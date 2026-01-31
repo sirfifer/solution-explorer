@@ -14,12 +14,55 @@ concurrency:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Python tools
+        run: pip install pytest ruff
+
+      - name: Lint Python
+        run: ruff check analyze.py tests/
+
+      - name: Test Python
+        run: pytest tests/ -v
+
+      - name: Install Viewer Dependencies
+        working-directory: viewer
+        run: npm ci
+
+      - name: Lint TypeScript
+        working-directory: viewer
+        run: npx eslint src/
+
+      - name: Test Viewer
+        working-directory: viewer
+        run: npm test
+
+      - name: TypeScript Check
+        working-directory: viewer
+        run: npx tsc -b
+
   generate:
     name: Generate Architecture Viz
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,8 +82,13 @@ jobs:
 
       - name: Run Architecture Analyzer
         run: |
-          python3 analyze.py . \
-            -o viewer/public/architecture.json
+          if [ -f "solution-explorer.json" ]; then
+            python3 analyze.py --config solution-explorer.json \
+              -o viewer/public/architecture.json --compact
+          else
+            python3 analyze.py . \
+              -o viewer/public/architecture.json --compact
+          fi
 
       - name: Install Viewer Dependencies
         working-directory: viewer
@@ -57,25 +105,21 @@ jobs:
           path: viewer/dist
           retention-days: 30
 
-      # Deploy to GitHub Pages (only on main branch push)
-      - name: Upload Pages Artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: viewer/dist
-
   deploy:
-    name: Deploy to GitHub Pages
+    name: Deploy to Cloudflare Pages
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: generate
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    permissions:
-      pages: write
-      id-token: write
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: architecture-viz
+          path: dist
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ vars.CLOUDFLARE_PROJECT_NAME || 'solution-explorer' }}

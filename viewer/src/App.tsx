@@ -109,6 +109,11 @@ export function App() {
             <span className={`text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
               Architecture
             </span>
+            {architecture.repositories && architecture.repositories.length > 1 && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${darkMode ? "bg-indigo-500/20 text-indigo-300" : "bg-indigo-100 text-indigo-700"}`}>
+                {architecture.repositories.length} repos
+              </span>
+            )}
           </div>
         </div>
 

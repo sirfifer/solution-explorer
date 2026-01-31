@@ -236,6 +236,9 @@ function flattenTopLevel(components: Component[]): Component[] {
   for (const comp of components) {
     if (comp.type === "project" && comp.children.length > 0) {
       result.push(...comp.children);
+    } else if (comp.type === "repository") {
+      // In multi-repo mode, show repository nodes as top-level drillable groups
+      result.push(comp);
     } else {
       result.push(comp);
     }

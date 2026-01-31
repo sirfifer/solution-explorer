@@ -1,0 +1,97 @@
+name: 'Solution Explorer'
+description: 'Generate interactive architecture diagrams from any codebase. Supports multi-repo solutions.'
+branding:
+  icon: 'git-branch'
+  color: 'blue'
+
+inputs:
+  config:
+    description: 'Path to solution-explorer.json for multi-repo analysis'
+    required: false
+    default: ''
+  path:
+    description: 'Path to the repository root to analyze (single-repo mode)'
+    required: false
+    default: '.'
+  deploy-to:
+    description: 'Deployment target: cloudflare, github-pages, or artifact-only'
+    required: false
+    default: 'artifact-only'
+  cloudflare-api-token:
+    description: 'Cloudflare API token (required when deploy-to is cloudflare)'
+    required: false
+    default: ''
+  cloudflare-account-id:
+    description: 'Cloudflare account ID (required when deploy-to is cloudflare)'
+    required: false
+    default: ''
+  cloudflare-project-name:
+    description: 'Cloudflare Pages project name'
+    required: false
+    default: 'solution-explorer'
+  github-token:
+    description: 'GitHub token for cloning private repos in multi-repo mode'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: Checkout Solution Explorer
+      uses: actions/checkout@v4
+      with:
+        repository: 'sirfifer/solution-explorer'
+        path: '.solution-explorer'
+
+    - name: Run Analyzer
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        if [ -n "${{ inputs.config }}" ]; then
+          python3 .solution-explorer/analyze.py \
+            --config "${{ inputs.config }}" \
+            -o .solution-explorer/viewer/public/architecture.json --compact
+        else
+          python3 .solution-explorer/analyze.py \
+            "${{ inputs.path }}" \
+            -o .solution-explorer/viewer/public/architecture.json --compact
+        fi
+
+    - name: Build Viewer
+      shell: bash
+      working-directory: .solution-explorer/viewer
+      run: |
+        npm ci
+        npm run build
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: architecture-viz
+        path: .solution-explorer/viewer/dist
+        retention-days: 30
+
+    - name: Deploy to Cloudflare Pages
+      if: inputs.deploy-to == 'cloudflare'
+      uses: cloudflare/wrangler-action@v3
+      with:
+        apiToken: ${{ inputs.cloudflare-api-token }}
+        accountId: ${{ inputs.cloudflare-account-id }}
+        command: pages deploy .solution-explorer/viewer/dist --project-name=${{ inputs.cloudflare-project-name }}
+
+    - name: Upload GitHub Pages Artifact
+      if: inputs.deploy-to == 'github-pages'
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: .solution-explorer/viewer/dist

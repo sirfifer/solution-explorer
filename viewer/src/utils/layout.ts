@@ -63,6 +63,7 @@ const TYPE_COLORS: Record<string, { bg: string; border: string; text: string; ba
   module: { bg: "bg-cyan-950/60", border: "border-cyan-500/50", text: "text-cyan-300", badge: "bg-cyan-500/20 text-cyan-300" },
   infrastructure: { bg: "bg-rose-950/60", border: "border-rose-500/50", text: "text-rose-300", badge: "bg-rose-500/20 text-rose-300" },
   project: { bg: "bg-zinc-800/60", border: "border-zinc-500/50", text: "text-zinc-300", badge: "bg-zinc-500/20 text-zinc-300" },
+  repository: { bg: "bg-indigo-950/60", border: "border-indigo-500/50", text: "text-indigo-300", badge: "bg-indigo-500/20 text-indigo-300" },
 };
 
 const TYPE_COLORS_LIGHT: Record<string, { bg: string; border: string; text: string; badge: string }> = {
@@ -73,6 +74,7 @@ const TYPE_COLORS_LIGHT: Record<string, { bg: string; border: string; text: stri
   module: { bg: "bg-cyan-50", border: "border-cyan-300", text: "text-cyan-700", badge: "bg-cyan-100 text-cyan-700" },
   infrastructure: { bg: "bg-rose-50", border: "border-rose-300", text: "text-rose-700", badge: "bg-rose-100 text-rose-700" },
   project: { bg: "bg-zinc-50", border: "border-zinc-300", text: "text-zinc-700", badge: "bg-zinc-100 text-zinc-700" },
+  repository: { bg: "bg-indigo-50", border: "border-indigo-300", text: "text-indigo-700", badge: "bg-indigo-100 text-indigo-700" },
 };
 
 export function getTypeColors(type: string, dark: boolean = true) {

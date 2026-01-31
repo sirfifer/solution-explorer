@@ -95,6 +95,11 @@ export interface ArchitectureStats {
   total_relationships: number;
 }
 
+export interface RepositoryInfo {
+  name: string;
+  repository?: string | null;
+}
+
 export interface Architecture {
   name: string;
   description: string;
@@ -107,6 +112,7 @@ export interface Architecture {
   symbols: Symbol[];
   files: FileInfo[];
   stats: ArchitectureStats;
+  repositories?: RepositoryInfo[];
 }
 
 // Navigation state

@@ -1,0 +1,23 @@
+{
+  "solution": "My Platform",
+  "description": "Backend services and mobile client",
+  "repositories": [
+    {
+      "name": "backend",
+      "path": "."
+    },
+    {
+      "name": "android-client",
+      "url": "https://github.com/your-org/android-client",
+      "ref": "main"
+    }
+  ],
+  "cross_repo_relationships": [
+    {
+      "source_repo": "android-client",
+      "target_repo": "backend",
+      "type": "http",
+      "label": "REST API"
+    }
+  ]
+}
