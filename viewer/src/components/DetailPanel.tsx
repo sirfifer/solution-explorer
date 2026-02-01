@@ -6,6 +6,7 @@ import {
   getLanguageColor,
   formatBytes,
   formatNumber,
+  TYPE_META,
 } from "../utils/layout";
 import { CodePreview } from "./CodePreview";
 import { MarkdownRenderer } from "./MarkdownRenderer";
@@ -118,7 +119,8 @@ function ComponentDetail({
             </h2>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className={`text-xs px-2 py-0.5 rounded-full ${colors.badge}`}>
-                {component.type}
+                {TYPE_META[component.type]?.icon && <span className="mr-1">{TYPE_META[component.type].icon}</span>}
+                {TYPE_META[component.type]?.label || component.type}
               </span>
               {component.framework && (
                 <span className={`text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
@@ -490,7 +492,7 @@ function ChildRow({ component }: { component: Component }) {
       onDoubleClick={() => drillInto(component)}
     >
       <span className={`text-[9px] px-1 py-0.5 rounded ${colors.badge}`}>
-        {component.type.slice(0, 3)}
+        {TYPE_META[component.type]?.icon || component.type.slice(0, 3)}
       </span>
       <span className="truncate flex-1">{component.name}</span>
       {component.docs?.purpose && (

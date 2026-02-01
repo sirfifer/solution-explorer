@@ -107,6 +107,20 @@ COMPONENT_MARKERS = {
     "Info.plist": ("swift", "application"),
 }
 
+# Directory names that suggest content-only (non-architectural) directories
+CONTENT_DIR_NAMES = {
+    "wiki", "wiki-content", "docs", "doc", "documentation",
+    "curriculum", "prompts", "prompt-templates",
+    "assets", "resources", "fixtures", "samples", "examples",
+    "models", "data", "migrations",
+}
+
+# File extensions considered "content" (not code)
+CONTENT_EXTENSIONS = {
+    ".md", ".mdx", ".txt", ".rst", ".json", ".yaml", ".yml",
+    ".csv", ".tsv", ".xml",
+}
+
 # ---------------------------------------------------------------------------
 # Data Models
 # ---------------------------------------------------------------------------
@@ -1092,6 +1106,9 @@ class ArchitectureScanner:
         # Phase 2: Scan files and extract symbols
         self._scan_files()
 
+        # Phase 2.5: Promote generic types to architectural roles
+        self._promote_component_types()
+
         # Phase 3: Detect relationships
         self._detect_relationships()
 
@@ -1301,6 +1318,176 @@ class ArchitectureScanner:
                 comp = self._find_component_for_file(rel)
                 if comp:
                     comp.files.append(rel)
+
+    # ------------------------------------------------------------------
+    # Phase 2.5: Promote generic types to architectural roles
+    # ------------------------------------------------------------------
+
+    def _promote_component_types(self):
+        """Promote generic component types (package, module) to specific
+        architectural roles (mobile-client, api-server, etc.) using
+        framework detection, dependency analysis, and directory heuristics."""
+        for rel_path, comp in self._component_map.items():
+            # Skip root for content detection but still promote its type
+            if rel_path:
+                if self._is_content_only(comp, rel_path):
+                    comp.type = "content"
+                    continue
+            promoted = self._classify_architectural_role(comp, rel_path)
+            if promoted:
+                comp.type = promoted
+
+    def _is_content_only(self, comp: Component, rel_path: str) -> bool:
+        """Determine if a component is a content-only directory."""
+        dir_name = os.path.basename(rel_path).lower()
+
+        if dir_name in CONTENT_DIR_NAMES:
+            code_exts = set(LANGUAGE_MAP.keys()) - CONTENT_EXTENSIONS
+            code_files = [f for f in comp.files
+                          if Path(f).suffix.lower() in code_exts]
+            total = len(comp.files)
+            if total == 0 or len(code_files) / max(total, 1) < 0.2:
+                return True
+
+        if comp.files:
+            content_count = sum(
+                1 for f in comp.files
+                if Path(f).suffix.lower() in CONTENT_EXTENSIONS
+            )
+            if content_count / len(comp.files) > 0.8:
+                return True
+
+        return False
+
+    def _classify_architectural_role(self, comp: Component, rel_path: str) -> Optional[str]:
+        """Classify a component into a specific architectural role."""
+        framework = (comp.framework or "").lower()
+        comp_dir = self.root / rel_path
+        dir_name = os.path.basename(rel_path).lower()
+
+        # Gather marker file signals
+        has_info_plist = (comp_dir / "Info.plist").exists()
+        has_xcodeproj = any(
+            p.suffix == ".xcodeproj" for p in comp_dir.iterdir() if p.is_dir()
+        ) if comp_dir.is_dir() else False
+        # Also check parent for .xcodeproj (common iOS layout)
+        if not has_xcodeproj:
+            has_xcodeproj = any(
+                p.suffix == ".xcodeproj" for p in self.root.iterdir() if p.is_dir()
+            ) if comp.language == "swift" else False
+        has_android_manifest = (
+            (comp_dir / "AndroidManifest.xml").exists()
+            or (comp_dir / "src" / "main" / "AndroidManifest.xml").exists()
+        )
+        has_build_gradle = (
+            (comp_dir / "build.gradle").exists()
+            or (comp_dir / "build.gradle.kts").exists()
+        )
+        has_package_json = (comp_dir / "package.json").exists()
+        has_cargo_toml = (comp_dir / "Cargo.toml").exists()
+        has_pubspec = (comp_dir / "pubspec.yaml").exists()
+
+        # Read dependency lists from config files
+        pkg_deps: set[str] = set()
+        if has_package_json:
+            info = parse_package_json(comp_dir / "package.json")
+            pkg_deps = set(info.get("dependencies", []))
+
+        cargo_deps: set[str] = set()
+        if has_cargo_toml:
+            info = parse_cargo_toml(comp_dir / "Cargo.toml")
+            cargo_deps = set(info.get("dependencies", []))
+
+        # --- Watch app ---
+        if "watch" in dir_name:
+            if comp.language == "swift" or framework in ("swiftui", "watchkit"):
+                return "watch-app"
+
+        # --- Mobile client: iOS ---
+        if framework in ("swiftui", "uikit"):
+            if has_info_plist or has_xcodeproj or comp.type == "application":
+                return "mobile-client"
+
+        # --- Mobile client: Android ---
+        if has_android_manifest:
+            return "mobile-client"
+        if has_build_gradle and comp.language in ("java", "kotlin"):
+            if has_android_manifest or "android" in dir_name:
+                return "mobile-client"
+
+        # --- Mobile client: React Native ---
+        if "react-native" in pkg_deps:
+            return "mobile-client"
+
+        # --- Mobile client: Flutter ---
+        if has_pubspec:
+            try:
+                content = (comp_dir / "pubspec.yaml").read_text(errors="replace")
+                if "flutter:" in content:
+                    return "mobile-client"
+            except OSError:
+                pass
+
+        # --- Desktop app ---
+        if framework in ("appkit", "electron"):
+            return "desktop-app"
+        if "electron" in pkg_deps:
+            return "desktop-app"
+
+        # --- API server: framework detection ---
+        server_frameworks = {
+            "axum", "actix", "rocket", "warp", "vapor",
+            "express", "fastify", "hono", "koa", "nestjs",
+            "flask", "django", "fastapi", "starlette", "aiohttp",
+            "tornado", "gin", "echo", "fiber",
+        }
+        if framework in server_frameworks:
+            return "api-server"
+
+        # --- API server: JS/TS deps (pure server, no client framework) ---
+        pure_server_deps = {
+            "express", "fastify", "hono", "koa", "@nestjs/core",
+        }
+        client_deps = {"react", "vue", "svelte", "@angular/core"}
+        if pkg_deps & pure_server_deps and not (pkg_deps & client_deps):
+            return "api-server"
+
+        # --- API server: Rust deps ---
+        rust_server_deps = {"axum", "actix-web", "rocket", "warp"}
+        if cargo_deps & rust_server_deps:
+            return "api-server"
+
+        # --- API server: port + server language + no client signals ---
+        # Only for languages that are typically server-side. Swift/Kotlin/Java
+        # mobile code often references ports as API clients, not servers.
+        server_languages = {"python", "rust", "go", "ruby", "typescript", "javascript"}
+        if (comp.port and comp.language in server_languages
+                and not (pkg_deps & client_deps)):
+            return "api-server"
+
+        # --- Web client ---
+        web_client_frameworks = {
+            "react", "next.js", "vue", "nuxt", "svelte",
+            "sveltekit", "angular",
+        }
+        if framework in web_client_frameworks:
+            return "web-client"
+
+        web_client_deps = {
+            "react", "vue", "svelte", "@angular/core",
+            "next", "nuxt", "@sveltejs/kit",
+        }
+        if pkg_deps & web_client_deps:
+            return "web-client"
+
+        # --- CLI tool ---
+        if comp.language == "python" and framework in ("click", "typer"):
+            return "cli-tool"
+        rust_cli_deps = {"clap"}
+        if cargo_deps & rust_cli_deps and not (cargo_deps & rust_server_deps):
+            return "cli-tool"
+
+        return None
 
     def _detect_relationships(self):
         """Detect inter-component relationships."""

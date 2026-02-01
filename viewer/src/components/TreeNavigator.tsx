@@ -1,7 +1,7 @@
 import { useState, memo } from "react";
 import type { Component } from "../types";
 import { useArchStore } from "../store";
-import { getTypeColors, getLanguageColor, formatNumber } from "../utils/layout";
+import { getTypeColors, getLanguageColor, formatNumber, TYPE_META } from "../utils/layout";
 
 interface TreeNodeProps {
   component: Component;
@@ -63,7 +63,7 @@ const TreeNode = memo(function TreeNode({ component, depth }: TreeNodeProps) {
 
         {/* Badge */}
         <span className={`text-[9px] px-1 py-0.5 rounded ${colors.badge} shrink-0`}>
-          {component.type.slice(0, 3)}
+          {TYPE_META[component.type]?.icon || component.type.slice(0, 3)}
         </span>
 
         {/* Metrics */}

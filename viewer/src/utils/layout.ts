@@ -64,6 +64,13 @@ const TYPE_COLORS: Record<string, { bg: string; border: string; text: string; ba
   infrastructure: { bg: "bg-rose-950/60", border: "border-rose-500/50", text: "text-rose-300", badge: "bg-rose-500/20 text-rose-300" },
   project: { bg: "bg-zinc-800/60", border: "border-zinc-500/50", text: "text-zinc-300", badge: "bg-zinc-500/20 text-zinc-300" },
   repository: { bg: "bg-indigo-950/60", border: "border-indigo-500/50", text: "text-indigo-300", badge: "bg-indigo-500/20 text-indigo-300" },
+  "mobile-client": { bg: "bg-orange-950/60", border: "border-orange-500/50", text: "text-orange-300", badge: "bg-orange-500/20 text-orange-300" },
+  "web-client": { bg: "bg-sky-950/60", border: "border-sky-500/50", text: "text-sky-300", badge: "bg-sky-500/20 text-sky-300" },
+  "api-server": { bg: "bg-green-950/60", border: "border-green-500/50", text: "text-green-300", badge: "bg-green-500/20 text-green-300" },
+  "watch-app": { bg: "bg-pink-950/60", border: "border-pink-500/50", text: "text-pink-300", badge: "bg-pink-500/20 text-pink-300" },
+  "desktop-app": { bg: "bg-teal-950/60", border: "border-teal-500/50", text: "text-teal-300", badge: "bg-teal-500/20 text-teal-300" },
+  "cli-tool": { bg: "bg-lime-950/60", border: "border-lime-500/50", text: "text-lime-300", badge: "bg-lime-500/20 text-lime-300" },
+  content: { bg: "bg-stone-950/60", border: "border-stone-600/30", text: "text-stone-500", badge: "bg-stone-500/20 text-stone-500" },
 };
 
 const TYPE_COLORS_LIGHT: Record<string, { bg: string; border: string; text: string; badge: string }> = {
@@ -75,12 +82,38 @@ const TYPE_COLORS_LIGHT: Record<string, { bg: string; border: string; text: stri
   infrastructure: { bg: "bg-rose-50", border: "border-rose-300", text: "text-rose-700", badge: "bg-rose-100 text-rose-700" },
   project: { bg: "bg-zinc-50", border: "border-zinc-300", text: "text-zinc-700", badge: "bg-zinc-100 text-zinc-700" },
   repository: { bg: "bg-indigo-50", border: "border-indigo-300", text: "text-indigo-700", badge: "bg-indigo-100 text-indigo-700" },
+  "mobile-client": { bg: "bg-orange-50", border: "border-orange-300", text: "text-orange-700", badge: "bg-orange-100 text-orange-700" },
+  "web-client": { bg: "bg-sky-50", border: "border-sky-300", text: "text-sky-700", badge: "bg-sky-100 text-sky-700" },
+  "api-server": { bg: "bg-green-50", border: "border-green-300", text: "text-green-700", badge: "bg-green-100 text-green-700" },
+  "watch-app": { bg: "bg-pink-50", border: "border-pink-300", text: "text-pink-700", badge: "bg-pink-100 text-pink-700" },
+  "desktop-app": { bg: "bg-teal-50", border: "border-teal-300", text: "text-teal-700", badge: "bg-teal-100 text-teal-700" },
+  "cli-tool": { bg: "bg-lime-50", border: "border-lime-300", text: "text-lime-700", badge: "bg-lime-100 text-lime-700" },
+  content: { bg: "bg-stone-50", border: "border-stone-200", text: "text-stone-400", badge: "bg-stone-100 text-stone-400" },
 };
 
 export function getTypeColors(type: string, dark: boolean = true) {
   const map = dark ? TYPE_COLORS : TYPE_COLORS_LIGHT;
   return map[type] || map.module;
 }
+
+// Human-readable labels and icons for component types
+export const TYPE_META: Record<string, { icon: string; label: string }> = {
+  "mobile-client": { icon: "\u{1F4F1}", label: "Mobile Client" },
+  "web-client": { icon: "\u{1F310}", label: "Web Client" },
+  "api-server": { icon: "\u2699\uFE0F", label: "API Server" },
+  "watch-app": { icon: "\u231A", label: "Watch App" },
+  "desktop-app": { icon: "\u{1F5A5}\uFE0F", label: "Desktop App" },
+  "cli-tool": { icon: ">_", label: "CLI Tool" },
+  content: { icon: "\u{1F4C4}", label: "Content" },
+  service: { icon: "\u{1F527}", label: "Service" },
+  library: { icon: "\u{1F4DA}", label: "Library" },
+  package: { icon: "\u{1F4E6}", label: "Package" },
+  module: { icon: "\u{1F9E9}", label: "Module" },
+  infrastructure: { icon: "\u2601\uFE0F", label: "Infrastructure" },
+  repository: { icon: "\u{1F4C2}", label: "Repository" },
+  application: { icon: "\u{1F4E6}", label: "Application" },
+  project: { icon: "\u{1F4C1}", label: "Project" },
+};
 
 // Language icons/colors
 const LANG_COLORS: Record<string, string> = {

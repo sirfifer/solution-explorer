@@ -1,7 +1,7 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { Component } from "../types";
-import { getTypeColors, getLanguageColor, formatNumber } from "../utils/layout";
+import { getTypeColors, getLanguageColor, formatNumber, TYPE_META } from "../utils/layout";
 import { useArchStore } from "../store";
 
 interface ComponentNodeData {
@@ -187,6 +187,7 @@ export const ComponentNode = memo(function ComponentNode({
         min-w-[240px] max-w-[320px]
         ${colors.bg} ${colors.border}
         ${selected ? "node-selected" : ""}
+        ${component.type === "content" ? "opacity-50" : ""}
         hover:scale-[1.02] transition-transform duration-150
         cursor-pointer
       `}
@@ -206,11 +207,12 @@ export const ComponentNode = memo(function ComponentNode({
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <h3 className={`font-semibold text-sm truncate ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
+              {TYPE_META[component.type]?.icon && <span className="mr-1.5">{TYPE_META[component.type].icon}</span>}
               {component.name}
             </h3>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${colors.badge}`}>
-                {component.type}
+                {TYPE_META[component.type]?.label || component.type}
               </span>
               {component.framework && (
                 <span className={`text-[10px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
