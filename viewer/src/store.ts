@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   Architecture,
+  Annotation,
   Component,
   BreadcrumbItem,
   ViewMode,
@@ -32,6 +33,11 @@ interface ArchStore {
   // Theme
   darkMode: boolean;
 
+  // Review mode
+  reviewMode: boolean;
+  annotations: Annotation[];
+  annotatingComponentId: string | null;
+
   // Actions
   setArchitecture: (arch: Architecture) => void;
   setLoading: (loading: boolean) => void;
@@ -51,6 +57,15 @@ interface ArchStore {
   setSearchQuery: (query: string) => void;
 
   toggleDarkMode: () => void;
+
+  // Review actions
+  toggleReviewMode: () => void;
+  setAnnotatingComponent: (id: string | null) => void;
+  addAnnotation: (componentId: string, text: string) => void;
+  updateAnnotation: (id: string, text: string) => void;
+  deleteAnnotation: (id: string) => void;
+  clearAllAnnotations: () => void;
+  getAnnotationsForComponent: (componentId: string) => Annotation[];
 
   // Helpers
   getComponentById: (id: string) => Component | null;
@@ -106,6 +121,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   darkMode: true,
 
+  reviewMode: false,
+  annotations: [],
+  annotatingComponentId: null,
+
   setArchitecture: (arch) => set({ architecture: arch, loading: false }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
@@ -113,16 +132,23 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   selectComponent: (id) => {
     const arch = get().architecture;
     if (!arch || !id) {
-      set({ selectedComponentId: null, detailItem: null, activePanel: null });
+      set({ selectedComponentId: null, detailItem: null, activePanel: get().reviewMode ? get().activePanel : null, annotatingComponentId: null });
       return;
     }
     const comp = findComponent(arch.components, id);
     if (comp) {
-      set({
-        selectedComponentId: id,
-        detailItem: { type: "component", data: comp },
-        activePanel: "detail",
-      });
+      if (get().reviewMode) {
+        set({
+          selectedComponentId: id,
+          annotatingComponentId: id,
+        });
+      } else {
+        set({
+          selectedComponentId: id,
+          detailItem: { type: "component", data: comp },
+          activePanel: "detail",
+        });
+      }
     }
   },
 
@@ -181,6 +207,36 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   setSearchQuery: (query) => set({ searchQuery: query }),
 
   toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
+
+  toggleReviewMode: () => set((s) => ({
+    reviewMode: !s.reviewMode,
+    annotatingComponentId: null,
+    activePanel: !s.reviewMode ? s.activePanel : s.activePanel === "review" ? null : s.activePanel,
+  })),
+
+  setAnnotatingComponent: (id) => set({ annotatingComponentId: id }),
+
+  addAnnotation: (componentId, text) => set((s) => ({
+    annotations: [
+      ...s.annotations.filter((a) => a.componentId !== componentId),
+      { id: crypto.randomUUID(), componentId, text, createdAt: new Date().toISOString() },
+    ],
+    annotatingComponentId: null,
+  })),
+
+  updateAnnotation: (id, text) => set((s) => ({
+    annotations: s.annotations.map((a) => a.id === id ? { ...a, text } : a),
+  })),
+
+  deleteAnnotation: (id) => set((s) => ({
+    annotations: s.annotations.filter((a) => a.id !== id),
+  })),
+
+  clearAllAnnotations: () => set({ annotations: [], annotatingComponentId: null }),
+
+  getAnnotationsForComponent: (componentId) => {
+    return get().annotations.filter((a) => a.componentId === componentId);
+  },
 
   getComponentById: (id) => {
     const arch = get().architecture;

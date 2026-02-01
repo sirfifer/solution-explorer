@@ -6,6 +6,9 @@ import { TreeNavigator } from "./components/TreeNavigator";
 import { DetailPanel } from "./components/DetailPanel";
 import { SearchOverlay } from "./components/SearchOverlay";
 import { HelpSystem } from "./components/HelpSystem";
+import { ReviewModeButton } from "./components/ReviewModeButton";
+import { AnnotationInput } from "./components/AnnotationInput";
+import { ReviewSummary } from "./components/ReviewSummary";
 import { initializeSearch } from "./utils/search";
 import { formatNumber, formatRelativeTime } from "./utils/layout";
 import type { Architecture } from "./types";
@@ -17,6 +20,8 @@ export function App() {
     error,
     darkMode,
     activePanel,
+    reviewMode,
+    annotatingComponentId,
     setArchitecture,
     setLoading,
     setError,
@@ -177,6 +182,9 @@ export function App() {
             </kbd>
           </button>
 
+          {/* Review mode */}
+          <ReviewModeButton />
+
           {/* Theme toggle */}
           <button
             onClick={toggleDarkMode}
@@ -216,6 +224,17 @@ export function App() {
         </div>
       </header>
 
+      {/* Review mode banner */}
+      {reviewMode && (
+        <div className={`
+          flex items-center justify-center gap-2 px-4 py-1.5 text-xs shrink-0
+          ${darkMode ? "bg-blue-500/10 text-blue-300 border-b border-blue-500/20" : "bg-blue-50 text-blue-700 border-b border-blue-200"}
+        `}>
+          <span>&#x270D;&#xFE0F;</span>
+          <span>Review Mode: click any component to add feedback</span>
+        </div>
+      )}
+
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Tree sidebar - desktop */}
@@ -254,8 +273,8 @@ export function App() {
           </ReactFlowProvider>
         </main>
 
-        {/* Detail panel - desktop */}
-        {activePanel === "detail" && (
+        {/* Detail / Review panel - desktop */}
+        {(activePanel === "detail" || activePanel === "review") && (
           <aside
             className={`
               hidden lg:flex flex-col shrink-0 border-l relative
@@ -268,12 +287,12 @@ export function App() {
               className={`absolute top-0 left-0 w-1 h-full cursor-col-resize z-20 hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors duration-75 ${darkMode ? "hover:bg-blue-400/40" : "hover:bg-blue-500/40"}`}
               onMouseDown={(e) => onMouseDown("right", e)}
             />
-            <DetailPanel />
+            {activePanel === "review" ? <ReviewSummary /> : <DetailPanel />}
           </aside>
         )}
 
-        {/* Detail panel - mobile bottom sheet */}
-        {activePanel === "detail" && (
+        {/* Detail / Review panel - mobile bottom sheet */}
+        {(activePanel === "detail" || activePanel === "review") && (
           <div className={`
             lg:hidden fixed bottom-0 left-0 right-0 z-30
             max-h-[60vh] flex flex-col rounded-t-2xl shadow-2xl
@@ -284,7 +303,7 @@ export function App() {
               <div className={`w-10 h-1 rounded-full ${darkMode ? "bg-zinc-700" : "bg-zinc-300"}`} />
             </div>
             <div className="flex-1 overflow-y-auto">
-              <DetailPanel />
+              {activePanel === "review" ? <ReviewSummary /> : <DetailPanel />}
             </div>
           </div>
         )}
@@ -318,6 +337,9 @@ export function App() {
           <span className="text-[10px]">Search</span>
         </button>
       </nav>
+
+      {/* Annotation input modal */}
+      {annotatingComponentId && <AnnotationInput />}
 
       {/* Search overlay */}
       <SearchOverlay />

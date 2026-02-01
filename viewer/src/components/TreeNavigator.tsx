@@ -9,7 +9,8 @@ interface TreeNodeProps {
 }
 
 const TreeNode = memo(function TreeNode({ component, depth }: TreeNodeProps) {
-  const { selectedComponentId, selectComponent, drillInto, darkMode } = useArchStore();
+  const { selectedComponentId, selectComponent, drillInto, darkMode, annotations } = useArchStore();
+  const hasAnnotation = annotations.some((a) => a.componentId === component.id);
   const [expanded, setExpanded] = useState(depth < 1);
   const hasChildren = component.children.length > 0;
   const isSelected = selectedComponentId === component.id;
@@ -76,6 +77,11 @@ const TreeNode = memo(function TreeNode({ component, depth }: TreeNodeProps) {
           <span className={`text-[10px] tabular-nums shrink-0 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             {formatNumber(component.metrics.files)}
           </span>
+        )}
+
+        {/* Annotation indicator */}
+        {hasAnnotation && (
+          <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" title="Has review annotation" />
         )}
       </button>
 

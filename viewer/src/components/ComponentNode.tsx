@@ -385,8 +385,9 @@ export const ComponentNode = memo(function ComponentNode({
   selected,
 }: NodeProps) {
   const { component } = data as ComponentNodeData;
-  const { selectComponent, drillInto, darkMode } = useArchStore();
+  const { selectComponent, drillInto, darkMode, reviewMode, annotations } = useArchStore();
   const colors = getTypeColors(component.type, darkMode);
+  const annotationCount = annotations.filter((a) => a.componentId === component.id).length;
   const hasChildren = component.children.length > 0 || component.files.length > 0;
   const langColor = component.language ? getLanguageColor(component.language) : null;
   const [hovered, setHovered] = useState(false);
@@ -429,6 +430,26 @@ export const ComponentNode = memo(function ComponentNode({
 
       {/* Hover documentation card */}
       {hovered && <HoverCard component={component} darkMode={darkMode} />}
+
+      {/* Annotation badge */}
+      {annotationCount > 0 && (
+        <div className={`
+          absolute -top-2 -right-2 z-20 min-w-[20px] h-[20px] flex items-center justify-center
+          rounded-full text-[10px] font-bold
+          ${darkMode ? "bg-blue-500 text-white" : "bg-blue-500 text-white"}
+          ${reviewMode ? "ring-2 ring-blue-400/50 animate-pulse" : ""}
+        `}>
+          {annotationCount}
+        </div>
+      )}
+
+      {/* Review mode indicator ring */}
+      {reviewMode && annotationCount === 0 && (
+        <div className={`
+          absolute -top-1 -right-1 z-20 w-3 h-3 rounded-full
+          ${darkMode ? "bg-blue-500/30 border border-blue-400/40" : "bg-blue-200 border border-blue-300"}
+        `} />
+      )}
 
       {/* Device-shaped frame wrapping all content */}
       <DeviceFrame type={component.type} darkMode={darkMode} colors={colors}>

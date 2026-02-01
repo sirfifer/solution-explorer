@@ -115,9 +115,17 @@ export interface Architecture {
   repositories?: RepositoryInfo[];
 }
 
+// Review annotations
+export interface Annotation {
+  id: string;
+  componentId: string;
+  text: string;
+  createdAt: string;
+}
+
 // Navigation state
 export type ViewMode = "graph" | "tree" | "list";
-export type Panel = "tree" | "detail" | null;
+export type Panel = "tree" | "detail" | "review" | null;
 
 export interface BreadcrumbItem {
   id: string;
