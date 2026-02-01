@@ -88,7 +88,7 @@ runs:
       with:
         apiToken: ${{ inputs.cloudflare-api-token }}
         accountId: ${{ inputs.cloudflare-account-id }}
-        command: pages deploy .solution-explorer/viewer/dist --project-name=${{ inputs.cloudflare-project-name }}
+        command: pages deploy .solution-explorer/viewer/dist --project-name=${{ inputs.cloudflare-project-name }} --branch=main --commit-dirty=true
 
     - name: Upload GitHub Pages Artifact
       if: inputs.deploy-to == 'github-pages'
