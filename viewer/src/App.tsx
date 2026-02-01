@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useArchStore } from "./store";
 import { ArchitectureGraph } from "./components/ArchitectureGraph";
@@ -7,7 +7,7 @@ import { DetailPanel } from "./components/DetailPanel";
 import { SearchOverlay } from "./components/SearchOverlay";
 import { HelpSystem } from "./components/HelpSystem";
 import { initializeSearch } from "./utils/search";
-import { formatNumber, formatBytes } from "./utils/layout";
+import { formatNumber, formatRelativeTime } from "./utils/layout";
 import type { Architecture } from "./types";
 
 export function App() {
@@ -27,6 +27,47 @@ export function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"graph" | "tree" | "detail">("graph");
+
+  // Resizable sidebar widths
+  const [leftWidth, setLeftWidth] = useState(256);
+  const [rightWidth, setRightWidth] = useState(320);
+  const resizing = useRef<"left" | "right" | null>(null);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+
+  const onMouseDown = useCallback((side: "left" | "right", e: React.MouseEvent) => {
+    e.preventDefault();
+    resizing.current = side;
+    startX.current = e.clientX;
+    startWidth.current = side === "left" ? leftWidth : rightWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [leftWidth, rightWidth]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!resizing.current) return;
+      const delta = e.clientX - startX.current;
+      if (resizing.current === "left") {
+        setLeftWidth(Math.max(180, Math.min(480, startWidth.current + delta)));
+      } else {
+        setRightWidth(Math.max(240, Math.min(600, startWidth.current - delta)));
+      }
+    };
+    const onMouseUp = () => {
+      if (resizing.current) {
+        resizing.current = null;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
 
   // Load architecture data
   useEffect(() => {
@@ -150,6 +191,14 @@ export function App() {
             <span>{formatNumber(architecture.stats.total_components)} components</span>
             <span>{formatNumber(architecture.stats.total_files)} files</span>
             <span>{formatNumber(architecture.stats.total_lines)} lines</span>
+            {architecture.generated_at && (
+              <>
+                <span className={darkMode ? "text-zinc-700" : "text-zinc-300"}>|</span>
+                <span className={`font-medium ${darkMode ? "text-zinc-400" : "text-zinc-500"}`} title={new Date(architecture.generated_at).toLocaleString()}>
+                  Generated {formatRelativeTime(architecture.generated_at)}
+                </span>
+              </>
+            )}
           </div>
 
           {/* Repo link */}
@@ -170,11 +219,19 @@ export function App() {
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Tree sidebar - desktop */}
-        <aside className={`
-          hidden lg:flex flex-col w-64 shrink-0 border-r
-          ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"}
-        `}>
+        <aside
+          className={`
+            hidden lg:flex flex-col shrink-0 border-r relative
+            ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"}
+          `}
+          style={{ width: leftWidth }}
+        >
           <TreeNavigator />
+          {/* Resize handle */}
+          <div
+            className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-20 hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors duration-75 ${darkMode ? "hover:bg-blue-400/40" : "hover:bg-blue-500/40"}`}
+            onMouseDown={(e) => onMouseDown("left", e)}
+          />
         </aside>
 
         {/* Tree sidebar - mobile overlay */}
@@ -199,10 +256,18 @@ export function App() {
 
         {/* Detail panel - desktop */}
         {activePanel === "detail" && (
-          <aside className={`
-            hidden lg:flex flex-col w-80 shrink-0 border-l
-            ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"}
-          `}>
+          <aside
+            className={`
+              hidden lg:flex flex-col shrink-0 border-l relative
+              ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"}
+            `}
+            style={{ width: rightWidth }}
+          >
+            {/* Resize handle */}
+            <div
+              className={`absolute top-0 left-0 w-1 h-full cursor-col-resize z-20 hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors duration-75 ${darkMode ? "hover:bg-blue-400/40" : "hover:bg-blue-500/40"}`}
+              onMouseDown={(e) => onMouseDown("right", e)}
+            />
             <DetailPanel />
           </aside>
         )}
@@ -260,13 +325,13 @@ export function App() {
       {/* Help system */}
       <HelpSystem />
 
-      {/* Footer timestamp */}
+      {/* Mobile timestamp - shown below header on small screens */}
       {architecture.generated_at && (
         <div className={`
-          fixed bottom-2 left-2 text-[9px] z-10 hidden lg:block
-          ${darkMode ? "text-zinc-700" : "text-zinc-400"}
+          md:hidden text-center text-[10px] py-1 border-b
+          ${darkMode ? "text-zinc-500 bg-zinc-950/80 border-zinc-800/50" : "text-zinc-400 bg-zinc-50/80 border-zinc-200/50"}
         `}>
-          Generated: {new Date(architecture.generated_at).toLocaleString()}
+          Generated {formatRelativeTime(architecture.generated_at)} ({new Date(architecture.generated_at).toLocaleString()})
         </div>
       )}
     </div>
