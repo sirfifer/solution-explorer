@@ -81,6 +81,15 @@
   }
 }
 
+/* Blinking LED for server node */
+@keyframes blink-led {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.blink-led {
+  animation: blink-led 2s ease-in-out infinite;
+}
+
 /* Mobile optimizations */
 @media (max-width: 768px) {
   .react-flow__controls {

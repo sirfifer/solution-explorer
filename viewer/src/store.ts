@@ -113,7 +113,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   selectComponent: (id) => {
     const arch = get().architecture;
     if (!arch || !id) {
-      set({ selectedComponentId: null, detailItem: null });
+      set({ selectedComponentId: null, detailItem: null, activePanel: null });
       return;
     }
     const comp = findComponent(arch.components, id);

@@ -184,3 +184,38 @@ const EDGE_STYLES: Record<string, { color: string; animated: boolean; dash: stri
 export function getEdgeStyle(type: string) {
   return EDGE_STYLES[type] || EDGE_STYLES.import;
 }
+
+// "Hero" component types: key architectural building blocks that should stand out visually
+export const HERO_TYPES = new Set([
+  "api-server",
+  "mobile-client",
+  "web-client",
+  "watch-app",
+  "desktop-app",
+  "cli-tool",
+  "service",
+  "application",
+]);
+
+export function isHeroType(type: string): boolean {
+  return HERO_TYPES.has(type);
+}
+
+// Glow colors for hero types (used for box-shadow)
+const HERO_GLOW: Record<string, { dark: string; light: string }> = {
+  "mobile-client": { dark: "rgba(249,115,22,0.18)", light: "rgba(249,115,22,0.14)" },
+  "web-client": { dark: "rgba(14,165,233,0.18)", light: "rgba(14,165,233,0.14)" },
+  "api-server": { dark: "rgba(34,197,94,0.18)", light: "rgba(34,197,94,0.14)" },
+  "watch-app": { dark: "rgba(236,72,153,0.18)", light: "rgba(236,72,153,0.14)" },
+  "desktop-app": { dark: "rgba(20,184,166,0.18)", light: "rgba(20,184,166,0.14)" },
+  "cli-tool": { dark: "rgba(132,204,22,0.18)", light: "rgba(132,204,22,0.14)" },
+  service: { dark: "rgba(16,185,129,0.18)", light: "rgba(16,185,129,0.14)" },
+  application: { dark: "rgba(59,130,246,0.18)", light: "rgba(59,130,246,0.14)" },
+};
+
+export function getHeroGlow(type: string, dark: boolean): string {
+  const glow = HERO_GLOW[type];
+  if (!glow) return "none";
+  const color = dark ? glow.dark : glow.light;
+  return `0 0 24px 4px ${color}`;
+}

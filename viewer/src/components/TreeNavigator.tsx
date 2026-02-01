@@ -1,7 +1,7 @@
 import { useState, memo } from "react";
 import type { Component } from "../types";
 import { useArchStore } from "../store";
-import { getTypeColors, getLanguageColor, formatNumber, TYPE_META } from "../utils/layout";
+import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType } from "../utils/layout";
 
 interface TreeNodeProps {
   component: Component;
@@ -59,11 +59,16 @@ const TreeNode = memo(function TreeNode({ component, depth }: TreeNodeProps) {
         )}
 
         {/* Name */}
-        <span className="truncate flex-1 font-medium">{component.name}</span>
+        <span className={`truncate flex-1 ${isHeroType(component.type) ? "font-semibold" : "font-medium"}`}>
+          {isHeroType(component.type) && TYPE_META[component.type]?.icon && (
+            <span className="mr-1">{TYPE_META[component.type].icon}</span>
+          )}
+          {component.name}
+        </span>
 
         {/* Badge */}
-        <span className={`text-[9px] px-1 py-0.5 rounded ${colors.badge} shrink-0`}>
-          {TYPE_META[component.type]?.icon || component.type.slice(0, 3)}
+        <span className={`${isHeroType(component.type) ? "text-[10px] px-1.5" : "text-[9px] px-1"} py-0.5 rounded ${colors.badge} shrink-0`}>
+          {isHeroType(component.type) ? (TYPE_META[component.type]?.label || component.type) : (TYPE_META[component.type]?.icon || component.type.slice(0, 3))}
         </span>
 
         {/* Metrics */}
