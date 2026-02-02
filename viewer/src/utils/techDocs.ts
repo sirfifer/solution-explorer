@@ -199,6 +199,8 @@ export function getTechRef(name: string): TechRef | null {
 /** Component type descriptions for tooltips */
 export const TYPE_DESCRIPTIONS: Record<string, string> = {
   "mobile-client": "A native mobile application that runs on iOS or Android devices. Typically built with Swift/SwiftUI, Kotlin/Jetpack Compose, React Native, or Flutter.",
+  "ios-client": "A native iOS application that runs on iPhone and iPad. Typically built with Swift and SwiftUI or UIKit, distributed through the App Store.",
+  "android-client": "A native Android application that runs on Android devices. Typically built with Kotlin and Jetpack Compose or Java with XML layouts, distributed through Google Play.",
   "web-client": "A browser-based frontend application. Usually built with JavaScript/TypeScript frameworks like React, Vue, Angular, or Svelte.",
   "api-server": "A backend service that exposes HTTP, gRPC, or other API endpoints for clients to consume. Handles business logic, data access, and authentication.",
   "watch-app": "An application designed for smartwatch platforms like Apple Watch (watchOS) or Wear OS.",

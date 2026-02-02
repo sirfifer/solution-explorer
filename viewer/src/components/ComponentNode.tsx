@@ -210,7 +210,10 @@ function ServiceFrame({ darkMode, colors, children }: FrameProps) {
 function DeviceFrame({ type, darkMode, colors, children }: { type: string; darkMode: boolean; colors: ReturnType<typeof getTypeColors>; children: ReactNode }) {
   const props = { darkMode, colors, children };
   switch (type) {
-    case "mobile-client": return <MobileFrame {...props} />;
+    case "mobile-client":
+    case "ios-client":
+    case "android-client":
+      return <MobileFrame {...props} />;
     case "api-server": return <ServerFrame {...props} />;
     case "web-client": return <BrowserFrame {...props} />;
     case "watch-app": return <WatchFrame {...props} />;

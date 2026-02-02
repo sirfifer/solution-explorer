@@ -1598,23 +1598,23 @@ class ArchitectureScanner:
             if comp.language == "swift" or framework in ("swiftui", "watchkit"):
                 return "watch-app"
 
-        # --- Mobile client: iOS ---
+        # --- iOS client ---
         if framework in ("swiftui", "uikit"):
             if has_info_plist or has_xcodeproj or comp.type == "application":
-                return "mobile-client"
+                return "ios-client"
 
-        # --- Mobile client: Android ---
+        # --- Android client ---
         if has_android_manifest:
-            return "mobile-client"
+            return "android-client"
         if has_build_gradle and comp.language in ("java", "kotlin"):
             if has_android_manifest or "android" in dir_name:
-                return "mobile-client"
+                return "android-client"
 
-        # --- Mobile client: React Native ---
+        # --- Mobile client: React Native (cross-platform) ---
         if "react-native" in pkg_deps:
             return "mobile-client"
 
-        # --- Mobile client: Flutter ---
+        # --- Mobile client: Flutter (cross-platform) ---
         if has_pubspec:
             try:
                 content = (comp_dir / "pubspec.yaml").read_text(errors="replace")
@@ -1665,9 +1665,12 @@ class ArchitectureScanner:
         # --- API server: port + server language + no client signals ---
         # Only for languages that are typically server-side. Swift/Kotlin/Java
         # mobile code often references ports as API clients, not servers.
+        # Also exclude utility/build directories that may reference ports in scripts.
+        utility_dir_names = {"scripts", "bin", "tools", "utils", "ci", "build", "devops", "deploy"}
         server_languages = {"python", "rust", "go", "ruby", "typescript", "javascript"}
         if (comp.port and comp.language in server_languages
-                and not (pkg_deps & client_deps)):
+                and not (pkg_deps & client_deps)
+                and dir_name not in utility_dir_names):
             return "api-server"
 
         # --- Web client ---
@@ -1815,6 +1818,31 @@ class ArchitectureScanner:
                                     label=f"port {port}",
                                 ))
                             break
+
+        # Watch app -> iOS client companion relationship
+        watch_apps = [c for c in self._component_map.values() if c.type == "watch-app"]
+        ios_clients = [c for c in self._component_map.values() if c.type == "ios-client"]
+        if watch_apps and ios_clients:
+            # Pair each watch app with the most likely iOS companion
+            # (same project, closest shared parent, or just the first iOS client)
+            for watch in watch_apps:
+                best_ios = ios_clients[0]
+                # Prefer an iOS client in the same parent directory
+                watch_parent = os.path.dirname(watch.path) if watch.path else ""
+                for ios in ios_clients:
+                    ios_parent = os.path.dirname(ios.path) if ios.path else ""
+                    if watch_parent == ios_parent or watch.name.lower().replace(" watch", "").replace("watch", "").strip() in ios.name.lower():
+                        best_ios = ios
+                        break
+                key = (watch.id, best_ios.id, "import")
+                if key not in seen:
+                    seen.add(key)
+                    relationships.append(Relationship(
+                        source=watch.id,
+                        target=best_ios.id,
+                        type="import",
+                        label="companion app",
+                    ))
 
         # Docker-compose service relationships
         for comp in self._component_map.values():

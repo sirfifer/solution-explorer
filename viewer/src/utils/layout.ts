@@ -16,9 +16,9 @@ export async function getLayoutedElements(
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": direction,
-      "elk.spacing.nodeNode": "60",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "80",
-      "elk.padding": "[top=40,left=40,bottom=40,right=40]",
+      "elk.spacing.nodeNode": "100",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "120",
+      "elk.padding": "[top=60,left=60,bottom=60,right=60]",
       "elk.layered.mergeEdges": "true",
       "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
       "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
@@ -65,6 +65,8 @@ const TYPE_COLORS: Record<string, { bg: string; border: string; text: string; ba
   project: { bg: "bg-zinc-800/60", border: "border-zinc-500/50", text: "text-zinc-300", badge: "bg-zinc-500/20 text-zinc-300" },
   repository: { bg: "bg-indigo-950/60", border: "border-indigo-500/50", text: "text-indigo-300", badge: "bg-indigo-500/20 text-indigo-300" },
   "mobile-client": { bg: "bg-orange-950/60", border: "border-orange-500/50", text: "text-orange-300", badge: "bg-orange-500/20 text-orange-300" },
+  "ios-client": { bg: "bg-orange-950/60", border: "border-orange-500/50", text: "text-orange-300", badge: "bg-orange-500/20 text-orange-300" },
+  "android-client": { bg: "bg-emerald-950/60", border: "border-emerald-500/50", text: "text-emerald-300", badge: "bg-emerald-500/20 text-emerald-300" },
   "web-client": { bg: "bg-sky-950/60", border: "border-sky-500/50", text: "text-sky-300", badge: "bg-sky-500/20 text-sky-300" },
   "api-server": { bg: "bg-green-950/60", border: "border-green-500/50", text: "text-green-300", badge: "bg-green-500/20 text-green-300" },
   "watch-app": { bg: "bg-pink-950/60", border: "border-pink-500/50", text: "text-pink-300", badge: "bg-pink-500/20 text-pink-300" },
@@ -83,6 +85,8 @@ const TYPE_COLORS_LIGHT: Record<string, { bg: string; border: string; text: stri
   project: { bg: "bg-zinc-50", border: "border-zinc-300", text: "text-zinc-700", badge: "bg-zinc-100 text-zinc-700" },
   repository: { bg: "bg-indigo-50", border: "border-indigo-300", text: "text-indigo-700", badge: "bg-indigo-100 text-indigo-700" },
   "mobile-client": { bg: "bg-orange-50", border: "border-orange-300", text: "text-orange-700", badge: "bg-orange-100 text-orange-700" },
+  "ios-client": { bg: "bg-orange-50", border: "border-orange-300", text: "text-orange-700", badge: "bg-orange-100 text-orange-700" },
+  "android-client": { bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-700" },
   "web-client": { bg: "bg-sky-50", border: "border-sky-300", text: "text-sky-700", badge: "bg-sky-100 text-sky-700" },
   "api-server": { bg: "bg-green-50", border: "border-green-300", text: "text-green-700", badge: "bg-green-100 text-green-700" },
   "watch-app": { bg: "bg-pink-50", border: "border-pink-300", text: "text-pink-700", badge: "bg-pink-100 text-pink-700" },
@@ -99,6 +103,8 @@ export function getTypeColors(type: string, dark: boolean = true) {
 // Human-readable labels and icons for component types
 export const TYPE_META: Record<string, { icon: string; label: string }> = {
   "mobile-client": { icon: "\u{1F4F1}", label: "Mobile Client" },
+  "ios-client": { icon: "\u{1F34F}", label: "iOS Client" },
+  "android-client": { icon: "\u{1F916}", label: "Android Client" },
   "web-client": { icon: "\u{1F310}", label: "Web Client" },
   "api-server": { icon: "\u2699\uFE0F", label: "API Server" },
   "watch-app": { icon: "\u231A", label: "Watch App" },
@@ -189,6 +195,8 @@ export function getEdgeStyle(type: string) {
 export const HERO_TYPES = new Set([
   "api-server",
   "mobile-client",
+  "ios-client",
+  "android-client",
   "web-client",
   "watch-app",
   "desktop-app",
@@ -204,6 +212,8 @@ export function isHeroType(type: string): boolean {
 // Glow colors for hero types (used for box-shadow)
 const HERO_GLOW: Record<string, { dark: string; light: string }> = {
   "mobile-client": { dark: "rgba(249,115,22,0.18)", light: "rgba(249,115,22,0.14)" },
+  "ios-client": { dark: "rgba(249,115,22,0.18)", light: "rgba(249,115,22,0.14)" },
+  "android-client": { dark: "rgba(16,185,129,0.18)", light: "rgba(16,185,129,0.14)" },
   "web-client": { dark: "rgba(14,165,233,0.18)", light: "rgba(14,165,233,0.14)" },
   "api-server": { dark: "rgba(34,197,94,0.18)", light: "rgba(34,197,94,0.14)" },
   "watch-app": { dark: "rgba(236,72,153,0.18)", light: "rgba(236,72,153,0.14)" },
