@@ -38,7 +38,7 @@ export function ArchitectureGraph() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { fitView } = useReactFlow();
+  const { fitView, setCenter, getNodes, getEdges } = useReactFlow();
   const layoutTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Build nodes and edges from visible components
@@ -115,6 +115,70 @@ export function ArchitectureGraph() {
       if (layoutTimeout.current) clearTimeout(layoutTimeout.current);
     };
   }, [rawNodes, rawEdges, setNodes, setEdges, fitView]);
+
+  // Pan to selected node and highlight its neighbors
+  useEffect(() => {
+    if (!selectedComponentId) {
+      // Reset all opacities
+      setNodes((nds) => nds.map((n) => ({
+        ...n,
+        style: { ...n.style, opacity: 1, transition: "opacity 0.3s ease" },
+      })));
+      setEdges((eds) => eds.map((e) => ({
+        ...e,
+        style: { ...e.style, opacity: 1, transition: "opacity 0.3s ease" },
+      })));
+      return;
+    }
+
+    // Find selected node's current rendered position (after ELK layout)
+    const currentNodes = getNodes();
+    const selectedNode = currentNodes.find((n) => n.id === selectedComponentId);
+    if (!selectedNode) return;
+
+    // Pan to center on selected node
+    const nodeWidth = selectedNode.measured?.width ?? 280;
+    const nodeHeight = selectedNode.measured?.height ?? 140;
+    setCenter(
+      selectedNode.position.x + nodeWidth / 2,
+      selectedNode.position.y + nodeHeight / 2,
+      { duration: 400 },
+    );
+
+    // Compute neighbor set from current edges (read via getEdges to avoid dependency loop)
+    const currentEdges = getEdges();
+    const neighborIds = new Set<string>();
+    const connectedEdgeIds = new Set<string>();
+    currentEdges.forEach((e) => {
+      if (e.source === selectedComponentId || e.target === selectedComponentId) {
+        neighborIds.add(e.source);
+        neighborIds.add(e.target);
+        connectedEdgeIds.add(e.id);
+      }
+    });
+
+    // Dim non-neighbors
+    setNodes((nds) => nds.map((n) => ({
+      ...n,
+      style: {
+        ...n.style,
+        opacity: n.id === selectedComponentId || neighborIds.has(n.id) ? 1 : 0.15,
+        transition: "opacity 0.3s ease",
+      },
+    })));
+
+    // Dim non-connected edges, thicken connected ones
+    setEdges((eds) => eds.map((e) => ({
+      ...e,
+      style: {
+        ...e.style,
+        opacity: connectedEdgeIds.has(e.id) ? 1 : 0.08,
+        strokeWidth: connectedEdgeIds.has(e.id) ? 2.5 : undefined,
+        transition: "opacity 0.3s ease",
+      },
+      animated: connectedEdgeIds.has(e.id) ? true : false,
+    })));
+  }, [selectedComponentId, getNodes, getEdges, setCenter, setNodes, setEdges]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {

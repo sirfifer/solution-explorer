@@ -385,9 +385,12 @@ export const ComponentNode = memo(function ComponentNode({
   selected,
 }: NodeProps) {
   const { component } = data as ComponentNodeData;
-  const { selectComponent, drillInto, darkMode, reviewMode, annotations } = useArchStore();
+  const { selectComponent, drillInto, darkMode, reviewMode, annotations, architecture } = useArchStore();
   const colors = getTypeColors(component.type, darkMode);
   const annotationCount = annotations.filter((a) => a.componentId === component.id).length;
+  const connectionCount = architecture?.relationships.filter(
+    (r) => r.source === component.id || r.target === component.id,
+  ).length ?? 0;
   const hasChildren = component.children.length > 0 || component.files.length > 0;
   const langColor = component.language ? getLanguageColor(component.language) : null;
   const [hovered, setHovered] = useState(false);
@@ -542,6 +545,11 @@ export const ComponentNode = memo(function ComponentNode({
           {docs?.api_endpoints && docs.api_endpoints.length > 0 && (
             <span className={`text-[9px] ${darkMode ? "text-blue-600" : "text-blue-500"}`} title="Has API endpoints">
               API
+            </span>
+          )}
+          {connectionCount > 0 && (
+            <span className={darkMode ? "text-zinc-600" : "text-zinc-400"} title={`${connectionCount} connection${connectionCount !== 1 ? "s" : ""} to other components`}>
+              {connectionCount} conn
             </span>
           )}
         </div>
