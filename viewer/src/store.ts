@@ -289,9 +289,19 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
     const parent = findComponent(architecture.components, drillLevel);
     if (!parent) return [];
-    // When drilled in, also exclude content components from the graph
+    // When drilled in, exclude content components and small internal modules
     const children = parent.children.length > 0 ? parent.children : [parent];
-    return children.filter((c) => c.type !== "content");
+    const hasHero = children.some((c) => isHeroType(c.type));
+    return children.filter((c) => {
+      if (c.type === "content") return false;
+      // When hero components exist at this level, hide small internal modules
+      if (hasHero && !isHeroType(c.type)
+          && c.type !== "library" && c.type !== "infrastructure"
+          && c.children.length === 0 && c.files.length < 10) {
+        return false;
+      }
+      return true;
+    });
   },
 
   getComponentRelationships: () => {
@@ -365,6 +375,24 @@ export function flattenTopLevel(components: Component[]): Component[] {
   // Try architecture-first view: surface all hero components
   const heroes = collectHeroComponents(components);
   if (heroes.length > 0) {
+    // When hero components exist, filter out small non-hero modules that are
+    // internal to a larger project (e.g., "WatchModels", "Shared").
+    // Keep libraries, infrastructure, and substantial modules.
+    const hasHero = heroes.some((c) => isHeroType(c.type));
+    if (hasHero) {
+      const significantTypes = new Set([
+        "library", "infrastructure", "repository", "project",
+      ]);
+      return heroes.filter((c) => {
+        if (isHeroType(c.type) || c.type === "content") return true;
+        if (significantTypes.has(c.type)) return true;
+        // Keep modules/packages that have children (drillable) or many files
+        if (c.children.length > 0) return true;
+        if (c.files.length >= 10) return true;
+        // Small internal modules without children are hidden from graph
+        return false;
+      });
+    }
     return heroes;
   }
 

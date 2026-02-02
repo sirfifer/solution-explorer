@@ -104,6 +104,10 @@ COMPONENT_MARKERS = {
     "Dockerfile": (None, "service"),
     "docker-compose.yml": (None, "infrastructure"),
     "docker-compose.yaml": (None, "infrastructure"),
+    "template.yaml": (None, "infrastructure"),   # AWS SAM
+    "template.yml": (None, "infrastructure"),     # AWS SAM
+    "serverless.yml": (None, "infrastructure"),   # Serverless Framework
+    "serverless.yaml": (None, "infrastructure"),  # Serverless Framework
     "Info.plist": ("swift", "application"),
 }
 
@@ -1256,6 +1260,131 @@ def parse_docker_compose(path: Path) -> dict:
         return {}
 
 
+def parse_sam_template(path: Path) -> dict:
+    """Extract Lambda functions and API info from AWS SAM template.yaml.
+
+    Uses basic YAML line parsing (no external deps) to find
+    AWS::Serverless::Function resources and their properties.
+    """
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+        functions = []
+        current_resource = None
+        current_type = None
+        current_handler = None
+        current_runtime = None
+        current_code_uri = None
+        in_resources = False
+
+        for line in content.split("\n"):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            if stripped == "Resources:":
+                in_resources = True
+                continue
+
+            if in_resources and not line.startswith(" ") and stripped.endswith(":"):
+                # New top-level section, end of Resources
+                in_resources = False
+                continue
+
+            if not in_resources:
+                continue
+
+            # Resource name (2-space indent under Resources)
+            m = re.match(r'^  (\w[\w-]*):', line)
+            if m:
+                # Save previous resource if it was a Lambda function
+                if current_resource and current_type and "Function" in current_type:
+                    functions.append({
+                        "name": current_resource,
+                        "runtime": current_runtime or "",
+                        "handler": current_handler or "",
+                        "code_uri": current_code_uri or "",
+                    })
+                current_resource = m.group(1)
+                current_type = None
+                current_handler = None
+                current_runtime = None
+                current_code_uri = None
+                continue
+
+            if "Type:" in stripped:
+                m = re.search(r'Type:\s*(.+)', stripped)
+                if m:
+                    current_type = m.group(1).strip()
+
+            if "Handler:" in stripped:
+                m = re.search(r'Handler:\s*(.+)', stripped)
+                if m:
+                    current_handler = m.group(1).strip()
+
+            if "Runtime:" in stripped:
+                m = re.search(r'Runtime:\s*(.+)', stripped)
+                if m:
+                    current_runtime = m.group(1).strip()
+
+            if "CodeUri:" in stripped:
+                m = re.search(r'CodeUri:\s*(.+)', stripped)
+                if m:
+                    current_code_uri = m.group(1).strip()
+
+        # Save last resource
+        if current_resource and current_type and "Function" in current_type:
+            functions.append({
+                "name": current_resource,
+                "runtime": current_runtime or "",
+                "handler": current_handler or "",
+                "code_uri": current_code_uri or "",
+            })
+
+        # Detect API Gateway
+        has_api = bool(re.search(r'AWS::Serverless::Api|AWS::ApiGateway', content))
+
+        return {
+            "functions": functions,
+            "has_api_gateway": has_api,
+            "type": "sam",
+        }
+    except OSError:
+        return {}
+
+
+def parse_serverless_yml(path: Path) -> dict:
+    """Extract function info from serverless.yml (Serverless Framework)."""
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+        functions = []
+        in_functions = False
+        current_fn = None
+
+        for line in content.split("\n"):
+            stripped = line.strip()
+            if stripped == "functions:":
+                in_functions = True
+                continue
+            if in_functions and not line.startswith(" ") and stripped.endswith(":"):
+                in_functions = False
+                continue
+            if not in_functions:
+                continue
+            m = re.match(r'^  (\w[\w-]*):', line)
+            if m:
+                current_fn = m.group(1)
+                functions.append({"name": current_fn})
+
+        provider = ""
+        m = re.search(r'provider:\s*\n\s+name:\s*(\w+)', content)
+        if m:
+            provider = m.group(1)
+
+        return {"functions": functions, "provider": provider, "type": "serverless"}
+    except OSError:
+        return {}
+
+
 # ---------------------------------------------------------------------------
 # Core Scanner
 # ---------------------------------------------------------------------------
@@ -1395,6 +1524,10 @@ class ArchitectureScanner:
                             comp.config_files.append({"type": "pyproject.toml", "path": os.path.join(rel, marker)})
                         elif marker in ("docker-compose.yml", "docker-compose.yaml"):
                             info = parse_docker_compose(marker_path)
+                            # Use service names for a better component description
+                            svc_names = info.get("services", [])
+                            if svc_names:
+                                comp.description = f"Services: {', '.join(svc_names)}"
                             comp.config_files.append({"type": "docker-compose", "path": os.path.join(rel, marker), **info})
                         elif marker == "Info.plist":
                             comp.type = "application"
@@ -1407,6 +1540,23 @@ class ArchitectureScanner:
                             if info.get("name"):
                                 comp.name = info["name"]
                             comp.config_files.append({"type": "Gemfile", "path": os.path.join(rel, marker)})
+                        elif marker in ("template.yaml", "template.yml"):
+                            info = parse_sam_template(marker_path)
+                            if info.get("functions"):
+                                comp.type = "api-server"
+                                fn_names = [f["name"] for f in info["functions"]]
+                                comp.description = f"AWS SAM: {', '.join(fn_names)}"
+                                # Derive a name from the directory or function names
+                                if len(fn_names) == 1:
+                                    comp.name = fn_names[0]
+                            comp.config_files.append({"type": "sam-template", "path": os.path.join(rel, marker), **info})
+                        elif marker in ("serverless.yml", "serverless.yaml"):
+                            info = parse_serverless_yml(marker_path)
+                            if info.get("functions"):
+                                comp.type = "api-server"
+                                fn_names = [f["name"] for f in info["functions"]]
+                                comp.description = f"Serverless: {', '.join(fn_names)}"
+                            comp.config_files.append({"type": "serverless", "path": os.path.join(rel, marker), **info})
 
                         self._component_map[rel] = comp
                         break
@@ -1661,6 +1811,29 @@ class ArchitectureScanner:
             ruby_server_deps = {"rails", "sinatra", "grape", "hanami", "roda"}
             if ruby_deps & ruby_server_deps:
                 return "api-server"
+
+        # --- Service: standalone server scripts ---
+        # Detect directories containing explicitly-named server files (e.g.,
+        # log_server.py, gateway.py) that import HTTP server modules, even in
+        # utility directories that would otherwise be excluded.
+        if comp.language == "python" or (not comp.language and comp.files):
+            server_file_patterns = re.compile(
+                r'(?:^|/)(?:.*server.*|.*gateway.*|.*daemon.*)\.py$', re.I)
+            server_imports = {
+                "http.server", "aiohttp", "flask", "fastapi", "tornado",
+                "uvicorn", "gunicorn", "starlette", "socketserver",
+            }
+            for fpath in comp.files:
+                if server_file_patterns.search(fpath):
+                    try:
+                        content = (self.root / fpath).read_text(
+                            encoding="utf-8", errors="replace")
+                        for srv_import in server_imports:
+                            if (f"import {srv_import}" in content
+                                    or f"from {srv_import}" in content):
+                                return "service"
+                    except OSError:
+                        pass
 
         # --- API server: port + server language + no client signals ---
         # Only for languages that are typically server-side. Swift/Kotlin/Java
