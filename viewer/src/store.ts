@@ -289,7 +289,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
     const parent = findComponent(architecture.components, drillLevel);
     if (!parent) return [];
-    return parent.children.length > 0 ? parent.children : [parent];
+    // When drilled in, also exclude content components from the graph
+    const children = parent.children.length > 0 ? parent.children : [parent];
+    return children.filter((c) => c.type !== "content");
   },
 
   getComponentRelationships: () => {
