@@ -2107,8 +2107,9 @@ class ArchitectureScanner:
                                     target=target_comp.id,
                                     type="http",
                                     port=port,
-                                    protocol="REST",
+                                    protocol="HTTP",
                                     label=f"port {port}",
+                                    bidirectional=True,
                                 ))
                             break
 

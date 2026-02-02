@@ -9,6 +9,7 @@ import type {
   Panel,
   Symbol,
   FileInfo,
+  Relationship,
 } from "./types";
 import { isHeroType } from "./utils/layout";
 
@@ -75,7 +76,7 @@ interface ArchStore {
   // Helpers
   getComponentById: (id: string) => Component | null;
   getVisibleComponents: () => Component[];
-  getComponentRelationships: () => { source: string; target: string; type: string; label: string | null; port: number | null }[];
+  getComponentRelationships: () => Relationship[];
   getComponentFiles: (componentId: string) => FileInfo[];
   getComponentSymbols: (componentId: string) => Symbol[];
 }

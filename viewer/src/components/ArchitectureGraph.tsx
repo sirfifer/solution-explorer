@@ -16,7 +16,8 @@ import {
 } from "@xyflow/react";
 import { useArchStore } from "../store";
 import { ComponentNode } from "./ComponentNode";
-import { getLayoutedElements, getEdgeStyle } from "../utils/layout";
+import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles } from "../utils/layout";
+import type { Relationship } from "../types";
 
 const nodeTypes: NodeTypes = {
   component: ComponentNode,
@@ -36,10 +37,46 @@ export function ArchitectureGraph() {
     drillUp,
   } = useArchStore();
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const { fitView, setCenter, getNodes, getEdges } = useReactFlow();
   const layoutTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Wrap onNodesChange to recompute edge handles when nodes are dragged
+  const onNodesChange = useCallback(
+    (changes: Parameters<typeof onNodesChangeBase>[0]) => {
+      onNodesChangeBase(changes);
+
+      // If any position changes occurred, recompute handles
+      const hasDrag = changes.some((c) => c.type === "position" && c.position);
+      if (hasDrag) {
+        // Use getNodes to get current positions after the change is applied
+        requestAnimationFrame(() => {
+          const currentNodes = getNodes();
+          const nodeMap = new Map(currentNodes.map((n) => [n.id, n]));
+          setEdges((eds) =>
+            eds.map((edge) => {
+              const sourceNode = nodeMap.get(edge.source);
+              const targetNode = nodeMap.get(edge.target);
+              if (sourceNode && targetNode) {
+                const { sourceHandle, targetHandle } = computeOptimalHandles(
+                  sourceNode.position,
+                  { width: sourceNode.measured?.width ?? 280, height: sourceNode.measured?.height ?? 140 },
+                  targetNode.position,
+                  { width: targetNode.measured?.width ?? 280, height: targetNode.measured?.height ?? 140 },
+                );
+                if (edge.sourceHandle !== sourceHandle || edge.targetHandle !== targetHandle) {
+                  return { ...edge, sourceHandle, targetHandle };
+                }
+              }
+              return edge;
+            }),
+          );
+        });
+      }
+    },
+    [onNodesChangeBase, getNodes, setEdges],
+  );
 
   // Build nodes and edges from visible components
   const { rawNodes, rawEdges } = useMemo(() => {
@@ -58,17 +95,44 @@ export function ArchitectureGraph() {
 
     const nodeIds = new Set(newNodes.map((n) => n.id));
     const newEdges: Edge[] = relationships
-      .filter((r) => nodeIds.has(r.source) && nodeIds.has(r.target))
-      .map((r, i) => {
+      .filter((r: Relationship) => nodeIds.has(r.source) && nodeIds.has(r.target))
+      .map((r: Relationship, i: number) => {
         const style = getEdgeStyle(r.type);
-        return {
+        const category = getEdgeCategory(r.type);
+
+        // Build a descriptive label for the edge
+        let edgeLabel = "";
+        if (category === "communication") {
+          const parts: string[] = [];
+          if (r.protocol) parts.push(r.protocol);
+          if (r.port) parts.push(`:${r.port}`);
+          if (parts.length > 0) {
+            edgeLabel = parts.join(" ");
+          } else if (r.label) {
+            edgeLabel = r.label;
+          }
+        } else {
+          // Structural edges get a simpler label
+          if (r.label && r.label !== r.type) {
+            edgeLabel = r.label;
+          }
+        }
+
+        // Structural edges use a lighter, thinner marker style
+        const markerSize = category === "communication" ? 16 : 12;
+
+        const edge: Edge = {
           id: `e-${r.source}-${r.target}-${i}`,
           source: r.source,
           target: r.target,
           type: "smoothstep",
           animated: style.animated,
-          label: r.label || undefined,
-          labelStyle: { fill: darkMode ? "#9CA3AF" : "#6B7280", fontSize: 11 },
+          label: edgeLabel || undefined,
+          labelStyle: {
+            fill: darkMode ? "#9CA3AF" : "#6B7280",
+            fontSize: category === "communication" ? 11 : 10,
+            fontFamily: category === "communication" ? "ui-monospace, monospace" : undefined,
+          },
           labelBgStyle: {
             fill: darkMode ? "#18181B" : "#FFFFFF",
             fillOpacity: 0.9,
@@ -76,14 +140,27 @@ export function ArchitectureGraph() {
           style: {
             stroke: style.color,
             strokeDasharray: style.dash || undefined,
+            strokeWidth: style.strokeWidth,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color: style.color,
-            width: 16,
-            height: 16,
+            width: markerSize,
+            height: markerSize,
           },
         };
+
+        // Bidirectional edges get an arrow on both ends
+        if (r.bidirectional) {
+          edge.markerStart = {
+            type: MarkerType.ArrowClosed,
+            color: style.color,
+            width: markerSize,
+            height: markerSize,
+          };
+        }
+
+        return edge;
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
@@ -103,8 +180,27 @@ export function ArchitectureGraph() {
     }
 
     getLayoutedElements(rawNodes, rawEdges, "RIGHT").then(({ nodes: ln, edges: le }) => {
+      // Build a position map for optimal handle computation
+      const nodeMap = new Map(ln.map((n) => [n.id, n]));
+
+      // Assign optimal handles to each edge based on relative node positions
+      const edgesWithHandles = le.map((edge) => {
+        const sourceNode = nodeMap.get(edge.source);
+        const targetNode = nodeMap.get(edge.target);
+        if (sourceNode && targetNode) {
+          const { sourceHandle, targetHandle } = computeOptimalHandles(
+            sourceNode.position,
+            { width: sourceNode.measured?.width ?? 280, height: sourceNode.measured?.height ?? 140 },
+            targetNode.position,
+            { width: targetNode.measured?.width ?? 280, height: targetNode.measured?.height ?? 140 },
+          );
+          return { ...edge, sourceHandle, targetHandle };
+        }
+        return edge;
+      });
+
       setNodes(ln);
-      setEdges(le);
+      setEdges(edgesWithHandles);
       // Delay fitView to allow rendering
       layoutTimeout.current = setTimeout(() => {
         fitView({ padding: 0.15, duration: 300 });

@@ -443,8 +443,15 @@ export const ComponentNode = memo(function ComponentNode({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <Handle type="target" position={Position.Left} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
-      <Handle type="source" position={Position.Right} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
+      {/* Handles on all 4 sides for intelligent edge routing */}
+      <Handle id="target-left" type="target" position={Position.Left} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
+      <Handle id="target-top" type="target" position={Position.Top} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
+      <Handle id="target-right" type="target" position={Position.Right} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
+      <Handle id="target-bottom" type="target" position={Position.Bottom} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
+      <Handle id="source-left" type="source" position={Position.Left} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
+      <Handle id="source-top" type="source" position={Position.Top} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
+      <Handle id="source-right" type="source" position={Position.Right} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
+      <Handle id="source-bottom" type="source" position={Position.Bottom} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
 
       {/* Hover documentation card */}
       {hovered && <HoverCard component={component} darkMode={darkMode} />}

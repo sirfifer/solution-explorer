@@ -176,19 +176,80 @@ export function formatRelativeTime(isoString: string): string {
   return date.toLocaleDateString();
 }
 
+// Edge categories: "communication" edges carry runtime data, "structural" edges
+// represent code-level or organizational relationships (imports, FFI, companions).
+export type EdgeCategory = "communication" | "structural";
+
+export function getEdgeCategory(type: string): EdgeCategory {
+  if (["http", "websocket", "grpc", "database", "file"].includes(type)) {
+    return "communication";
+  }
+  return "structural";
+}
+
 // Relationship type to edge style
-const EDGE_STYLES: Record<string, { color: string; animated: boolean; dash: string }> = {
-  import: { color: "#6B7280", animated: false, dash: "" },
-  http: { color: "#3B82F6", animated: true, dash: "" },
-  websocket: { color: "#8B5CF6", animated: true, dash: "5 5" },
-  grpc: { color: "#10B981", animated: true, dash: "" },
-  ffi: { color: "#F59E0B", animated: false, dash: "3 3" },
-  database: { color: "#EC4899", animated: false, dash: "" },
-  file: { color: "#6B7280", animated: false, dash: "8 4" },
+// Communication edges: colored, animated, solid lines with arrows
+// Structural edges: gray, not animated, dashed to clearly differentiate
+const EDGE_STYLES: Record<string, { color: string; animated: boolean; dash: string; strokeWidth: number }> = {
+  import:    { color: "#6B7280", animated: false, dash: "6 4",  strokeWidth: 1.2 },
+  http:      { color: "#3B82F6", animated: true,  dash: "",     strokeWidth: 2 },
+  websocket: { color: "#8B5CF6", animated: true,  dash: "",     strokeWidth: 2 },
+  grpc:      { color: "#10B981", animated: true,  dash: "",     strokeWidth: 2 },
+  ffi:       { color: "#F59E0B", animated: false, dash: "4 3",  strokeWidth: 1.2 },
+  database:  { color: "#EC4899", animated: true,  dash: "",     strokeWidth: 2 },
+  file:      { color: "#6B7280", animated: true,  dash: "8 4",  strokeWidth: 1.5 },
 };
 
 export function getEdgeStyle(type: string) {
   return EDGE_STYLES[type] || EDGE_STYLES.import;
+}
+
+// Compute the best handle pair for an edge based on relative node positions.
+// Returns { sourceHandle, targetHandle } IDs matching the handles on ComponentNode.
+export function computeOptimalHandles(
+  sourcePos: { x: number; y: number },
+  sourceSize: { width: number; height: number },
+  targetPos: { x: number; y: number },
+  targetSize: { width: number; height: number },
+): { sourceHandle: string; targetHandle: string } {
+  // Compute center points
+  const sx = sourcePos.x + sourceSize.width / 2;
+  const sy = sourcePos.y + sourceSize.height / 2;
+  const tx = targetPos.x + targetSize.width / 2;
+  const ty = targetPos.y + targetSize.height / 2;
+
+  const dx = tx - sx;
+  const dy = ty - sy;
+
+  // Determine predominant direction from source to target
+  // Use node sizes to add a margin so we prefer horizontal when nodes are side-by-side
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+
+  let sourceHandle: string;
+  let targetHandle: string;
+
+  if (absDx >= absDy) {
+    // Horizontal relationship
+    if (dx >= 0) {
+      sourceHandle = "source-right";
+      targetHandle = "target-left";
+    } else {
+      sourceHandle = "source-left";
+      targetHandle = "target-right";
+    }
+  } else {
+    // Vertical relationship
+    if (dy >= 0) {
+      sourceHandle = "source-bottom";
+      targetHandle = "target-top";
+    } else {
+      sourceHandle = "source-top";
+      targetHandle = "target-bottom";
+    }
+  }
+
+  return { sourceHandle, targetHandle };
 }
 
 // "Hero" component types: key architectural building blocks that should stand out visually
