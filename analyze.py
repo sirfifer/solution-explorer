@@ -121,6 +121,14 @@ CONTENT_EXTENSIONS = {
     ".csv", ".tsv", ".xml",
 }
 
+# Languages considered actual code (for port detection and relationship scanning).
+# Excludes markup, config, and content languages that can contain port-like numbers.
+CODE_LANGUAGES = {
+    "swift", "python", "rust", "typescript", "javascript",
+    "go", "java", "kotlin", "ruby", "cpp", "c", "csharp", "dart",
+    "vue", "svelte", "shell",
+}
+
 # ---------------------------------------------------------------------------
 # Data Models
 # ---------------------------------------------------------------------------
@@ -949,6 +957,111 @@ class GoParser(BaseParser):
         return min(start + 10, len(lines) - 1)
 
 
+class RubyParser(BaseParser):
+    """Parser for Ruby source files."""
+
+    SYMBOL_PATTERNS = [
+        (r'^\s*(class|module)\s+([A-Z]\w*(?:::[A-Z]\w*)*)', "type"),
+        (r'^\s*def\s+(self\.)?(\w+[?!=]?)', "function"),
+    ]
+
+    def extract_symbols(self, content: str, file_path: str) -> list[Symbol]:
+        symbols = []
+        lines = content.split("\n")
+        for i, line in enumerate(lines):
+            # Class / module
+            m = re.match(r'^\s*(class|module)\s+([A-Z]\w*(?:::[A-Z]\w*)*)', line)
+            if m:
+                kind = m.group(1)
+                name = m.group(2)
+                end = self._find_ruby_end(lines, i)
+                vis = "public"
+                docstring = self._extract_docstring_before(lines, i)
+                symbols.append(Symbol(
+                    id=self._make_symbol_id(file_path, name, i + 1),
+                    name=name, kind=kind, file=file_path,
+                    line=i + 1, end_line=end + 1,
+                    code_preview=self._get_code_preview(lines, i),
+                    visibility=vis,
+                    docstring=docstring,
+                ))
+                continue
+
+            # Methods
+            m = re.match(r'^\s*def\s+(self\.)?(\w+[?!=]?)', line)
+            if m:
+                name = m.group(2)
+                if m.group(1):
+                    name = f"self.{name}"
+                end = self._find_ruby_end(lines, i)
+                docstring = self._extract_docstring_before(lines, i)
+                symbols.append(Symbol(
+                    id=self._make_symbol_id(file_path, name, i + 1),
+                    name=name, kind="function", file=file_path,
+                    line=i + 1, end_line=end + 1,
+                    code_preview=self._get_code_preview(lines, i),
+                    visibility="public" if not name.startswith("_") else "private",
+                    docstring=docstring,
+                ))
+        return symbols
+
+    def extract_imports(self, content: str) -> list[str]:
+        imports = set()
+        for m in re.finditer(r"""require\s+['"]([^'"]+)['"]""", content):
+            imports.add(m.group(1).split("/")[0])
+        for m in re.finditer(r"""require_relative\s+['"]([^'"]+)['"]""", content):
+            imports.add(m.group(1).split("/")[0])
+        return sorted(imports)
+
+    def detect_framework(self, content: str) -> Optional[str]:
+        if "Rails" in content or "ActiveRecord" in content or "ActionController" in content:
+            return "Rails"
+        if "Sinatra" in content or "Sinatra::Base" in content:
+            return "Sinatra"
+        if "Grape::API" in content:
+            return "Grape"
+        if "Hanami" in content:
+            return "Hanami"
+        return None
+
+    def detect_api_endpoints(self, content: str) -> list[dict]:
+        endpoints = []
+        # Rails-style routes
+        for m in re.finditer(
+            r'(?:get|post|put|patch|delete)\s+["\']([^"\']+)',
+            content,
+        ):
+            method = "GET"
+            line = content[:m.start()].split("\n")[-1]
+            for verb in ("post", "put", "patch", "delete"):
+                if verb in line.lower():
+                    method = verb.upper()
+                    break
+            endpoints.append({"method": method, "path": m.group(1)})
+        # Sinatra-style
+        for m in re.finditer(
+            r'(get|post|put|patch|delete)\s+["\']([^"\']+)',
+            content,
+        ):
+            endpoints.append({"method": m.group(1).upper(), "path": m.group(2)})
+        return endpoints
+
+    def _find_ruby_end(self, lines, start):
+        depth = 0
+        block_keywords = re.compile(
+            r'^\s*(?:class|module|def|do|if|unless|case|while|until|for|begin)\b'
+        )
+        for i in range(start, min(start + 500, len(lines))):
+            stripped = lines[i].strip()
+            if block_keywords.match(lines[i]) or stripped.endswith(" do"):
+                depth += 1
+            if stripped == "end" or stripped.startswith("end ") or stripped.startswith("end;"):
+                depth -= 1
+                if depth == 0:
+                    return i
+        return min(start + 10, len(lines) - 1)
+
+
 # Map language to parser
 PARSERS = {
     "swift": SwiftParser(),
@@ -957,6 +1070,7 @@ PARSERS = {
     "typescript": TypeScriptParser(),
     "javascript": TypeScriptParser(),
     "go": GoParser(),
+    "ruby": RubyParser(),
 }
 
 
@@ -1026,6 +1140,41 @@ def parse_pyproject_toml(path: Path) -> dict:
                 info["dependencies"].append(dep)
         return info
     except OSError:
+        return {}
+
+
+def parse_info_plist(path: Path) -> dict:
+    """Parse Info.plist for app metadata using stdlib plistlib."""
+    try:
+        import plistlib
+        with open(path, "rb") as f:
+            plist = plistlib.load(f)
+        return {
+            "name": plist.get("CFBundleDisplayName") or plist.get("CFBundleName") or "",
+            "bundle_id": plist.get("CFBundleIdentifier", ""),
+        }
+    except Exception:
+        return {}
+
+
+def parse_gemfile(path: Path) -> dict:
+    """Parse Gemfile for Ruby dependencies and app name."""
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+        gems = set()
+        for m in re.finditer(r"""gem\s+['"]([^'"]+)['"]""", content):
+            gems.add(m.group(1))
+        # Try to get app name from config/application.rb (Rails convention)
+        app_rb = path.parent / "config" / "application.rb"
+        name = ""
+        if app_rb.exists():
+            app_content = app_rb.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r'module\s+(\w+)', app_content)
+            if m:
+                # Convert CamelCase to readable: "UnaMentisApi" -> "UnaMentis Api"
+                name = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', m.group(1))
+        return {"name": name, "dependencies": list(gems)}
+    except Exception:
         return {}
 
 
@@ -1212,7 +1361,15 @@ class ArchitectureScanner:
                             comp.config_files.append({"type": "docker-compose", "path": os.path.join(rel, marker), **info})
                         elif marker == "Info.plist":
                             comp.type = "application"
+                            info = parse_info_plist(marker_path)
+                            if info.get("name"):
+                                comp.name = info["name"]
                             comp.config_files.append({"type": "Info.plist", "path": os.path.join(rel, marker)})
+                        elif marker == "Gemfile":
+                            info = parse_gemfile(marker_path)
+                            if info.get("name"):
+                                comp.name = info["name"]
+                            comp.config_files.append({"type": "Gemfile", "path": os.path.join(rel, marker)})
 
                         self._component_map[rel] = comp
                         break
@@ -1289,12 +1446,13 @@ class ArchitectureScanner:
                         if comp and not comp.framework:
                             comp.framework = fw
 
-                    # Detect ports
-                    ports = parser.detect_ports(content)
-                    if ports:
-                        comp = self._find_component_for_file(rel)
-                        if comp and not comp.port:
-                            comp.port = ports[0]
+                    # Detect ports (only in code files, not docs/config)
+                    if lang in CODE_LANGUAGES:
+                        ports = parser.detect_ports(content)
+                        if ports:
+                            comp = self._find_component_for_file(rel)
+                            if comp and not comp.port:
+                                comp.port = ports[0]
 
                 # Extract file-level documentation
                 module_doc = None
@@ -1440,6 +1598,7 @@ class ArchitectureScanner:
             "express", "fastify", "hono", "koa", "nestjs",
             "flask", "django", "fastapi", "starlette", "aiohttp",
             "tornado", "gin", "echo", "fiber",
+            "rails", "sinatra", "grape", "hanami",
         }
         if framework in server_frameworks:
             return "api-server"
@@ -1456,6 +1615,15 @@ class ArchitectureScanner:
         rust_server_deps = {"axum", "actix-web", "rocket", "warp"}
         if cargo_deps & rust_server_deps:
             return "api-server"
+
+        # --- API server: Ruby deps ---
+        has_gemfile = (comp_dir / "Gemfile").exists()
+        if has_gemfile:
+            gem_info = parse_gemfile(comp_dir / "Gemfile")
+            ruby_deps = set(gem_info.get("dependencies", []))
+            ruby_server_deps = {"rails", "sinatra", "grape", "hanami", "roda"}
+            if ruby_deps & ruby_server_deps:
+                return "api-server"
 
         # --- API server: port + server language + no client signals ---
         # Only for languages that are typically server-side. Swift/Kotlin/Java
@@ -1494,6 +1662,10 @@ class ArchitectureScanner:
         relationships = []
         seen = set()
 
+        # Content components should not participate in relationships
+        content_ids = {comp.id for comp in self._component_map.values()
+                       if comp.type == "content"}
+
         # Build a map of component paths to IDs
         comp_by_path = {}
         for path, comp in self._component_map.items():
@@ -1502,13 +1674,14 @@ class ArchitectureScanner:
         # Import-based relationships
         for file_info in self._all_files:
             source_comp = self._find_component_for_file(file_info.path)
-            if not source_comp:
+            if not source_comp or source_comp.id in content_ids:
                 continue
 
             for imp in file_info.imports:
                 # Try to resolve import to a component
                 target_comp = self._resolve_import_to_component(imp, file_info.path)
-                if target_comp and target_comp.id != source_comp.id:
+                if (target_comp and target_comp.id != source_comp.id
+                        and target_comp.id not in content_ids):
                     key = (source_comp.id, target_comp.id, "import")
                     if key not in seen:
                         seen.add(key)
@@ -1522,12 +1695,15 @@ class ArchitectureScanner:
         # Port-based relationships (service A calls service B's port)
         port_map = {}  # port -> component
         for comp in self._component_map.values():
-            if comp.port:
+            if comp.port and comp.id not in content_ids:
                 port_map[comp.port] = comp
 
         for file_info in self._all_files:
+            # Only scan code files for port references, not docs/config
+            if file_info.language not in CODE_LANGUAGES:
+                continue
             source_comp = self._find_component_for_file(file_info.path)
-            if not source_comp:
+            if not source_comp or source_comp.id in content_ids:
                 continue
 
             try:
@@ -1542,13 +1718,13 @@ class ArchitectureScanner:
                     continue
                 port_str = str(port)
                 if port_str in content:
-                    # Verify it's actually a port reference
+                    # Verify it's actually a port reference with tight patterns
                     patterns = [
-                        f"localhost:{port_str}",
-                        f"127.0.0.1:{port_str}",
-                        f"0.0.0.0:{port_str}",
-                        f"port.*{port_str}",
-                        f":{port_str}",
+                        rf"localhost:{port_str}\b",
+                        rf"127\.0\.0\.1:{port_str}\b",
+                        rf"0\.0\.0\.0:{port_str}\b",
+                        rf"""[\"']https?://[^\"']*:{port_str}\b""",
+                        rf"(?:PORT|port)\s*[=:]\s*{port_str}\b",
                     ]
                     for pat in patterns:
                         if re.search(pat, content):
