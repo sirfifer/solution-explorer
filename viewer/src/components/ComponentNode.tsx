@@ -3,6 +3,8 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { Component } from "../types";
 import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, getHeroGlow } from "../utils/layout";
 import { useArchStore } from "../store";
+import { Tooltip, TechTooltip } from "./Tooltip";
+import { getTechRef, TYPE_DESCRIPTIONS, METRIC_DESCRIPTIONS } from "../utils/techDocs";
 
 interface ComponentNodeData {
   component: Component;
@@ -296,14 +298,24 @@ function HoverCard({ component, darkMode }: { component: Component; darkMode: bo
               Tech Stack
             </div>
             <div className="flex flex-wrap gap-1">
-              {docs.tech_stack.map((t, i) => (
-                <span key={i} className={`
-                  px-1.5 py-0.5 rounded text-[10px]
-                  ${darkMode ? "bg-cyan-900/40 text-cyan-300" : "bg-cyan-100 text-cyan-700"}
-                `}>
-                  {t}
-                </span>
-              ))}
+              {docs.tech_stack.map((t, i) => {
+                const ref = getTechRef(t);
+                const badge = (
+                  <span className={`
+                    px-1.5 py-0.5 rounded text-[10px]
+                    ${darkMode ? "bg-cyan-900/40 text-cyan-300" : "bg-cyan-100 text-cyan-700"}
+                  `}>
+                    {t}
+                  </span>
+                );
+                return ref ? (
+                  <TechTooltip key={i} name={t} description={ref.description} url={ref.url}>
+                    {badge}
+                  </TechTooltip>
+                ) : (
+                  <span key={i}>{badge}</span>
+                );
+              })}
             </div>
           </div>
         )}
@@ -465,14 +477,25 @@ export const ComponentNode = memo(function ComponentNode({
                 {component.name}
               </h3>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={`${isHero ? "text-[11px] px-2 py-0.5" : "text-[10px] px-1.5 py-0.5"} rounded-full font-medium ${colors.badge}`}>
-                  {TYPE_META[component.type]?.label || component.type}
-                </span>
-                {component.framework && (
-                  <span className={`${isHero ? "text-[11px] font-medium" : "text-[10px]"} ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-                    {component.framework}
+                <Tooltip content={TYPE_DESCRIPTIONS[component.type] || component.type} position="bottom">
+                  <span className={`${isHero ? "text-[11px] px-2 py-0.5" : "text-[10px] px-1.5 py-0.5"} rounded-full font-medium ${colors.badge}`}>
+                    {TYPE_META[component.type]?.label || component.type}
                   </span>
-                )}
+                </Tooltip>
+                {component.framework && (() => {
+                  const ref = getTechRef(component.framework);
+                  return ref ? (
+                    <TechTooltip name={component.framework} description={ref.description} url={ref.url}>
+                      <span className={`${isHero ? "text-[11px] font-medium" : "text-[10px]"} ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                        {component.framework}
+                      </span>
+                    </TechTooltip>
+                  ) : (
+                    <span className={`${isHero ? "text-[11px] font-medium" : "text-[10px]"} ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                      {component.framework}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
             {hasChildren && (
@@ -522,35 +545,55 @@ export const ComponentNode = memo(function ComponentNode({
 
         {/* Metrics bar */}
         <div className={`px-4 pb-3 flex items-center gap-3 text-[11px] flex-wrap ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-          {langColor && (
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: langColor }} />
-              <span>{component.language}</span>
-            </div>
-          )}
+          {langColor && (() => {
+            const langRef = component.language ? getTechRef(component.language) : null;
+            const langEl = (
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: langColor }} />
+                <span>{component.language}</span>
+              </span>
+            );
+            return langRef ? (
+              <TechTooltip name={component.language!} description={langRef.description} url={langRef.url}>
+                {langEl}
+              </TechTooltip>
+            ) : langEl;
+          })()}
           {component.metrics?.files > 0 && (
-            <span>{formatNumber(component.metrics.files)} files</span>
+            <Tooltip content={METRIC_DESCRIPTIONS.files}>
+              <span>{formatNumber(component.metrics.files)} files</span>
+            </Tooltip>
           )}
           {component.metrics?.lines > 0 && (
-            <span>{formatNumber(component.metrics.lines)} loc</span>
+            <Tooltip content={METRIC_DESCRIPTIONS.loc}>
+              <span>{formatNumber(component.metrics.lines)} loc</span>
+            </Tooltip>
           )}
           {component.port && (
-            <span className={`font-mono ${darkMode ? "text-blue-400" : "text-blue-600"}`}>:{component.port}</span>
+            <Tooltip content="The network port this service listens on.">
+              <span className={`font-mono ${darkMode ? "text-blue-400" : "text-blue-600"}`}>:{component.port}</span>
+            </Tooltip>
           )}
           {docs?.readme && (
-            <span className={`text-[9px] ${darkMode ? "text-green-600" : "text-green-500"}`} title="Has README">
-              DOC
-            </span>
+            <Tooltip content="This component has a README file with documentation.">
+              <span className={`text-[9px] ${darkMode ? "text-green-600" : "text-green-500"}`}>
+                DOC
+              </span>
+            </Tooltip>
           )}
           {docs?.api_endpoints && docs.api_endpoints.length > 0 && (
-            <span className={`text-[9px] ${darkMode ? "text-blue-600" : "text-blue-500"}`} title="Has API endpoints">
-              API
-            </span>
+            <Tooltip content={`This component exposes ${docs.api_endpoints.length} API endpoint${docs.api_endpoints.length !== 1 ? "s" : ""}.`}>
+              <span className={`text-[9px] ${darkMode ? "text-blue-600" : "text-blue-500"}`}>
+                API
+              </span>
+            </Tooltip>
           )}
           {connectionCount > 0 && (
-            <span className={darkMode ? "text-zinc-600" : "text-zinc-400"} title={`${connectionCount} connection${connectionCount !== 1 ? "s" : ""} to other components`}>
-              {connectionCount} conn
-            </span>
+            <Tooltip content={METRIC_DESCRIPTIONS.conn}>
+              <span className={darkMode ? "text-zinc-600" : "text-zinc-400"}>
+                {connectionCount} conn
+              </span>
+            </Tooltip>
           )}
         </div>
 

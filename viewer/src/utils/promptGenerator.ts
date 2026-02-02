@@ -1,4 +1,4 @@
-import type { Annotation, Architecture, Component } from "../types";
+import type { Annotation, AnnotationTarget, Architecture, Component } from "../types";
 
 export function generateReviewPrompt(
   annotations: Annotation[],
@@ -12,110 +12,219 @@ export function generateReviewPrompt(
   lines.push(`# Architecture Review: ${architecture.name}`);
   lines.push("");
   lines.push("The following is a set of review comments on the project architecture.");
-  lines.push("Each annotation includes the reviewer's feedback and relevant component context.");
+  lines.push("Annotations cover components, individual files, and symbols.");
   lines.push("Please analyze this feedback and suggest concrete implementation changes.");
   lines.push("");
   lines.push("---");
 
-  annotations.forEach((annotation, index) => {
-    const comp = getComponentById(annotation.componentId);
-    if (!comp) return;
+  // Group annotations by target type for organized output
+  const grouped: Record<AnnotationTarget, Annotation[]> = {
+    component: [],
+    file: [],
+    symbol: [],
+  };
+  for (const a of annotations) {
+    grouped[a.targetType || "component"].push(a);
+  }
 
+  let counter = 0;
+
+  // Component annotations (with full context)
+  if (grouped.component.length > 0) {
     lines.push("");
-    lines.push(`## ${index + 1}. ${comp.name} (${comp.type})`);
-    lines.push("");
-    lines.push("**Feedback:**");
-    annotation.text.split("\n").forEach((line) => {
-      lines.push(`> ${line}`);
-    });
-    lines.push("");
-    lines.push("**Component Context:**");
-    lines.push(`- Path: ${comp.path}`);
+    lines.push("# Component-Level Feedback");
 
-    if (comp.docs?.purpose) {
-      lines.push(`- Purpose: ${comp.docs.purpose}`);
-    }
+    for (const annotation of grouped.component) {
+      const comp = getComponentById(annotation.componentId);
+      if (!comp) continue;
+      counter++;
 
-    const details: string[] = [];
-    if (comp.framework) details.push(`Framework: ${comp.framework}`);
-    if (comp.language) details.push(`Language: ${comp.language}`);
-    if (details.length > 0) lines.push(`- ${details.join(" | ")}`);
-
-    if (comp.metrics) {
-      const metrics: string[] = [];
-      if (comp.metrics.files > 0) metrics.push(`${comp.metrics.files} files`);
-      if (comp.metrics.lines > 0) metrics.push(`${comp.metrics.lines} lines`);
-      if (metrics.length > 0) lines.push(`- Size: ${metrics.join(", ")}`);
-    }
-
-    if (comp.docs?.patterns && comp.docs.patterns.length > 0) {
-      lines.push(`- Patterns: ${comp.docs.patterns.join(", ")}`);
-    }
-
-    if (comp.docs?.tech_stack && comp.docs.tech_stack.length > 0) {
-      lines.push(`- Tech Stack: ${comp.docs.tech_stack.join(", ")}`);
-    }
-
-    if (comp.docs?.api_endpoints && comp.docs.api_endpoints.length > 0) {
-      lines.push(`- API Endpoints:`);
-      comp.docs.api_endpoints.slice(0, 10).forEach((ep) => {
-        lines.push(`  - ${ep.method} ${ep.path}`);
-      });
-      if (comp.docs.api_endpoints.length > 10) {
-        lines.push(`  - ... and ${comp.docs.api_endpoints.length - 10} more`);
-      }
-    }
-
-    if (comp.docs?.env_vars && comp.docs.env_vars.length > 0) {
-      lines.push(`- Environment Variables: ${comp.docs.env_vars.join(", ")}`);
-    }
-
-    if (comp.port) {
-      lines.push(`- Port: ${comp.port}`);
-    }
-
-    // Relationships
-    const rels = architecture.relationships.filter(
-      (r) => r.source === comp.id || r.target === comp.id,
-    );
-    if (rels.length > 0) {
       lines.push("");
-      lines.push("**Relationships:**");
-      rels.slice(0, 10).forEach((r) => {
-        const isSource = r.source === comp.id;
-        const otherId = isSource ? r.target : r.source;
-        const otherComp = getComponentById(otherId);
-        const otherName = otherComp?.name || otherId;
-        const direction = isSource ? "->" : "<-";
-        lines.push(`- ${direction} ${otherName} (${r.type}${r.label ? `: ${r.label}` : ""})`);
-      });
-      if (rels.length > 10) {
-        lines.push(`- ... and ${rels.length - 10} more relationships`);
-      }
-    }
-
-    // Key files
-    if (comp.entry_points && comp.entry_points.length > 0) {
+      lines.push(`## ${counter}. ${comp.name} (${comp.type})`);
       lines.push("");
-      lines.push("**Entry Points:**");
-      comp.entry_points.slice(0, 5).forEach((ep) => {
-        lines.push(`- ${ep}`);
+      lines.push("**Feedback:**");
+      annotation.text.split("\n").forEach((line) => {
+        lines.push(`> ${line}`);
       });
+      lines.push("");
+      appendComponentContext(lines, comp, architecture, getComponentById);
+      lines.push("");
+      lines.push("---");
     }
+  }
 
+  // File annotations
+  if (grouped.file.length > 0) {
     lines.push("");
-    lines.push("---");
-  });
+    lines.push("# File-Level Feedback");
+
+    for (const annotation of grouped.file) {
+      const comp = getComponentById(annotation.componentId);
+      counter++;
+      const fileInfo = architecture.files.find((f) => f.path === annotation.targetId);
+
+      lines.push("");
+      lines.push(`## ${counter}. File: ${annotation.targetName}`);
+      if (comp) lines.push(`Component: ${comp.name} (${comp.type})`);
+      lines.push("");
+      lines.push("**Feedback:**");
+      annotation.text.split("\n").forEach((line) => {
+        lines.push(`> ${line}`);
+      });
+
+      if (fileInfo) {
+        lines.push("");
+        lines.push("**File Context:**");
+        lines.push(`- Path: ${fileInfo.path}`);
+        lines.push(`- Language: ${fileInfo.language}`);
+        lines.push(`- Lines: ${fileInfo.lines}`);
+        if (fileInfo.symbols.length > 0) {
+          const symbolNames = fileInfo.symbols
+            .map((sid) => architecture.symbols.find((s) => s.id === sid)?.name)
+            .filter(Boolean);
+          if (symbolNames.length > 0) {
+            lines.push(`- Symbols: ${symbolNames.slice(0, 15).join(", ")}${symbolNames.length > 15 ? ` ... +${symbolNames.length - 15} more` : ""}`);
+          }
+        }
+      }
+
+      lines.push("");
+      lines.push("---");
+    }
+  }
+
+  // Symbol annotations
+  if (grouped.symbol.length > 0) {
+    lines.push("");
+    lines.push("# Symbol-Level Feedback");
+
+    for (const annotation of grouped.symbol) {
+      const comp = getComponentById(annotation.componentId);
+      counter++;
+      const symbol = architecture.symbols.find((s) => s.id === annotation.targetId);
+
+      lines.push("");
+      lines.push(`## ${counter}. Symbol: ${annotation.targetName}`);
+      if (comp) lines.push(`Component: ${comp.name} (${comp.type})`);
+      lines.push("");
+      lines.push("**Feedback:**");
+      annotation.text.split("\n").forEach((line) => {
+        lines.push(`> ${line}`);
+      });
+
+      if (symbol) {
+        lines.push("");
+        lines.push("**Symbol Context:**");
+        lines.push(`- Kind: ${symbol.kind}`);
+        lines.push(`- File: ${symbol.file}:${symbol.line}`);
+        lines.push(`- Visibility: ${symbol.visibility}`);
+        if (symbol.docstring) {
+          lines.push(`- Docstring: ${symbol.docstring.slice(0, 200)}${symbol.docstring.length > 200 ? "..." : ""}`);
+        }
+        if (symbol.code_preview) {
+          lines.push("");
+          lines.push("```");
+          lines.push(symbol.code_preview);
+          lines.push("```");
+        }
+      }
+
+      lines.push("");
+      lines.push("---");
+    }
+  }
 
   // Summary
   const uniqueComponents = new Set(annotations.map((a) => a.componentId)).size;
   lines.push("");
   lines.push("**Review Summary:**");
-  lines.push(`- Annotations: ${annotations.length}`);
+  lines.push(`- Total annotations: ${annotations.length}`);
+  if (grouped.component.length > 0) lines.push(`  - Components: ${grouped.component.length}`);
+  if (grouped.file.length > 0) lines.push(`  - Files: ${grouped.file.length}`);
+  if (grouped.symbol.length > 0) lines.push(`  - Symbols: ${grouped.symbol.length}`);
   lines.push(`- Components reviewed: ${uniqueComponents}`);
   lines.push(`- Architecture generated: ${architecture.generated_at}`);
   lines.push("");
   lines.push("Generated by solution-explorer architecture viewer.");
 
   return lines.join("\n");
+}
+
+function appendComponentContext(
+  lines: string[],
+  comp: Component,
+  architecture: Architecture,
+  getComponentById: (id: string) => Component | null,
+) {
+  lines.push("**Component Context:**");
+  lines.push(`- Path: ${comp.path}`);
+
+  if (comp.docs?.purpose) {
+    lines.push(`- Purpose: ${comp.docs.purpose}`);
+  }
+
+  const details: string[] = [];
+  if (comp.framework) details.push(`Framework: ${comp.framework}`);
+  if (comp.language) details.push(`Language: ${comp.language}`);
+  if (details.length > 0) lines.push(`- ${details.join(" | ")}`);
+
+  if (comp.metrics) {
+    const metrics: string[] = [];
+    if (comp.metrics.files > 0) metrics.push(`${comp.metrics.files} files`);
+    if (comp.metrics.lines > 0) metrics.push(`${comp.metrics.lines} lines`);
+    if (metrics.length > 0) lines.push(`- Size: ${metrics.join(", ")}`);
+  }
+
+  if (comp.docs?.patterns && comp.docs.patterns.length > 0) {
+    lines.push(`- Patterns: ${comp.docs.patterns.join(", ")}`);
+  }
+
+  if (comp.docs?.tech_stack && comp.docs.tech_stack.length > 0) {
+    lines.push(`- Tech Stack: ${comp.docs.tech_stack.join(", ")}`);
+  }
+
+  if (comp.docs?.api_endpoints && comp.docs.api_endpoints.length > 0) {
+    lines.push(`- API Endpoints:`);
+    comp.docs.api_endpoints.slice(0, 10).forEach((ep) => {
+      lines.push(`  - ${ep.method} ${ep.path}`);
+    });
+    if (comp.docs.api_endpoints.length > 10) {
+      lines.push(`  - ... and ${comp.docs.api_endpoints.length - 10} more`);
+    }
+  }
+
+  if (comp.docs?.env_vars && comp.docs.env_vars.length > 0) {
+    lines.push(`- Environment Variables: ${comp.docs.env_vars.join(", ")}`);
+  }
+
+  if (comp.port) {
+    lines.push(`- Port: ${comp.port}`);
+  }
+
+  const rels = architecture.relationships.filter(
+    (r) => r.source === comp.id || r.target === comp.id,
+  );
+  if (rels.length > 0) {
+    lines.push("");
+    lines.push("**Relationships:**");
+    rels.slice(0, 10).forEach((r) => {
+      const isSource = r.source === comp.id;
+      const otherId = isSource ? r.target : r.source;
+      const otherComp = getComponentById(otherId);
+      const otherName = otherComp?.name || otherId;
+      const direction = isSource ? "->" : "<-";
+      lines.push(`- ${direction} ${otherName} (${r.type}${r.label ? `: ${r.label}` : ""})`);
+    });
+    if (rels.length > 10) {
+      lines.push(`- ... and ${rels.length - 10} more relationships`);
+    }
+  }
+
+  if (comp.entry_points && comp.entry_points.length > 0) {
+    lines.push("");
+    lines.push("**Entry Points:**");
+    comp.entry_points.slice(0, 5).forEach((ep) => {
+      lines.push(`- ${ep}`);
+    });
+  }
 }

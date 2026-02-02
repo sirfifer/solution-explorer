@@ -5,6 +5,7 @@ import { getTypeColors, TYPE_META } from "../utils/layout";
 export function AnnotationInput() {
   const {
     annotatingComponentId,
+    annotatingTarget,
     annotations,
     darkMode,
     setAnnotatingComponent,
@@ -16,15 +17,19 @@ export function AnnotationInput() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const component = annotatingComponentId ? getComponentById(annotatingComponentId) : null;
-  const existing = annotations.find((a) => a.componentId === annotatingComponentId);
+  const targetType = annotatingTarget?.type ?? "component";
+  const targetId = annotatingTarget?.id ?? annotatingComponentId ?? "";
+  const targetName = annotatingTarget?.name ?? component?.name ?? "";
+
+  const existing = annotations.find((a) =>
+    a.targetType === targetType && a.targetId === targetId
+  );
   const [text, setText] = useState("");
 
-  // Reset text when component changes
   useEffect(() => {
     setText(existing?.text || "");
-    // Focus the textarea after a short delay (allows modal to render)
     setTimeout(() => textareaRef.current?.focus(), 50);
-  }, [annotatingComponentId, existing?.text]);
+  }, [annotatingComponentId, annotatingTarget, existing?.text]);
 
   if (!component || !annotatingComponentId) return null;
 
@@ -34,7 +39,7 @@ export function AnnotationInput() {
   const handleSave = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    addAnnotation(annotatingComponentId, trimmed);
+    addAnnotation(annotatingComponentId, trimmed, targetType, targetId, targetName);
   };
 
   const handleDelete = () => {
@@ -54,6 +59,18 @@ export function AnnotationInput() {
     }
   };
 
+  const headerLabel = targetType === "component"
+    ? component.name
+    : targetType === "file"
+      ? targetName.split("/").pop() || targetName
+      : targetName;
+
+  const headerSubLabel = targetType === "component"
+    ? component.docs?.purpose || null
+    : targetType === "file"
+      ? targetName
+      : `Symbol in ${component.name}`;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
@@ -70,17 +87,26 @@ export function AnnotationInput() {
         {/* Header */}
         <div className={`px-4 py-3 border-b ${darkMode ? "border-zinc-800" : "border-zinc-100"}`}>
           <div className="flex items-center gap-2">
-            {meta?.icon && <span>{meta.icon}</span>}
+            {targetType === "component" && meta?.icon && <span>{meta.icon}</span>}
+            {targetType === "file" && <span className="text-xs">&#x1F4C4;</span>}
+            {targetType === "symbol" && <span className={`text-[10px] font-bold px-1 rounded ${darkMode ? "bg-zinc-700 text-zinc-300" : "bg-zinc-200 text-zinc-600"}`}>S</span>}
             <span className={`font-semibold text-sm ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
-              {component.name}
+              {headerLabel}
             </span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${colors.badge}`}>
-              {meta?.label || component.type}
-            </span>
+            {targetType === "component" && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${colors.badge}`}>
+                {meta?.label || component.type}
+              </span>
+            )}
+            {targetType !== "component" && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500"}`}>
+                {targetType}
+              </span>
+            )}
           </div>
-          {component.docs?.purpose && (
-            <p className={`text-[11px] mt-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-              {component.docs.purpose}
+          {headerSubLabel && (
+            <p className={`text-[11px] mt-1 truncate ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+              {headerSubLabel}
             </p>
           )}
         </div>
@@ -92,7 +118,7 @@ export function AnnotationInput() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Add your feedback for this component..."
+            placeholder={`Add your feedback for this ${targetType}...`}
             rows={4}
             className={`
               w-full px-3 py-2 rounded-lg border text-sm resize-none

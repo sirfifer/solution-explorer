@@ -10,6 +10,8 @@ import {
 } from "../utils/layout";
 import { CodePreview } from "./CodePreview";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { Tooltip, TechTooltip } from "./Tooltip";
+import { getTechRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
 
 type Tab = "overview" | "docs" | "files" | "symbols" | "relationships";
 
@@ -118,19 +120,32 @@ function ComponentDetail({
               {component.name}
             </h2>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <span className={`text-xs px-2 py-0.5 rounded-full ${colors.badge}`}>
-                {TYPE_META[component.type]?.icon && <span className="mr-1">{TYPE_META[component.type].icon}</span>}
-                {TYPE_META[component.type]?.label || component.type}
-              </span>
-              {component.framework && (
-                <span className={`text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-                  {component.framework}
+              <Tooltip content={TYPE_DESCRIPTIONS[component.type] || component.type}>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${colors.badge}`}>
+                  {TYPE_META[component.type]?.icon && <span className="mr-1">{TYPE_META[component.type].icon}</span>}
+                  {TYPE_META[component.type]?.label || component.type}
                 </span>
-              )}
+              </Tooltip>
+              {component.framework && (() => {
+                const ref = getTechRef(component.framework);
+                return ref ? (
+                  <TechTooltip name={component.framework} description={ref.description} url={ref.url}>
+                    <span className={`text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                      {component.framework}
+                    </span>
+                  </TechTooltip>
+                ) : (
+                  <span className={`text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                    {component.framework}
+                  </span>
+                );
+              })()}
               {component.port && (
-                <span className={`text-xs font-mono ${darkMode ? "text-blue-400" : "text-blue-600"}`}>
-                  :{component.port}
-                </span>
+                <Tooltip content="The network port this service listens on.">
+                  <span className={`text-xs font-mono ${darkMode ? "text-blue-400" : "text-blue-600"}`}>
+                    :{component.port}
+                  </span>
+                </Tooltip>
               )}
             </div>
           </div>
@@ -157,21 +172,33 @@ function ComponentDetail({
         {/* Tech stack + patterns quick badges */}
         {docs && (docs.tech_stack?.length > 0 || docs.patterns?.length > 0) && (
           <div className="flex flex-wrap gap-1 mt-2">
-            {docs.tech_stack?.map((t, i) => (
-              <span key={`t-${i}`} className={`
-                text-[10px] px-1.5 py-0.5 rounded
-                ${darkMode ? "bg-cyan-900/30 text-cyan-400" : "bg-cyan-50 text-cyan-700"}
-              `}>
-                {t}
-              </span>
-            ))}
+            {docs.tech_stack?.map((t, i) => {
+              const ref = getTechRef(t);
+              const badge = (
+                <span className={`
+                  text-[10px] px-1.5 py-0.5 rounded
+                  ${darkMode ? "bg-cyan-900/30 text-cyan-400" : "bg-cyan-50 text-cyan-700"}
+                `}>
+                  {t}
+                </span>
+              );
+              return ref ? (
+                <TechTooltip key={`t-${i}`} name={t} description={ref.description} url={ref.url}>
+                  {badge}
+                </TechTooltip>
+              ) : (
+                <span key={`t-${i}`}>{badge}</span>
+              );
+            })}
             {docs.patterns?.map((p, i) => (
-              <span key={`p-${i}`} className={`
-                text-[10px] px-1.5 py-0.5 rounded
-                ${darkMode ? "bg-violet-900/30 text-violet-400" : "bg-violet-50 text-violet-700"}
-              `}>
-                {p}
-              </span>
+              <Tooltip key={`p-${i}`} content={`Design pattern: ${p}`}>
+                <span className={`
+                  text-[10px] px-1.5 py-0.5 rounded
+                  ${darkMode ? "bg-violet-900/30 text-violet-400" : "bg-violet-50 text-violet-700"}
+                `}>
+                  {p}
+                </span>
+              </Tooltip>
             ))}
           </div>
         )}
@@ -214,13 +241,14 @@ function ComponentDetail({
           <DocsTab component={component} />
         )}
         {activeTab === "files" && (
-          <FilesTab files={files} />
+          <FilesTab files={files} componentId={component.id} />
         )}
         {activeTab === "symbols" && (
           <SymbolsTab
             symbols={symbols}
             expandedSymbol={expandedSymbol}
             setExpandedSymbol={setExpandedSymbol}
+            componentId={component.id}
           />
         )}
         {activeTab === "relationships" && (
@@ -509,8 +537,8 @@ function ChildRow({ component }: { component: Component }) {
   );
 }
 
-function FilesTab({ files }: { files: FileInfo[] }) {
-  const { darkMode, showDetail } = useArchStore();
+function FilesTab({ files, componentId }: { files: FileInfo[]; componentId: string }) {
+  const { darkMode, showDetail, reviewMode, setAnnotatingTarget, annotations } = useArchStore();
   const [filter, setFilter] = useState("");
 
   const filtered = useMemo(() => {
@@ -576,6 +604,22 @@ function FilesTab({ files }: { files: FileInfo[] }) {
                   <span className={`text-[10px] tabular-nums ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                     {f.lines}
                   </span>
+                  {reviewMode && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAnnotatingTarget({ type: "file", id: f.path, name: f.path, componentId });
+                      }}
+                      className={`shrink-0 w-5 h-5 flex items-center justify-center rounded text-[10px]
+                        ${annotations.some((a) => a.targetType === "file" && a.targetId === f.path)
+                          ? "bg-blue-500 text-white"
+                          : darkMode ? "text-zinc-600 hover:text-blue-400 hover:bg-zinc-800" : "text-zinc-400 hover:text-blue-500 hover:bg-zinc-100"
+                        }`}
+                      title="Add review feedback"
+                    >
+                      {"\u270E"}
+                    </button>
+                  )}
                 </button>
               );
             })}
@@ -590,12 +634,14 @@ function SymbolsTab({
   symbols,
   expandedSymbol,
   setExpandedSymbol,
+  componentId,
 }: {
   symbols: ArchSymbol[];
   expandedSymbol: string | null;
   setExpandedSymbol: (s: string | null) => void;
+  componentId: string;
 }) {
-  const { darkMode } = useArchStore();
+  const { darkMode, reviewMode, setAnnotatingTarget, annotations } = useArchStore();
   const [filter, setFilter] = useState("");
   const [kindFilter, setKindFilter] = useState<string>("all");
 
@@ -674,14 +720,16 @@ function SymbolsTab({
                 setExpandedSymbol(expandedSymbol === sym.id ? null : sym.id)
               }
             >
-              <span
-                className={`
-                  w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0
-                  ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-200 text-zinc-600"}
-                `}
-              >
-                {kindIcons[sym.kind] || sym.kind[0]}
-              </span>
+              <Tooltip content={SYMBOL_KIND_DESCRIPTIONS[sym.kind] || `Symbol kind: ${sym.kind}`}>
+                <span
+                  className={`
+                    w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0
+                    ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-200 text-zinc-600"}
+                  `}
+                >
+                  {kindIcons[sym.kind] || sym.kind[0]}
+                </span>
+              </Tooltip>
               <span className={`truncate flex-1 font-mono ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
                 {sym.name}
               </span>
@@ -703,8 +751,23 @@ function SymbolsTab({
                   </div>
                 )}
                 <CodePreview code={sym.code_preview} language={sym.file.split(".").pop() || ""} />
-                <div className={`text-[10px] mt-1 font-mono ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
-                  {sym.file}:{sym.line}
+                <div className={`flex items-center justify-between mt-1`}>
+                  <div className={`text-[10px] font-mono ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                    {sym.file}:{sym.line}
+                  </div>
+                  {reviewMode && (
+                    <button
+                      onClick={() => setAnnotatingTarget({ type: "symbol", id: sym.id, name: sym.name, componentId })}
+                      className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1
+                        ${annotations.some((a) => a.targetType === "symbol" && a.targetId === sym.id)
+                          ? darkMode ? "bg-blue-500/20 text-blue-300" : "bg-blue-100 text-blue-600"
+                          : darkMode ? "text-zinc-500 hover:text-blue-400 hover:bg-zinc-800" : "text-zinc-400 hover:text-blue-500 hover:bg-zinc-100"
+                        }`}
+                      title="Add review feedback for this symbol"
+                    >
+                      {"\u270E"} Feedback
+                    </button>
+                  )}
                 </div>
               </div>
             )}

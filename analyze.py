@@ -1149,12 +1149,54 @@ def parse_info_plist(path: Path) -> dict:
         import plistlib
         with open(path, "rb") as f:
             plist = plistlib.load(f)
+        name = plist.get("CFBundleDisplayName") or plist.get("CFBundleName") or ""
+        # Reject build-time variable placeholders like $(PRODUCT_NAME)
+        if name and ("$(" in name or "${" in name):
+            name = ""
         return {
-            "name": plist.get("CFBundleDisplayName") or plist.get("CFBundleName") or "",
+            "name": name,
             "bundle_id": plist.get("CFBundleIdentifier", ""),
         }
     except Exception:
         return {}
+
+
+def _extract_ruby_app_name(base_dir: Path) -> str:
+    """Try multiple strategies to find a Ruby/Rails app name from a directory."""
+    # Strategy 1: config/application.rb (Rails convention)
+    app_rb = base_dir / "config" / "application.rb"
+    if app_rb.exists():
+        try:
+            content = app_rb.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r'module\s+(\w+)', content)
+            if m:
+                return re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', m.group(1))
+        except OSError:
+            pass
+
+    # Strategy 2: config.ru (Rack convention: run AppName::Application)
+    config_ru = base_dir / "config.ru"
+    if config_ru.exists():
+        try:
+            content = config_ru.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r'run\s+(\w+)::Application', content)
+            if m:
+                return re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', m.group(1))
+        except OSError:
+            pass
+
+    # Strategy 3: bin/rails or Rakefile mentioning the app
+    rakefile = base_dir / "Rakefile"
+    if rakefile.exists():
+        try:
+            content = rakefile.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r'(\w+)::Application\.load_tasks', content)
+            if m:
+                return re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', m.group(1))
+        except OSError:
+            pass
+
+    return ""
 
 
 def parse_gemfile(path: Path) -> dict:
@@ -1164,15 +1206,7 @@ def parse_gemfile(path: Path) -> dict:
         gems = set()
         for m in re.finditer(r"""gem\s+['"]([^'"]+)['"]""", content):
             gems.add(m.group(1))
-        # Try to get app name from config/application.rb (Rails convention)
-        app_rb = path.parent / "config" / "application.rb"
-        name = ""
-        if app_rb.exists():
-            app_content = app_rb.read_text(encoding="utf-8", errors="replace")
-            m = re.search(r'module\s+(\w+)', app_content)
-            if m:
-                # Convert CamelCase to readable: "UnaMentisApi" -> "UnaMentis Api"
-                name = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', m.group(1))
+        name = _extract_ruby_app_name(path.parent)
         return {"name": name, "dependencies": list(gems)}
     except Exception:
         return {}
@@ -1257,6 +1291,9 @@ class ArchitectureScanner:
 
         # Phase 2.5: Promote generic types to architectural roles
         self._promote_component_types()
+
+        # Phase 2.6: Improve component names after type promotion
+        self._improve_component_names()
 
         # Phase 3: Detect relationships
         self._detect_relationships()
@@ -1656,6 +1693,44 @@ class ArchitectureScanner:
             return "cli-tool"
 
         return None
+
+    def _improve_component_names(self):
+        """Improve component names after type promotion.
+
+        Some components get generic folder-based names during discovery because
+        their marker files don't provide names (e.g., Makefile, Dockerfile).
+        After type promotion identifies the architectural role, we can try
+        harder to find a meaningful name.
+        """
+        for rel_path, comp in self._component_map.items():
+            if not rel_path:
+                continue
+            folder_name = os.path.basename(rel_path)
+            # Only improve if the name is still the generic folder name
+            if comp.name != folder_name:
+                continue
+
+            comp_dir = self.root / rel_path
+
+            # Ruby/Rails apps: try to find the real app name
+            if comp.language == "ruby" or (comp.framework and comp.framework.lower() in ("rails", "sinatra", "grape")):
+                name = _extract_ruby_app_name(comp_dir)
+                if name:
+                    comp.name = name
+                    continue
+
+            # Python apps: try pyproject.toml or setup.cfg in subtree
+            if comp.language == "python":
+                for cfg_name in ("pyproject.toml", "setup.cfg", "setup.py"):
+                    cfg_path = comp_dir / cfg_name
+                    if cfg_path.exists():
+                        if cfg_name == "pyproject.toml":
+                            info = parse_pyproject_toml(cfg_path)
+                        else:
+                            continue
+                        if info.get("name"):
+                            comp.name = info["name"]
+                            break
 
     def _detect_relationships(self):
         """Detect inter-component relationships."""

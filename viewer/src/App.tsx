@@ -33,7 +33,9 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"graph" | "tree" | "detail">("graph");
 
-  // Resizable sidebar widths
+  // Collapsible + resizable sidebar widths
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
   const [leftWidth, setLeftWidth] = useState(256);
   const [rightWidth, setRightWidth] = useState(320);
   const resizing = useRef<"left" | "right" | null>(null);
@@ -90,6 +92,13 @@ export function App() {
     }
     load();
   }, [setArchitecture, setLoading, setError]);
+
+  // Auto-expand right panel when content appears
+  useEffect(() => {
+    if (activePanel === "detail" || activePanel === "review") {
+      setRightCollapsed(false);
+    }
+  }, [activePanel]);
 
   // Apply dark mode class
   useEffect(() => {
@@ -242,15 +251,36 @@ export function App() {
           className={`
             hidden lg:flex flex-col shrink-0 border-r relative
             ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"}
+            transition-[width] duration-200 ease-in-out
           `}
-          style={{ width: leftWidth }}
+          style={{ width: leftCollapsed ? 36 : leftWidth }}
         >
-          <TreeNavigator />
-          {/* Resize handle */}
-          <div
-            className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-20 hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors duration-75 ${darkMode ? "hover:bg-blue-400/40" : "hover:bg-blue-500/40"}`}
-            onMouseDown={(e) => onMouseDown("left", e)}
-          />
+          {leftCollapsed ? (
+            <button
+              onClick={() => setLeftCollapsed(false)}
+              className={`w-full h-full flex items-center justify-center ${darkMode ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900" : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"}`}
+              title="Expand sidebar"
+            >
+              <span className="text-sm">{"\u00BB"}</span>
+            </button>
+          ) : (
+            <>
+              <TreeNavigator />
+              {/* Collapse button */}
+              <button
+                onClick={() => setLeftCollapsed(true)}
+                className={`absolute top-2 right-2 z-30 w-6 h-6 flex items-center justify-center rounded ${darkMode ? "text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800" : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"} transition-colors`}
+                title="Collapse sidebar"
+              >
+                <span className="text-xs">{"\u00AB"}</span>
+              </button>
+              {/* Resize handle */}
+              <div
+                className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-20 hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors duration-75 ${darkMode ? "hover:bg-blue-400/40" : "hover:bg-blue-500/40"}`}
+                onMouseDown={(e) => onMouseDown("left", e)}
+              />
+            </>
+          )}
         </aside>
 
         {/* Tree sidebar - mobile overlay */}
@@ -279,15 +309,36 @@ export function App() {
             className={`
               hidden lg:flex flex-col shrink-0 border-l relative
               ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"}
+              transition-[width] duration-200 ease-in-out
             `}
-            style={{ width: rightWidth }}
+            style={{ width: rightCollapsed ? 36 : rightWidth }}
           >
-            {/* Resize handle */}
-            <div
-              className={`absolute top-0 left-0 w-1 h-full cursor-col-resize z-20 hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors duration-75 ${darkMode ? "hover:bg-blue-400/40" : "hover:bg-blue-500/40"}`}
-              onMouseDown={(e) => onMouseDown("right", e)}
-            />
-            {activePanel === "review" ? <ReviewSummary /> : <DetailPanel />}
+            {rightCollapsed ? (
+              <button
+                onClick={() => setRightCollapsed(false)}
+                className={`w-full h-full flex items-center justify-center ${darkMode ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900" : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"}`}
+                title="Expand panel"
+              >
+                <span className="text-sm">{"\u00AB"}</span>
+              </button>
+            ) : (
+              <>
+                {/* Collapse button */}
+                <button
+                  onClick={() => setRightCollapsed(true)}
+                  className={`absolute top-2 left-4 z-30 w-6 h-6 flex items-center justify-center rounded ${darkMode ? "text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800" : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"} transition-colors`}
+                  title="Collapse panel"
+                >
+                  <span className="text-xs">{"\u00BB"}</span>
+                </button>
+                {/* Resize handle */}
+                <div
+                  className={`absolute top-0 left-0 w-1 h-full cursor-col-resize z-20 hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors duration-75 ${darkMode ? "hover:bg-blue-400/40" : "hover:bg-blue-500/40"}`}
+                  onMouseDown={(e) => onMouseDown("right", e)}
+                />
+                {activePanel === "review" ? <ReviewSummary /> : <DetailPanel />}
+              </>
+            )}
           </aside>
         )}
 

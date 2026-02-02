@@ -116,9 +116,13 @@ export interface Architecture {
 }
 
 // Review annotations
+export type AnnotationTarget = "component" | "file" | "symbol";
 export interface Annotation {
   id: string;
   componentId: string;
+  targetType: AnnotationTarget;
+  targetId: string;
+  targetName: string;
   text: string;
   createdAt: string;
 }
