@@ -1,6 +1,6 @@
 import { useState, memo } from "react";
 import type { Component } from "../types";
-import { useArchStore } from "../store";
+import { useArchStore, flattenTopLevel } from "../store";
 import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType } from "../utils/layout";
 
 interface TreeNodeProps {
@@ -113,7 +113,7 @@ export function TreeNavigator() {
         </h2>
       </div>
       <div className="flex-1 overflow-y-auto py-2">
-        {architecture.components.map((comp) => (
+        {flattenTopLevel(architecture.components).map((comp) => (
           <TreeNode key={comp.id} component={comp} depth={0} />
         ))}
       </div>

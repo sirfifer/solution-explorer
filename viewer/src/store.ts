@@ -9,6 +9,7 @@ import type {
   Symbol,
   FileInfo,
 } from "./types";
+import { isHeroType } from "./utils/layout";
 
 interface ArchStore {
   // Data
@@ -287,13 +288,57 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   },
 }));
 
-function flattenTopLevel(components: Component[]): Component[] {
+// Recursively collect architectural (hero-type) components from any depth.
+// Skips structural wrappers (project, module, package) that just contain heroes.
+// Preserves non-hero peers (libraries, infrastructure) that don't wrap heroes.
+function collectHeroComponents(components: Component[]): Component[] {
+  const result: Component[] = [];
+
+  for (const comp of components) {
+    if (comp.type === "project") {
+      // Project root: always recurse into children
+      result.push(...collectHeroComponents(comp.children));
+    } else if (comp.type === "repository") {
+      // Repository node: collect heroes; if none, show the repo itself (drillable)
+      const repoHeroes = collectHeroComponents(comp.children);
+      if (repoHeroes.length > 0) {
+        result.push(...repoHeroes);
+      } else {
+        result.push(comp);
+      }
+    } else if (isHeroType(comp.type)) {
+      // Architectural component: surface it
+      result.push(comp);
+    } else {
+      // Non-hero (module, package, library, content, etc.)
+      // Check if it wraps hero children
+      const childHeroes = collectHeroComponents(comp.children);
+      if (childHeroes.length > 0) {
+        // It's just a wrapper: skip it, promote the heroes
+        result.push(...childHeroes);
+      } else {
+        // It's a real peer component (library, infrastructure, etc.)
+        result.push(comp);
+      }
+    }
+  }
+
+  return result;
+}
+
+export function flattenTopLevel(components: Component[]): Component[] {
+  // Try architecture-first view: surface all hero components
+  const heroes = collectHeroComponents(components);
+  if (heroes.length > 0) {
+    return heroes;
+  }
+
+  // Fallback: no hero types detected, use folder-based one-level unwrap
   const result: Component[] = [];
   for (const comp of components) {
     if (comp.type === "project" && comp.children.length > 0) {
       result.push(...comp.children);
     } else if (comp.type === "repository") {
-      // In multi-repo mode, show repository nodes as top-level drillable groups
       result.push(comp);
     } else {
       result.push(comp);
