@@ -35,7 +35,12 @@ SKIP_DIRS = {
     "vendor", "Pods", ".swiftpm", ".sass-cache", "coverage",
     ".gradle", ".idea", ".vscode", "venv", ".venv", "env",
     ".tox", "egg-info", ".eggs", ".cache",
+    "htmlcov",  # Python coverage HTML output
 }
+
+# Suffix patterns for directory names that indicate prebuilt binary frameworks
+# (not source code to analyze). These are matched by suffix.
+SKIP_DIR_SUFFIXES = {".xcframework", ".framework", ".dSYM"}
 
 # File extensions to skip
 SKIP_EXTENSIONS = {
@@ -116,7 +121,7 @@ CONTENT_DIR_NAMES = {
     "wiki", "wiki-content", "docs", "doc", "documentation",
     "curriculum", "prompts", "prompt-templates",
     "assets", "resources", "fixtures", "samples", "examples",
-    "models", "data", "migrations",
+    "models", "data", "migrations", "output", "baselines",
 }
 
 # File extensions considered "content" (not code)
@@ -132,6 +137,39 @@ CODE_LANGUAGES = {
     "go", "java", "kotlin", "ruby", "cpp", "c", "csharp", "dart",
     "vue", "svelte", "shell",
 }
+
+def _should_skip_dir(name: str) -> bool:
+    """Check if a directory should be skipped during traversal."""
+    if name in SKIP_DIRS or name.startswith("."):
+        return True
+    # Skip prebuilt binary framework directories
+    for suffix in SKIP_DIR_SUFFIXES:
+        if name.endswith(suffix):
+            return True
+    return False
+
+
+def _is_vendored_repo(dirpath: str) -> bool:
+    """Detect vendored third-party source repositories.
+
+    These are full external repos checked into the project (e.g., llama.cpp).
+    They have their own build system and many files that shouldn't be treated
+    as part of the project's architecture.
+    """
+    p = Path(dirpath)
+    # Must have its own build system (CMakeLists.txt or Makefile) AND
+    # a LICENSE file (strong signal of external project)
+    has_build = (p / "CMakeLists.txt").exists() or (p / "Makefile").exists()
+    has_license = (p / "LICENSE").exists() or (p / "LICENSE.md").exists()
+    if has_build and has_license:
+        # Check that it has substantial code (not just a simple subproject)
+        code_count = sum(
+            1 for f in p.iterdir()
+            if f.is_dir() and not _should_skip_dir(f.name)
+        )
+        return code_count >= 5  # vendored repos tend to have many subdirectories
+    return False
+
 
 # ---------------------------------------------------------------------------
 # Data Models
@@ -1407,6 +1445,7 @@ class ArchitectureScanner:
         self._all_symbols: list[Symbol] = []
         self._component_map: dict[str, Component] = {}
         self._language_counts: dict[str, int] = defaultdict(int)
+        self._vendored_paths: set[str] = set()
         self._total_lines = 0
         self._total_size = 0
 
@@ -1489,11 +1528,26 @@ class ArchitectureScanner:
 
         for dirpath, dirnames, filenames in os.walk(self.root):
             # Filter directories
-            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+            dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
 
             rel = os.path.relpath(dirpath, self.root)
             if rel == ".":
                 rel = ""
+
+            # Detect vendored third-party repos and prevent recursion into them.
+            # Create a single "library" component for the vendored repo instead.
+            if rel and _is_vendored_repo(dirpath):
+                comp_id = self._make_component_id(rel)
+                if comp_id not in self._component_map:
+                    self._component_map[rel] = Component(
+                        id=comp_id,
+                        name=os.path.basename(dirpath),
+                        type="library",
+                        path=rel,
+                    )
+                self._vendored_paths.add(rel)
+                dirnames.clear()  # Don't recurse into vendored code
+                continue
 
             for marker, (lang, comp_type) in COMPONENT_MARKERS.items():
                 if marker in filenames:
@@ -1563,10 +1617,15 @@ class ArchitectureScanner:
 
         # Also create intermediate directory components for significant directories
         for dirpath, dirnames, filenames in os.walk(self.root):
-            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+            dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
             rel = os.path.relpath(dirpath, self.root)
             if rel == ".":
                 rel = ""
+
+            # Skip directories under vendored repos
+            if self._is_under_vendored(rel):
+                dirnames.clear()
+                continue
 
             # Count code files in this directory
             code_files = [f for f in filenames if Path(f).suffix.lower() in LANGUAGE_MAP]
@@ -1583,10 +1642,23 @@ class ArchitectureScanner:
                             path=rel,
                         )
 
+    def _is_under_vendored(self, rel_path: str) -> bool:
+        """Check if a path is inside a vendored third-party repo."""
+        for vp in self._vendored_paths:
+            if rel_path.startswith(vp + os.sep):
+                return True
+        return False
+
     def _scan_files(self):
         """Scan all code files and extract symbols."""
         for dirpath, dirnames, filenames in os.walk(self.root):
-            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+            dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
+
+            # Skip vendored directories
+            rel_dir = os.path.relpath(dirpath, self.root)
+            if rel_dir != "." and self._is_under_vendored(rel_dir):
+                dirnames.clear()
+                continue
 
             for fname in sorted(filenames):
                 fpath = Path(dirpath) / fname
@@ -1681,6 +1753,54 @@ class ArchitectureScanner:
             promoted = self._classify_architectural_role(comp, rel_path)
             if promoted:
                 comp.type = promoted
+
+        # Post-promotion pass: demote hero components that are actually wrappers
+        # containing diverse hero children. A monorepo root with Package.swift
+        # might be classified as ios-client, but if it also contains api-servers
+        # and web-clients, it's really a project wrapper.
+        hero_types = {
+            "ios-client", "android-client", "mobile-client", "web-client",
+            "api-server", "watch-app", "desktop-app", "cli-tool", "service",
+        }
+        for rel_path, comp in self._component_map.items():
+            if comp.type not in hero_types:
+                continue
+            # Collect hero types from direct children and all descendants.
+            # Exclude subordinate directories (tests, static, etc.) since those
+            # are part of the parent component, not independent heroes.
+            subordinate_dirs = {
+                "tests", "test", "spec", "specs", "__tests__",
+                "static", "public", "dist", "build", "assets",
+            }
+            direct_child_hero_types: set[str] = set()
+            descendant_hero_types: set[str] = set()
+            prefix = (rel_path + os.sep) if rel_path else ""
+            for child_path, child_comp in self._component_map.items():
+                if not child_path or child_path == rel_path:
+                    continue
+                if prefix and not child_path.startswith(prefix):
+                    continue
+                child_dirname = os.path.basename(child_path).lower()
+                if child_dirname in subordinate_dirs:
+                    continue
+                if not prefix:
+                    # Root: direct children have no separator
+                    is_direct = os.sep not in child_path
+                else:
+                    is_direct = child_path[len(prefix):].count(os.sep) == 0
+                if child_comp.type in hero_types:
+                    descendant_hero_types.add(child_comp.type)
+                    if is_direct:
+                        direct_child_hero_types.add(child_comp.type)
+            # Demote if direct children have 2+ different hero types (clear wrapper).
+            # Also demote if descendants have 3+ different hero types AND this
+            # component has few direct files (monorepo root pattern).
+            other_direct = direct_child_hero_types - {comp.type}
+            other_all = descendant_hero_types - {comp.type}
+            if len(other_direct) >= 2:
+                comp.type = "package"
+            elif len(other_all) >= 3 and len(comp.files) <= 25:
+                comp.type = "package"
 
     def _is_content_only(self, comp: Component, rel_path: str) -> bool:
         """Determine if a component is a content-only directory."""

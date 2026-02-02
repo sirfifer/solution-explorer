@@ -289,10 +289,11 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
     const parent = findComponent(architecture.components, drillLevel);
     if (!parent) return [];
-    // When drilled in, exclude content components and small internal modules
+    // When drilled in, promote hero grandchildren from non-hero wrappers
     const children = parent.children.length > 0 ? parent.children : [parent];
-    const hasHero = children.some((c) => isHeroType(c.type));
-    return children.filter((c) => {
+    const promoted = promoteDrillChildren(children);
+    const hasHero = promoted.some((c) => isHeroType(c.type));
+    return promoted.filter((c) => {
       if (c.type === "content") return false;
       // When hero components exist at this level, hide small internal modules
       if (hasHero && !isHeroType(c.type)
@@ -352,8 +353,18 @@ function collectHeroComponents(components: Component[]): Component[] {
         result.push(comp);
       }
     } else if (isHeroType(comp.type)) {
-      // Architectural component: surface it
-      result.push(comp);
+      // Hero component: surface it. But also check if it contains OTHER hero
+      // types in its children (e.g., a root ios-client that wraps api-servers,
+      // web-clients, etc.). If so, surface both this hero and its hero descendants.
+      const childHeroes = collectHeroComponents(comp.children);
+      const hasOtherHeroTypes = childHeroes.some((ch) => ch.type !== comp.type);
+      if (hasOtherHeroTypes) {
+        // This hero wraps diverse hero children (monorepo root pattern).
+        // Surface this hero and promote its hero children too.
+        result.push(comp, ...childHeroes);
+      } else {
+        result.push(comp);
+      }
     } else {
       // Non-hero (module, package, library, content, etc.)
       // Check if it wraps hero children
@@ -364,6 +375,40 @@ function collectHeroComponents(components: Component[]): Component[] {
       } else {
         // It's a real peer component (library, infrastructure, etc.)
         result.push(comp);
+      }
+    }
+  }
+
+  return result;
+}
+
+// When drilled into a component, promote hero grandchildren from non-hero
+// wrappers so they appear at the current level instead of being hidden behind
+// generic "module" or "package" blocks.
+function promoteDrillChildren(children: Component[]): Component[] {
+  const result: Component[] = [];
+
+  for (const child of children) {
+    if (isHeroType(child.type)) {
+      // Already a hero: keep as-is
+      result.push(child);
+    } else {
+      // Non-hero wrapper: check if it contains hero children
+      const childHeroes = collectHeroComponents(child.children);
+      if (childHeroes.length > 0) {
+        // Promote the hero grandchildren to this level
+        result.push(...childHeroes);
+        // Also keep non-hero siblings that are substantial
+        for (const grandchild of child.children) {
+          if (!isHeroType(grandchild.type)
+              && grandchild.type !== "content"
+              && !childHeroes.includes(grandchild)) {
+            result.push(grandchild);
+          }
+        }
+      } else {
+        // No hero children: keep the wrapper itself
+        result.push(child);
       }
     }
   }
