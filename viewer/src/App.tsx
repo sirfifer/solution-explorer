@@ -13,6 +13,37 @@ import { initializeSearch } from "./utils/search";
 import { formatNumber, formatRelativeTime } from "./utils/layout";
 import type { Architecture } from "./types";
 
+// Session storage keys for UI state persistence
+const STORAGE_KEYS = {
+  leftCollapsed: "arch-left-collapsed",
+  rightCollapsed: "arch-right-collapsed",
+  leftWidth: "arch-left-width",
+  rightWidth: "arch-right-width",
+  darkMode: "arch-dark-mode",
+} as const;
+
+// Helper to get value from storage with fallback
+function getStoredValue<T>(key: string, fallback: T, storage: Storage = sessionStorage): T {
+  try {
+    const stored = storage.getItem(key);
+    if (stored !== null) {
+      return JSON.parse(stored) as T;
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return fallback;
+}
+
+// Helper to save value to storage
+function setStoredValue<T>(key: string, value: T, storage: Storage = sessionStorage): void {
+  try {
+    storage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export function App() {
   const {
     architecture,
@@ -22,25 +53,33 @@ export function App() {
     activePanel,
     reviewMode,
     annotatingComponentId,
+    drillLevel,
     setArchitecture,
     setLoading,
     setError,
     setSearchOpen,
     setActivePanel,
     toggleDarkMode,
+    navigateToBreadcrumb,
   } = useArchStore();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"graph" | "tree" | "detail">("graph");
 
-  // Collapsible + resizable sidebar widths
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [leftWidth, setLeftWidth] = useState(256);
-  const [rightWidth, setRightWidth] = useState(320);
+  // Collapsible + resizable sidebar widths (restored from session storage)
+  const [leftCollapsed, setLeftCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.leftCollapsed, false));
+  const [rightCollapsed, setRightCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.rightCollapsed, false));
+  const [leftWidth, setLeftWidth] = useState(() => getStoredValue(STORAGE_KEYS.leftWidth, 256));
+  const [rightWidth, setRightWidth] = useState(() => getStoredValue(STORAGE_KEYS.rightWidth, 320));
   const resizing = useRef<"left" | "right" | null>(null);
   const startX = useRef(0);
   const startWidth = useRef(0);
+
+  // Persist panel state to session storage
+  useEffect(() => { setStoredValue(STORAGE_KEYS.leftCollapsed, leftCollapsed); }, [leftCollapsed]);
+  useEffect(() => { setStoredValue(STORAGE_KEYS.rightCollapsed, rightCollapsed); }, [rightCollapsed]);
+  useEffect(() => { setStoredValue(STORAGE_KEYS.leftWidth, leftWidth); }, [leftWidth]);
+  useEffect(() => { setStoredValue(STORAGE_KEYS.rightWidth, rightWidth); }, [rightWidth]);
 
   const onMouseDown = useCallback((side: "left" | "right", e: React.MouseEvent) => {
     e.preventDefault();
@@ -173,6 +212,24 @@ export function App() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Home button - visible when drilled into a component */}
+          {drillLevel && (
+            <button
+              onClick={() => navigateToBreadcrumb(-1)}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
+                ${darkMode
+                  ? "bg-blue-500/15 text-blue-300 hover:bg-blue-500/25"
+                  : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                }
+              `}
+              title="Return to top-level architecture view"
+            >
+              <span>&#x1F3E0;</span>
+              <span className="hidden sm:inline">Home</span>
+            </button>
+          )}
+
           {/* Search button */}
           <button
             onClick={() => setSearchOpen(true)}
@@ -274,11 +331,14 @@ export function App() {
               >
                 <span className="text-xs">{"\u00AB"}</span>
               </button>
-              {/* Resize handle */}
+              {/* Resize handle - wider grab area with visual indicator */}
               <div
-                className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-20 hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors duration-75 ${darkMode ? "hover:bg-blue-400/40" : "hover:bg-blue-500/40"}`}
+                className={`absolute top-0 right-0 w-2 h-full cursor-col-resize z-20 group flex items-center justify-center`}
                 onMouseDown={(e) => onMouseDown("left", e)}
-              />
+              >
+                {/* Visual indicator line */}
+                <div className={`w-0.5 h-16 rounded-full transition-colors duration-75 ${darkMode ? "bg-zinc-700 group-hover:bg-blue-400" : "bg-zinc-300 group-hover:bg-blue-500"} group-active:bg-blue-600`} />
+              </div>
             </>
           )}
         </aside>
@@ -369,6 +429,15 @@ export function App() {
         ${darkMode ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"}
         backdrop-blur-sm
       `}>
+        {drillLevel && (
+          <button
+            onClick={() => navigateToBreadcrumb(-1)}
+            className={`flex flex-col items-center gap-0.5 px-4 py-1 ${darkMode ? "text-blue-400" : "text-blue-500"}`}
+          >
+            <span className="text-lg">&#x1F3E0;</span>
+            <span className="text-[10px]">Home</span>
+          </button>
+        )}
         <button
           onClick={() => { setSidebarOpen(true); }}
           className={`flex flex-col items-center gap-0.5 px-4 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
@@ -378,7 +447,7 @@ export function App() {
         </button>
         <button
           onClick={() => { setSidebarOpen(false); setActivePanel(null); }}
-          className={`flex flex-col items-center gap-0.5 px-4 py-1 ${darkMode ? "text-blue-400" : "text-blue-500"}`}
+          className={`flex flex-col items-center gap-0.5 px-4 py-1 ${!drillLevel ? (darkMode ? "text-blue-400" : "text-blue-500") : (darkMode ? "text-zinc-400" : "text-zinc-500")}`}
         >
           <span className="text-lg">&#x1F310;</span>
           <span className="text-[10px]">Graph</span>

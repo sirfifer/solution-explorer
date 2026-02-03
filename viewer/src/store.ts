@@ -13,6 +13,30 @@ import type {
 } from "./types";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 
+// Storage key for dark mode preference (localStorage for persistence across sessions)
+const DARK_MODE_KEY = "arch-dark-mode";
+
+function getStoredDarkMode(): boolean {
+  try {
+    const stored = localStorage.getItem(DARK_MODE_KEY);
+    if (stored !== null) {
+      return JSON.parse(stored) as boolean;
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  // Default to dark mode
+  return true;
+}
+
+function saveStoredDarkMode(value: boolean): void {
+  try {
+    localStorage.setItem(DARK_MODE_KEY, JSON.stringify(value));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 interface ArchStore {
   // Data
   architecture: Architecture | null;
@@ -125,7 +149,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   searchOpen: false,
   searchQuery: "",
 
-  darkMode: true,
+  darkMode: getStoredDarkMode(),
 
   reviewMode: false,
   annotations: [],
@@ -213,7 +237,11 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   setSearchOpen: (open) => set({ searchOpen: open, searchQuery: open ? get().searchQuery : "" }),
   setSearchQuery: (query) => set({ searchQuery: query }),
 
-  toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
+  toggleDarkMode: () => set((s) => {
+    const newValue = !s.darkMode;
+    saveStoredDarkMode(newValue);
+    return { darkMode: newValue };
+  }),
 
   toggleReviewMode: () => set((s) => ({
     reviewMode: !s.reviewMode,

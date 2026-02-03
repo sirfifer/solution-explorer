@@ -1,17 +1,44 @@
-import { useState, memo, useMemo } from "react";
+import { useState, memo, useMemo, useCallback, useEffect } from "react";
 import type { Component } from "../types";
 import { useArchStore, flattenTopLevel } from "../store";
-import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, isClientType, isServerType } from "../utils/layout";
+import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType } from "../utils/layout";
+
+// Session storage key for expanded nodes
+const EXPANDED_KEY = "arch-tree-expanded";
+
+// Get expanded state from session storage
+function getExpandedFromSession(): Set<string> {
+  try {
+    const stored = sessionStorage.getItem(EXPANDED_KEY);
+    if (stored) {
+      return new Set(JSON.parse(stored));
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return new Set();
+}
+
+// Save expanded state to session storage
+function saveExpandedToSession(expanded: Set<string>) {
+  try {
+    sessionStorage.setItem(EXPANDED_KEY, JSON.stringify([...expanded]));
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 interface TreeNodeProps {
   component: Component;
   depth: number;
+  expandedIds: Set<string>;
+  onToggleExpand: (id: string) => void;
 }
 
-const TreeNode = memo(function TreeNode({ component, depth }: TreeNodeProps) {
+const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggleExpand }: TreeNodeProps) {
   const { selectedComponentId, selectComponent, drillInto, darkMode, annotations } = useArchStore();
   const hasAnnotation = annotations.some((a) => a.componentId === component.id);
-  const [expanded, setExpanded] = useState(depth < 1);
+  const expanded = expandedIds.has(component.id);
   const hasChildren = component.children.length > 0;
   const isSelected = selectedComponentId === component.id;
   const colors = getTypeColors(component.type, darkMode);
@@ -42,7 +69,7 @@ const TreeNode = memo(function TreeNode({ component, depth }: TreeNodeProps) {
             className={`w-4 h-4 flex items-center justify-center text-[10px] shrink-0 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}
             onClick={(e) => {
               e.stopPropagation();
-              setExpanded(!expanded);
+              onToggleExpand(component.id);
             }}
           >
             {expanded ? "\u25BC" : "\u25B6"}
@@ -92,6 +119,8 @@ const TreeNode = memo(function TreeNode({ component, depth }: TreeNodeProps) {
               key={child.id}
               component={child}
               depth={depth + 1}
+              expandedIds={expandedIds}
+              onToggleExpand={onToggleExpand}
             />
           ))}
         </div>
@@ -134,20 +163,55 @@ function collectOtherComponents(
     .filter((g) => g.components.length > 0);
 }
 
+// Session storage key for expanded folders
+const FOLDER_EXPANDED_KEY = "arch-folder-expanded";
+
+function getFolderExpandedFromSession(): Set<string> {
+  try {
+    const stored = sessionStorage.getItem(FOLDER_EXPANDED_KEY);
+    if (stored) {
+      return new Set(JSON.parse(stored));
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return new Set();
+}
+
+function saveFolderExpandedToSession(expanded: Set<string>) {
+  try {
+    sessionStorage.setItem(FOLDER_EXPANDED_KEY, JSON.stringify([...expanded]));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 interface FolderNodeProps {
   name: string;
   children: Component[];
   darkMode: boolean;
+  expandedIds: Set<string>;
+  folderExpandedIds: Set<string>;
+  onToggleExpand: (id: string) => void;
+  onToggleFolderExpand: (name: string) => void;
 }
 
-const FolderNode = memo(function FolderNode({ name, children, darkMode }: FolderNodeProps) {
-  const [expanded, setExpanded] = useState(false);
+const FolderNode = memo(function FolderNode({
+  name,
+  children,
+  darkMode,
+  expandedIds,
+  folderExpandedIds,
+  onToggleExpand,
+  onToggleFolderExpand,
+}: FolderNodeProps) {
+  const expanded = folderExpandedIds.has(name);
 
   return (
     <div>
       <button
         className={`w-full text-left flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg mx-1 ${darkMode ? "hover:bg-zinc-800/50 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"}`}
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => onToggleFolderExpand(name)}
       >
         <span className={`w-4 h-4 flex items-center justify-center text-[10px] shrink-0 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
           {expanded ? "\u25BC" : "\u25B6"}
@@ -161,7 +225,13 @@ const FolderNode = memo(function FolderNode({ name, children, darkMode }: Folder
       {expanded && (
         <div>
           {children.map((child) => (
-            <TreeNode key={child.id} component={child} depth={1} />
+            <TreeNode
+              key={child.id}
+              component={child}
+              depth={1}
+              expandedIds={expandedIds}
+              onToggleExpand={onToggleExpand}
+            />
           ))}
         </div>
       )}
@@ -171,6 +241,43 @@ const FolderNode = memo(function FolderNode({ name, children, darkMode }: Folder
 
 export function TreeNavigator() {
   const { architecture, darkMode } = useArchStore();
+
+  // Tree expansion state - starts collapsed (empty set), restored from session
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => getExpandedFromSession());
+  const [folderExpandedIds, setFolderExpandedIds] = useState<Set<string>>(() => getFolderExpandedFromSession());
+
+  // Save to session storage whenever expansion state changes
+  useEffect(() => {
+    saveExpandedToSession(expandedIds);
+  }, [expandedIds]);
+
+  useEffect(() => {
+    saveFolderExpandedToSession(folderExpandedIds);
+  }, [folderExpandedIds]);
+
+  const onToggleExpand = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const onToggleFolderExpand = useCallback((name: string) => {
+    setFolderExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next;
+    });
+  }, []);
 
   const { topLevel, otherGroups } = useMemo(() => {
     if (!architecture) return { topLevel: [], otherGroups: [] };
@@ -194,7 +301,13 @@ export function TreeNavigator() {
       <div className="flex-1 overflow-y-auto py-2">
         {/* Top-level components (main graph items) */}
         {topLevel.map((comp) => (
-          <TreeNode key={comp.id} component={comp} depth={0} />
+          <TreeNode
+            key={comp.id}
+            component={comp}
+            depth={0}
+            expandedIds={expandedIds}
+            onToggleExpand={onToggleExpand}
+          />
         ))}
 
         {/* Other components grouped by parent */}
@@ -211,6 +324,10 @@ export function TreeNavigator() {
                 name={group.parentName}
                 children={group.components}
                 darkMode={darkMode}
+                expandedIds={expandedIds}
+                folderExpandedIds={folderExpandedIds}
+                onToggleExpand={onToggleExpand}
+                onToggleFolderExpand={onToggleFolderExpand}
               />
             ))}
           </>
