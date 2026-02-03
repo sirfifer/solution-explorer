@@ -179,7 +179,7 @@ export function ArchitectureGraph() {
       clearTimeout(layoutTimeout.current);
     }
 
-    getLayoutedElements(rawNodes, rawEdges, "RIGHT").then(({ nodes: ln, edges: le }) => {
+    getLayoutedElements(rawNodes, rawEdges, "DOWN").then(({ nodes: ln, edges: le }) => {
       // Build a position map for optimal handle computation
       const nodeMap = new Map(ln.map((n) => [n.id, n]));
 

@@ -3,30 +3,72 @@ import type { Node, Edge } from "@xyflow/react";
 
 const elk = new ELK();
 
-const DEFAULT_NODE_WIDTH = 280;
-const DEFAULT_NODE_HEIGHT = 140;
+// Default sizes based on actual measured node dimensions
+// Largest nodes are ~360x230, so use that plus margin
+const DEFAULT_NODE_WIDTH = 380;
+const DEFAULT_NODE_HEIGHT = 250;
+
+// Priority order for layout: mobile clients first (top-left), then other clients,
+// then servers below them
+const TYPE_PRIORITY: Record<string, number> = {
+  "ios-client": 0,
+  "android-client": 1,
+  "mobile-client": 2,
+  "watch-app": 3,
+  "web-client": 4,
+  "desktop-app": 5,
+  "cli-tool": 6,
+  "api-server": 10,
+  "service": 11,
+  // Everything else gets 20+
+};
+
+function getTypePriority(type: string): number {
+  return TYPE_PRIORITY[type] ?? 20;
+}
 
 export async function getLayoutedElements(
   nodes: Node[],
   edges: Edge[],
-  direction: "RIGHT" | "DOWN" = "RIGHT",
+  direction: "RIGHT" | "DOWN" = "DOWN",
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  // Sort nodes by type priority for better initial layering
+  const sortedNodes = [...nodes].sort((a, b) => {
+    const aType = (a.data as { component?: { type?: string } })?.component?.type ?? "";
+    const bType = (b.data as { component?: { type?: string } })?.component?.type ?? "";
+    return getTypePriority(aType) - getTypePriority(bType);
+  });
+
   const elkGraph = {
     id: "root",
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": direction,
-      "elk.spacing.nodeNode": "100",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "120",
-      "elk.padding": "[top=60,left=60,bottom=60,right=60]",
-      "elk.layered.mergeEdges": "true",
-      "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
+      // Large spacing to prevent overlaps and show relationships clearly
+      "elk.spacing.nodeNode": "60",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "80",
+      "elk.padding": "[top=40,left=40,bottom=40,right=40]",
+      // Better edge routing for clearer relationship visualization
+      "elk.layered.mergeEdges": "false",
+      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
       "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+      // Consider node priorities for layer assignment - model order takes precedence
+      "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+      "elk.layered.layering.strategy": "LONGEST_PATH_SOURCE",
+      // Spread nodes more evenly
+      "elk.layered.spacing.edgeNodeBetweenLayers": "40",
+      "elk.layered.spacing.edgeEdgeBetweenLayers": "20",
+      // Prevent overlap
+      "elk.layered.compaction.postCompaction.strategy": "NONE",
     },
-    children: nodes.map((node) => ({
+    children: sortedNodes.map((node, index) => ({
       id: node.id,
       width: node.measured?.width ?? DEFAULT_NODE_WIDTH,
       height: node.measured?.height ?? DEFAULT_NODE_HEIGHT,
+      // Use index as layout priority (lower = higher in hierarchy)
+      layoutOptions: {
+        "elk.priority": String(sortedNodes.length - index),
+      },
     })),
     edges: edges.map((edge) => ({
       id: edge.id,
