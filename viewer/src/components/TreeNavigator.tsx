@@ -113,7 +113,7 @@ export function TreeNavigator() {
         </h2>
       </div>
       <div className="flex-1 overflow-y-auto py-2">
-        {flattenTopLevel(architecture.components).map((comp) => (
+        {flattenTopLevel(architecture.components, architecture.relationships).map((comp) => (
           <TreeNode key={comp.id} component={comp} depth={0} />
         ))}
       </div>

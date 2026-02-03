@@ -270,6 +270,32 @@ export function isHeroType(type: string): boolean {
   return HERO_TYPES.has(type);
 }
 
+// Domain 1: Human-facing client types (always top-level)
+// Each backed by concrete framework/manifest detection in the analyzer.
+export const CLIENT_TYPES = new Set([
+  "mobile-client",
+  "ios-client",
+  "android-client",
+  "web-client",
+  "watch-app",
+  "desktop-app",
+  "cli-tool",
+]);
+
+// Domain 2 candidates: Server types that may be top-level if a client depends on them
+export const SERVER_TYPES = new Set([
+  "api-server",
+  "service",
+]);
+
+export function isClientType(type: string): boolean {
+  return CLIENT_TYPES.has(type);
+}
+
+export function isServerType(type: string): boolean {
+  return SERVER_TYPES.has(type);
+}
+
 // Glow colors for hero types (used for box-shadow)
 const HERO_GLOW: Record<string, { dark: string; light: string }> = {
   "mobile-client": { dark: "rgba(249,115,22,0.18)", light: "rgba(249,115,22,0.14)" },

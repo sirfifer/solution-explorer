@@ -11,7 +11,7 @@ import type {
   FileInfo,
   Relationship,
 } from "./types";
-import { isHeroType } from "./utils/layout";
+import { isHeroType, isClientType, isServerType } from "./utils/layout";
 
 interface ArchStore {
   // Data
@@ -283,8 +283,8 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     if (!architecture) return [];
 
     if (!drillLevel) {
-      // Top level: show architectural components, exclude content-only items
-      return flattenTopLevel(architecture.components)
+      // Top level: show clients (Domain 1) and their dependent servers (Domain 2)
+      return flattenTopLevel(architecture.components, architecture.relationships)
         .filter((c) => c.type !== "content");
     }
 
@@ -335,51 +335,81 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   },
 }));
 
-// Recursively collect architectural (hero-type) components from any depth.
-// Skips structural wrappers (project, module, package) that just contain heroes.
-// Preserves non-hero peers (libraries, infrastructure) that don't wrap heroes.
-function collectHeroComponents(components: Component[]): Component[] {
+// Recursively collect Domain 1 (client) and Domain 2 candidate (server)
+// components from any depth, unwrapping structural containers.
+// Non-client, non-server components are excluded entirely from top-level.
+function collectTopLevelCandidates(components: Component[]): Component[] {
   const result: Component[] = [];
 
   for (const comp of components) {
-    if (comp.type === "project") {
-      // Project root: always recurse into children
-      result.push(...collectHeroComponents(comp.children));
-    } else if (comp.type === "repository") {
-      // Repository node: collect heroes; if none, show the repo itself (drillable)
-      const repoHeroes = collectHeroComponents(comp.children);
-      if (repoHeroes.length > 0) {
-        result.push(...repoHeroes);
-      } else {
-        result.push(comp);
-      }
-    } else if (isHeroType(comp.type)) {
-      // Hero component: surface it. But also check if it contains OTHER hero
-      // types in its children (e.g., a root ios-client that wraps api-servers,
-      // web-clients, etc.). If so, surface both this hero and its hero descendants.
-      const childHeroes = collectHeroComponents(comp.children);
-      const hasOtherHeroTypes = childHeroes.some((ch) => ch.type !== comp.type);
-      if (hasOtherHeroTypes) {
-        // This hero wraps diverse hero children (monorepo root pattern).
-        // Surface this hero and promote its hero children too.
-        result.push(comp, ...childHeroes);
+    if (comp.type === "project" || comp.type === "repository") {
+      // Structural wrapper: always recurse into children
+      result.push(...collectTopLevelCandidates(comp.children));
+    } else if (isClientType(comp.type) || isServerType(comp.type)) {
+      // Domain 1 or Domain 2 candidate: surface it.
+      // Also check for diverse client/server children (monorepo root pattern).
+      const childCandidates = collectTopLevelCandidates(comp.children);
+      const hasOtherTypes = childCandidates.some((ch) => ch.type !== comp.type);
+      if (hasOtherTypes) {
+        result.push(comp, ...childCandidates);
       } else {
         result.push(comp);
       }
     } else {
-      // Non-hero (module, package, library, content, etc.)
-      // Check if it wraps hero children
-      const childHeroes = collectHeroComponents(comp.children);
-      if (childHeroes.length > 0) {
-        // It's just a wrapper: skip it, promote the heroes
-        result.push(...childHeroes);
-      } else {
-        // It's a real peer component (library, infrastructure, etc.)
-        result.push(comp);
+      // Non-client, non-server (module, package, library, infrastructure, etc.)
+      // Check if it wraps client/server children
+      const childCandidates = collectTopLevelCandidates(comp.children);
+      if (childCandidates.length > 0) {
+        // Just a wrapper: skip it, promote the candidates
+        result.push(...childCandidates);
       }
+      // Otherwise: Domain 3, never top-level
     }
   }
 
+  return result;
+}
+
+// Given all components and relationships, return the set of component IDs
+// for servers that have at least one client-type component depending on them.
+function findClientFacingServerIds(
+  components: Component[],
+  relationships: Relationship[],
+): Set<string> {
+  const clientIds = new Set<string>();
+  function collectClientIds(comps: Component[]) {
+    for (const c of comps) {
+      if (isClientType(c.type)) clientIds.add(c.id);
+      collectClientIds(c.children);
+    }
+  }
+  collectClientIds(components);
+
+  const clientFacingServerIds = new Set<string>();
+  for (const rel of relationships) {
+    if (clientIds.has(rel.source) && !clientIds.has(rel.target)) {
+      clientFacingServerIds.add(rel.target);
+    }
+    if (clientIds.has(rel.target) && !clientIds.has(rel.source)) {
+      clientFacingServerIds.add(rel.source);
+    }
+  }
+
+  return clientFacingServerIds;
+}
+
+// Recursively collect hero-type components for drill-down promotion.
+// Unlike collectTopLevelCandidates (which is strict about domains), this
+// surfaces all hero types within a drilled component's subtree.
+function collectDrillHeroes(components: Component[]): Component[] {
+  const result: Component[] = [];
+  for (const comp of components) {
+    if (isHeroType(comp.type)) {
+      result.push(comp);
+    } else {
+      result.push(...collectDrillHeroes(comp.children));
+    }
+  }
   return result;
 }
 
@@ -395,7 +425,7 @@ function promoteDrillChildren(children: Component[]): Component[] {
       result.push(child);
     } else {
       // Non-hero wrapper: check if it contains hero children
-      const childHeroes = collectHeroComponents(child.children);
+      const childHeroes = collectDrillHeroes(child.children);
       if (childHeroes.length > 0) {
         // Promote the hero grandchildren to this level
         result.push(...childHeroes);
@@ -417,41 +447,49 @@ function promoteDrillChildren(children: Component[]): Component[] {
   return result;
 }
 
-export function flattenTopLevel(components: Component[]): Component[] {
-  // Try architecture-first view: surface all hero components
-  const heroes = collectHeroComponents(components);
-  if (heroes.length > 0) {
-    // When hero components exist, filter out small non-hero modules that are
-    // internal to a larger project (e.g., "WatchModels", "Shared").
-    // Keep libraries, infrastructure, and substantial modules.
-    const hasHero = heroes.some((c) => isHeroType(c.type));
-    if (hasHero) {
-      const significantTypes = new Set([
-        "library", "infrastructure", "repository", "project",
-      ]);
-      return heroes.filter((c) => {
-        if (isHeroType(c.type) || c.type === "content") return true;
-        if (significantTypes.has(c.type)) return true;
-        // Keep modules/packages that have children (drillable) or many files
-        if (c.children.length > 0) return true;
-        if (c.files.length >= 10) return true;
-        // Small internal modules without children are hidden from graph
-        return false;
-      });
+export function flattenTopLevel(
+  components: Component[],
+  relationships: Relationship[],
+): Component[] {
+  const candidates = collectTopLevelCandidates(components);
+
+  if (candidates.length === 0) {
+    // Fallback: no clients or servers detected, use folder-based one-level unwrap
+    const result: Component[] = [];
+    for (const comp of components) {
+      if (comp.type === "project" && comp.children.length > 0) {
+        result.push(...comp.children);
+      } else {
+        result.push(comp);
+      }
     }
-    return heroes;
+    return result;
   }
 
-  // Fallback: no hero types detected, use folder-based one-level unwrap
-  const result: Component[] = [];
-  for (const comp of components) {
-    if (comp.type === "project" && comp.children.length > 0) {
-      result.push(...comp.children);
-    } else if (comp.type === "repository") {
-      result.push(comp);
-    } else {
-      result.push(comp);
+  // Separate clients from servers
+  const clients = candidates.filter((c) => isClientType(c.type));
+  const serverCandidates = candidates.filter((c) => isServerType(c.type));
+
+  // Determine which servers are client-facing using relationship data
+  const clientFacingIds = findClientFacingServerIds(components, relationships);
+
+  // Domain 1: all clients, always included
+  // Domain 2: servers that a client depends on
+  const topLevel = [...clients];
+
+  for (const server of serverCandidates) {
+    if (clientFacingIds.has(server.id)) {
+      topLevel.push(server);
     }
   }
-  return result;
+
+  // Safety net: if clients exist but zero servers survived the relationship
+  // filter, include all server-typed candidates. This handles cases where the
+  // analyzer didn't detect the client-to-server relationship (e.g., the client
+  // uses an environment variable for the API URL).
+  if (clients.length > 0 && topLevel.length === clients.length && serverCandidates.length > 0) {
+    topLevel.push(...serverCandidates);
+  }
+
+  return topLevel;
 }
