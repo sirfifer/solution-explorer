@@ -1,7 +1,7 @@
-import { useState, memo } from "react";
+import { useState, memo, useMemo } from "react";
 import type { Component } from "../types";
 import { useArchStore, flattenTopLevel } from "../store";
-import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType } from "../utils/layout";
+import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, isClientType, isServerType } from "../utils/layout";
 
 interface TreeNodeProps {
   component: Component;
@@ -100,8 +100,87 @@ const TreeNode = memo(function TreeNode({ component, depth }: TreeNodeProps) {
   );
 });
 
+// Collect components that are NOT top-level but exist in the tree
+// Groups them by their immediate parent type/name for organization
+function collectOtherComponents(
+  components: Component[],
+  topLevelIds: Set<string>,
+  parentName: string = "Root",
+): { parentName: string; components: Component[] }[] {
+  const groups: Map<string, Component[]> = new Map();
+
+  function walk(comps: Component[], parent: string) {
+    for (const c of comps) {
+      if (topLevelIds.has(c.id)) {
+        // This is top-level, but its children might not be
+        walk(c.children, c.name);
+      } else if (c.type !== "project" && c.type !== "repository" && c.type !== "content") {
+        // Non-top-level component, group by parent
+        if (!groups.has(parent)) {
+          groups.set(parent, []);
+        }
+        groups.get(parent)!.push(c);
+      } else if (c.type === "project" || c.type === "repository") {
+        // Structural: recurse
+        walk(c.children, parent);
+      }
+    }
+  }
+
+  walk(components, parentName);
+
+  return Array.from(groups.entries())
+    .map(([parentName, comps]) => ({ parentName, components: comps }))
+    .filter((g) => g.components.length > 0);
+}
+
+interface FolderNodeProps {
+  name: string;
+  children: Component[];
+  darkMode: boolean;
+}
+
+const FolderNode = memo(function FolderNode({ name, children, darkMode }: FolderNodeProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div>
+      <button
+        className={`w-full text-left flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg mx-1 ${darkMode ? "hover:bg-zinc-800/50 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"}`}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span className={`w-4 h-4 flex items-center justify-center text-[10px] shrink-0 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+          {expanded ? "\u25BC" : "\u25B6"}
+        </span>
+        <span className="mr-1">{"\uD83D\uDCC1"}</span>
+        <span className="truncate flex-1 font-medium">{name}</span>
+        <span className={`text-[9px] px-1 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-200 text-zinc-500"} shrink-0`}>
+          {children.length}
+        </span>
+      </button>
+      {expanded && (
+        <div>
+          {children.map((child) => (
+            <TreeNode key={child.id} component={child} depth={1} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
 export function TreeNavigator() {
   const { architecture, darkMode } = useArchStore();
+
+  const { topLevel, otherGroups } = useMemo(() => {
+    if (!architecture) return { topLevel: [], otherGroups: [] };
+
+    const topLevel = flattenTopLevel(architecture.components, architecture.relationships);
+    const topLevelIds = new Set(topLevel.map((c) => c.id));
+    const otherGroups = collectOtherComponents(architecture.components, topLevelIds);
+
+    return { topLevel, otherGroups };
+  }, [architecture]);
 
   if (!architecture) return null;
 
@@ -109,13 +188,33 @@ export function TreeNavigator() {
     <div className="h-full flex flex-col">
       <div className={`px-4 py-3 border-b ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
         <h2 className={`text-xs font-semibold uppercase tracking-wider ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-          Components
+          Architecture
         </h2>
       </div>
       <div className="flex-1 overflow-y-auto py-2">
-        {flattenTopLevel(architecture.components, architecture.relationships).map((comp) => (
+        {/* Top-level components (main graph items) */}
+        {topLevel.map((comp) => (
           <TreeNode key={comp.id} component={comp} depth={0} />
         ))}
+
+        {/* Other components grouped by parent */}
+        {otherGroups.length > 0 && (
+          <>
+            <div className={`px-4 py-2 mt-3 border-t ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
+              <h3 className={`text-[10px] font-semibold uppercase tracking-wider ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                Internal Components
+              </h3>
+            </div>
+            {otherGroups.map((group) => (
+              <FolderNode
+                key={group.parentName}
+                name={group.parentName}
+                children={group.components}
+                darkMode={darkMode}
+              />
+            ))}
+          </>
+        )}
       </div>
     </div>
   );

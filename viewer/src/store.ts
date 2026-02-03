@@ -335,36 +335,34 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   },
 }));
 
-// Recursively collect Domain 1 (client) and Domain 2 candidate (server)
-// components from any depth, unwrapping structural containers.
-// Non-client, non-server components are excluded entirely from top-level.
-function collectTopLevelCandidates(components: Component[]): Component[] {
+// Collect Domain 1 (client) and Domain 2 candidate (server) components,
+// unwrapping structural containers up to a limited depth.
+// Once we find a client or server, we STOP: those are the entry points.
+// maxUnwrap limits how many levels of non-client/non-server wrappers we pierce.
+function collectTopLevelCandidates(
+  components: Component[],
+  maxUnwrap: number = 2,
+): Component[] {
   const result: Component[] = [];
 
   for (const comp of components) {
     if (comp.type === "project" || comp.type === "repository") {
-      // Structural wrapper: always recurse into children
-      result.push(...collectTopLevelCandidates(comp.children));
+      // Structural wrapper: always recurse (doesn't count against maxUnwrap)
+      result.push(...collectTopLevelCandidates(comp.children, maxUnwrap));
     } else if (isClientType(comp.type) || isServerType(comp.type)) {
-      // Domain 1 or Domain 2 candidate: surface it.
-      // Also check for diverse client/server children (monorepo root pattern).
-      const childCandidates = collectTopLevelCandidates(comp.children);
-      const hasOtherTypes = childCandidates.some((ch) => ch.type !== comp.type);
-      if (hasOtherTypes) {
-        result.push(comp, ...childCandidates);
-      } else {
-        result.push(comp);
-      }
-    } else {
-      // Non-client, non-server (module, package, library, infrastructure, etc.)
-      // Check if it wraps client/server children
-      const childCandidates = collectTopLevelCandidates(comp.children);
+      // Domain 1 or Domain 2 candidate: surface it and STOP.
+      result.push(comp);
+    } else if (maxUnwrap > 0) {
+      // Non-client, non-server wrapper (module, package, library, etc.)
+      // Check if it directly contains clients/servers (one more level)
+      const childCandidates = collectTopLevelCandidates(comp.children, maxUnwrap - 1);
       if (childCandidates.length > 0) {
-        // Just a wrapper: skip it, promote the candidates
+        // It's a wrapper: skip it, promote the candidates
         result.push(...childCandidates);
       }
-      // Otherwise: Domain 3, never top-level
+      // Otherwise: Domain 3, not surfaced at top level
     }
+    // If maxUnwrap === 0, we've gone too deep into wrappers; stop here
   }
 
   return result;

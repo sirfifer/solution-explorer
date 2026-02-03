@@ -331,11 +331,14 @@ export function App() {
                 >
                   <span className="text-xs">{"\u00BB"}</span>
                 </button>
-                {/* Resize handle */}
+                {/* Resize handle - wider grab area with visual indicator */}
                 <div
-                  className={`absolute top-0 left-0 w-1 h-full cursor-col-resize z-20 hover:bg-blue-500/50 active:bg-blue-500/70 transition-colors duration-75 ${darkMode ? "hover:bg-blue-400/40" : "hover:bg-blue-500/40"}`}
+                  className={`absolute top-0 left-0 w-2 h-full cursor-col-resize z-20 group flex items-center justify-center`}
                   onMouseDown={(e) => onMouseDown("right", e)}
-                />
+                >
+                  {/* Visual indicator line */}
+                  <div className={`w-0.5 h-16 rounded-full transition-colors duration-75 ${darkMode ? "bg-zinc-700 group-hover:bg-blue-400" : "bg-zinc-300 group-hover:bg-blue-500"} group-active:bg-blue-600`} />
+                </div>
                 {activePanel === "review" ? <ReviewSummary /> : <DetailPanel />}
               </>
             )}
