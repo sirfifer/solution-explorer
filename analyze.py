@@ -138,6 +138,83 @@ CODE_LANGUAGES = {
     "vue", "svelte", "shell",
 }
 
+# HTTP client patterns by language - used to detect when a component makes HTTP calls
+# Each pattern group helps identify outbound HTTP connections
+HTTP_CLIENT_PATTERNS = {
+    # Swift/iOS patterns - URLSession, Alamofire, etc.
+    "swift": [
+        r'URLSession\s*\.\s*shared',
+        r'URLSession\s*\(',
+        r'URLRequest\s*\(',
+        r'dataTask\s*\(\s*with:',
+        r'\.data\s*\(\s*from:',
+        r'AF\s*\.\s*request',  # Alamofire
+        r'Moya\s*\.\s*request',
+    ],
+    # TypeScript/JavaScript patterns
+    "typescript": [
+        r'\bfetch\s*\(',
+        r'axios\s*\.\s*(?:get|post|put|delete|patch|request)',
+        r'\.ajax\s*\(',
+        r'http\.(?:get|post|put|delete)',
+        r'request\s*\(',
+    ],
+    "javascript": [
+        r'\bfetch\s*\(',
+        r'axios\s*\.\s*(?:get|post|put|delete|patch|request)',
+        r'\.ajax\s*\(',
+        r'http\.(?:get|post|put|delete)',
+        r'request\s*\(',
+    ],
+    # Python patterns
+    "python": [
+        r'requests\s*\.\s*(?:get|post|put|delete|patch)',
+        r'httpx\s*\.\s*(?:get|post|put|delete|patch)',
+        r'aiohttp\.ClientSession',
+        r'urllib\.request',
+        r'http\.client',
+    ],
+    # Go patterns
+    "go": [
+        r'http\.(?:Get|Post|NewRequest)',
+        r'client\.(?:Get|Post|Do)',
+    ],
+    # Kotlin/Android patterns
+    "kotlin": [
+        r'OkHttpClient',
+        r'Retrofit',
+        r'HttpClient',
+        r'\.execute\s*\(\s*\)',
+    ],
+    # Rust patterns
+    "rust": [
+        r'reqwest::(?:get|Client)',
+        r'hyper::Client',
+        r'surf::(?:get|post)',
+    ],
+}
+
+# URL patterns to extract from code - helps identify target services
+URL_EXTRACTION_PATTERNS = [
+    # Full URLs with scheme
+    r'["\'](?P<url>https?://[a-zA-Z0-9][-a-zA-Z0-9.]*(?::\d+)?(?:/[^"\']*)?)["\']',
+    # Environment variable references for URLs
+    r'(?:API_URL|SERVER_URL|BASE_URL|ENDPOINT|_HOST|_SERVER)\s*[=:]\s*["\'](?P<url>[^"\']+)["\']',
+    # Service names in docker-compose style (service:port)
+    r'["\'](?P<service>[a-zA-Z][-a-zA-Z0-9_]*):\d+["\']',
+]
+
+# Logging/observability framework patterns - helps detect logging services
+LOGGING_SERVICE_PATTERNS = {
+    "sentry": ["sentry-sdk", "sentry", "@sentry/node", "@sentry/browser"],
+    "datadog": ["ddtrace", "datadog", "@datadog/browser-logs"],
+    "newrelic": ["newrelic", "@newrelic/browser-agent"],
+    "grafana": ["grafana", "loki-client"],
+    "prometheus": ["prometheus", "prometheus-client", "prom-client"],
+    "elasticsearch": ["elasticsearch", "@elastic/elasticsearch"],
+    "fluentd": ["fluent-logger", "fluentd"],
+}
+
 def _should_skip_dir(name: str) -> bool:
     """Check if a directory should be skipped during traversal."""
     if name in SKIP_DIRS or name.startswith("."):
@@ -1966,6 +2043,26 @@ class ArchitectureScanner:
                 and dir_name not in utility_dir_names):
             return "api-server"
 
+        # --- Logging/monitoring service ---
+        # Detect logging servers, log collectors, metrics services
+        logging_dir_patterns = {"log", "logger", "logging", "logs", "metrics", "monitor", "telemetry", "observability"}
+        if dir_name in logging_dir_patterns:
+            # Check for server-like characteristics
+            if comp.port or comp.language in server_languages:
+                return "service"
+
+        # Check for logging framework dependencies
+        logging_deps = {
+            "winston", "pino", "bunyan", "log4js",  # Node.js
+            "loguru", "structlog", "python-json-logger",  # Python
+            "slog", "zap", "logrus",  # Go
+            "tracing", "log4rs",  # Rust
+            "sentry-sdk", "@sentry/node", "datadog", "ddtrace",  # Observability
+            "prometheus-client", "prom-client", "opentelemetry",  # Metrics
+        }
+        if pkg_deps & logging_deps and comp.port:
+            return "service"
+
         # --- Web client ---
         web_client_frameworks = {
             "react", "next.js", "vue", "nuxt", "svelte",
@@ -1980,6 +2077,21 @@ class ArchitectureScanner:
         }
         if pkg_deps & web_client_deps:
             return "web-client"
+
+        # --- Admin/dashboard frontend for API servers ---
+        # Detect web UIs that are admin panels or dashboards for backend services
+        admin_dir_patterns = {"admin", "dashboard", "console", "portal", "ui", "frontend", "web-client", "webclient"}
+        if dir_name in admin_dir_patterns:
+            # Check for web framework
+            if framework in web_client_frameworks or (pkg_deps & web_client_deps):
+                return "web-client"
+            # Check if it has HTML/JS files suggesting a frontend
+            has_frontend_files = any(
+                f.endswith(('.html', '.jsx', '.tsx', '.vue', '.svelte'))
+                for f in comp.files
+            )
+            if has_frontend_files:
+                return "web-client"
 
         # --- CLI tool ---
         if comp.language == "python" and framework in ("click", "typer"):
@@ -2113,6 +2225,158 @@ class ArchitectureScanner:
                                 ))
                             break
 
+        # Service name-based relationships (from docker-compose, kubernetes, etc.)
+        # Build a map of service names to components for matching
+        service_name_map = {}  # lowercase name -> component
+        for comp in self._component_map.values():
+            if comp.id in content_ids:
+                continue
+            # Use component name (lowercase, hyphenated form) as potential service name
+            name_variants = [
+                comp.name.lower().replace(" ", "-").replace("_", "-"),
+                comp.name.lower().replace(" ", "_").replace("-", "_"),
+                comp.name.lower().replace(" ", "").replace("-", "").replace("_", ""),
+            ]
+            # Also use the directory name as a service name
+            if comp.path:
+                dir_name = os.path.basename(comp.path).lower()
+                name_variants.extend([
+                    dir_name,
+                    dir_name.replace("-", "_"),
+                    dir_name.replace("_", "-"),
+                ])
+            for variant in name_variants:
+                if variant and len(variant) > 2:  # Skip very short names
+                    service_name_map[variant] = comp
+
+        # Scan for service name references in code
+        for file_info in self._all_files:
+            if file_info.language not in CODE_LANGUAGES:
+                continue
+            source_comp = self._find_component_for_file(file_info.path)
+            if not source_comp or source_comp.id in content_ids:
+                continue
+
+            try:
+                fpath = self.root / file_info.path
+                content = fpath.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+
+            # Look for service names in URL-like patterns
+            # Pattern: "service-name:port" or "http://service-name" or "service_name.internal"
+            for service_name, target_comp in service_name_map.items():
+                if target_comp.id == source_comp.id:
+                    continue
+                if len(service_name) < 4:  # Skip short names to avoid false positives
+                    continue
+
+                # Check for service name in URL-like contexts
+                patterns = [
+                    rf'["\']https?://{re.escape(service_name)}[:/\'".]',
+                    rf'["\']https?://[^"\']*\.{re.escape(service_name)}\.',
+                    rf'["\'](?:http://|https://)?{re.escape(service_name)}:\d+["\']',
+                    rf'host\s*[=:]\s*["\'](?:[^"\']*\.)?{re.escape(service_name)}["\']',
+                    rf'(?:API_|SERVER_|SERVICE_){re.escape(service_name).upper()}',
+                ]
+                for pat in patterns:
+                    if re.search(pat, content, re.IGNORECASE):
+                        key = (source_comp.id, target_comp.id, "http")
+                        if key not in seen:
+                            seen.add(key)
+                            relationships.append(Relationship(
+                                source=source_comp.id,
+                                target=target_comp.id,
+                                type="http",
+                                protocol="HTTP",
+                                label=f"calls {service_name}",
+                                bidirectional=True,
+                            ))
+                        break
+
+        # HTTP client pattern-based relationships for mobile/frontend apps
+        # Detect when a client component makes HTTP calls to API servers
+        api_servers = [c for c in self._component_map.values()
+                       if c.type in ("api-server", "service") and c.id not in content_ids]
+        client_types = {"ios-client", "android-client", "web-client", "mobile-client", "watch-app"}
+
+        for file_info in self._all_files:
+            lang = file_info.language
+            if lang not in HTTP_CLIENT_PATTERNS:
+                continue
+
+            source_comp = self._find_component_for_file(file_info.path)
+            if not source_comp or source_comp.id in content_ids:
+                continue
+            # Only process client-type components
+            if source_comp.type not in client_types:
+                continue
+
+            try:
+                fpath = self.root / file_info.path
+                content = fpath.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+
+            # Check if this file contains HTTP client calls
+            has_http_calls = False
+            for pattern in HTTP_CLIENT_PATTERNS.get(lang, []):
+                if re.search(pattern, content):
+                    has_http_calls = True
+                    break
+
+            if not has_http_calls:
+                continue
+
+            # Extract URLs from the file to find target services
+            urls_found = set()
+            for url_pat in URL_EXTRACTION_PATTERNS:
+                for match in re.finditer(url_pat, content):
+                    url = match.group("url") if "url" in match.groupdict() else match.group(0)
+                    if url:
+                        urls_found.add(url.lower())
+
+            # Try to match URLs to API servers
+            for api_server in api_servers:
+                if api_server.id == source_comp.id:
+                    continue
+
+                # Check if any extracted URL references this server
+                server_indicators = [
+                    api_server.name.lower().replace(" ", "-"),
+                    api_server.name.lower().replace(" ", "_"),
+                    os.path.basename(api_server.path).lower() if api_server.path else "",
+                ]
+                if api_server.port:
+                    server_indicators.append(f":{api_server.port}")
+
+                matched = False
+                for url in urls_found:
+                    for indicator in server_indicators:
+                        if indicator and len(indicator) > 2 and indicator in url:
+                            matched = True
+                            break
+                    if matched:
+                        break
+
+                # If no URL match but we have HTTP calls and only one API server,
+                # assume the client talks to it (common in single-backend apps)
+                if not matched and len(api_servers) == 1:
+                    matched = True
+
+                if matched:
+                    key = (source_comp.id, api_server.id, "http")
+                    if key not in seen:
+                        seen.add(key)
+                        relationships.append(Relationship(
+                            source=source_comp.id,
+                            target=api_server.id,
+                            type="http",
+                            protocol="HTTP",
+                            label="API call",
+                            bidirectional=True,
+                        ))
+
         # Watch app -> iOS client companion relationship
         watch_apps = [c for c in self._component_map.values() if c.type == "watch-app"]
         ios_clients = [c for c in self._component_map.values() if c.type == "ios-client"]
@@ -2139,12 +2403,64 @@ class ArchitectureScanner:
                     ))
 
         # Docker-compose service relationships
+        # Build a map of docker service names to components
+        docker_services = {}  # service_name -> component
         for comp in self._component_map.values():
             for config in comp.config_files:
                 if config.get("type") == "docker-compose":
-                    for _port_info in config.get("ports", []):
-                        # Create infrastructure relationships
-                        pass
+                    service_name = config.get("service_name", "").lower()
+                    if service_name:
+                        docker_services[service_name] = comp
+                    # Also try component name as fallback
+                    docker_services[comp.name.lower().replace(" ", "-")] = comp
+
+        # Look for depends_on relationships in docker-compose configs
+        for comp in self._component_map.values():
+            for config in comp.config_files:
+                if config.get("type") == "docker-compose":
+                    depends_on = config.get("depends_on", [])
+                    for dep_name in depends_on:
+                        dep_name_lower = dep_name.lower()
+                        if dep_name_lower in docker_services:
+                            target_comp = docker_services[dep_name_lower]
+                            if target_comp.id != comp.id:
+                                key = (comp.id, target_comp.id, "docker")
+                                if key not in seen:
+                                    seen.add(key)
+                                    relationships.append(Relationship(
+                                        source=comp.id,
+                                        target=target_comp.id,
+                                        type="docker",
+                                        label="depends_on",
+                                    ))
+
+        # Client-to-all-servers fallback for small projects
+        # If we have clients but no HTTP relationships detected, connect clients
+        # to all API servers (common pattern in monorepos where URLs are in config)
+        clients = [c for c in self._component_map.values()
+                   if c.type in client_types and c.id not in content_ids]
+        if clients and api_servers:
+            # Check if any HTTP relationships exist from clients
+            client_ids = {c.id for c in clients}
+            has_client_http = any(
+                r.source in client_ids and r.type == "http"
+                for r in relationships
+            )
+            if not has_client_http:
+                # No HTTP relationships detected, create fallback connections
+                for client in clients:
+                    for server in api_servers:
+                        key = (client.id, server.id, "http")
+                        if key not in seen:
+                            seen.add(key)
+                            relationships.append(Relationship(
+                                source=client.id,
+                                target=server.id,
+                                type="http",
+                                protocol="HTTP",
+                                label="API (inferred)",
+                                bidirectional=True,
+                            ))
 
         self.architecture.relationships = [asdict(r) for r in relationships]
 
