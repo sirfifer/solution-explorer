@@ -309,6 +309,37 @@ function OverviewTab({
         <StatCard label="Size" value={formatBytes(metrics?.size_bytes || 0)} darkMode={darkMode} />
       </div>
 
+      {/* External Services */}
+      {component.external_services && component.external_services.length > 0 && (
+        <div>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            External Services ({component.external_services.length})
+          </h4>
+          <div className="flex flex-wrap gap-1.5">
+            {component.external_services.map((svc, i) => {
+              const categoryColors: Record<string, string> = {
+                ai: darkMode ? "bg-violet-900/40 text-violet-300 border-violet-700/50" : "bg-violet-50 text-violet-700 border-violet-200",
+                speech: darkMode ? "bg-cyan-900/40 text-cyan-300 border-cyan-700/50" : "bg-cyan-50 text-cyan-700 border-cyan-200",
+                payments: darkMode ? "bg-emerald-900/40 text-emerald-300 border-emerald-700/50" : "bg-emerald-50 text-emerald-700 border-emerald-200",
+                communications: darkMode ? "bg-blue-900/40 text-blue-300 border-blue-700/50" : "bg-blue-50 text-blue-700 border-blue-200",
+                email: darkMode ? "bg-amber-900/40 text-amber-300 border-amber-700/50" : "bg-amber-50 text-amber-700 border-amber-200",
+                devtools: darkMode ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-zinc-100 text-zinc-600 border-zinc-200",
+                backend: darkMode ? "bg-orange-900/40 text-orange-300 border-orange-700/50" : "bg-orange-50 text-orange-700 border-orange-200",
+                database: darkMode ? "bg-rose-900/40 text-rose-300 border-rose-700/50" : "bg-rose-50 text-rose-700 border-rose-200",
+              };
+              const colors = categoryColors[svc.category] || (darkMode ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-zinc-100 text-zinc-600 border-zinc-200");
+              return (
+                <Tooltip key={i} content={`External ${svc.category} service`}>
+                  <span className={`text-xs px-2 py-1 rounded-md border ${colors}`}>
+                    {svc.name}
+                  </span>
+                </Tooltip>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* API Endpoints */}
       {docs?.api_endpoints && docs.api_endpoints.length > 0 && (
         <div>

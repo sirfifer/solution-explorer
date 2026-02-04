@@ -58,6 +58,11 @@ export interface ComponentDoc {
   api_endpoints: ApiEndpoint[];
 }
 
+export interface ExternalService {
+  name: string;
+  category: string;
+}
+
 export interface Component {
   id: string;
   name: string;
@@ -73,6 +78,7 @@ export interface Component {
   config_files: ComponentConfig[];
   metrics: ComponentMetrics;
   docs: ComponentDoc;
+  external_services?: ExternalService[];
 }
 
 export interface Relationship {

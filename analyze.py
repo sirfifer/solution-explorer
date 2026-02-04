@@ -215,6 +215,39 @@ LOGGING_SERVICE_PATTERNS = {
     "fluentd": ["fluent-logger", "fluentd"],
 }
 
+# Well-known external cloud APIs - detected to show external dependencies
+# Maps domain patterns to (service_name, service_category) tuples
+EXTERNAL_CLOUD_APIS = {
+    # LLM/AI APIs
+    "api.openai.com": ("OpenAI", "ai"),
+    "api.anthropic.com": ("Anthropic", "ai"),
+    "api.groq.com": ("Groq", "ai"),
+    "api.cohere.ai": ("Cohere", "ai"),
+    "api.mistral.ai": ("Mistral", "ai"),
+    "generativelanguage.googleapis.com": ("Google AI", "ai"),
+    # Speech APIs
+    "api.deepgram.com": ("Deepgram", "speech"),
+    "api.assemblyai.com": ("AssemblyAI", "speech"),
+    "api.elevenlabs.io": ("ElevenLabs", "speech"),
+    "api.speechmatics.com": ("Speechmatics", "speech"),
+    # Other cloud services
+    "api.stripe.com": ("Stripe", "payments"),
+    "api.twilio.com": ("Twilio", "communications"),
+    "api.sendgrid.com": ("SendGrid", "email"),
+    "api.github.com": ("GitHub", "devtools"),
+    "api.gitlab.com": ("GitLab", "devtools"),
+    "api.slack.com": ("Slack", "communications"),
+    "api.firebase.google.com": ("Firebase", "backend"),
+    "firestore.googleapis.com": ("Firestore", "database"),
+}
+
+# iOS/watchOS framework imports that indicate companion app communication
+WATCH_CONNECTIVITY_IMPORTS = [
+    "WatchConnectivity",
+    "WCSession",
+    "WCSessionDelegate",
+]
+
 def _should_skip_dir(name: str) -> bool:
     """Check if a directory should be skipped during traversal."""
     if name in SKIP_DIRS or name.startswith("."):
@@ -313,6 +346,7 @@ class Component:
     config_files: list = field(default_factory=list)
     metrics: dict = field(default_factory=dict)
     docs: dict = field(default_factory=dict)  # ComponentDoc as dict
+    external_services: list = field(default_factory=list)  # External cloud APIs used
 
 
 @dataclass
@@ -376,20 +410,47 @@ class BaseParser:
         return sorted(env_vars)
 
     def detect_ports(self, content: str) -> list[int]:
-        """Extract port numbers from code."""
+        """Extract port numbers from server-side code (binding/listening patterns only).
+
+        Only matches patterns that indicate this component SERVES on a port,
+        not patterns that indicate it connects TO a port as a client.
+        """
         ports = set()
-        # Common port assignment patterns
-        patterns = [
-            r'(?:port|PORT)\s*[=:]\s*(\d{2,5})',
-            r'localhost:(\d{2,5})',
-            r'127\.0\.0\.1:(\d{2,5})',
-            r'0\.0\.0\.0:(\d{2,5})',
-            r'listen\w*\(.*?(\d{4,5})',
+        # Server-side port binding patterns (high confidence)
+        server_patterns = [
+            # Direct listen/bind/serve patterns
+            r'\.listen\s*\(\s*(\d{4,5})',
+            r'\.bind\s*\([^)]*:(\d{4,5})',
+            r'\.serve\s*\([^)]*(\d{4,5})',
+            r'TcpListener::bind\s*\([^)]*:(\d{4,5})',
+            r'app\.run\s*\([^)]*port\s*=\s*(\d{4,5})',
+            r'uvicorn\.run\s*\([^)]*port\s*=\s*(\d{4,5})',
+            # Express/Node patterns
+            r'app\.listen\s*\(\s*(\d{4,5})',
+            r'server\.listen\s*\(\s*(\d{4,5})',
+            r'createServer\s*\([^)]*\)\.listen\s*\(\s*(\d{4,5})',
+            # Flask/Python patterns
+            r'app\.run\s*\([^)]*port\s*=\s*(\d{4,5})',
+            # Axum/Rust patterns
+            r'axum::serve\s*\([^)]*bind\s*\([^)]*:(\d{4,5})',
+            # Port constant definitions (for main server files)
+            r'(?:SERVER_PORT|APP_PORT|HTTP_PORT|API_PORT|LISTEN_PORT)\s*[=:]\s*(\d{4,5})',
+            # aiohttp pattern
+            r'web\.run_app\s*\([^)]*port\s*=\s*(\d{4,5})',
+            # Only match 0.0.0.0 binding (server-side), not localhost (often client-side)
+            r'0\.0\.0\.0:(\d{4,5})',
+            # Python constant definitions like PORT = 8766
+            r'^PORT\s*=\s*(?:int\s*\([^)]*["\'])?(\d{4,5})',
+            r'_PORT\s*[=,]\s*["\']?(\d{4,5})',
+            # Environment variable defaults for ports
+            r'\.get\s*\(\s*["\'].*PORT["\'].*["\'](\d{4,5})["\']',
+            # Rust clap default_value for port arguments
+            r'default_value\s*=\s*["\'](\d{4,5})["\']',
         ]
-        for pat in patterns:
-            for m in re.finditer(pat, content):
+        for pat in server_patterns:
+            for m in re.finditer(pat, content, re.MULTILINE):
                 p = int(m.group(1))
-                if 80 <= p <= 65535:
+                if 1024 <= p <= 65535:  # Skip privileged ports
                     ports.add(p)
         return sorted(ports)
 
@@ -1540,6 +1601,9 @@ class ArchitectureScanner:
         # Phase 2.6: Improve component names after type promotion
         self._improve_component_names()
 
+        # Phase 2.7: Assign ports to server components (after types are finalized)
+        self._assign_server_ports()
+
         # Phase 3: Detect relationships
         self._detect_relationships()
 
@@ -1659,6 +1723,10 @@ class ArchitectureScanner:
                             svc_names = info.get("services", [])
                             if svc_names:
                                 comp.description = f"Services: {', '.join(svc_names)}"
+                            # Assign port from docker-compose (primary service port)
+                            dc_ports = info.get("ports", [])
+                            if dc_ports and not comp.port:
+                                comp.port = dc_ports[0].get("host")
                             comp.config_files.append({"type": "docker-compose", "path": os.path.join(rel, marker), **info})
                         elif marker == "Info.plist":
                             comp.type = "application"
@@ -1783,12 +1851,16 @@ class ArchitectureScanner:
                             comp.framework = fw
 
                     # Detect ports (only in code files, not docs/config)
+                    # Only assign to server-type components to avoid client code
                     if lang in CODE_LANGUAGES:
                         ports = parser.detect_ports(content)
                         if ports:
                             comp = self._find_component_for_file(rel)
                             if comp and not comp.port:
-                                comp.port = ports[0]
+                                # Only assign ports to server-type components
+                                server_types = {"api-server", "service", "infrastructure"}
+                                if comp.type in server_types:
+                                    comp.port = ports[0]
 
                 # Extract file-level documentation
                 module_doc = None
@@ -2013,14 +2085,17 @@ class ArchitectureScanner:
         # Detect directories containing explicitly-named server files (e.g.,
         # log_server.py, gateway.py) that import HTTP server modules, even in
         # utility directories that would otherwise be excluded.
-        if comp.language == "python" or (not comp.language and comp.files):
+        # Check Python files regardless of component's primary language (e.g.,
+        # scripts/ may have Gemfile but contain Python server scripts).
+        python_files = [f for f in comp.files if f.endswith('.py')]
+        if python_files:
             server_file_patterns = re.compile(
                 r'(?:^|/)(?:.*server.*|.*gateway.*|.*daemon.*)\.py$', re.I)
             server_imports = {
                 "http.server", "aiohttp", "flask", "fastapi", "tornado",
                 "uvicorn", "gunicorn", "starlette", "socketserver",
             }
-            for fpath in comp.files:
+            for fpath in python_files:
                 if server_file_patterns.search(fpath):
                     try:
                         content = (self.root / fpath).read_text(
@@ -2028,6 +2103,13 @@ class ArchitectureScanner:
                         for srv_import in server_imports:
                             if (f"import {srv_import}" in content
                                     or f"from {srv_import}" in content):
+                                # Also extract port from the server file
+                                if not comp.port:
+                                    port_match = re.search(
+                                        r'(?:default|port)["\']?\s*[:=]\s*(\d{4,5})',
+                                        content, re.I)
+                                    if port_match:
+                                        comp.port = int(port_match.group(1))
                                 return "service"
                     except OSError:
                         pass
@@ -2139,6 +2221,82 @@ class ArchitectureScanner:
                         if info.get("name"):
                             comp.name = info["name"]
                             break
+
+    def _assign_server_ports(self):
+        """Second pass for port assignment after component types are finalized.
+
+        During file scanning, we may detect ports but not assign them because
+        the component type wasn't known yet. This pass re-scans server components
+        to ensure they get their ports assigned.
+
+        Also propagates ports from child components (e.g., cli-tool with server
+        subcommand) up to parent server components (e.g., workspace containing
+        the CLI and library crates).
+        """
+        server_types = {"api-server", "service", "infrastructure"}
+
+        # First pass: direct port assignment to server components
+        for comp in self._component_map.values():
+            if comp.port:
+                continue  # Already has a port
+            if comp.type not in server_types:
+                continue  # Not a server type
+
+            # Find files belonging to this component and scan for ports
+            for file_info in self._all_files:
+                if file_info.language not in CODE_LANGUAGES:
+                    continue
+                file_comp = self._find_component_for_file(file_info.path)
+                if file_comp and file_comp.id == comp.id:
+                    # Re-scan this file for ports
+                    try:
+                        fpath = self.root / file_info.path
+                        content = fpath.read_text(encoding="utf-8", errors="replace")
+                        parser = PARSERS.get(file_info.language)
+                        if parser:
+                            ports = parser.detect_ports(content)
+                            if ports:
+                                comp.port = ports[0]
+                                break  # Got a port, done with this component
+                    except OSError:
+                        continue
+
+        # Second pass: propagate ports from children to parent server components
+        # This handles cases like Rust workspaces where the CLI crate defines the
+        # port but the parent workspace is the server component.
+        for comp in self._component_map.values():
+            if comp.port:
+                continue  # Already has a port
+            if comp.type not in server_types:
+                continue  # Not a server type
+
+            # Find child components and scan their files for ports
+            for rel_path, child in self._component_map.items():
+                if not rel_path:
+                    continue
+                # Check if this component is a parent of the child
+                parent_id = self._find_parent_component(rel_path)
+                if parent_id == comp.id:
+                    # This is a child of our server component
+                    # Scan child's files for ports
+                    for file_info in self._all_files:
+                        if file_info.language not in CODE_LANGUAGES:
+                            continue
+                        file_comp = self._find_component_for_file(file_info.path)
+                        if file_comp and file_comp.id == child.id:
+                            try:
+                                fpath = self.root / file_info.path
+                                content = fpath.read_text(encoding="utf-8", errors="replace")
+                                parser = PARSERS.get(file_info.language)
+                                if parser:
+                                    ports = parser.detect_ports(content)
+                                    if ports:
+                                        comp.port = ports[0]
+                                        break
+                            except OSError:
+                                continue
+                    if comp.port:
+                        break
 
     def _detect_relationships(self):
         """Detect inter-component relationships."""
@@ -2459,6 +2617,151 @@ class ArchitectureScanner:
                                 type="http",
                                 protocol="HTTP",
                                 label="API (inferred)",
+                                bidirectional=True,
+                            ))
+
+        # External cloud API detection
+        # Track external services referenced by components to surface as notes/metadata
+        external_services_by_component = defaultdict(set)
+        for file_info in self._all_files:
+            lang = file_info.language
+            if lang not in CODE_LANGUAGES:
+                continue
+
+            source_comp = self._find_component_for_file(file_info.path)
+            if not source_comp or source_comp.id in content_ids:
+                continue
+
+            try:
+                fpath = self.root / file_info.path
+                content = fpath.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+
+            # Check for external cloud API domains
+            for domain, (service_name, category) in EXTERNAL_CLOUD_APIS.items():
+                if domain in content:
+                    # Verify it's in a URL-like context
+                    patterns = [
+                        rf'["\']https?://{re.escape(domain)}',
+                        rf'wss?://{re.escape(domain)}',
+                        rf'host["\s:=]+["\']?{re.escape(domain)}',
+                    ]
+                    for pat in patterns:
+                        if re.search(pat, content):
+                            external_services_by_component[source_comp.id].add(
+                                (service_name, category)
+                            )
+                            break
+
+        # Add external services as metadata on components
+        for comp_id, services in external_services_by_component.items():
+            for path, comp in self._component_map.items():
+                if comp.id == comp_id:
+                    if not hasattr(comp, "external_services"):
+                        comp.external_services = []
+                    comp.external_services = [
+                        {"name": name, "category": cat}
+                        for name, cat in sorted(services)
+                    ]
+                    break
+
+        # WatchConnectivity-based relationship enhancement
+        # Scan for WatchConnectivity framework imports to confirm Watch-iOS pairing
+        for file_info in self._all_files:
+            if file_info.language != "swift":
+                continue
+
+            for imp in file_info.imports:
+                if imp in WATCH_CONNECTIVITY_IMPORTS:
+                    source_comp = self._find_component_for_file(file_info.path)
+                    if not source_comp:
+                        continue
+                    # If this is an iOS client, find any Watch apps and ensure relationship
+                    if source_comp.type == "ios-client":
+                        for watch in watch_apps:
+                            key = (watch.id, source_comp.id, "import")
+                            if key not in seen:
+                                seen.add(key)
+                                relationships.append(Relationship(
+                                    source=watch.id,
+                                    target=source_comp.id,
+                                    type="import",
+                                    label="WatchConnectivity",
+                                ))
+                    # If this is a watch app, find parent iOS client
+                    elif source_comp.type == "watch-app":
+                        for ios in ios_clients:
+                            key = (source_comp.id, ios.id, "import")
+                            if key not in seen:
+                                seen.add(key)
+                                relationships.append(Relationship(
+                                    source=source_comp.id,
+                                    target=ios.id,
+                                    type="import",
+                                    label="WatchConnectivity",
+                                ))
+                    break  # Only need to find it once per file
+
+        # Next.js/web config file URL detection
+        # Parse .env files and next.config.* for API URLs to detect backend connections
+        env_api_urls = {}  # component_id -> list of URLs
+        for file_info in self._all_files:
+            filename = os.path.basename(file_info.path)
+            # Check for env files and Next.js config
+            if not (filename.startswith(".env") or
+                    filename in ("next.config.js", "next.config.ts", "next.config.mjs")):
+                continue
+
+            source_comp = self._find_component_for_file(file_info.path)
+            if not source_comp or source_comp.id in content_ids:
+                continue
+            if source_comp.type not in client_types:
+                continue
+
+            try:
+                fpath = self.root / file_info.path
+                content = fpath.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+
+            # Extract URLs from env/config files
+            env_patterns = [
+                r'(?:NEXT_PUBLIC_)?(?:API_URL|BACKEND_URL|SERVER_URL|WS_URL)\s*[=:]\s*["\']?([^"\'\s\n]+)',
+                r'(?:destination|source|rewrites).*?["\']https?://([^"\']+)["\']',
+            ]
+            for pattern in env_patterns:
+                for match in re.finditer(pattern, content, re.IGNORECASE):
+                    url = match.group(1)
+                    if url and not url.startswith("$"):  # Skip env var references
+                        if source_comp.id not in env_api_urls:
+                            env_api_urls[source_comp.id] = []
+                        env_api_urls[source_comp.id].append(url)
+
+        # Match env URLs to API servers
+        for comp_id, urls in env_api_urls.items():
+            for url in urls:
+                for api_server in api_servers:
+                    matched = False
+                    # Check port match
+                    if api_server.port:
+                        if f":{api_server.port}" in url:
+                            matched = True
+                    # Check name match
+                    server_name = api_server.name.lower().replace(" ", "-")
+                    if server_name in url.lower():
+                        matched = True
+
+                    if matched:
+                        key = (comp_id, api_server.id, "http")
+                        if key not in seen:
+                            seen.add(key)
+                            relationships.append(Relationship(
+                                source=comp_id,
+                                target=api_server.id,
+                                type="http",
+                                protocol="HTTP",
+                                label="env config",
                                 bidirectional=True,
                             ))
 
