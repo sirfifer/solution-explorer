@@ -535,6 +535,27 @@ class BaseParser:
         return preview
 
 
+def _is_conditional_import(content: str, framework: str) -> bool:
+    """Check if 'import <framework>' only appears inside #if conditional blocks.
+
+    Returns True if every occurrence of the import is preceded (on a nearby
+    earlier line) by an #if directive, meaning it's a conditional/compat shim.
+    """
+    lines = content.split("\n")
+    in_conditional = 0
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#if "):
+            in_conditional += 1
+        elif stripped == "#endif":
+            in_conditional = max(0, in_conditional - 1)
+        elif stripped == f"import {framework}" and in_conditional == 0:
+            # Unconditional import found
+            return False
+    # All occurrences were inside conditional blocks (or none existed)
+    return True
+
+
 class SwiftParser(BaseParser):
     SYMBOL_PATTERNS = [
         (r'^\s*(public|open|internal|private|fileprivate)?\s*(final\s+)?(class|struct|enum|protocol|actor)\s+(\w+)', "type"),
@@ -642,15 +663,37 @@ class SwiftParser(BaseParser):
         return [m.group(1) for m in self.IMPORT_PATTERN.finditer(content)]
 
     def detect_framework(self, content: str) -> Optional[str]:
-        if "import SwiftUI" in content:
-            return "SwiftUI"
-        if "import UIKit" in content:
-            return "UIKit"
-        if "import AppKit" in content:
-            return "AppKit"
+        # Platform-specific frameworks take priority over cross-platform ones.
+        # AppKit = macOS only, UIKit = iOS only, SwiftUI = cross-platform.
+        # Vapor is server-side Swift.
+        # Important: skip imports inside #if os() conditional compilation blocks,
+        # as those are cross-platform compatibility shims, not the primary platform.
         if "import Vapor" in content:
             return "Vapor"
+        if "import AppKit" in content and not _is_conditional_import(content, "AppKit"):
+            return "AppKit"
+        if "import UIKit" in content:
+            return "UIKit"
+        if "import SwiftUI" in content:
+            return "SwiftUI"
         return None
+
+    def detect_api_endpoints(self, content: str) -> list[dict]:
+        endpoints = []
+        # Vapor route registration: app.get("path") { ... }
+        # or router.get("path") { ... } / routes.get("path") { ... }
+        for m in re.finditer(
+            r'\.\s*(get|post|put|delete|patch)\s*\(\s*"([^"]+)"',
+            content,
+        ):
+            endpoints.append({"method": m.group(1).upper(), "path": m.group(2)})
+        # Vapor grouped routes: group("api") { ... }
+        for m in re.finditer(
+            r'\.group\(\s*"([^"]+)"',
+            content,
+        ):
+            endpoints.append({"method": "GROUP", "path": m.group(1)})
+        return endpoints
 
     def _find_closing_brace(self, lines: list[str], start: int) -> int:
         depth = 0
@@ -741,8 +784,33 @@ class PythonParser(BaseParser):
         }
         for key, name in frameworks.items():
             if f"import {key}" in content or f"from {key}" in content:
+                # Skip imports inside try/except blocks (optional deps)
+                if self._is_try_except_import(content, key):
+                    continue
                 return name
         return None
+
+    @staticmethod
+    def _is_try_except_import(content: str, module: str) -> bool:
+        """Check if an import only appears inside try/except blocks.
+
+        Returns True if every occurrence of 'import <module>' is preceded
+        by a 'try:' line, indicating it is an optional/fallback dependency.
+        """
+        lines = content.split("\n")
+        in_try = False
+        found_unconditional = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped == "try:":
+                in_try = True
+            elif stripped.startswith("except") and ":" in stripped:
+                in_try = False
+            elif (f"import {module}" in stripped or f"from {module}" in stripped):
+                if not in_try:
+                    found_unconditional = True
+                    break
+        return not found_unconditional
 
     def detect_api_endpoints(self, content: str) -> list[dict]:
         endpoints = []
@@ -1123,6 +1191,78 @@ class GoParser(BaseParser):
             m.group(1).split("/")[-1]
             for m in self.IMPORT_PATTERN.finditer(content)
         ))
+
+    def detect_framework(self, content: str) -> Optional[str]:
+        # Server frameworks (most specific first)
+        if "github.com/gin-gonic/gin" in content:
+            return "Gin"
+        if "github.com/labstack/echo" in content:
+            return "Echo"
+        if "github.com/gofiber/fiber" in content:
+            return "Fiber"
+        if "github.com/go-chi/chi" in content:
+            return "Chi"
+        if "github.com/gorilla/mux" in content:
+            return "Gorilla"
+        if "github.com/beego/" in content or "github.com/astaxie/beego" in content:
+            return "Beego"
+        # net/http is used for both clients and servers; only classify as a
+        # server framework when server-specific patterns are present.
+        if '"net/http"' in content:
+            server_patterns = (
+                "http.ListenAndServe", "http.Handle", "http.HandleFunc",
+                "http.ServeMux", "http.Server{",
+            )
+            if any(p in content for p in server_patterns):
+                return "net/http"
+        return None
+
+    def extract_file_doc(self, content: str) -> Optional[str]:
+        """Extract Go file-level package comment (// comments before package)."""
+        lines = content.split("\n")
+        doc_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("//"):
+                text = stripped[2:].strip()
+                if text and not text.startswith("+build") and not text.startswith("go:"):
+                    doc_lines.append(text)
+            elif stripped == "" and not doc_lines:
+                continue
+            elif stripped.startswith("package "):
+                break
+            else:
+                # Non-comment, non-blank before package: reset
+                doc_lines = []
+        return "\n".join(doc_lines) if doc_lines else None
+
+    def detect_api_endpoints(self, content: str) -> list[dict]:
+        endpoints = []
+        # Gin/Echo/Fiber-style: router.GET("/path", handler)
+        for m in re.finditer(
+            r'\.\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s*\(\s*["\']([^"\']+)',
+            content,
+        ):
+            endpoints.append({"method": m.group(1).upper(), "path": m.group(2)})
+        # Chi-style: r.Get("/path", handler)
+        for m in re.finditer(
+            r'\.\s*(Get|Post|Put|Delete|Patch|Head|Options)\s*\(\s*["\']([^"\']+)',
+            content,
+        ):
+            endpoints.append({"method": m.group(1).upper(), "path": m.group(2)})
+        # Gorilla/net/http: .HandleFunc("/path", handler).Methods("GET")
+        for m in re.finditer(
+            r'\.HandleFunc\(\s*["\']([^"\']+)',
+            content,
+        ):
+            endpoints.append({"method": "ANY", "path": m.group(1)})
+        # http.Handle("/path", ...)
+        for m in re.finditer(
+            r'http\.Handle(?:Func)?\(\s*["\']([^"\']+)',
+            content,
+        ):
+            endpoints.append({"method": "ANY", "path": m.group(1)})
+        return endpoints
 
     def _find_closing_brace(self, lines, start):
         depth = 0
@@ -1561,6 +1701,88 @@ def parse_serverless_yml(path: Path) -> dict:
         return {}
 
 
+# Framework specificity ranking: more specific frameworks override generic ones
+# at the component level. E.g., if one file uses SwiftUI and another uses AppKit,
+# the component framework should be AppKit (macOS-only). Similarly, Next.js
+# overrides React since Next.js is built on React.
+_FRAMEWORK_PRIORITY = {
+    # Swift
+    "SwiftUI": 1,      # Cross-platform (iOS, macOS, watchOS, tvOS)
+    "UIKit": 2,         # iOS-specific
+    "AppKit": 2,        # macOS-specific
+    "WatchKit": 2,      # watchOS-specific
+    "Vapor": 3,         # Server-side Swift
+    # JavaScript / TypeScript
+    "React": 1,         # Generic UI library
+    "Vue": 1,           # Generic UI framework
+    "Svelte": 1,        # Generic UI framework
+    "Next.js": 2,       # React meta-framework (includes React)
+    "Angular": 2,       # Full framework
+    "Express": 2,       # Server-side Node
+    # Python
+    "Flask": 1,         # Lightweight server
+    "Starlette": 1,     # Lightweight async server
+    "Click": 1,         # CLI framework
+    "FastAPI": 2,       # Built on Starlette, more specific
+    "Django": 2,        # Full framework
+    "aiohttp": 2,       # Full async framework
+    "Tornado": 2,       # Full async framework
+    "pytest": 1,        # Test framework
+    # Rust
+    "Tokio": 1,         # Async runtime (generic)
+    "Warp": 2,          # HTTP framework built on Tokio
+    "Axum": 2,          # HTTP framework built on Tokio
+    "Actix": 2,         # HTTP framework
+    "Rocket": 2,        # HTTP framework
+    # Go
+    "net/http": 1,      # Standard library
+    "Gorilla": 2,       # Router built on net/http
+    "Chi": 2,           # Router built on net/http
+    "Gin": 3,           # Full framework
+    "Echo": 3,          # Full framework
+    "Fiber": 3,         # Full framework
+    "Beego": 3,         # Full framework
+    # Ruby
+    "Sinatra": 1,       # Lightweight
+    "Grape": 1,         # API-only
+    "Hanami": 2,        # Full framework
+    "Rails": 3,         # Full framework
+}
+
+def _framework_priority(fw: str) -> int:
+    """Return priority rank for a framework (higher = more specific)."""
+    return _FRAMEWORK_PRIORITY.get(fw, 1)
+
+
+def _name_from_server_script(fpath: str, content: str) -> str:
+    """Derive a human-readable service name from a server script.
+
+    Checks the module docstring first (e.g., \"Remote Log Server\"), then
+    falls back to the filename (e.g., log_server.py -> \"Log Server\").
+    """
+    # Try to extract a name from the module docstring (first triple-quoted string)
+    doc_match = re.match(r'(?:#[^\n]*\n)*\s*(?:\'\'\'|""")([^\'\"]+)', content)
+    if doc_match:
+        first_line = doc_match.group(1).strip().split("\n")[0].strip()
+        # Clean up common prefixes/suffixes
+        for prefix in ("UnaMentis ", "una-mentis "):
+            if first_line.lower().startswith(prefix.lower()):
+                first_line = first_line[len(prefix):]
+        # Strip trailing qualifiers (e.g., "with Web Interface", "for XYZ")
+        for sep in (" with ", " for ", " - ", " -- ", " :: "):
+            idx = first_line.lower().find(sep)
+            if idx > 5:  # Keep at least 5 chars of the core name
+                first_line = first_line[:idx]
+        # Truncate overly long descriptions
+        if len(first_line) > 30:
+            first_line = first_line[:30].rsplit(" ", 1)[0]
+        if first_line and len(first_line) > 3:
+            return first_line
+
+    # Fall back to filename: log_server.py -> "Log Server"
+    basename = os.path.basename(fpath).replace(".py", "")
+    return basename.replace("_", " ").replace("-", " ").title()
+
 # ---------------------------------------------------------------------------
 # Core Scanner
 # ---------------------------------------------------------------------------
@@ -1843,12 +2065,17 @@ class ArchitectureScanner:
                     symbols = parser.extract_symbols(content, rel)
                     imports = parser.extract_imports(content)
 
-                    # Detect framework at file level
+                    # Detect framework at file level.
+                    # Platform-specific frameworks (AppKit, UIKit, Vapor) take
+                    # priority over cross-platform ones (SwiftUI).
                     fw = parser.detect_framework(content)
                     if fw:
                         comp = self._find_component_for_file(rel)
-                        if comp and not comp.framework:
-                            comp.framework = fw
+                        if comp:
+                            if not comp.framework:
+                                comp.framework = fw
+                            elif _framework_priority(fw) > _framework_priority(comp.framework):
+                                comp.framework = fw
 
                     # Detect ports (only in code files, not docs/config)
                     # Only assign to server-type components to avoid client code
@@ -1984,11 +2211,18 @@ class ArchitectureScanner:
         has_xcodeproj = any(
             p.suffix == ".xcodeproj" for p in comp_dir.iterdir() if p.is_dir()
         ) if comp_dir.is_dir() else False
-        # Also check parent for .xcodeproj (common iOS layout)
-        if not has_xcodeproj:
-            has_xcodeproj = any(
-                p.suffix == ".xcodeproj" for p in self.root.iterdir() if p.is_dir()
-            ) if comp.language == "swift" else False
+        # Also check parent for .xcodeproj (common iOS layout where code
+        # dir sits beside the xcodeproj). Only check direct parent, not root,
+        # to avoid false positives for nested Swift packages. Skip if this
+        # component has its own Package.swift (it's a library, not an app).
+        has_package_swift = (comp_dir / "Package.swift").exists()
+        if not has_xcodeproj and comp.language == "swift" and not has_package_swift:
+            parent_dir = comp_dir.parent
+            if parent_dir.is_dir() and parent_dir != self.root:
+                has_xcodeproj = any(
+                    p.suffix == ".xcodeproj" for p in parent_dir.iterdir()
+                    if p.is_dir()
+                )
         has_android_manifest = (
             (comp_dir / "AndroidManifest.xml").exists()
             or (comp_dir / "src" / "main" / "AndroidManifest.xml").exists()
@@ -2017,6 +2251,28 @@ class ArchitectureScanner:
             if comp.language == "swift" or framework in ("swiftui", "watchkit"):
                 return "watch-app"
 
+        # --- macOS desktop app ---
+        # Must check before iOS: AppKit is macOS-only, SwiftUI is cross-platform.
+        # Also detect macOS-specific SwiftUI APIs (MenuBarExtra, NSApplication, etc.)
+        if framework == "appkit":
+            return "desktop-app"
+        if framework == "swiftui":
+            # Check for macOS-specific SwiftUI APIs in any Swift file owned by
+            # this component. Don't require comp.language == "swift" since mixed-
+            # content directories (e.g., docs + code) may have a different primary
+            # language.
+            macos_indicators = {"MenuBarExtra", "NSApplication", "NSWindow",
+                                "NSStatusBar", ".menuBarExtraStyle"}
+            for fpath in comp.files:
+                if not fpath.endswith(".swift"):
+                    continue
+                try:
+                    fc = (self.root / fpath).read_text(encoding="utf-8", errors="replace")
+                    if any(ind in fc for ind in macos_indicators):
+                        return "desktop-app"
+                except OSError:
+                    continue
+
         # --- iOS client ---
         if framework in ("swiftui", "uikit"):
             if has_info_plist or has_xcodeproj or comp.type == "application":
@@ -2042,8 +2298,9 @@ class ArchitectureScanner:
             except OSError:
                 pass
 
-        # --- Desktop app ---
-        if framework in ("appkit", "electron"):
+        # --- Desktop app (Electron / other) ---
+        # Note: AppKit-based desktop apps are handled earlier (before iOS check).
+        if framework == "electron":
             return "desktop-app"
         if "electron" in pkg_deps:
             return "desktop-app"
@@ -2053,7 +2310,7 @@ class ArchitectureScanner:
             "axum", "actix", "rocket", "warp", "vapor",
             "express", "fastify", "hono", "koa", "nestjs",
             "flask", "django", "fastapi", "starlette", "aiohttp",
-            "tornado", "gin", "echo", "fiber",
+            "tornado", "gin", "echo", "fiber", "chi", "gorilla", "beego",
             "rails", "sinatra", "grape", "hanami",
         }
         if framework in server_frameworks:
@@ -2087,8 +2344,11 @@ class ArchitectureScanner:
         # utility directories that would otherwise be excluded.
         # Check Python files regardless of component's primary language (e.g.,
         # scripts/ may have Gemfile but contain Python server scripts).
+        # Skip test directories since test_server.py files test servers, not run them.
+        test_dir_names = {"tests", "test", "spec", "specs", "__tests__",
+                          "testing", "test_suite", "e2e", "integration"}
         python_files = [f for f in comp.files if f.endswith('.py')]
-        if python_files:
+        if python_files and dir_name not in test_dir_names:
             server_file_patterns = re.compile(
                 r'(?:^|/)(?:.*server.*|.*gateway.*|.*daemon.*)\.py$', re.I)
             server_imports = {
@@ -2110,6 +2370,10 @@ class ArchitectureScanner:
                                         content, re.I)
                                     if port_match:
                                         comp.port = int(port_match.group(1))
+                                # Derive a better name from the server script
+                                # when the component has a generic folder name
+                                if comp.name == dir_name:
+                                    comp.name = _name_from_server_script(fpath, content)
                                 return "service"
                     except OSError:
                         pass
