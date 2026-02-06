@@ -207,6 +207,49 @@ function ServiceFrame({ darkMode, colors, children }: FrameProps) {
   );
 }
 
+function ScreenFrame({ darkMode, colors, children }: FrameProps) {
+  return (
+    <div className={`
+      relative rounded-[20px] border-[3px] min-w-[240px] max-w-[300px]
+      ${darkMode ? "border-cyan-600/50 bg-cyan-950/40" : "border-cyan-300 bg-cyan-50"}
+    `}>
+      {/* Mini status bar */}
+      <div className={`flex items-center justify-between px-3 py-1 rounded-t-[16px] border-b
+        ${darkMode ? "bg-cyan-950/60 border-cyan-800/30" : "bg-cyan-50 border-cyan-200"}`}>
+        <div className={`text-[8px] font-mono ${darkMode ? "text-cyan-500/60" : "text-cyan-400/80"}`}>
+          9:41
+        </div>
+        <div className="flex items-center gap-1">
+          <div className={`w-3 h-1.5 rounded-sm ${darkMode ? "bg-cyan-600/40" : "bg-cyan-300/60"}`} />
+        </div>
+      </div>
+      {/* Screen content */}
+      <div className={`rounded-b-[16px] overflow-hidden ${darkMode ? "bg-cyan-950/30" : "bg-white"}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function TabContainerFrame({ darkMode, colors, children }: FrameProps) {
+  return (
+    <div className={`
+      relative rounded-xl border-2 min-w-[280px] max-w-[360px]
+      ${darkMode ? "border-indigo-500/40" : "border-indigo-300"}
+      ${colors.bg}
+    `}>
+      {/* Tab bar indicator */}
+      <div className={`flex items-center justify-center gap-3 px-3 py-1.5 rounded-t-lg border-b
+        ${darkMode ? "bg-indigo-950/50 border-indigo-800/30" : "bg-indigo-50 border-indigo-200"}`}>
+        <div className={`w-4 h-4 rounded-sm ${darkMode ? "bg-indigo-600/40" : "bg-indigo-300/60"}`} />
+        <div className={`w-4 h-4 rounded-sm ${darkMode ? "bg-indigo-600/40" : "bg-indigo-300/60"}`} />
+        <div className={`w-4 h-4 rounded-sm ${darkMode ? "bg-indigo-600/40" : "bg-indigo-300/60"}`} />
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function DeviceFrame({ type, darkMode, colors, children }: { type: string; darkMode: boolean; colors: ReturnType<typeof getTypeColors>; children: ReactNode }) {
   const props = { darkMode, colors, children };
   switch (type) {
@@ -220,6 +263,9 @@ function DeviceFrame({ type, darkMode, colors, children }: { type: string; darkM
     case "desktop-app": return <DesktopFrame {...props} />;
     case "cli-tool": return <TerminalFrame {...props} />;
     case "service": return <ServiceFrame {...props} />;
+    case "screen": return <ScreenFrame {...props} />;
+    case "tab-container": return <TabContainerFrame {...props} />;
+    case "tab": return <MobileFrame {...props} />;
     case "application":
       // Application: enhanced hero styling, no device frame
       return (

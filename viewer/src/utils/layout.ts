@@ -18,8 +18,12 @@ const TYPE_PRIORITY: Record<string, number> = {
   "web-client": 4,
   "desktop-app": 5,
   "cli-tool": 6,
+  "tab-container": 7,
+  "tab": 8,
+  "screen": 9,
   "api-server": 10,
   "service": 11,
+  "feature-group": 12,
   // Everything else gets 20+
 };
 
@@ -114,6 +118,10 @@ const TYPE_COLORS: Record<string, { bg: string; border: string; text: string; ba
   "watch-app": { bg: "bg-pink-950/60", border: "border-pink-500/50", text: "text-pink-300", badge: "bg-pink-500/20 text-pink-300" },
   "desktop-app": { bg: "bg-teal-950/60", border: "border-teal-500/50", text: "text-teal-300", badge: "bg-teal-500/20 text-teal-300" },
   "cli-tool": { bg: "bg-lime-950/60", border: "border-lime-500/50", text: "text-lime-300", badge: "bg-lime-500/20 text-lime-300" },
+  screen: { bg: "bg-cyan-950/60", border: "border-cyan-400/50", text: "text-cyan-300", badge: "bg-cyan-500/20 text-cyan-300" },
+  "tab-container": { bg: "bg-indigo-950/60", border: "border-indigo-400/50", text: "text-indigo-300", badge: "bg-indigo-500/20 text-indigo-300" },
+  tab: { bg: "bg-blue-950/60", border: "border-blue-400/50", text: "text-blue-300", badge: "bg-blue-500/20 text-blue-300" },
+  "feature-group": { bg: "bg-slate-950/60", border: "border-slate-400/50", text: "text-slate-300", badge: "bg-slate-500/20 text-slate-300" },
   content: { bg: "bg-stone-950/60", border: "border-stone-600/30", text: "text-stone-500", badge: "bg-stone-500/20 text-stone-500" },
 };
 
@@ -134,6 +142,10 @@ const TYPE_COLORS_LIGHT: Record<string, { bg: string; border: string; text: stri
   "watch-app": { bg: "bg-pink-50", border: "border-pink-300", text: "text-pink-700", badge: "bg-pink-100 text-pink-700" },
   "desktop-app": { bg: "bg-teal-50", border: "border-teal-300", text: "text-teal-700", badge: "bg-teal-100 text-teal-700" },
   "cli-tool": { bg: "bg-lime-50", border: "border-lime-300", text: "text-lime-700", badge: "bg-lime-100 text-lime-700" },
+  screen: { bg: "bg-cyan-50", border: "border-cyan-300", text: "text-cyan-700", badge: "bg-cyan-100 text-cyan-700" },
+  "tab-container": { bg: "bg-indigo-50", border: "border-indigo-300", text: "text-indigo-700", badge: "bg-indigo-100 text-indigo-700" },
+  tab: { bg: "bg-blue-50", border: "border-blue-300", text: "text-blue-700", badge: "bg-blue-100 text-blue-700" },
+  "feature-group": { bg: "bg-slate-50", border: "border-slate-300", text: "text-slate-700", badge: "bg-slate-100 text-slate-700" },
   content: { bg: "bg-stone-50", border: "border-stone-200", text: "text-stone-400", badge: "bg-stone-100 text-stone-400" },
 };
 
@@ -153,6 +165,10 @@ export const TYPE_META: Record<string, { icon: string; label: string }> = {
   "desktop-app": { icon: "\u{1F5A5}\uFE0F", label: "Desktop App" },
   "cli-tool": { icon: ">_", label: "CLI Tool" },
   content: { icon: "\u{1F4C4}", label: "Content" },
+  screen: { icon: "\u{1F4F1}", label: "Screen" },
+  "tab-container": { icon: "\u{1F5C2}\uFE0F", label: "Tab Bar" },
+  tab: { icon: "\u{1F4CB}", label: "Tab" },
+  "feature-group": { icon: "\u{1F4C2}", label: "Feature" },
   service: { icon: "\u{1F527}", label: "Service" },
   library: { icon: "\u{1F4DA}", label: "Library" },
   package: { icon: "\u{1F4E6}", label: "Package" },
@@ -226,6 +242,7 @@ export function getEdgeCategory(type: string): EdgeCategory {
   if (["http", "websocket", "grpc", "database", "file"].includes(type)) {
     return "communication";
   }
+  // navigation, modal, tab, import, ffi, docker, companion are all structural
   return "structural";
 }
 
@@ -240,6 +257,9 @@ const EDGE_STYLES: Record<string, { color: string; animated: boolean; dash: stri
   ffi:       { color: "#F59E0B", animated: false, dash: "4 3",  strokeWidth: 1.2 },
   database:  { color: "#EC4899", animated: true,  dash: "",     strokeWidth: 2 },
   file:      { color: "#6B7280", animated: true,  dash: "8 4",  strokeWidth: 1.5 },
+  navigation:{ color: "#06B6D4", animated: false, dash: "",     strokeWidth: 1.5 },
+  tab:       { color: "#818CF8", animated: false, dash: "4 2",  strokeWidth: 1.2 },
+  modal:     { color: "#A78BFA", animated: false, dash: "6 3",  strokeWidth: 1.5 },
 };
 
 export function getEdgeStyle(type: string) {
@@ -306,6 +326,9 @@ export const HERO_TYPES = new Set([
   "cli-tool",
   "service",
   "application",
+  "screen",
+  "tab-container",
+  "tab",
 ]);
 
 export function isHeroType(type: string): boolean {
@@ -350,6 +373,9 @@ const HERO_GLOW: Record<string, { dark: string; light: string }> = {
   "cli-tool": { dark: "rgba(132,204,22,0.18)", light: "rgba(132,204,22,0.14)" },
   service: { dark: "rgba(16,185,129,0.18)", light: "rgba(16,185,129,0.14)" },
   application: { dark: "rgba(59,130,246,0.18)", light: "rgba(59,130,246,0.14)" },
+  screen: { dark: "rgba(6,182,212,0.18)", light: "rgba(6,182,212,0.14)" },
+  "tab-container": { dark: "rgba(129,140,248,0.18)", light: "rgba(129,140,248,0.14)" },
+  tab: { dark: "rgba(59,130,246,0.18)", light: "rgba(59,130,246,0.14)" },
 };
 
 export function getHeroGlow(type: string, dark: boolean): string {
