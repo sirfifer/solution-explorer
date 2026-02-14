@@ -1,6 +1,58 @@
-# Solution Explorer
+<p align="center">
+  <img src="docs/screenshots/architecture-overview.png" alt="Solution Explorer - Architecture visualization" width="800">
+</p>
 
-Interactive architecture visualization for any codebase. Analyzes source code to extract components, relationships, symbols, and metrics, then renders them as a drillable, searchable diagram. Supports solutions that span multiple repositories.
+<h1 align="center">Solution Explorer</h1>
+
+<p align="center">
+  <strong>Interactive architecture visualization for any codebase</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/sirfifer/solution-explorer/actions/workflows/architecture-viz.yml"><img src="https://github.com/sirfifer/solution-explorer/actions/workflows/architecture-viz.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+  <a href="https://github.com/sirfifer/solution-explorer/releases"><img src="https://img.shields.io/github/v/release/sirfifer/solution-explorer" alt="Release"></a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/node-18%2B-green" alt="Node 18+">
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#screenshots">Screenshots</a> &middot;
+  <a href="#how-it-works">How It Works</a> &middot;
+  <a href="#deployment-options">Deploy</a> &middot;
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+---
+
+Solution Explorer analyzes source code to extract components, relationships, symbols, and metrics, then renders them as a drillable, searchable interactive diagram. It supports solutions that span multiple repositories, works with many languages, and requires zero external Python dependencies.
+
+## Screenshots
+
+### Architecture Overview
+
+The main graph view shows all components in your codebase as interactive cards. Each card displays the component type, framework, language, file count, and key metrics. Arrows between components indicate relationships like imports, HTTP connections, and Docker links.
+
+<p align="center">
+  <img src="docs/screenshots/architecture-overview.png" alt="Architecture overview showing components and relationships" width="800">
+</p>
+
+### Component Detail Panel
+
+Click any component to open the detail panel on the right. It shows files, lines of code, symbols, documented symbols with descriptions, external services, tech stack tags, and a button to drill deeper into the component's internals.
+
+<p align="center">
+  <img src="docs/screenshots/detail-panel.png" alt="Detail panel showing component metadata, symbols, and metrics" width="800">
+</p>
+
+### Drill-Down View
+
+Double-click a component to drill into it and see its internal structure. Breadcrumbs at the top let you navigate back. Each sub-component is rendered as its own card, showing the hierarchical architecture of your codebase.
+
+<p align="center">
+  <img src="docs/screenshots/drill-down.png" alt="Drill-down view showing internal component structure with breadcrumbs" width="800">
+</p>
 
 ## Quick Start
 
@@ -48,6 +100,74 @@ bash build.sh /path/to/your/repo
 # Output: viewer/dist/ (deploy anywhere)
 ```
 
+### Requirements
+
+- **Python 3.10+** (no pip packages needed, stdlib only)
+- **Node.js 18+** (for the viewer)
+
+## How It Works
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
+│  Your Codebase  │────>│  analyze.py       │────>│  architecture.json  │
+│                 │     │  (Python stdlib)  │     │                     │
+└─────────────────┘     └──────────────────┘     └──────────┬──────────┘
+                                                            │
+                                                            v
+                                                 ┌─────────────────────┐
+                                                 │  React Viewer       │
+                                                 │  (interactive graph)│
+                                                 └─────────────────────┘
+```
+
+1. **Python Analyzer** (`analyze.py`) walks the codebase with zero external dependencies (stdlib only)
+2. Detects components via marker files (package.json, Cargo.toml, Info.plist, Dockerfile, etc.)
+3. Parses source files to extract symbols, imports, and API patterns
+4. Detects inter-component relationships (imports, HTTP/port references, protocols)
+5. Outputs `architecture.json` with the full hierarchical model
+6. **React Viewer** renders the data as an interactive graph using React Flow and ELK layout
+
+### Supported Languages
+
+| Tier | Languages | What's Extracted |
+|------|-----------|-----------------|
+| **Full parsing** | Swift, Python, Rust, TypeScript/JavaScript, Go | Components, symbols, relationships, frameworks, API endpoints |
+| **Detection + metrics** | Java, Kotlin, Ruby, C/C++, C#, Dart, Vue, Svelte, HTML/CSS, SQL, Shell | File counts, line counts, size, language breakdown |
+
+### What It Detects
+
+| Category | Details |
+|----------|---------|
+| **Components** | Via marker files: package.json, Cargo.toml, pyproject.toml, go.mod, Info.plist, Dockerfile, and more |
+| **Symbols** | Classes, structs, enums, protocols/traits/interfaces, functions, React components |
+| **Relationships** | Import dependencies, port-based HTTP connections, Docker Compose links, URL patterns |
+| **Metrics** | File counts, line counts, size, language breakdown per component |
+| **Frameworks** | SwiftUI, UIKit, React, Next.js, Flask, Django, Axum, Express, Vue, and more |
+| **Documentation** | README, CLAUDE.md, CHANGELOG, API endpoints, env vars, architectural patterns |
+| **Cloud Services** | AWS, Firebase, Supabase, and other external service references |
+
+## Viewer Features
+
+- **Hierarchical drill-down**: Click to see details, double-click to drill into sub-components
+- **Breadcrumb navigation**: Always know where you are, click to jump back
+- **Fuzzy search**: Cmd/Ctrl+K to search across components, files, and symbols
+- **Code preview**: Inline syntax-highlighted code for every symbol
+- **Relationship visualization**: Arrows show dependencies and HTTP connections
+- **Tree sidebar**: Collapsible component tree for quick navigation
+- **Dark/light mode**: Toggle with one click
+- **Mobile-friendly**: Touch gestures, bottom sheet panels, responsive layout
+- **Multi-repo grouping**: Repository-level nodes when visualizing multi-repo solutions
+- **Onboarding tour**: Guided walkthrough for first-time users
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| Cmd/Ctrl + K | Open search |
+| Escape | Close search/panels |
+| Arrow keys | Navigate search results |
+| Enter | Select search result |
+
 ## Multi-Repo Solutions
 
 For solutions that span multiple repositories, create a `solution-explorer.json` config file:
@@ -74,6 +194,8 @@ For solutions that span multiple repositories, create a `solution-explorer.json`
   ]
 }
 ```
+
+See [solution-explorer.json.example](solution-explorer.json.example) for a complete template.
 
 ### Config Reference
 
@@ -193,31 +315,7 @@ Run `bash build.sh` and copy `viewer/dist/` to your server or bucket.
     github-token: ''
 ```
 
-## How It Works
-
-1. **Python Analyzer** (`analyze.py`) walks the codebase with zero external dependencies (stdlib only)
-2. Detects components via marker files (package.json, Cargo.toml, Info.plist, Dockerfile, etc.)
-3. Parses source files to extract symbols, imports, and API patterns
-4. Detects inter-component relationships (imports, HTTP/port references, protocols)
-5. Outputs `architecture.json` with the full hierarchical model
-6. **React Viewer** renders the data as an interactive graph
-
-### Supported Languages
-
-Primary (full parsing): **Swift, Python, Rust, TypeScript/JavaScript, Go**
-
-Detection and metrics: Java, Kotlin, Ruby, C/C++, C#, Dart, Vue, Svelte, HTML/CSS, SQL, Shell
-
-### What It Detects
-
-- **Components**: Via marker files (package.json, Cargo.toml, pyproject.toml, go.mod, Info.plist, Dockerfile, etc.)
-- **Symbols**: Classes, structs, enums, protocols/traits/interfaces, functions, React components
-- **Relationships**: Import dependencies, port-based HTTP connections, Docker Compose links
-- **Metrics**: File counts, line counts, size, language breakdown per component
-- **Frameworks**: SwiftUI, UIKit, React, Next.js, Flask, Django, Axum, Express, Vue, and more
-- **Documentation**: README, CLAUDE.md, CHANGELOG, API endpoints, env vars, architectural patterns
-
-### CLI Options
+## CLI Options
 
 ```
 python3 analyze.py [path] [options]
@@ -231,45 +329,89 @@ Options:
   --compact           Compact JSON (no indentation)
 ```
 
-## Viewer Features
-
-- **Hierarchical drill-down**: Click to see details, double-click to drill into sub-components
-- **Breadcrumb navigation**: Always know where you are, click to jump back
-- **Fuzzy search**: Cmd/Ctrl+K to search across components, files, and symbols
-- **Code preview**: Inline syntax-highlighted code for every symbol
-- **Relationship visualization**: Arrows show dependencies and HTTP connections
-- **Dark/light mode**: Toggle with one click
-- **Mobile-friendly**: Touch gestures, bottom sheet panels, responsive layout
-- **Multi-repo grouping**: Repository-level nodes when visualizing multi-repo solutions
-
-### Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| Cmd/Ctrl + K | Open search |
-| Escape | Close search/panels |
-| Arrow keys | Navigate search results |
-| Enter | Select search result |
-
 ## Architecture Data Format
 
-```
+<details>
+<summary>Click to expand the full schema</summary>
+
+```json
 {
-  name, description, repository, generated_at,
-  repositories: [{ name, repository }],       // multi-repo only
-  components: [{
-    id, name, type, path, language, framework, port,
-    children: [...],
-    files: [...],
-    metrics: { files, lines, size_bytes, symbols, languages },
-    docs: { readme, purpose, patterns, tech_stack, api_endpoints, env_vars, ... }
-  }],
-  relationships: [{ source, target, type, label, protocol, port }],
-  symbols: [{ id, name, kind, file, line, end_line, code_preview, visibility }],
-  files: [{ path, language, lines, size_bytes, symbols, imports }],
-  stats: { total_files, total_lines, total_symbols, ... }
+  "name": "string",
+  "description": "string",
+  "repository": "string",
+  "generated_at": "ISO 8601 timestamp",
+  "repositories": [
+    { "name": "string", "repository": "string" }
+  ],
+  "components": [
+    {
+      "id": "string",
+      "name": "string",
+      "type": "ios_app | web_client | api_server | service | library | ...",
+      "path": "string",
+      "language": "string",
+      "framework": "string",
+      "port": "number | null",
+      "children": ["... nested components"],
+      "files": ["... file paths"],
+      "metrics": {
+        "files": "number",
+        "lines": "number",
+        "size_bytes": "number",
+        "symbols": "number",
+        "languages": { "lang": "number of files" }
+      },
+      "docs": {
+        "readme": "string | null",
+        "purpose": "string | null",
+        "patterns": ["string"],
+        "tech_stack": ["string"],
+        "api_endpoints": ["string"],
+        "env_vars": ["string"]
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source": "component_id",
+      "target": "component_id",
+      "type": "import | http | docker | grpc | websocket",
+      "label": "string",
+      "protocol": "string | null",
+      "port": "number | null"
+    }
+  ],
+  "symbols": [
+    {
+      "id": "string",
+      "name": "string",
+      "kind": "class | struct | enum | protocol | function | component",
+      "file": "string",
+      "line": "number",
+      "end_line": "number",
+      "code_preview": "string",
+      "visibility": "public | internal | private"
+    }
+  ],
+  "files": [
+    {
+      "path": "string",
+      "language": "string",
+      "lines": "number",
+      "size_bytes": "number",
+      "symbols": "number",
+      "imports": ["string"]
+    }
+  ],
+  "stats": {
+    "total_files": "number",
+    "total_lines": "number",
+    "total_symbols": "number"
+  }
 }
 ```
+
+</details>
 
 ## Local Development
 
@@ -279,15 +421,51 @@ For contributing to solution-explorer itself:
 git clone https://github.com/sirfifer/solution-explorer.git
 cd solution-explorer
 
+# Run Python tests
+python3 -m pytest tests/ -v
+
 # Analyze this repo as a test
 python3 analyze.py . -o viewer/public/architecture.json
 
 # Start the viewer in dev mode
 cd viewer && npm install && npm run dev
+
+# Run TypeScript tests and linting
+npm test
+npm run lint
 ```
 
-Requirements: Python 3.10+, Node.js 18+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
+
+## Project Structure
+
+```
+solution-explorer/
+├── analyze.py              # Core analyzer (4500+ lines, zero dependencies)
+├── action.yml              # GitHub Action definition
+├── build.sh                # Static site build script
+├── solution-explorer.json.example  # Multi-repo config template
+├── tests/
+│   └── test_analyzer.py    # Python test suite
+└── viewer/                 # React/TypeScript frontend
+    ├── src/
+    │   ├── components/     # React components (nodes, panels, search, tour)
+    │   ├── utils/          # Layout engine, search, documentation
+    │   ├── store.ts        # Zustand state management
+    │   └── types.ts        # TypeScript type definitions
+    ├── vite.config.ts      # Build configuration
+    └── vitest.config.ts    # Test configuration
+```
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on:
+
+- Setting up the development environment
+- Running tests and linters
+- Submitting pull requests
+- Adding language support
 
 ## License
 
-MIT
+[MIT](LICENSE) &copy; 2025-2026 sirfifer
