@@ -3,6 +3,7 @@ import type {
   Architecture,
   Annotation,
   AnnotationTarget,
+  AnnotationTargetContext,
   Component,
   BreadcrumbItem,
   ViewMode,
@@ -64,7 +65,7 @@ interface ArchStore {
   reviewMode: boolean;
   annotations: Annotation[];
   annotatingComponentId: string | null;
-  annotatingTarget: { type: AnnotationTarget; id: string; name: string } | null;
+  annotatingTarget: { type: AnnotationTarget; id: string; name: string; targetContext?: AnnotationTargetContext } | null;
 
   // Actions
   setArchitecture: (arch: Architecture) => void;
@@ -89,8 +90,8 @@ interface ArchStore {
   // Review actions
   toggleReviewMode: () => void;
   setAnnotatingComponent: (id: string | null) => void;
-  setAnnotatingTarget: (target: { type: AnnotationTarget; id: string; name: string; componentId: string } | null) => void;
-  addAnnotation: (componentId: string, text: string, targetType?: AnnotationTarget, targetId?: string, targetName?: string) => void;
+  setAnnotatingTarget: (target: { type: AnnotationTarget; id: string; name: string; componentId: string; targetContext?: AnnotationTargetContext } | null) => void;
+  addAnnotation: (componentId: string, text: string, targetType?: AnnotationTarget, targetId?: string, targetName?: string, targetContext?: AnnotationTargetContext) => void;
   updateAnnotation: (id: string, text: string) => void;
   deleteAnnotation: (id: string) => void;
   clearAllAnnotations: () => void;
@@ -254,13 +255,13 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   setAnnotatingTarget: (target) => set({
     annotatingComponentId: target?.componentId ?? null,
-    annotatingTarget: target ? { type: target.type, id: target.id, name: target.name } : null,
+    annotatingTarget: target ? { type: target.type, id: target.id, name: target.name, targetContext: target.targetContext } : null,
   }),
 
-  addAnnotation: (componentId, text, targetType = "component", targetId, targetName) => set((s) => {
+  addAnnotation: (componentId, text, targetType = "component", targetId, targetName, targetContext) => set((s) => {
     const finalTargetId = targetId ?? componentId;
     const finalTargetName = targetName ?? "";
-    // For component-level annotations, replace existing; for others, always append
+    // For component-level annotations, replace existing; for others, replace by (targetType, targetId)
     const filtered = targetType === "component"
       ? s.annotations.filter((a) => !(a.componentId === componentId && a.targetType === "component"))
       : s.annotations.filter((a) => !(a.targetType === targetType && a.targetId === finalTargetId));
@@ -275,6 +276,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
           targetName: finalTargetName,
           text,
           createdAt: new Date().toISOString(),
+          targetContext,
         },
       ],
       annotatingComponentId: null,

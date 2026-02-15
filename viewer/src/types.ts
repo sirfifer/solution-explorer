@@ -122,7 +122,28 @@ export interface Architecture {
 }
 
 // Review annotations
-export type AnnotationTarget = "component" | "file" | "symbol";
+export type AnnotationTarget =
+  | "component"            // whole-component feedback
+  | "component-name"       // the display name
+  | "component-type"       // the type badge
+  | "component-framework"  // framework label
+  | "component-port"       // port display
+  | "component-purpose"    // purpose/description line
+  | "component-pattern"    // a specific pattern badge
+  | "file"                 // file-level feedback
+  | "symbol";              // symbol-level feedback
+
+export interface AnnotationTargetContext {
+  componentPath?: string;
+  nameSource?: string;
+  typeValue?: string;
+  frameworkValue?: string;
+  portValue?: number;
+  purposeValue?: string;
+  patternValue?: string;
+  configFiles?: string[];
+}
+
 export interface Annotation {
   id: string;
   componentId: string;
@@ -131,6 +152,7 @@ export interface Annotation {
   targetName: string;
   text: string;
   createdAt: string;
+  targetContext?: AnnotationTargetContext;
 }
 
 // Navigation state

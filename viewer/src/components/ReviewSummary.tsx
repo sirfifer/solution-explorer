@@ -1,14 +1,37 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useArchStore } from "../store";
-import type { Annotation, AnnotationTarget } from "../types";
+import type { Annotation, Component } from "../types";
 import { getTypeColors, TYPE_META } from "../utils/layout";
-import { generateReviewPrompt } from "../utils/promptGenerator";
+import { generateReviewPrompt, generateComponentPrompt } from "../utils/promptGenerator";
 
-const TARGET_GROUP_META: Record<AnnotationTarget, { label: string; icon: string }> = {
-  component: { label: "Components", icon: "\u2B22" },
-  file: { label: "Files", icon: "\uD83D\uDCC4" },
-  symbol: { label: "Symbols", icon: "\u2666" },
+// Human-readable labels for sub-component targets
+const SUB_TARGET_LABELS: Record<string, { label: string; icon: string }> = {
+  "component-name": { label: "name", icon: "Aa" },
+  "component-type": { label: "type", icon: "\u2B22" },
+  "component-framework": { label: "framework", icon: "\u2699" },
+  "component-port": { label: "port", icon: "\uD83D\uDD0C" },
+  "component-purpose": { label: "purpose", icon: "\uD83D\uDCDD" },
+  "component-pattern": { label: "pattern", icon: "\u2B22" },
 };
+
+// Sort order for target types within a group
+const TARGET_ORDER: Record<string, number> = {
+  "component": 0,
+  "component-name": 1,
+  "component-type": 2,
+  "component-framework": 3,
+  "component-port": 4,
+  "component-purpose": 5,
+  "component-pattern": 6,
+  "file": 7,
+  "symbol": 8,
+};
+
+interface ComponentGroup {
+  componentId: string;
+  component: Component;
+  annotations: Annotation[];
+}
 
 export function ReviewSummary() {
   const {
@@ -29,18 +52,27 @@ export function ReviewSummary() {
 
   if (!architecture) return null;
 
-  // Group annotations by target type
-  const grouped: Record<AnnotationTarget, Annotation[]> = {
-    component: [],
-    file: [],
-    symbol: [],
-  };
-  for (const a of annotations) {
-    const t = a.targetType || "component";
-    grouped[t].push(a);
-  }
+  // Group annotations by component
+  const groups: ComponentGroup[] = useMemo(() => {
+    const map = new Map<string, Annotation[]>();
+    for (const a of annotations) {
+      const arr = map.get(a.componentId) || [];
+      arr.push(a);
+      map.set(a.componentId, arr);
+    }
+    return Array.from(map.entries())
+      .map(([componentId, anns]) => {
+        const comp = getComponentById(componentId);
+        if (!comp) return null;
+        const sorted = [...anns].sort(
+          (a, b) => (TARGET_ORDER[a.targetType] ?? 99) - (TARGET_ORDER[b.targetType] ?? 99),
+        );
+        return { componentId, component: comp, annotations: sorted } as ComponentGroup;
+      })
+      .filter((g): g is ComponentGroup => g !== null);
+  }, [annotations, getComponentById]);
 
-  const handleCopyToClaudeCode = async () => {
+  const handleCopyAll = async () => {
     const prompt = generateReviewPrompt(annotations, architecture, getComponentById);
     try {
       await navigator.clipboard.writeText(prompt);
@@ -82,6 +114,7 @@ export function ReviewSummary() {
         id: annotation.targetId,
         name: annotation.targetName,
         componentId: annotation.componentId,
+        targetContext: annotation.targetContext,
       });
     }
   };
@@ -89,9 +122,35 @@ export function ReviewSummary() {
   const renderAnnotation = (annotation: Annotation) => {
     const comp = getComponentById(annotation.componentId);
     if (!comp) return null;
-    const colors = getTypeColors(comp.type, darkMode);
-    const meta = TYPE_META[comp.type];
-    const isComponent = annotation.targetType === "component";
+
+    const isWholeComponent = annotation.targetType === "component";
+    const isSubComponent = annotation.targetType.startsWith("component-");
+    const subMeta = isSubComponent ? SUB_TARGET_LABELS[annotation.targetType] : null;
+
+    // Display name for the annotation target
+    const displayName = isWholeComponent
+      ? "General feedback"
+      : isSubComponent
+        ? annotation.targetType === "component-pattern"
+          ? `Pattern: ${annotation.targetContext?.patternValue || annotation.targetName}`
+          : subMeta?.label || annotation.targetType.replace("component-", "")
+        : annotation.targetType === "file"
+          ? (annotation.targetName.split("/").pop() || annotation.targetName)
+          : annotation.targetName;
+
+    // Icon for annotation type
+    const displayIcon = isWholeComponent
+      ? "\u2B22"
+      : isSubComponent
+        ? subMeta?.icon || "\u2B22"
+        : annotation.targetType === "file"
+          ? "\uD83D\uDCC4"
+          : "\u2666";
+
+    // Badge style
+    const badgeStyle = isSubComponent
+      ? darkMode ? "bg-blue-900/40 text-blue-300" : "bg-blue-100 text-blue-600"
+      : darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500";
 
     return (
       <div
@@ -101,36 +160,15 @@ export function ReviewSummary() {
         {/* Header */}
         <div className={`px-3 py-2 border-b ${darkMode ? "border-zinc-800/50" : "border-zinc-100"}`}>
           <div className="flex items-center justify-between">
-            <button
-              onClick={() => handleNavigate(annotation.componentId)}
-              className="flex items-center gap-1.5 hover:underline min-w-0"
-            >
-              {isComponent ? (
-                <>
-                  {meta?.icon && <span className="text-xs">{meta.icon}</span>}
-                  <span className={`text-xs font-medium truncate ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
-                    {comp.name}
-                  </span>
-                  <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${colors.badge}`}>
-                    {meta?.label || comp.type}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="text-[10px] shrink-0">
-                    {annotation.targetType === "file" ? "\uD83D\uDCC4" : "\u2666"}
-                  </span>
-                  <span className={`text-xs font-medium truncate ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
-                    {annotation.targetType === "file"
-                      ? (annotation.targetName.split("/").pop() || annotation.targetName)
-                      : annotation.targetName}
-                  </span>
-                  <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500"}`}>
-                    {annotation.targetType}
-                  </span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[10px] shrink-0">{displayIcon}</span>
+              <span className={`text-xs font-medium truncate ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+                {displayName}
+              </span>
+              <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${badgeStyle}`}>
+                {isWholeComponent ? "component" : isSubComponent ? (subMeta?.label || "property") : annotation.targetType}
+              </span>
+            </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
                 onClick={() => handleEdit(annotation)}
@@ -148,12 +186,6 @@ export function ReviewSummary() {
               </button>
             </div>
           </div>
-          {/* Show parent component for file/symbol annotations */}
-          {!isComponent && (
-            <p className={`text-[10px] mt-0.5 truncate ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
-              in {comp.name}
-            </p>
-          )}
         </div>
 
         {/* Annotation text */}
@@ -166,9 +198,6 @@ export function ReviewSummary() {
     );
   };
 
-  const groupOrder: AnnotationTarget[] = ["component", "file", "symbol"];
-  const nonEmptyGroups = groupOrder.filter((t) => grouped[t].length > 0);
-
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -179,10 +208,10 @@ export function ReviewSummary() {
           </h2>
           <p className={`text-[11px] mt-0.5 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             {annotations.length} annotation{annotations.length !== 1 ? "s" : ""}
-            {nonEmptyGroups.length > 1 && (
+            {groups.length > 1 && (
               <span>
                 {" \u00B7 "}
-                {nonEmptyGroups.map((t) => `${grouped[t].length} ${TARGET_GROUP_META[t].label.toLowerCase()}`).join(", ")}
+                {groups.length} component{groups.length !== 1 ? "s" : ""}
               </span>
             )}
           </p>
@@ -196,7 +225,7 @@ export function ReviewSummary() {
         </button>
       </div>
 
-      {/* Annotations list, grouped by type */}
+      {/* Annotations list, grouped by component */}
       <div className="flex-1 overflow-y-auto">
         {annotations.length === 0 ? (
           <div className={`px-4 py-8 text-center text-sm ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
@@ -204,22 +233,16 @@ export function ReviewSummary() {
           </div>
         ) : (
           <div className="py-2">
-            {nonEmptyGroups.map((targetType) => (
-              <div key={targetType}>
-                {/* Group header (only if multiple groups) */}
-                {nonEmptyGroups.length > 1 && (
-                  <div className={`px-4 pt-3 pb-1.5 flex items-center gap-1.5 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-                    <span className="text-[10px]">{TARGET_GROUP_META[targetType].icon}</span>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider">
-                      {TARGET_GROUP_META[targetType].label}
-                    </span>
-                    <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-300"}`}>
-                      ({grouped[targetType].length})
-                    </span>
-                  </div>
-                )}
-                {grouped[targetType].map(renderAnnotation)}
-              </div>
+            {groups.map((group) => (
+              <ComponentGroupSection
+                key={group.componentId}
+                group={group}
+                darkMode={darkMode}
+                architecture={architecture}
+                getComponentById={getComponentById}
+                onNavigate={handleNavigate}
+                renderAnnotation={renderAnnotation}
+              />
             ))}
           </div>
         )}
@@ -229,7 +252,7 @@ export function ReviewSummary() {
       {annotations.length > 0 && (
         <div className={`px-4 py-3 border-t space-y-2 ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
           <button
-            onClick={handleCopyToClaudeCode}
+            onClick={handleCopyAll}
             className={`
               w-full py-2 rounded-lg text-sm font-medium transition-colors
               ${copied
@@ -242,7 +265,7 @@ export function ReviewSummary() {
               }
             `}
           >
-            {copied ? "Copied! Paste into Claude Code" : "Copy to Claude Code"}
+            {copied ? "Copied! Paste into Claude Code" : "Copy All to Claude Code"}
           </button>
 
           <button
@@ -261,6 +284,84 @@ export function ReviewSummary() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Per-component group section ─────────────────────────────────────────────
+
+function ComponentGroupSection({
+  group,
+  darkMode,
+  architecture,
+  getComponentById,
+  onNavigate,
+  renderAnnotation,
+}: {
+  group: ComponentGroup;
+  darkMode: boolean;
+  architecture: NonNullable<ReturnType<typeof useArchStore.getState>["architecture"]>;
+  getComponentById: (id: string) => Component | null;
+  onNavigate: (componentId: string) => void;
+  renderAnnotation: (annotation: Annotation) => React.ReactNode;
+}) {
+  const [copied, setCopied] = useState(false);
+  const comp = group.component;
+  const colors = getTypeColors(comp.type, darkMode);
+  const meta = TYPE_META[comp.type];
+
+  const handleCopyComponent = async () => {
+    const prompt = generateComponentPrompt(comp, group.annotations, architecture, getComponentById);
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const w = window.open("", "_blank", "width=600,height=500");
+      if (w) {
+        w.document.write(`<pre style="white-space:pre-wrap;font-family:monospace;padding:20px">${prompt.replace(/</g, "&lt;")}</pre>`);
+      }
+    }
+  };
+
+  return (
+    <div className={`mb-3 ${darkMode ? "border-b border-zinc-800/50" : "border-b border-zinc-100"} last:border-b-0`}>
+      {/* Component group header */}
+      <div className={`px-4 pt-3 pb-2 flex items-center justify-between`}>
+        <button
+          onClick={() => onNavigate(group.componentId)}
+          className="flex items-center gap-1.5 hover:underline min-w-0"
+        >
+          {meta?.icon && <span className="text-xs">{meta.icon}</span>}
+          <span className={`text-xs font-semibold truncate ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+            {comp.name}
+          </span>
+          <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${colors.badge}`}>
+            {meta?.label || comp.type}
+          </span>
+        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            {group.annotations.length}
+          </span>
+          <button
+            onClick={handleCopyComponent}
+            className={`
+              text-[10px] px-2 py-1 rounded-md font-medium transition-colors
+              ${copied
+                ? darkMode ? "bg-green-600/20 text-green-300" : "bg-green-100 text-green-700"
+                : darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700"
+              }
+            `}
+            title={`Copy feedback for ${comp.name}`}
+          >
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+      </div>
+
+      {/* Annotations in this group */}
+      {group.annotations.map(renderAnnotation)}
     </div>
   );
 }

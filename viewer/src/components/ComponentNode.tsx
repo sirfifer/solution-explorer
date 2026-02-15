@@ -1,6 +1,6 @@
 import { memo, useState, useRef, useEffect, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import type { Component } from "../types";
+import type { Component, AnnotationTarget, AnnotationTargetContext } from "../types";
 import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, getHeroGlow } from "../utils/layout";
 import { useArchStore } from "../store";
 import { Tooltip, TechTooltip } from "./Tooltip";
@@ -291,6 +291,57 @@ function DeviceFrame({ type, darkMode, colors, children }: { type: string; darkM
   }
 }
 
+// ─── ReviewTarget ──────────────────────────────────────────────────────────────
+// Wraps individual visual elements in review mode to make them annotatable.
+
+function ReviewTarget({
+  targetType, targetId, targetName, componentId, targetContext, children, className,
+}: {
+  targetType: AnnotationTarget;
+  targetId: string;
+  targetName: string;
+  componentId: string;
+  targetContext?: AnnotationTargetContext;
+  children: ReactNode;
+  className?: string;
+}) {
+  const { reviewMode, setAnnotatingTarget, annotations, darkMode } = useArchStore();
+  if (!reviewMode) return <>{children}</>;
+
+  const hasAnnotation = annotations.some(
+    (a) => a.targetType === targetType && a.targetId === targetId
+  );
+
+  return (
+    <span
+      className={`
+        relative cursor-pointer group/rt inline-flex items-center
+        ${hasAnnotation
+          ? "ring-1 ring-blue-500/50 rounded-sm bg-blue-500/10"
+          : "hover:ring-1 hover:ring-blue-400/30 rounded-sm"
+        }
+        ${className ?? ""}
+      `}
+      onClick={(e) => {
+        e.stopPropagation();
+        setAnnotatingTarget({
+          type: targetType,
+          id: targetId,
+          name: targetName,
+          componentId,
+          targetContext,
+        });
+      }}
+      title={`Add feedback for ${targetName}`}
+    >
+      {children}
+      {hasAnnotation && (
+        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-blue-500 z-10" />
+      )}
+    </span>
+  );
+}
+
 // ─── HoverCard ─────────────────────────────────────────────────────────────────
 
 function HoverCard({ component, darkMode }: { component: Component; darkMode: boolean }) {
@@ -530,17 +581,37 @@ export const ComponentNode = memo(function ComponentNode({
             <div className="flex-1 min-w-0">
               <h3 className={`font-semibold truncate ${isHero ? "text-base" : "text-sm"} ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
                 {TYPE_META[component.type]?.icon && <span className="mr-1.5">{TYPE_META[component.type].icon}</span>}
-                {component.name}
+                <ReviewTarget
+                  targetType="component-name"
+                  targetId={`${component.id}:name`}
+                  targetName={component.name}
+                  componentId={component.id}
+                  targetContext={{
+                    componentPath: component.path,
+                    nameSource: `directory name at ${component.path}`,
+                    configFiles: component.config_files?.map((c) => c.path),
+                  }}
+                >
+                  {component.name}
+                </ReviewTarget>
               </h3>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <Tooltip content={TYPE_DESCRIPTIONS[component.type] || component.type} position="bottom">
-                  <span className={`${isHero ? "text-[11px] px-2 py-0.5" : "text-[10px] px-1.5 py-0.5"} rounded-full font-medium ${colors.badge}`}>
-                    {TYPE_META[component.type]?.label || component.type}
-                  </span>
-                </Tooltip>
+                <ReviewTarget
+                  targetType="component-type"
+                  targetId={`${component.id}:type`}
+                  targetName={TYPE_META[component.type]?.label || component.type}
+                  componentId={component.id}
+                  targetContext={{ typeValue: component.type, componentPath: component.path }}
+                >
+                  <Tooltip content={TYPE_DESCRIPTIONS[component.type] || component.type} position="bottom">
+                    <span className={`${isHero ? "text-[11px] px-2 py-0.5" : "text-[10px] px-1.5 py-0.5"} rounded-full font-medium ${colors.badge}`}>
+                      {TYPE_META[component.type]?.label || component.type}
+                    </span>
+                  </Tooltip>
+                </ReviewTarget>
                 {component.framework && (() => {
                   const ref = getTechRef(component.framework);
-                  return ref ? (
+                  const frameworkEl = ref ? (
                     <TechTooltip name={component.framework} description={ref.description} url={ref.url}>
                       <span className={`${isHero ? "text-[11px] font-medium" : "text-[10px]"} ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
                         {component.framework}
@@ -550,6 +621,17 @@ export const ComponentNode = memo(function ComponentNode({
                     <span className={`${isHero ? "text-[11px] font-medium" : "text-[10px]"} ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
                       {component.framework}
                     </span>
+                  );
+                  return (
+                    <ReviewTarget
+                      targetType="component-framework"
+                      targetId={`${component.id}:framework`}
+                      targetName={component.framework}
+                      componentId={component.id}
+                      targetContext={{ frameworkValue: component.framework, componentPath: component.path }}
+                    >
+                      {frameworkEl}
+                    </ReviewTarget>
                   );
                 })()}
               </div>
@@ -574,9 +656,18 @@ export const ComponentNode = memo(function ComponentNode({
 
           {/* Purpose line */}
           {docs?.purpose && (
-            <p className={`text-[10px] mt-1.5 leading-snug line-clamp-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-              {docs.purpose}
-            </p>
+            <ReviewTarget
+              targetType="component-purpose"
+              targetId={`${component.id}:purpose`}
+              targetName="Purpose"
+              componentId={component.id}
+              targetContext={{ purposeValue: docs.purpose, componentPath: component.path }}
+              className="block mt-1.5"
+            >
+              <p className={`text-[10px] leading-snug line-clamp-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                {docs.purpose}
+              </p>
+            </ReviewTarget>
           )}
         </div>
 
@@ -584,12 +675,21 @@ export const ComponentNode = memo(function ComponentNode({
         {hasPatterns && (
           <div className="px-4 pb-1.5 flex flex-wrap gap-1">
             {docs!.patterns.slice(0, 3).map((p, i) => (
-              <span key={i} className={`
-                text-[9px] px-1.5 py-0.5 rounded
-                ${darkMode ? "bg-violet-900/30 text-violet-400" : "bg-violet-50 text-violet-600"}
-              `}>
-                {p}
-              </span>
+              <ReviewTarget
+                key={i}
+                targetType="component-pattern"
+                targetId={`${component.id}:pattern:${p}`}
+                targetName={p}
+                componentId={component.id}
+                targetContext={{ patternValue: p, componentPath: component.path }}
+              >
+                <span className={`
+                  text-[9px] px-1.5 py-0.5 rounded
+                  ${darkMode ? "bg-violet-900/30 text-violet-400" : "bg-violet-50 text-violet-600"}
+                `}>
+                  {p}
+                </span>
+              </ReviewTarget>
             ))}
             {docs!.patterns.length > 3 && (
               <span className={`text-[9px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
@@ -626,9 +726,17 @@ export const ComponentNode = memo(function ComponentNode({
             </Tooltip>
           )}
           {component.port && (
-            <Tooltip content="The network port this service listens on.">
-              <span className={`font-mono ${darkMode ? "text-blue-400" : "text-blue-600"}`}>:{component.port}</span>
-            </Tooltip>
+            <ReviewTarget
+              targetType="component-port"
+              targetId={`${component.id}:port`}
+              targetName={`:${component.port}`}
+              componentId={component.id}
+              targetContext={{ portValue: component.port, componentPath: component.path }}
+            >
+              <Tooltip content="The network port this service listens on.">
+                <span className={`font-mono ${darkMode ? "text-blue-400" : "text-blue-600"}`}>:{component.port}</span>
+              </Tooltip>
+            </ReviewTarget>
           )}
           {docs?.readme && (
             <Tooltip content="This component has a README file with documentation.">

@@ -2,6 +2,16 @@ import { useState, useEffect, useRef } from "react";
 import { useArchStore } from "../store";
 import { getTypeColors, TYPE_META } from "../utils/layout";
 
+// Human-readable labels for sub-component target types
+const TARGET_LABELS: Record<string, string> = {
+  "component-name": "name",
+  "component-type": "type",
+  "component-framework": "framework",
+  "component-port": "port",
+  "component-purpose": "purpose",
+  "component-pattern": "pattern",
+};
+
 export function AnnotationInput() {
   const {
     annotatingComponentId,
@@ -20,6 +30,7 @@ export function AnnotationInput() {
   const targetType = annotatingTarget?.type ?? "component";
   const targetId = annotatingTarget?.id ?? annotatingComponentId ?? "";
   const targetName = annotatingTarget?.name ?? component?.name ?? "";
+  const targetContext = annotatingTarget?.targetContext;
 
   const existing = annotations.find((a) =>
     a.targetType === targetType && a.targetId === targetId
@@ -39,7 +50,7 @@ export function AnnotationInput() {
   const handleSave = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    addAnnotation(annotatingComponentId, trimmed, targetType, targetId, targetName);
+    addAnnotation(annotatingComponentId, trimmed, targetType, targetId, targetName, targetContext);
   };
 
   const handleDelete = () => {
@@ -59,17 +70,74 @@ export function AnnotationInput() {
     }
   };
 
-  const headerLabel = targetType === "component"
-    ? component.name
-    : targetType === "file"
-      ? targetName.split("/").pop() || targetName
-      : targetName;
+  // Compute header label based on target type
+  const headerLabel = (() => {
+    switch (targetType) {
+      case "component": return component.name;
+      case "component-name": return `Name: "${component.name}"`;
+      case "component-type": return `Type: ${TYPE_META[component.type]?.label || component.type}`;
+      case "component-framework": return `Framework: ${component.framework}`;
+      case "component-port": return `Port: :${component.port}`;
+      case "component-purpose": return "Purpose Statement";
+      case "component-pattern": return `Pattern: ${targetContext?.patternValue || targetName}`;
+      case "file": return targetName.split("/").pop() || targetName;
+      case "symbol": return targetName;
+      default: return targetName;
+    }
+  })();
 
-  const headerSubLabel = targetType === "component"
-    ? component.docs?.purpose || null
-    : targetType === "file"
-      ? targetName
-      : `Symbol in ${component.name}`;
+  // Compute sub-label with context
+  const headerSubLabel = (() => {
+    switch (targetType) {
+      case "component": return component.docs?.purpose || null;
+      case "component-name": return `in ${component.name} (${component.path})`;
+      case "component-type": return `Current type: ${component.type}`;
+      case "component-framework": return `in ${component.name}`;
+      case "component-port": return `in ${component.name}`;
+      case "component-purpose": return component.docs?.purpose || "(no purpose set)";
+      case "component-pattern": return `in ${component.name}`;
+      case "file": return targetName;
+      case "symbol": return `Symbol in ${component.name}`;
+      default: return null;
+    }
+  })();
+
+  // Compute icon for the header
+  const targetIcon = (() => {
+    switch (targetType) {
+      case "component": return meta?.icon || null;
+      case "component-name": return "Aa";
+      case "component-type": return meta?.icon || null;
+      case "component-framework": return "\u2699";
+      case "component-port": return "\uD83D\uDD0C";
+      case "component-purpose": return "\uD83D\uDCDD";
+      case "component-pattern": return "\u2B22";
+      case "file": return "\uD83D\uDCC4";
+      case "symbol": return null;
+      default: return null;
+    }
+  })();
+
+  // Compute placeholder text
+  const placeholder = (() => {
+    switch (targetType) {
+      case "component-name": return "e.g., Rename this to 'AuthService'...";
+      case "component-type": return "e.g., This should be classified as a 'service' instead...";
+      case "component-framework": return "e.g., This is actually using Fastify, not Express...";
+      case "component-port": return "e.g., Port should be 8080 in production...";
+      case "component-purpose": return "e.g., The purpose should mention authentication...";
+      case "component-pattern": return "e.g., This pattern is incorrect, it's actually Observer...";
+      default: return `Add your feedback for this ${targetType}...`;
+    }
+  })();
+
+  // Determine badge content
+  const isSubComponent = targetType.startsWith("component-");
+  const badgeLabel = isSubComponent
+    ? TARGET_LABELS[targetType] || targetType.replace("component-", "")
+    : targetType === "component"
+      ? meta?.label || component.type
+      : targetType;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -87,20 +155,30 @@ export function AnnotationInput() {
         {/* Header */}
         <div className={`px-4 py-3 border-b ${darkMode ? "border-zinc-800" : "border-zinc-100"}`}>
           <div className="flex items-center gap-2">
-            {targetType === "component" && meta?.icon && <span>{meta.icon}</span>}
-            {targetType === "file" && <span className="text-xs">&#x1F4C4;</span>}
-            {targetType === "symbol" && <span className={`text-[10px] font-bold px-1 rounded ${darkMode ? "bg-zinc-700 text-zinc-300" : "bg-zinc-200 text-zinc-600"}`}>S</span>}
+            {targetIcon && (
+              targetType === "symbol" ? (
+                <span className={`text-[10px] font-bold px-1 rounded ${darkMode ? "bg-zinc-700 text-zinc-300" : "bg-zinc-200 text-zinc-600"}`}>S</span>
+              ) : (
+                <span className="text-xs">{targetIcon}</span>
+              )
+            )}
+            {targetType === "symbol" && !targetIcon && (
+              <span className={`text-[10px] font-bold px-1 rounded ${darkMode ? "bg-zinc-700 text-zinc-300" : "bg-zinc-200 text-zinc-600"}`}>S</span>
+            )}
             <span className={`font-semibold text-sm ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
               {headerLabel}
             </span>
-            {targetType === "component" && (
+            {targetType === "component" ? (
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${colors.badge}`}>
                 {meta?.label || component.type}
               </span>
-            )}
-            {targetType !== "component" && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500"}`}>
-                {targetType}
+            ) : (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                isSubComponent
+                  ? darkMode ? "bg-blue-900/40 text-blue-300" : "bg-blue-100 text-blue-600"
+                  : darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500"
+              }`}>
+                {badgeLabel}
               </span>
             )}
           </div>
@@ -118,7 +196,7 @@ export function AnnotationInput() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Add your feedback for this ${targetType}...`}
+            placeholder={placeholder}
             rows={4}
             className={`
               w-full px-3 py-2 rounded-lg border text-sm resize-none
