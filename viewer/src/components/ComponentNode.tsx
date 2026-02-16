@@ -1,7 +1,7 @@
 import { memo, useState, useRef, useEffect, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { Component, AnnotationTarget, AnnotationTargetContext } from "../types";
-import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, getHeroGlow } from "../utils/layout";
+import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, getHeroGlow, ROLE_META, getRoleBadgeColors } from "../utils/layout";
 import { useArchStore } from "../store";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, TYPE_DESCRIPTIONS, METRIC_DESCRIPTIONS } from "../utils/techDocs";
@@ -490,6 +490,82 @@ function HoverCard({ component, darkMode }: { component: Component; darkMode: bo
   );
 }
 
+// ─── Help Popover ─────────────────────────────────────────────────────────────
+// Click-triggered popover showing help text for any component. Shows AI-enhanced
+// help_text when available, falls back to docs.purpose / description / README excerpt.
+
+function getHelpContent(component: Component): string | null {
+  if (component.ai_enhance?.help_text) return component.ai_enhance.help_text;
+  if (component.docs?.purpose) return component.docs.purpose;
+  if (component.description) return component.description;
+  if (component.docs?.readme) return component.docs.readme.slice(0, 200) + (component.docs.readme.length > 200 ? "..." : "");
+  return null;
+}
+
+function HelpPopover({ component, darkMode }: { component: Component; darkMode: boolean }) {
+  const helpText = getHelpContent(component);
+  if (!helpText) return null;
+
+  const ai = component.ai_enhance;
+  const roleMeta = ai?.architectural_role ? ROLE_META[ai.architectural_role] : null;
+
+  return (
+    <div
+      className={`
+        absolute right-0 top-full mt-1 z-50
+        w-[300px] rounded-xl border shadow-2xl text-xs
+        ${darkMode
+          ? "bg-zinc-900/95 border-zinc-700 text-zinc-300"
+          : "bg-white/95 border-zinc-200 text-zinc-700"
+        }
+        backdrop-blur-md
+      `}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="p-3 space-y-2">
+        {/* Role and criticality badges */}
+        {(roleMeta || ai?.criticality) && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {roleMeta && ai?.architectural_role && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${getRoleBadgeColors(ai.architectural_role, darkMode)}`}>
+                {roleMeta.icon} {roleMeta.label}
+              </span>
+            )}
+            {ai?.criticality && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                ai.criticality === "critical"
+                  ? (darkMode ? "bg-red-900/40 text-red-300" : "bg-red-100 text-red-700")
+                  : ai.criticality === "important"
+                    ? (darkMode ? "bg-amber-900/40 text-amber-300" : "bg-amber-100 text-amber-700")
+                    : (darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500")
+              }`}>
+                {ai.criticality}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Help text */}
+        <p className={`text-[11px] leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+          {helpText}
+        </p>
+
+        {/* Data handled */}
+        {ai?.data_handled && (
+          <div>
+            <div className={`text-[10px] font-semibold uppercase tracking-wider mb-0.5 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+              Data Handled
+            </div>
+            <p className={`text-[10px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+              {ai.data_handled}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component Node ───────────────────────────────────────────────────────
 
 export const ComponentNode = memo(function ComponentNode({
@@ -500,14 +576,16 @@ export const ComponentNode = memo(function ComponentNode({
   const { selectComponent, drillInto, darkMode, reviewMode, annotations, architecture } = useArchStore();
   const colors = getTypeColors(component.type, darkMode);
   const annotationCount = annotations.filter((a) => a.componentId === component.id).length;
-  const connectionCount = architecture?.relationships.filter(
-    (r) => r.source === component.id || r.target === component.id,
-  ).length ?? 0;
+  const incomingCount = architecture?.relationships.filter((r) => r.target === component.id).length ?? 0;
+  const outgoingCount = architecture?.relationships.filter((r) => r.source === component.id).length ?? 0;
+  const connectionCount = incomingCount + outgoingCount;
   const hasChildren = component.children.length > 0 || component.files.length > 0;
   const langColor = component.language ? getLanguageColor(component.language) : null;
   const [hovered, setHovered] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isHero = isHeroType(component.type);
+  const hasHelpContent = !!(getHelpContent(component));
 
   useEffect(() => {
     return () => {
@@ -634,24 +712,48 @@ export const ComponentNode = memo(function ComponentNode({
                     </ReviewTarget>
                   );
                 })()}
+                {component.ai_enhance?.architectural_role && ROLE_META[component.ai_enhance.architectural_role] && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${getRoleBadgeColors(component.ai_enhance.architectural_role, darkMode)}`}>
+                    {ROLE_META[component.ai_enhance.architectural_role].icon} {ROLE_META[component.ai_enhance.architectural_role].label}
+                  </span>
+                )}
               </div>
             </div>
-            {hasChildren && (
-              <button
-                className={`
-                  shrink-0 w-6 h-6 rounded-lg flex items-center justify-center
-                  text-xs font-bold
-                  ${darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200" : "bg-zinc-200 text-zinc-600 hover:bg-zinc-300"}
-                `}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  drillInto(component);
-                }}
-                title="Drill into component"
-              >
-                &darr;
-              </button>
-            )}
+            <div className="flex items-center gap-1 shrink-0 relative">
+              {hasHelpContent && (
+                <button
+                  className={`
+                    w-6 h-6 rounded-lg flex items-center justify-center
+                    text-xs font-bold
+                    ${darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200" : "bg-zinc-200 text-zinc-600 hover:bg-zinc-300"}
+                  `}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowHelp(!showHelp);
+                  }}
+                  title="Component info"
+                >
+                  ?
+                </button>
+              )}
+              {hasChildren && (
+                <button
+                  className={`
+                    w-6 h-6 rounded-lg flex items-center justify-center
+                    text-xs font-bold
+                    ${darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200" : "bg-zinc-200 text-zinc-600 hover:bg-zinc-300"}
+                  `}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    drillInto(component);
+                  }}
+                  title="Drill into component"
+                >
+                  &darr;
+                </button>
+              )}
+              {showHelp && <HelpPopover component={component} darkMode={darkMode} />}
+            </div>
           </div>
 
           {/* Purpose line */}
@@ -701,6 +803,13 @@ export const ComponentNode = memo(function ComponentNode({
 
         {/* Metrics bar */}
         <div className={`px-4 pb-3 flex items-center gap-3 text-[11px] flex-wrap ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+          {component.ai_enhance?.criticality && component.ai_enhance.criticality !== "supporting" && (
+            <Tooltip content={`${component.ai_enhance.criticality === "critical" ? "Critical: system fails without this" : "Important: degraded behavior without this"}`}>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                component.ai_enhance.criticality === "critical" ? "bg-red-500" : "bg-amber-500"
+              }`} />
+            </Tooltip>
+          )}
           {langColor && (() => {
             const langRef = component.language ? getTechRef(component.language) : null;
             const langEl = (
@@ -755,7 +864,9 @@ export const ComponentNode = memo(function ComponentNode({
           {connectionCount > 0 && (
             <Tooltip content={METRIC_DESCRIPTIONS.conn}>
               <span className={darkMode ? "text-zinc-600" : "text-zinc-400"}>
-                {connectionCount} conn
+                {incomingCount > 0 && outgoingCount > 0
+                  ? `${incomingCount} in, ${outgoingCount} out`
+                  : `${connectionCount} conn`}
               </span>
             </Tooltip>
           )}

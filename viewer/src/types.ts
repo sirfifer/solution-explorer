@@ -63,6 +63,26 @@ export interface ExternalService {
   category: string;
 }
 
+// AI enhancement data (optional, present only when AI assist has been run)
+export interface ComponentAIEnhance {
+  help_text?: string;
+  architectural_role?: string;
+  data_handled?: string;
+  criticality?: "critical" | "important" | "supporting";
+}
+
+export interface RelationshipAIEnhance {
+  data_flow_description?: string;
+  importance?: "primary" | "secondary" | "internal";
+  ai_discovered?: boolean;
+}
+
+export interface ArchitectureAIEnhance {
+  summary?: string;
+  data_flow_narrative?: string;
+  component_groups?: Array<{ name: string; component_ids: string[] }>;
+}
+
 export interface Component {
   id: string;
   name: string;
@@ -79,6 +99,7 @@ export interface Component {
   metrics: ComponentMetrics;
   docs: ComponentDoc;
   external_services?: ExternalService[];
+  ai_enhance?: ComponentAIEnhance;
 }
 
 export interface Relationship {
@@ -89,6 +110,7 @@ export interface Relationship {
   protocol: string | null;
   port: number | null;
   bidirectional: boolean;
+  ai_enhance?: RelationshipAIEnhance;
 }
 
 export interface ArchitectureStats {
@@ -119,6 +141,7 @@ export interface Architecture {
   files: FileInfo[];
   stats: ArchitectureStats;
   repositories?: RepositoryInfo[];
+  ai_enhance?: ArchitectureAIEnhance;
 }
 
 // Review annotations

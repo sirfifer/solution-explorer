@@ -70,6 +70,8 @@
       "Skill(comms:*)",
       "Skill(commit-message)",
       "Skill(commit-message:*)",
+      "Skill(ai-assist)",
+      "Skill(ai-assist:*)",
       "WebSearch",
       "WebFetch",
       "Edit",

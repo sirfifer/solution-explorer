@@ -179,6 +179,47 @@ export const TYPE_META: Record<string, { icon: string; label: string }> = {
   project: { icon: "\u{1F4C1}", label: "Project" },
 };
 
+// Architectural role metadata for AI-enhanced components
+export const ROLE_META: Record<string, { icon: string; label: string }> = {
+  "api-gateway": { icon: "\u{1F6AA}", label: "API Gateway" },
+  "auth-service": { icon: "\u{1F512}", label: "Auth" },
+  "data-store": { icon: "\u{1F4BE}", label: "Data Store" },
+  "cache-layer": { icon: "\u26A1", label: "Cache" },
+  "queue-processor": { icon: "\u{1F4E8}", label: "Queue" },
+  "event-bus": { icon: "\u{1F4E1}", label: "Event Bus" },
+  "orchestrator": { icon: "\u{1F3AF}", label: "Orchestrator" },
+  "worker": { icon: "\u2699\uFE0F", label: "Worker" },
+  "proxy": { icon: "\u{1F504}", label: "Proxy" },
+  "monitoring": { icon: "\u{1F4CA}", label: "Monitoring" },
+  "logging": { icon: "\u{1F4DD}", label: "Logging" },
+  "scheduler": { icon: "\u{1F552}", label: "Scheduler" },
+  "notification-service": { icon: "\u{1F514}", label: "Notifications" },
+  "file-storage": { icon: "\u{1F4C1}", label: "File Storage" },
+  "search-engine": { icon: "\u{1F50D}", label: "Search" },
+  "ml-pipeline": { icon: "\u{1F9E0}", label: "ML Pipeline" },
+  "presentation-layer": { icon: "\u{1F3A8}", label: "Presentation" },
+  "business-logic": { icon: "\u{1F4BC}", label: "Business Logic" },
+  "data-access": { icon: "\u{1F5C3}\uFE0F", label: "Data Access" },
+};
+
+export function getRoleBadgeColors(role: string, dark: boolean): string {
+  const roleColorMap: Record<string, { dark: string; light: string }> = {
+    "api-gateway": { dark: "bg-blue-900/40 text-blue-300", light: "bg-blue-100 text-blue-700" },
+    "auth-service": { dark: "bg-yellow-900/40 text-yellow-300", light: "bg-yellow-100 text-yellow-700" },
+    "data-store": { dark: "bg-pink-900/40 text-pink-300", light: "bg-pink-100 text-pink-700" },
+    "cache-layer": { dark: "bg-amber-900/40 text-amber-300", light: "bg-amber-100 text-amber-700" },
+    "queue-processor": { dark: "bg-indigo-900/40 text-indigo-300", light: "bg-indigo-100 text-indigo-700" },
+    "event-bus": { dark: "bg-purple-900/40 text-purple-300", light: "bg-purple-100 text-purple-700" },
+    "orchestrator": { dark: "bg-rose-900/40 text-rose-300", light: "bg-rose-100 text-rose-700" },
+    "worker": { dark: "bg-slate-800/60 text-slate-300", light: "bg-slate-100 text-slate-600" },
+    "monitoring": { dark: "bg-cyan-900/40 text-cyan-300", light: "bg-cyan-100 text-cyan-700" },
+    "logging": { dark: "bg-stone-800/60 text-stone-300", light: "bg-stone-100 text-stone-600" },
+  };
+  const colors = roleColorMap[role];
+  if (colors) return dark ? colors.dark : colors.light;
+  return dark ? "bg-zinc-800/60 text-zinc-300" : "bg-zinc-100 text-zinc-600";
+}
+
 // Language icons/colors
 const LANG_COLORS: Record<string, string> = {
   swift: "#F05138",

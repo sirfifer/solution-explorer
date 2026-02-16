@@ -65,6 +65,7 @@ export function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"graph" | "tree" | "detail">("graph");
+  const [summaryDismissed, setSummaryDismissed] = useState(false);
 
   // Collapsible + resizable sidebar widths (restored from session storage)
   const [leftCollapsed, setLeftCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.leftCollapsed, false));
@@ -289,6 +290,24 @@ export function App() {
           )}
         </div>
       </header>
+
+      {/* AI summary banner */}
+      {architecture.ai_enhance?.summary && !summaryDismissed && (
+        <div className={`
+          flex items-start gap-2 px-4 py-2 text-xs shrink-0
+          ${darkMode ? "bg-indigo-950/30 border-b border-indigo-800/30 text-indigo-300" : "bg-indigo-50 border-b border-indigo-200 text-indigo-700"}
+        `}>
+          <span className="shrink-0 mt-0.5">&#x2728;</span>
+          <p className="flex-1 leading-relaxed">{architecture.ai_enhance.summary}</p>
+          <button
+            onClick={() => setSummaryDismissed(true)}
+            className={`shrink-0 p-0.5 rounded ${darkMode ? "hover:bg-indigo-900/40 text-indigo-500" : "hover:bg-indigo-100 text-indigo-400"}`}
+            title="Dismiss"
+          >
+            &#x2715;
+          </button>
+        </div>
+      )}
 
       {/* Review mode banner */}
       {reviewMode && (

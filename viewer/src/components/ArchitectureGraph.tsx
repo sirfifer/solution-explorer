@@ -117,6 +117,10 @@ export function ArchitectureGraph() {
             edgeLabel = r.label;
           }
         }
+        // AI-enhanced: use data flow description as fallback label
+        if (!edgeLabel && r.ai_enhance?.data_flow_description) {
+          edgeLabel = r.ai_enhance.data_flow_description;
+        }
 
         // Structural edges use a lighter, thinner marker style
         const markerSize = category === "communication" ? 16 : 12;
@@ -157,6 +161,15 @@ export function ArchitectureGraph() {
             color: style.color,
             width: markerSize,
             height: markerSize,
+          };
+        }
+
+        // AI-discovered relationships get a distinct dashed style
+        if (r.ai_enhance?.ai_discovered) {
+          edge.style = {
+            ...edge.style,
+            strokeDasharray: "8 4",
+            opacity: 0.7,
           };
         }
 

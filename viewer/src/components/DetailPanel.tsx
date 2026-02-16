@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import type { Component, FileInfo, Symbol as ArchSymbol } from "../types";
+import type { Component, FileInfo, Symbol as ArchSymbol, Relationship } from "../types";
 import { useArchStore } from "../store";
 import {
   getTypeColors,
@@ -7,13 +7,15 @@ import {
   formatBytes,
   formatNumber,
   TYPE_META,
+  ROLE_META,
+  getRoleBadgeColors,
 } from "../utils/layout";
 import { CodePreview } from "./CodePreview";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
 
-type Tab = "overview" | "docs" | "files" | "symbols" | "relationships";
+type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai";
 
 export function DetailPanel() {
   const {
@@ -105,6 +107,7 @@ function ComponentDetail({
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: "overview", label: "Overview" },
     ...(hasDocContent ? [{ key: "docs" as Tab, label: "Docs" }] : []),
+    ...(component.ai_enhance ? [{ key: "ai" as Tab, label: "AI Insights" }] : []),
     { key: "files", label: "Files", count: files.length },
     { key: "symbols", label: "Symbols", count: symbols.length },
     { key: "relationships", label: "Links", count: relationships.length },
@@ -250,6 +253,9 @@ function ComponentDetail({
             setExpandedSymbol={setExpandedSymbol}
             componentId={component.id}
           />
+        )}
+        {activeTab === "ai" && (
+          <AIInsightsTab component={component} relationships={relationships} />
         )}
         {activeTab === "relationships" && (
           <RelationshipsTab componentId={component.id} relationships={relationships} />
@@ -814,19 +820,108 @@ function SymbolsTab({
   );
 }
 
+function AIInsightsTab({
+  component,
+  relationships,
+}: {
+  component: Component;
+  relationships: Relationship[];
+}) {
+  const { darkMode } = useArchStore();
+  const ai = component.ai_enhance;
+  if (!ai) return null;
+
+  const roleMeta = ai.architectural_role ? ROLE_META[ai.architectural_role] : null;
+  const incomingCount = relationships.filter((r) => r.target === component.id).length;
+  const outgoingCount = relationships.filter((r) => r.source === component.id).length;
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* Role and criticality */}
+      {(roleMeta || ai.criticality) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {roleMeta && ai.architectural_role && (
+            <span className={`text-xs px-2 py-1 rounded-full font-medium ${getRoleBadgeColors(ai.architectural_role, darkMode)}`}>
+              {roleMeta.icon} {roleMeta.label}
+            </span>
+          )}
+          {ai.criticality && (
+            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+              ai.criticality === "critical"
+                ? (darkMode ? "bg-red-900/40 text-red-300" : "bg-red-100 text-red-700")
+                : ai.criticality === "important"
+                  ? (darkMode ? "bg-amber-900/40 text-amber-300" : "bg-amber-100 text-amber-700")
+                  : (darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500")
+            }`}>
+              {ai.criticality}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Help text */}
+      {ai.help_text && (
+        <div>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            About This Component
+          </h4>
+          <p className={`text-sm leading-relaxed ${darkMode ? "text-zinc-300" : "text-zinc-600"}`}>
+            {ai.help_text}
+          </p>
+        </div>
+      )}
+
+      {/* Data handled */}
+      {ai.data_handled && (
+        <div>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            Data Handled
+          </h4>
+          <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+            {ai.data_handled}
+          </p>
+        </div>
+      )}
+
+      {/* Connection summary */}
+      {(incomingCount > 0 || outgoingCount > 0) && (
+        <div>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            Connections
+          </h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`px-3 py-2 rounded-lg ${darkMode ? "bg-zinc-800/50" : "bg-zinc-50"}`}>
+              <div className={`text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>Incoming</div>
+              <div className={`text-lg font-semibold tabular-nums ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>
+                {incomingCount}
+              </div>
+            </div>
+            <div className={`px-3 py-2 rounded-lg ${darkMode ? "bg-zinc-800/50" : "bg-zinc-50"}`}>
+              <div className={`text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>Outgoing</div>
+              <div className={`text-lg font-semibold tabular-nums ${darkMode ? "text-blue-400" : "text-blue-600"}`}>
+                {outgoingCount}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RelationshipsTab({
   componentId,
   relationships,
 }: {
   componentId: string;
-  relationships: { source: string; target: string; type: string; label: string | null; port: number | null }[];
+  relationships: Relationship[];
 }) {
   const { darkMode, selectComponent, getComponentById } = useArchStore();
 
   const incoming = relationships.filter((r) => r.target === componentId);
   const outgoing = relationships.filter((r) => r.source === componentId);
 
-  const RelRow = ({ rel, direction }: { rel: typeof relationships[0]; direction: "in" | "out" }) => {
+  const RelRow = ({ rel, direction }: { rel: Relationship; direction: "in" | "out" }) => {
     const otherId = direction === "in" ? rel.source : rel.target;
     const other = getComponentById(otherId);
     const typeColors: Record<string, string> = {
@@ -838,28 +933,40 @@ function RelationshipsTab({
     };
 
     return (
-      <button
-        className={`
-          w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm
-          ${darkMode ? "hover:bg-zinc-800/50" : "hover:bg-zinc-100"}
-        `}
-        onClick={() => selectComponent(otherId)}
-      >
-        <span className={`text-xs ${direction === "in" ? "text-emerald-400" : "text-blue-400"}`}>
-          {direction === "in" ? "\u2190" : "\u2192"}
-        </span>
-        <span className={`flex-1 truncate ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
-          {other?.name || otherId}
-        </span>
-        <span className={`text-[10px] ${typeColors[rel.type] || ""}`}>
-          {rel.type}
-        </span>
-        {rel.port && (
-          <span className={`text-[10px] font-mono ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-            :{rel.port}
+      <div>
+        <button
+          className={`
+            w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm
+            ${darkMode ? "hover:bg-zinc-800/50" : "hover:bg-zinc-100"}
+          `}
+          onClick={() => selectComponent(otherId)}
+        >
+          <span className={`text-xs ${direction === "in" ? "text-emerald-400" : "text-blue-400"}`}>
+            {direction === "in" ? "\u2190" : "\u2192"}
           </span>
+          <span className={`flex-1 truncate ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
+            {other?.name || otherId}
+          </span>
+          <span className={`text-[10px] ${typeColors[rel.type] || ""}`}>
+            {rel.type}
+          </span>
+          {rel.port && (
+            <span className={`text-[10px] font-mono ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+              :{rel.port}
+            </span>
+          )}
+          {rel.ai_enhance?.ai_discovered && (
+            <span className={`text-[9px] px-1 py-0.5 rounded ${darkMode ? "bg-purple-900/30 text-purple-400" : "bg-purple-50 text-purple-600"}`}>
+              AI
+            </span>
+          )}
+        </button>
+        {rel.ai_enhance?.data_flow_description && (
+          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            {rel.ai_enhance.data_flow_description}
+          </p>
         )}
-      </button>
+      </div>
     );
   };
 
