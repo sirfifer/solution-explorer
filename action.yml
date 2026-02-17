@@ -62,6 +62,7 @@ runs:
         # On workflow_dispatch or pull_request, always run fresh analysis.
         if [ "${{ github.event_name }}" = "push" ] && [ -f "architecture.json" ]; then
           echo "Using pre-built architecture JSON (AI-enhanced)"
+          mkdir -p .solution-explorer/viewer/public
           cp architecture.json \
             .solution-explorer/viewer/public/architecture.json
         elif [ -n "${{ inputs.config }}" ]; then
