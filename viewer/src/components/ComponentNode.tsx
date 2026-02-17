@@ -1,4 +1,5 @@
-import { memo, useState, useRef, useEffect, type ReactNode } from "react";
+import { memo, useState, useRef, useEffect, useCallback, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { Component, AnnotationTarget, AnnotationTargetContext } from "../types";
 import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, getHeroGlow, ROLE_META, getRoleBadgeColors } from "../utils/layout";
@@ -344,7 +345,11 @@ function ReviewTarget({
 
 // ─── HoverCard ─────────────────────────────────────────────────────────────────
 
-function HoverCard({ component, darkMode }: { component: Component; darkMode: boolean }) {
+function HoverCard({ component, darkMode, triggerRef }: {
+  component: Component;
+  darkMode: boolean;
+  triggerRef: React.RefObject<HTMLDivElement | null>;
+}) {
   const docs = component.docs;
   if (!docs) return null;
 
@@ -353,10 +358,13 @@ function HoverCard({ component, darkMode }: { component: Component; darkMode: bo
 
   if (!hasDocs && !component.description) return null;
 
-  return (
+  const rect = triggerRef.current?.getBoundingClientRect();
+  if (!rect) return null;
+
+  return createPortal(
     <div
       className={`
-        absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50
+        fixed z-[9999] pointer-events-auto
         w-[360px] max-h-[320px] overflow-y-auto
         rounded-xl border shadow-2xl text-xs
         ${darkMode
@@ -365,6 +373,11 @@ function HoverCard({ component, darkMode }: { component: Component; darkMode: bo
         }
         backdrop-blur-md
       `}
+      style={{
+        left: rect.left + rect.width / 2,
+        top: rect.top - 8,
+        transform: "translate(-50%, -100%)",
+      }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-3 space-y-2">
@@ -486,7 +499,8 @@ function HoverCard({ component, darkMode }: { component: Component; darkMode: bo
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -502,17 +516,42 @@ function getHelpContent(component: Component): string | null {
   return null;
 }
 
-function HelpPopover({ component, darkMode }: { component: Component; darkMode: boolean }) {
+function HelpPopover({ component, darkMode, triggerRef, onClose }: {
+  component: Component;
+  darkMode: boolean;
+  triggerRef: React.RefObject<HTMLDivElement | null>;
+  onClose: () => void;
+}) {
   const helpText = getHelpContent(component);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        popoverRef.current && !popoverRef.current.contains(target) &&
+        triggerRef.current && !triggerRef.current.contains(target)
+      ) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [triggerRef, onClose]);
+
   if (!helpText) return null;
 
   const ai = component.ai_enhance;
   const roleMeta = ai?.architectural_role ? ROLE_META[ai.architectural_role] : null;
 
-  return (
+  const rect = triggerRef.current?.getBoundingClientRect();
+  if (!rect) return null;
+
+  return createPortal(
     <div
+      ref={popoverRef}
       className={`
-        absolute right-0 top-full mt-1 z-50
+        fixed z-[9999] pointer-events-auto
         w-[300px] rounded-xl border shadow-2xl text-xs
         ${darkMode
           ? "bg-zinc-900/95 border-zinc-700 text-zinc-300"
@@ -520,6 +559,11 @@ function HelpPopover({ component, darkMode }: { component: Component; darkMode: 
         }
         backdrop-blur-md
       `}
+      style={{
+        left: rect.right,
+        top: rect.bottom + 4,
+        transform: "translate(-100%, 0)",
+      }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-3 space-y-2">
@@ -562,7 +606,8 @@ function HelpPopover({ component, darkMode }: { component: Component; darkMode: 
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -584,6 +629,8 @@ export const ComponentNode = memo(function ComponentNode({
   const [hovered, setHovered] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nodeRef = useRef<HTMLDivElement>(null);
+  const helpButtonRef = useRef<HTMLDivElement>(null);
   const isHero = isHeroType(component.type);
   const hasHelpContent = !!(getHelpContent(component));
 
@@ -600,12 +647,14 @@ export const ComponentNode = memo(function ComponentNode({
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
     setHovered(false);
   };
+  const closeHelp = useCallback(() => setShowHelp(false), []);
 
   const docs = component.docs;
   const hasPatterns = docs?.patterns && docs.patterns.length > 0;
 
   return (
     <div
+      ref={nodeRef}
       className={`
         relative
         ${selected ? "node-selected" : ""}
@@ -629,7 +678,7 @@ export const ComponentNode = memo(function ComponentNode({
       <Handle id="source-bottom" type="source" position={Position.Bottom} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
 
       {/* Hover documentation card */}
-      {hovered && <HoverCard component={component} darkMode={darkMode} />}
+      {hovered && <HoverCard component={component} darkMode={darkMode} triggerRef={nodeRef} />}
 
       {/* Annotation badge */}
       {annotationCount > 0 && (
@@ -719,7 +768,7 @@ export const ComponentNode = memo(function ComponentNode({
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-1 shrink-0 relative">
+            <div ref={helpButtonRef} className="flex items-center gap-1 shrink-0 relative">
               {hasHelpContent && (
                 <button
                   className={`
@@ -752,7 +801,7 @@ export const ComponentNode = memo(function ComponentNode({
                   &darr;
                 </button>
               )}
-              {showHelp && <HelpPopover component={component} darkMode={darkMode} />}
+              {showHelp && <HelpPopover component={component} darkMode={darkMode} triggerRef={helpButtonRef} onClose={closeHelp} />}
             </div>
           </div>
 

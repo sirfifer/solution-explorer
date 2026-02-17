@@ -1,12 +1,12 @@
 ---
 name: ai-assist
-description: Analyze a codebase, enhance the results with AI, and serve an interactive architecture viewer locally
+description: Analyze a codebase, enhance the results with AI, and deploy the interactive architecture viewer
 ---
 
 # /ai-assist - Architecture Enhancement Skill
 
 Analyze a codebase with solution-explorer, enhance the results with AI-generated
-descriptions and annotations, and launch a local interactive viewer.
+descriptions and annotations, and deploy the interactive architecture viewer.
 
 ## Usage
 
@@ -123,29 +123,98 @@ Verify the output is valid and loadable:
 python3 -c "import json; d=json.load(open('/Users/ramerman/dev/solution-explorer/viewer/public/architecture.json')); print(f'OK: {len(d[\"components\"])} components, {len(d[\"relationships\"])} relationships')"
 ```
 
-### Step 6: Build and serve locally
+### Step 6: Build and deploy
 
-Build the viewer and start the local preview server:
+After the enhanced JSON is validated, build locally and deploy to production.
+
+#### 6a. Build locally for validation
+
+Build the viewer to verify the enhanced JSON renders correctly:
 
 ```bash
 cd /Users/ramerman/dev/solution-explorer/viewer && npm run build
 ```
 
-Then start the local server:
+If the build fails, fix the issue before proceeding.
+
+#### 6b. Start local preview
+
+Start the local preview server in the background for immediate review:
 
 ```bash
 cd /Users/ramerman/dev/solution-explorer/viewer && npx vite preview --port 4173
 ```
 
-Run the preview server in the background. Once it starts, output the local URL
-to the user as the final message:
+Tell the user:
 
 ```
-Architecture viewer is ready at: http://localhost:4173/
+Local preview is ready at: http://localhost:4173/
 ```
 
-This is the final output of the skill. The user should be able to open that URL
-and explore the full AI-enhanced architecture diagram.
+#### 6c. Determine deployment target
+
+Get the target codebase's GitHub remote:
+
+```bash
+cd <codebase-path> && git remote get-url origin
+```
+
+Extract `owner/repo` from the URL (handles both HTTPS `https://github.com/owner/repo.git`
+and SSH `git@github.com:owner/repo.git` formats).
+
+Read `/Users/ramerman/dev/solution-explorer/DEPLOYMENTS.md` and find the row matching
+the GitHub repo. Extract the deployment URL.
+
+If no matching installation is found in DEPLOYMENTS.md, tell the user and skip
+deployment. The local preview URL is the final output.
+
+#### 6d. Deploy
+
+Copy the enhanced JSON to the target codebase and push:
+
+```bash
+cp /Users/ramerman/dev/solution-explorer/viewer/public/architecture.json \
+  <codebase-path>/architecture.json
+cd <codebase-path>
+git add architecture.json
+git commit -m "Update AI-enhanced architecture visualization"
+git push
+```
+
+The push to main automatically triggers the Architecture Visualization workflow
+since the target repo's workflow fires on `push: branches: [main]`. The workflow
+detects the pre-built `architecture.json` and uses it instead of running the
+analyzer, preserving all AI enhancements.
+
+If the current branch is not main, warn the user that deployment to production
+only triggers on push to main.
+
+#### 6e. Monitor deployment
+
+Wait 15 seconds, then check the workflow status:
+
+```bash
+gh run list -R <owner/repo> -w "Architecture Visualization" --limit 1
+```
+
+If the run is still in progress, wait 30 seconds and check again (up to 3 times).
+
+#### 6f. Report results
+
+Output both URLs:
+
+```
+Architecture viewer ready:
+  Local preview:  http://localhost:4173/
+  Production:     <deployment-url> (deploying...)
+```
+
+Once the workflow completes, update the status:
+
+```
+Deployment complete:
+  Production: <deployment-url>
+```
 
 ## Key Rules
 
@@ -157,7 +226,7 @@ and explore the full AI-enhanced architecture diagram.
 6. Use the exact `architectural_role` vocabulary from RESOURCES.md
 7. Validate the JSON is parseable before declaring success
 8. When filling `docs.purpose` or `description`, do not overwrite non-empty values
-9. The final output MUST be a local URL the user can open in their browser
+9. The final output MUST include a local preview URL and, if deployed, the production URL and deployment status
 
 ## Schema Reference
 

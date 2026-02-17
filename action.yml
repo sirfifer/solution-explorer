@@ -58,7 +58,13 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
-        if [ -n "${{ inputs.config }}" ]; then
+        # Use pre-built architecture JSON only on push events (AI-enhanced flow).
+        # On workflow_dispatch or pull_request, always run fresh analysis.
+        if [ "${{ github.event_name }}" = "push" ] && [ -f "architecture.json" ]; then
+          echo "Using pre-built architecture JSON (AI-enhanced)"
+          cp architecture.json \
+            .solution-explorer/viewer/public/architecture.json
+        elif [ -n "${{ inputs.config }}" ]; then
           python3 .solution-explorer/analyze.py \
             --config "${{ inputs.config }}" \
             -o .solution-explorer/viewer/public/architecture.json --compact

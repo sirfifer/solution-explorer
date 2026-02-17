@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, type ReactElement, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useArchStore } from "../store";
 
 interface TooltipProps {
@@ -43,9 +44,9 @@ export function Tooltip({ content, children, delay = 300, position = "top" }: To
       >
         {children}
       </span>
-      {visible && content && (
+      {visible && content && createPortal(
         <div
-          className="fixed z-[100] pointer-events-none"
+          className="fixed z-[9999] pointer-events-none"
           style={{
             left: coords.x,
             top: position === "top" ? coords.y - 8 : coords.y + 8,
@@ -55,7 +56,7 @@ export function Tooltip({ content, children, delay = 300, position = "top" }: To
           }}
         >
           <div className={`
-            max-w-[280px] px-3 py-2 rounded-lg text-xs leading-relaxed shadow-lg border
+            min-w-[120px] max-w-[280px] px-3 py-2 rounded-lg text-xs leading-relaxed shadow-lg border
             ${darkMode
               ? "bg-zinc-800 border-zinc-700 text-zinc-200"
               : "bg-white border-zinc-200 text-zinc-700 shadow-zinc-200/50"
@@ -73,7 +74,8 @@ export function Tooltip({ content, children, delay = 300, position = "top" }: To
               `}
             />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
