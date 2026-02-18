@@ -26,7 +26,7 @@
 
 ---
 
-Solution Explorer analyzes source code to extract components, relationships, symbols, and metrics, then renders them as a drillable, searchable interactive diagram. It supports solutions that span multiple repositories, works with many languages, and requires zero external Python dependencies.
+Solution Explorer is a static analysis tool that scans codebases to extract components, relationships, and metrics, then renders them as an interactive architecture diagram. It supports solutions that span multiple repositories, works with many languages, and requires zero external Python dependencies.
 
 ## Screenshots
 

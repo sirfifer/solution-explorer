@@ -328,6 +328,8 @@ export function ArchitectureGraph() {
         />
         <MiniMap
           position="bottom-right"
+          pannable
+          zoomable
           nodeColor={(node) => {
             const comp = (node.data as { component?: { type?: string } })?.component;
             const type = comp?.type || "module";

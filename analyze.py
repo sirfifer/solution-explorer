@@ -1875,6 +1875,8 @@ class SwiftUIFlowDetector:
                 framework="SwiftUI",
                 description=f"{len(tabs)} tabs",
             )
+            if tab_container.path:
+                tab_container.files = [tab_container.path]
             new_components.append(tab_container)
 
         # 7b: Tab components
@@ -1889,6 +1891,8 @@ class SwiftUIFlowDetector:
                 language="swift",
                 framework="SwiftUI",
             )
+            if tab_comp.path:
+                tab_comp.files = [tab_comp.path]
             tab_components[tab["view_name"]] = tab_comp
             new_components.append(tab_comp)
 
@@ -1917,6 +1921,8 @@ class SwiftUIFlowDetector:
                 language="swift",
                 framework="SwiftUI",
             )
+            if fpath:
+                screen_comp.files = [fpath]
             screen_components[vname] = screen_comp
             new_components.append(screen_comp)
 
@@ -3782,32 +3788,41 @@ class ArchitectureScanner:
     def _compute_metrics(self):
         """Compute metrics for each component."""
         for comp in self._component_map.values():
-            file_count = len(comp.files)
-            total_lines = 0
-            total_size = 0
-            lang_counts = defaultdict(int)
-            symbol_count = 0
+            self._compute_component_metrics(comp)
 
-            for fpath in comp.files:
-                for fi in self._all_files:
-                    if fi.path == fpath:
-                        total_lines += fi.lines
-                        total_size += fi.size_bytes
-                        lang_counts[fi.language] += fi.lines
-                        symbol_count += len(fi.symbols)
-                        break
+    def _compute_component_metrics(self, comp):
+        """Compute metrics for a single component and its children."""
+        file_count = len(comp.files)
+        total_lines = 0
+        total_size = 0
+        lang_counts = defaultdict(int)
+        symbol_count = 0
 
-            comp.metrics = {
-                "files": file_count,
-                "lines": total_lines,
-                "size_bytes": total_size,
-                "symbols": symbol_count,
-                "languages": dict(lang_counts),
-            }
+        for fpath in comp.files:
+            for fi in self._all_files:
+                if fi.path == fpath:
+                    total_lines += fi.lines
+                    total_size += fi.size_bytes
+                    lang_counts[fi.language] += fi.lines
+                    symbol_count += len(fi.symbols)
+                    break
 
-            # Determine primary language
-            if lang_counts and not comp.language:
-                comp.language = max(lang_counts, key=lang_counts.get)
+        comp.metrics = {
+            "files": file_count,
+            "lines": total_lines,
+            "size_bytes": total_size,
+            "symbols": symbol_count,
+            "languages": dict(lang_counts),
+        }
+
+        # Determine primary language
+        if lang_counts and not comp.language:
+            comp.language = max(lang_counts, key=lang_counts.get)
+
+        # Recurse into children (synthetic UI components not in _component_map)
+        for child in comp.children:
+            if isinstance(child, Component):
+                self._compute_component_metrics(child)
 
     def _extract_component_docs(self):
         """Extract rich documentation for every component."""

@@ -33,11 +33,20 @@ user whether to re-analyze from scratch or enhance the existing file.
 
 ### Step 2: Load and understand the architecture
 
-Read the resulting JSON. For each top-level component and its children:
+Read the resulting JSON. Process EVERY component at ALL levels of nesting:
 
-1. Read 2-3 of its most important source files (entry points first, then README, then main files)
-2. Understand what the component does architecturally
-3. Note any relationships the static analyzer may have missed
+1. Walk the `components` array recursively: each component may have a `children`
+   array containing nested components (tabs, screens, sub-modules). Every single
+   component at every depth must be processed.
+2. For each component, locate its source files:
+   - Use the `files` array (pick 2-3 most important: entry points first, then main
+     files, then others)
+   - If `files` is empty, check `path`: if it points to a file (has an extension like
+     `.swift`, `.ts`, `.py`), read that file directly
+   - If `path` is a directory, look for README, main/index files in that directory
+3. Read the selected source files and understand what each component does
+   architecturally
+4. Note any relationships the static analyzer may have missed
 
 ### Step 3: Enhance the JSON
 
@@ -47,6 +56,12 @@ Use a Python script or inline edits to modify the dict and write it back.
 #### 3a. Component enhancements
 
 For every component (recursively through children), add or fill:
+
+**Coverage requirement:** Every component at every nesting level must receive
+`ai_enhance` data. This includes top-level components, tab containers, tabs,
+screens, and sub-modules at any depth under `children`. If a component has no
+source files to read, still provide `ai_enhance` based on its name, type, and
+position in the hierarchy.
 
 **Existing fields** (fill only if empty/null):
 - `description`: 1-2 sentence description of what this component does and why it exists.
@@ -122,6 +137,36 @@ Verify the output is valid and loadable:
 ```bash
 python3 -c "import json; d=json.load(open('/Users/ramerman/dev/solution-explorer/viewer/public/architecture.json')); print(f'OK: {len(d[\"components\"])} components, {len(d[\"relationships\"])} relationships')"
 ```
+
+Then verify 100% AI enhancement coverage:
+
+```bash
+python3 -c "
+import json
+
+def check(components):
+    missing, total = [], 0
+    for c in components:
+        total += 1
+        if 'ai_enhance' not in c or not c['ai_enhance']:
+            missing.append(c.get('id', 'unknown'))
+        m, t = check(c.get('children', []))
+        missing.extend(m)
+        total += t
+    return missing, total
+
+d = json.load(open('/Users/ramerman/dev/solution-explorer/viewer/public/architecture.json'))
+missing, total = check(d['components'])
+if missing:
+    print(f'INCOMPLETE: {len(missing)}/{total} components missing ai_enhance:')
+    for m in missing: print(f'  - {m}')
+else:
+    print(f'OK: all {total} components have ai_enhance data')
+"
+```
+
+If any components are missing `ai_enhance`, go back to Step 3 and enhance them
+before proceeding to Step 6.
 
 ### Step 6: Build and deploy
 

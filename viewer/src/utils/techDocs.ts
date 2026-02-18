@@ -244,3 +244,86 @@ export const METRIC_DESCRIPTIONS: Record<string, string> = {
   size: "Total file size on disk for all source files.",
   conn: "Number of connections (relationships) to other components in the architecture.",
 };
+
+/** Design pattern references with descriptions and links */
+export const PATTERN_DOCS: Record<string, TechRef> = {
+  "MVC": { description: "Model-View-Controller separates data, UI, and control logic into three interconnected components", url: "https://developer.mozilla.org/en-US/docs/Glossary/MVC" },
+  "MVVM": { description: "Model-View-ViewModel binds UI elements to data through a view model that exposes observable state", url: "https://learn.microsoft.com/en-us/dotnet/architecture/maui/mvvm" },
+  "MVP": { description: "Model-View-Presenter where the presenter handles UI logic and mediates between model and view", url: "https://en.wikipedia.org/wiki/Model%E2%80%93view%E2%80%93presenter" },
+  "Repository Pattern": { description: "Abstracts data access behind a collection-like interface, decoupling business logic from storage", url: "https://martinfowler.com/eaaCatalog/repository.html" },
+  "Service Layer": { description: "Defines an application boundary with a set of available operations and coordinates responses", url: "https://martinfowler.com/eaaCatalog/serviceLayer.html" },
+  "API Layer": { description: "A dedicated layer that exposes application functionality through well-defined endpoints", url: "https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design" },
+  "Observer Pattern": { description: "Objects subscribe to events and are notified when state changes occur", url: "https://refactoring.guru/design-patterns/observer" },
+  "Singleton": { description: "Ensures a class has only one instance and provides a global point of access", url: "https://refactoring.guru/design-patterns/singleton" },
+  "Factory Pattern": { description: "Creates objects without exposing instantiation logic, using a common interface", url: "https://refactoring.guru/design-patterns/factory-method" },
+  "Strategy Pattern": { description: "Defines a family of algorithms, encapsulates each one, and makes them interchangeable", url: "https://refactoring.guru/design-patterns/strategy" },
+  "Dependency Injection": { description: "Components receive their dependencies from external sources rather than creating them", url: "https://en.wikipedia.org/wiki/Dependency_injection" },
+  "Middleware": { description: "Functions that intercept and process requests in a pipeline before reaching the handler", url: "https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware" },
+  "Event-Driven": { description: "Architecture where components communicate by producing and consuming events asynchronously", url: "https://learn.microsoft.com/en-us/azure/architecture/guide/architecture-styles/event-driven" },
+  "CQRS": { description: "Command Query Responsibility Segregation separates read and write operations into distinct models", url: "https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs" },
+  "Pub/Sub": { description: "Publishers send messages to topics without knowing subscribers, enabling loose coupling", url: "https://cloud.google.com/pubsub/docs/overview" },
+  "REST": { description: "Representational State Transfer, an architectural style for networked APIs using HTTP methods", url: "https://restfulapi.net" },
+  "RESTful API": { description: "An API conforming to REST constraints, using HTTP methods and resource-based URLs", url: "https://restfulapi.net" },
+  "GraphQL API": { description: "A query language for APIs that lets clients request exactly the data they need", url: "https://graphql.org/learn/" },
+  "Microservices": { description: "Architecture where an application is composed of small, independently deployable services", url: "https://microservices.io" },
+  "Monolith": { description: "A single deployable unit containing all application functionality", url: "https://en.wikipedia.org/wiki/Monolithic_application" },
+  "Clean Architecture": { description: "Organizes code in concentric layers with dependencies pointing inward toward domain logic", url: "https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html" },
+  "Hexagonal Architecture": { description: "Ports and adapters pattern that isolates core logic from external concerns", url: "https://alistair.cockburn.us/hexagonal-architecture/" },
+  "Domain-Driven Design": { description: "Software design approach focused on modeling the core business domain and its logic", url: "https://martinfowler.com/bliki/DomainDrivenDesign.html" },
+  "Actor Model": { description: "Concurrency model where actors are independent units that communicate via message passing", url: "https://en.wikipedia.org/wiki/Actor_model" },
+  "State Machine": { description: "A model of computation with a finite number of states and transitions between them", url: "https://statecharts.dev" },
+  "Command Pattern": { description: "Encapsulates a request as an object, allowing parameterization and queuing of operations", url: "https://refactoring.guru/design-patterns/command" },
+  "Decorator Pattern": { description: "Dynamically adds behavior to objects by wrapping them in decorator objects", url: "https://refactoring.guru/design-patterns/decorator" },
+  "Adapter Pattern": { description: "Converts the interface of a class into another interface that clients expect", url: "https://refactoring.guru/design-patterns/adapter" },
+  "Facade Pattern": { description: "Provides a simplified interface to a complex subsystem of classes", url: "https://refactoring.guru/design-patterns/facade" },
+  "Proxy Pattern": { description: "Provides a surrogate or placeholder for another object to control access to it", url: "https://refactoring.guru/design-patterns/proxy" },
+  "Builder Pattern": { description: "Constructs complex objects step by step, separating construction from representation", url: "https://refactoring.guru/design-patterns/builder" },
+  "Coordinator Pattern": { description: "Manages navigation flow between view controllers, keeping them decoupled from each other", url: "https://www.hackingwithswift.com/articles/71/how-to-use-the-coordinator-pattern-in-ios-apps" },
+  "Combine": { description: "Apple's declarative framework for processing asynchronous events over time using publishers and subscribers", url: "https://developer.apple.com/documentation/combine" },
+  "SwiftUI": { description: "Apple's declarative UI framework for building interfaces across all Apple platforms", url: "https://developer.apple.com/xcode/swiftui/" },
+  "UIKit": { description: "Apple's imperative UI framework for building iOS and tvOS applications", url: "https://developer.apple.com/documentation/uikit" },
+  "Core Data": { description: "Apple's framework for managing object graphs and persisting data locally", url: "https://developer.apple.com/documentation/coredata" },
+  "VIPER": { description: "View-Interactor-Presenter-Entity-Router, a clean architecture pattern for iOS apps", url: "https://www.objc.io/issues/13-architecture/viper/" },
+  "TCA": { description: "The Composable Architecture, a library for building apps in a consistent and testable way", url: "https://github.com/pointfreeco/swift-composable-architecture" },
+};
+
+/** Case-insensitive lookup for a pattern reference */
+export function getPatternRef(name: string): TechRef | null {
+  if (PATTERN_DOCS[name]) return PATTERN_DOCS[name];
+  // Try case-insensitive match
+  const lower = name.toLowerCase();
+  for (const [key, ref] of Object.entries(PATTERN_DOCS)) {
+    if (key.toLowerCase() === lower) return ref;
+  }
+  // Fall back to tech docs (some patterns overlap with tech names)
+  return getTechRef(name);
+}
+
+/** Protocol/communication references */
+export const PROTOCOL_DOCS: Record<string, TechRef> = {
+  "HTTP": { description: "Hypertext Transfer Protocol, the foundation of data communication on the web", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP" },
+  "HTTPS": { description: "HTTP Secure, encrypted communication using TLS", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP" },
+  "WebSocket": { description: "Full-duplex communication protocol over a single TCP connection", url: "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API" },
+  "gRPC": { description: "High-performance RPC framework using HTTP/2 and Protocol Buffers", url: "https://grpc.io" },
+  "REST": { description: "Representational State Transfer, an architectural style for networked APIs", url: "https://restfulapi.net" },
+  "GraphQL": { description: "Query language for APIs that lets clients request specific data", url: "https://graphql.org" },
+  "TCP": { description: "Transmission Control Protocol, reliable ordered delivery of data streams", url: "https://en.wikipedia.org/wiki/Transmission_Control_Protocol" },
+  "UDP": { description: "User Datagram Protocol, low-latency connectionless communication", url: "https://en.wikipedia.org/wiki/User_Datagram_Protocol" },
+  "MQTT": { description: "Lightweight messaging protocol for IoT and machine-to-machine communication", url: "https://mqtt.org" },
+  "AMQP": { description: "Advanced Message Queuing Protocol for message-oriented middleware", url: "https://www.amqp.org" },
+  "Redis": { description: "In-memory data store used as database, cache, and message broker", url: "https://redis.io" },
+  "PostgreSQL": { description: "Advanced open-source relational database", url: "https://www.postgresql.org" },
+  "SQL": { description: "Structured Query Language for managing relational databases", url: "https://en.wikipedia.org/wiki/SQL" },
+  "FFI": { description: "Foreign Function Interface, calling code written in one language from another", url: "https://en.wikipedia.org/wiki/Foreign_function_interface" },
+  "WatchConnectivity": { description: "Apple framework for communication between iPhone and Apple Watch apps", url: "https://developer.apple.com/documentation/watchconnectivity" },
+};
+
+/** Case-insensitive lookup for a protocol reference */
+export function getProtocolRef(name: string): TechRef | null {
+  if (PROTOCOL_DOCS[name]) return PROTOCOL_DOCS[name];
+  const upper = name.toUpperCase();
+  for (const [key, ref] of Object.entries(PROTOCOL_DOCS)) {
+    if (key.toUpperCase() === upper) return ref;
+  }
+  return getTechRef(name);
+}

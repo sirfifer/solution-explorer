@@ -5,7 +5,7 @@ import type { Component, AnnotationTarget, AnnotationTargetContext } from "../ty
 import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, getHeroGlow, ROLE_META, getRoleBadgeColors } from "../utils/layout";
 import { useArchStore } from "../store";
 import { Tooltip, TechTooltip } from "./Tooltip";
-import { getTechRef, TYPE_DESCRIPTIONS, METRIC_DESCRIPTIONS } from "../utils/techDocs";
+import { getTechRef, getPatternRef, TYPE_DESCRIPTIONS, METRIC_DESCRIPTIONS } from "../utils/techDocs";
 
 interface ComponentNodeData {
   component: Component;
@@ -393,14 +393,24 @@ function HoverCard({ component, darkMode, triggerRef }: {
               Patterns
             </div>
             <div className="flex flex-wrap gap-1">
-              {docs.patterns.map((p, i) => (
-                <span key={i} className={`
-                  px-1.5 py-0.5 rounded text-[10px]
-                  ${darkMode ? "bg-violet-900/40 text-violet-300" : "bg-violet-100 text-violet-700"}
-                `}>
-                  {p}
-                </span>
-              ))}
+              {docs.patterns.map((p, i) => {
+                const pRef = getPatternRef(p);
+                const badge = (
+                  <span className={`
+                    px-1.5 py-0.5 rounded text-[10px]
+                    ${darkMode ? "bg-violet-900/40 text-violet-300" : "bg-violet-100 text-violet-700"}
+                  `}>
+                    {p}
+                  </span>
+                );
+                return pRef ? (
+                  <TechTooltip key={i} name={p} description={pRef.description} url={pRef.url}>
+                    {badge}
+                  </TechTooltip>
+                ) : (
+                  <span key={i}>{badge}</span>
+                );
+              })}
             </div>
           </div>
         )}

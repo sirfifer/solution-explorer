@@ -13,7 +13,7 @@ import {
 import { CodePreview } from "./CodePreview";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { Tooltip, TechTooltip } from "./Tooltip";
-import { getTechRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
+import { getTechRef, getPatternRef, getProtocolRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
 
 type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai";
 
@@ -193,16 +193,26 @@ function ComponentDetail({
                 <span key={`t-${i}`}>{badge}</span>
               );
             })}
-            {docs.patterns?.map((p, i) => (
-              <Tooltip key={`p-${i}`} content={`Design pattern: ${p}`}>
+            {docs.patterns?.map((p, i) => {
+              const pRef = getPatternRef(p);
+              const badge = (
                 <span className={`
                   text-[10px] px-1.5 py-0.5 rounded
                   ${darkMode ? "bg-violet-900/30 text-violet-400" : "bg-violet-50 text-violet-700"}
                 `}>
                   {p}
                 </span>
-              </Tooltip>
-            ))}
+              );
+              return pRef ? (
+                <TechTooltip key={`p-${i}`} name={p} description={pRef.description} url={pRef.url}>
+                  {badge}
+                </TechTooltip>
+              ) : (
+                <Tooltip key={`p-${i}`} content={`Design pattern: ${p}`}>
+                  {badge}
+                </Tooltip>
+              );
+            })}
           </div>
         )}
       </div>
@@ -947,9 +957,19 @@ function RelationshipsTab({
           <span className={`flex-1 truncate ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
             {other?.name || otherId}
           </span>
-          <span className={`text-[10px] ${typeColors[rel.type] || ""}`}>
-            {rel.type}
-          </span>
+          {(() => {
+            const protoRef = getProtocolRef(rel.protocol || rel.type);
+            const typeSpan = (
+              <span className={`text-[10px] ${typeColors[rel.type] || ""}`}>
+                {rel.protocol || rel.type}
+              </span>
+            );
+            return protoRef ? (
+              <TechTooltip name={rel.protocol || rel.type} description={protoRef.description} url={protoRef.url}>
+                {typeSpan}
+              </TechTooltip>
+            ) : typeSpan;
+          })()}
           {rel.port && (
             <span className={`text-[10px] font-mono ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
               :{rel.port}

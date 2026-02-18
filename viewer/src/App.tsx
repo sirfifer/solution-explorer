@@ -209,6 +209,23 @@ export function App() {
                 {architecture.repositories.length} repos
               </span>
             )}
+            {architecture.repository && (
+              <a
+                href={architecture.repository}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`
+                  flex items-center gap-1 text-xs px-2 py-0.5 rounded-md
+                  ${darkMode
+                    ? "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                    : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100"
+                  }
+                `}
+              >
+                <span>&#x1F517;</span>
+                <span>{architecture.name} Repository</span>
+              </a>
+            )}
           </div>
         </div>
 
@@ -276,18 +293,23 @@ export function App() {
             )}
           </div>
 
-          {/* Repo link */}
-          {architecture.repository && (
-            <a
-              href={architecture.repository}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
-              title="View repository"
-            >
-              &#x1F517;
-            </a>
-          )}
+          {/* Solution Explorer link */}
+          <a
+            href="https://github.com/sirfifer/solution-explorer"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`
+              flex items-center gap-1 text-[10px] px-2 py-1 rounded-md
+              ${darkMode
+                ? "text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800"
+                : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
+              }
+            `}
+            title="Built with Solution Explorer"
+          >
+            <span>&#x2699;&#xFE0F;</span>
+            <span>Solution Explorer</span>
+          </a>
         </div>
       </header>
 
