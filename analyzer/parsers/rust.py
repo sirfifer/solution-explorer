@@ -8,6 +8,8 @@ from .base import BaseParser
 
 
 class RustParser(BaseParser):
+    """Parser for Rust source files."""
+
     IMPORT_PATTERN = re.compile(r'^\s*use\s+([\w:]+)', re.MULTILINE)
 
     def extract_symbols(self, content: str, file_path: str) -> list[Symbol]:

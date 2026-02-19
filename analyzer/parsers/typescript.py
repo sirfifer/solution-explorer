@@ -8,6 +8,8 @@ from .base import BaseParser
 
 
 class TypeScriptParser(BaseParser):
+    """Parser for TypeScript and JavaScript source files."""
+
     IMPORT_PATTERN = re.compile(
         r'''^\s*import\s+(?:(?:[\w{},\s*]+)\s+from\s+)?['"]([@\w/.\-]+)['"]''',
         re.MULTILINE

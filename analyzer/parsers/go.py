@@ -8,6 +8,8 @@ from .base import BaseParser
 
 
 class GoParser(BaseParser):
+    """Parser for Go source files."""
+
     IMPORT_PATTERN = re.compile(r'"([\w./\-]+)"')
 
     def extract_symbols(self, content: str, file_path: str) -> list[Symbol]:

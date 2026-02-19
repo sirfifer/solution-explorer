@@ -1,4 +1,4 @@
-"""Multi-repository analysis orchestrator."""
+"""Multi-repository analysis orchestrator for scanning and merging cross-repo architectures."""
 
 import json
 import os

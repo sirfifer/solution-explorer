@@ -1,4 +1,4 @@
-"""Core architecture scanner."""
+"""Core architecture scanner that discovers components, files, and relationships."""
 
 import json
 import os
@@ -51,6 +51,13 @@ from .utils import (
 
 
 class ArchitectureScanner:
+    """Scan a project directory to build a complete architecture model.
+
+    Discovers components by directory structure, parses source files for
+    symbols and imports, detects frameworks, and infers relationships
+    between components.
+    """
+
     def __init__(self, root: Path, max_file_size: int = 500_000,
                  max_symbols: int = 0, preview_lines: int = 5):
         self.root = root.resolve()

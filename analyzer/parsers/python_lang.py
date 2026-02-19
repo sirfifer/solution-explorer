@@ -8,6 +8,8 @@ from .base import BaseParser
 
 
 class PythonParser(BaseParser):
+    """Parser for Python source files."""
+
     IMPORT_PATTERN = re.compile(
         r'^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))', re.MULTILINE
     )

@@ -9,6 +9,8 @@ from .base import BaseParser
 
 
 class SwiftParser(BaseParser):
+    """Parser for Swift source files."""
+
     SYMBOL_PATTERNS = [
         (r'^\s*(public|open|internal|private|fileprivate)?\s*(final\s+)?(class|struct|enum|protocol|actor)\s+(\w+)', "type"),
         (r'^\s*(public|open|internal|private|fileprivate)?\s*(static\s+|class\s+)?(func)\s+(\w+)', "function"),
