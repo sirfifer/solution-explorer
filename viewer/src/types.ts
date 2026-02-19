@@ -142,6 +142,7 @@ export interface Architecture {
   stats: ArchitectureStats;
   repositories?: RepositoryInfo[];
   ai_enhance?: ArchitectureAIEnhance;
+  component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
 }
 
 // Review annotations

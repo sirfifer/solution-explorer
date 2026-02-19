@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { Component, FileInfo, Symbol as ArchSymbol, Relationship } from "../types";
 import { useArchStore } from "../store";
 import {
@@ -88,6 +88,15 @@ function ComponentDetail({
     getComponentSymbols,
     showDetail,
   } = useArchStore();
+
+  // Lazy-load component details (split mode)
+  const loadComponentDetail = useArchStore((s) => s.loadComponentDetail);
+  const componentDetailLoading = useArchStore((s) => s.componentDetailLoading);
+
+  useEffect(() => {
+    loadComponentDetail(component.id);
+  }, [component.id, loadComponentDetail]);
+
   const colors = getTypeColors(component.type, darkMode);
   const files = useMemo(() => getComponentFiles(component.id), [component.id, getComponentFiles]);
   const symbols = useMemo(() => getComponentSymbols(component.id), [component.id, getComponentSymbols]);

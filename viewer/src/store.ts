@@ -98,6 +98,11 @@ interface ArchStore {
   getAnnotationsForComponent: (componentId: string) => Annotation[];
   getAnnotationsForTarget: (targetType: AnnotationTarget, targetId: string) => Annotation[];
 
+  // Component detail cache (for split mode)
+  componentDetailCache: Record<string, { symbols: Symbol[]; files: FileInfo[] }>;
+  componentDetailLoading: string | null;
+  loadComponentDetail: (componentId: string) => Promise<{ symbols: Symbol[]; files: FileInfo[] } | null>;
+
   // Helpers
   getComponentById: (id: string) => Component | null;
   getVisibleComponents: () => Component[];
@@ -151,6 +156,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   searchQuery: "",
 
   darkMode: getStoredDarkMode(),
+
+  componentDetailCache: {},
+  componentDetailLoading: null,
 
   reviewMode: false,
   annotations: [],
@@ -302,6 +310,37 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     return get().annotations.filter((a) => a.targetType === targetType && a.targetId === targetId);
   },
 
+  loadComponentDetail: async (componentId) => {
+    // Already cached
+    const cached = get().componentDetailCache[componentId];
+    if (cached) return cached;
+
+    // In monolithic mode (files/symbols loaded in architecture), no need to fetch
+    const arch = get().architecture;
+    if (arch && arch.files.length > 0) return null;
+
+    set({ componentDetailLoading: componentId });
+    const safeId = componentId.replace(/\//g, "--");
+    try {
+      const res = await fetch(`./architecture/data/detail-${safeId}.json`);
+      if (res.ok) {
+        const detail = await res.json();
+        set((state) => ({
+          componentDetailCache: { ...state.componentDetailCache, [componentId]: detail },
+          componentDetailLoading: null,
+        }));
+        // Add to search index
+        const { addToSearchIndex } = await import("./utils/search");
+        addToSearchIndex(detail.symbols || [], detail.files || []);
+        return detail;
+      }
+    } catch {
+      // Fetch failed, leave as null
+    }
+    set({ componentDetailLoading: null });
+    return null;
+  },
+
   getComponentById: (id) => {
     const arch = get().architecture;
     if (!arch) return null;
@@ -349,6 +388,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   },
 
   getComponentFiles: (componentId) => {
+    // Check detail cache first (split mode)
+    const cached = get().componentDetailCache[componentId];
+    if (cached) return cached.files;
+    // Fall back to monolithic data
     const { architecture } = get();
     if (!architecture) return [];
     const comp = findComponent(architecture.components, componentId);
@@ -357,6 +400,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   },
 
   getComponentSymbols: (componentId) => {
+    // Check detail cache first (split mode)
+    const cached = get().componentDetailCache[componentId];
+    if (cached) return cached.symbols;
+    // Fall back to monolithic data
     const { architecture } = get();
     if (!architecture) return [];
     const files = get().getComponentFiles(componentId);

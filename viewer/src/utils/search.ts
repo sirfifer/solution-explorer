@@ -73,6 +73,46 @@ export function initializeSearch(arch: Architecture) {
   });
 }
 
+export function addToSearchIndex(symbols: Symbol[], files: FileInfo[]) {
+  // Add files to index
+  for (const file of files) {
+    const name = file.path.split("/").pop() || file.path;
+    allResults.push({
+      type: "file",
+      id: file.path,
+      name,
+      path: file.path,
+      kind: file.language,
+      language: file.language,
+      score: 0,
+    });
+  }
+
+  // Add symbols to index
+  for (const sym of symbols) {
+    allResults.push({
+      type: "symbol",
+      id: sym.id,
+      name: sym.name,
+      path: sym.file,
+      kind: sym.kind,
+      score: 0,
+    });
+  }
+
+  // Rebuild Fuse instance with updated data
+  componentFuse = new Fuse(allResults, {
+    keys: [
+      { name: "name", weight: 3 },
+      { name: "path", weight: 1 },
+      { name: "kind", weight: 0.5 },
+    ],
+    threshold: 0.4,
+    includeScore: true,
+    minMatchCharLength: 2,
+  });
+}
+
 export function search(query: string, limit: number = 50): SearchResult[] {
   if (!componentFuse || !query.trim()) return [];
 

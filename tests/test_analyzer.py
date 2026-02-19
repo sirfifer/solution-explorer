@@ -6,18 +6,19 @@ from pathlib import Path
 
 import pytest
 
-# Add project root to path so we can import analyze
+# Add project root to path so we can import the analyzer package
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from analyze import (
-    Architecture,
-    ArchitectureScanner,
+from analyzer.models import Architecture
+from analyzer.scanner import ArchitectureScanner
+from analyzer.multi_repo import MultiRepoOrchestrator
+from analyzer.parsers import (
     GoParser,
-    MultiRepoOrchestrator,
     PythonParser,
     RustParser,
     SwiftParser,
     TypeScriptParser,
 )
+from analyzer.parsers.base import BaseParser
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -571,7 +572,6 @@ class TestRustParser:
 
 class TestBaseParserUtilities:
     def test_extract_env_vars(self):
-        from analyze import BaseParser
         parser = BaseParser()
 
         code = (
@@ -585,7 +585,6 @@ class TestBaseParserUtilities:
         assert "NODE_ENV" in env_vars
 
     def test_detect_ports(self):
-        from analyze import BaseParser
         parser = BaseParser()
 
         code = (
@@ -599,7 +598,6 @@ class TestBaseParserUtilities:
         assert 4000 in ports
 
     def test_detect_ports_ignores_invalid(self):
-        from analyze import BaseParser
         parser = BaseParser()
 
         code = "port = 42\n"  # below 80, should be ignored

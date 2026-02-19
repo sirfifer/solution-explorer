@@ -116,12 +116,25 @@ export function App() {
     };
   }, []);
 
-  // Load architecture data
+  // Load architecture data (try split manifest.json first, fall back to monolithic)
   useEffect(() => {
     async function load() {
       try {
         setLoading(true);
-        const res = await fetch("./architecture.json");
+
+        // Try split mode first (manifest.json)
+        let res = await fetch("./architecture/manifest.json");
+        if (res.ok) {
+          const manifest = await res.json();
+          // Split mode: manifest has components/relationships but no symbols/files
+          const data: Architecture = { ...manifest, symbols: manifest.symbols || [], files: manifest.files || [] };
+          setArchitecture(data);
+          initializeSearch(data);
+          return;
+        }
+
+        // Fall back to monolithic architecture.json
+        res = await fetch("./architecture.json");
         if (!res.ok) throw new Error(`Failed to load architecture data: ${res.status}`);
         const data: Architecture = await res.json();
         setArchitecture(data);
