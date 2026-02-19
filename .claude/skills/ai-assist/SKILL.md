@@ -28,6 +28,8 @@ python3 /Users/ramerman/dev/solution-explorer/analyze.py <codebase-path> \
   -o /Users/ramerman/dev/solution-explorer/viewer/public/architecture.json --pretty
 ```
 
+> `analyze.py` is a thin CLI wrapper around the `analyzer/` package. The command works identically.
+
 If `viewer/public/architecture.json` already exists from a previous run, ask the
 user whether to re-analyze from scratch or enhance the existing file.
 

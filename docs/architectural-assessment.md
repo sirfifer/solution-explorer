@@ -1,3 +1,5 @@
+> **Status (2025-02-17):** Wave 1 (Changes 1-3) is complete. The analyzer has been refactored into the `analyzer/` package, split JSON output is implemented, and the symbol cap is configurable. See CHANGELOG.md for details. Wave 2 (Changes 4-6) is planned but not yet started.
+
 # Solution Explorer: Architectural Assessment and Evolution Plan
 
 ## Executive Summary
@@ -107,7 +109,7 @@ After researching Sourcegraph, Sourcetrail, CodeScene, NDepend, Structure101, Se
 
 These are listed in priority order: each one unblocks the next.
 
-#### Change 1: Split analyze.py into a package
+#### Change 1: Split analyze.py into a package ✅ Complete
 
 **Why:** Adding UI action detection (buttons, toolbars, menus, swipe actions, state properties) across 6+ languages will push the file past 6,000 lines. Testing individual parsers requires loading everything. New contributors can't find anything.
 
@@ -134,7 +136,7 @@ analyzer/
 
 **Backward compatibility:** Keep `analyze.py` as a thin wrapper that imports from `analyzer/` and calls `main()`. Existing GitHub Actions and CLI usage unchanged.
 
-#### Change 2: Split the JSON output for lazy loading
+#### Change 2: Split the JSON output for lazy loading ✅ Complete
 
 **Why:** The architecture JSON is 5.1 MB for a medium project. 53% is symbols, 31% is files. With 100%+ symbol coverage (no more 5,000 cap), a medium project could produce 15-30 MB. Loading that on page open is unacceptable.
 
@@ -161,7 +163,7 @@ Symbols and files are chunked per component and loaded on demand when a user ope
 
 **Static hosting:** All files are static assets. Cloudflare Pages serves them from CDN edge. No server needed.
 
-#### Change 3: Remove the 5,000 symbol cap and index by component
+#### Change 3: Remove the 5,000 symbol cap and index by component ✅ Complete
 
 **Why:** 100%+ coverage means capturing every symbol in the codebase. The current flat array with a hard cap is the bottleneck. With split JSON (Change 2), each component's symbols are in their own file, so there's no single-file size explosion.
 
@@ -221,7 +223,7 @@ The one future scenario where a partial rewrite makes sense: if we need Tree-sit
 
 Each change is independently valuable and deployable. No big bang.
 
-### Wave 1: Foundation (Changes 1-3)
+### Wave 1: Foundation (Changes 1-3) ✅ Complete
 
 Split `analyze.py` into a package, implement split JSON output with lazy loading in the viewer, remove the symbol cap.
 

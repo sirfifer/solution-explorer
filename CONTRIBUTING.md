@@ -46,17 +46,18 @@ python3 -m pytest tests/ -v
 cd viewer && npm test
 
 # Linting
-ruff check analyze.py
+ruff check analyzer/
 cd viewer && npm run lint
 ```
 
 ### Code Style
 
-**Python (analyze.py):**
+**Python (`analyzer/` package):**
 - Formatted and linted with [Ruff](https://docs.astral.sh/ruff/)
 - Line length limit: 120 characters
 - Target: Python 3.10+
 - Zero external dependencies (stdlib only)
+- `analyze.py` at root is a thin CLI wrapper
 
 **TypeScript (viewer):**
 - Linted with ESLint
@@ -65,7 +66,7 @@ cd viewer && npm run lint
 
 Run the linters before submitting:
 ```bash
-ruff check analyze.py
+ruff check analyzer/
 cd viewer && npm run lint
 ```
 
@@ -85,12 +86,13 @@ Look for issues tagged with [`good first issue`](https://github.com/sirfifer/sol
 
 ### Adding Language Support
 
-The analyzer in `analyze.py` supports multiple languages. To improve parsing for an existing language or add a new one:
+The analyzer package has per-language parsers in `analyzer/parsers/`. To improve parsing for an existing language or add a new one:
 
-1. Study the existing parser classes (e.g., `SwiftParser`, `PythonParser`, `GoParser`)
-2. Add or modify the parser in `analyze.py`
-3. Add test cases in `tests/test_analyzer.py`
-4. Test against real-world codebases in that language
+1. Study the existing parser classes in `analyzer/parsers/` (e.g., `swift.py`, `python_lang.py`, `go.py`)
+2. Each parser extends `BaseParser` from `analyzer/parsers/base.py` and implements `extract_symbols`, `extract_imports`, and `detect_framework`
+3. Register new parsers in `analyzer/parsers/__init__.py` in the `PARSERS` dict
+4. Add test cases in `tests/` (see `test_parsers_extra.py` for examples)
+5. Test against real-world codebases in that language
 
 ## Submitting Changes
 
@@ -135,10 +137,19 @@ Understanding the project structure helps with contributing:
 
 ```
 solution-explorer/
-├── analyze.py          # Core analyzer (Python, zero dependencies)
+├── analyze.py          # CLI entry point (thin wrapper)
+├── analyzer/           # Core analysis package (Python, zero dependencies)
+│   ├── cli.py          # Argument parsing, output handling
+│   ├── models.py       # Data model (Component, Symbol, Relationship, etc.)
+│   ├── scanner.py      # ArchitectureScanner (discovery, metrics, docs)
+│   ├── parsers/        # Per-language source parsers
+│   ├── swiftui_flow.py # SwiftUI navigation flow detection
+│   ├── config_parsers.py # Config file parsers
+│   ├── constants.py    # Shared constants
+│   └── utils.py        # Shared helpers
+├── tests/              # Python test suite (370 tests)
 ├── action.yml          # GitHub Action definition
 ├── build.sh            # Static site build script
-├── tests/              # Python test suite
 └── viewer/             # React/TypeScript frontend
     ├── src/
     │   ├── components/ # React components (nodes, panels, search)
@@ -148,7 +159,7 @@ solution-explorer/
     └── public/         # Static assets + generated architecture.json
 ```
 
-The **analyzer** walks a codebase, detects components via marker files, parses source files for symbols and relationships, and outputs `architecture.json`. The **viewer** reads that JSON and renders an interactive graph using React Flow and ELK layout.
+The **analyzer** (`analyzer/` package) walks a codebase, detects components via marker files, parses source files for symbols and relationships, and outputs `architecture.json` (single file or split directory). The **viewer** reads that data and renders an interactive graph using React Flow and ELK layout.
 
 ## Code of Conduct
 

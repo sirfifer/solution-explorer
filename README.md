@@ -109,7 +109,7 @@ bash build.sh /path/to/your/repo
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
-│  Your Codebase  │────>│  analyze.py       │────>│  architecture.json  │
+│  Your Codebase  │────>│  analyzer/        │────>│  architecture.json  │
 │                 │     │  (Python stdlib)  │     │                     │
 └─────────────────┘     └──────────────────┘     └──────────┬──────────┘
                                                             │
@@ -120,7 +120,7 @@ bash build.sh /path/to/your/repo
                                                  └─────────────────────┘
 ```
 
-1. **Python Analyzer** (`analyze.py`) walks the codebase with zero external dependencies (stdlib only)
+1. **Python Analyzer** (`analyzer/` package) walks the codebase with zero external dependencies (stdlib only)
 2. Detects components via marker files (package.json, Cargo.toml, Info.plist, Dockerfile, etc.)
 3. Parses source files to extract symbols, imports, and API patterns
 4. Detects inter-component relationships (imports, HTTP/port references, protocols)
@@ -321,10 +321,11 @@ Run `bash build.sh` and copy `viewer/dist/` to your server or bucket.
 python3 analyze.py [path] [options]
 
 Options:
-  -o, --output        Output JSON path (default: architecture.json)
+  -o, --output        Output path (default: architecture.json)
   --config            Path to solution-explorer.json for multi-repo mode
+  --split             Output split files for lazy loading (manifest.json + per-component detail files)
   --max-file-size     Skip files larger than N bytes (default: 500KB)
-  --max-symbols       Limit symbols in output (default: 5000, 0=unlimited)
+  --max-symbols       Limit symbols in output (default: 5000 in single-file mode, unlimited in split mode; 0=unlimited)
   --preview-lines     Lines per code preview (default: 5)
   --compact           Compact JSON (no indentation)
 ```
@@ -413,6 +414,23 @@ Options:
 
 </details>
 
+### Split Mode Output
+
+When using `--split`, the analyzer produces a directory instead of a single file:
+
+```
+architecture/
+├── manifest.json                    # Component tree, relationships, stats (~20-100 KB)
+└── data/
+    ├── detail-component-a.json      # Symbols and files for component A
+    ├── detail-component-b.json      # Symbols and files for component B
+    └── ...
+```
+
+The manifest contains everything needed to render the graph: component hierarchy, relationships, metrics, and AI enhancements. Symbols and files are loaded on demand when a user opens a component's detail panel.
+
+The viewer automatically detects split mode (tries `manifest.json` first, falls back to `architecture.json`).
+
 ## Local Development
 
 For contributing to solution-explorer itself:
@@ -435,23 +453,42 @@ npm test
 npm run lint
 ```
 
+> **Note:** `analyze.py` is a thin wrapper around the `analyzer/` package. Both `python3 analyze.py` and `python3 -m analyzer` work identically.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
 
 ## Project Structure
 
 ```
 solution-explorer/
-├── analyze.py              # Core analyzer (4500+ lines, zero dependencies)
+├── analyze.py              # CLI entry point (thin wrapper)
+├── analyzer/               # Core analysis package
+│   ├── __init__.py
+│   ├── cli.py              # Argument parsing, split/single-file output
+│   ├── models.py           # Dataclasses: Component, Symbol, Relationship, etc.
+│   ├── scanner.py          # ArchitectureScanner (component discovery, metrics, docs)
+│   ├── swiftui_flow.py     # SwiftUI navigation/tab flow detection
+│   ├── multi_repo.py       # Multi-repo orchestration
+│   ├── config_parsers.py   # Config file parsers (package.json, Cargo.toml, etc.)
+│   ├── constants.py        # Skip dirs, language maps, component markers
+│   ├── utils.py            # Shared helpers
+│   └── parsers/            # Per-language source parsers
+│       ├── __init__.py     # Parser registry
+│       ├── base.py         # BaseParser interface
+│       ├── swift.py        # Swift/SwiftUI
+│       ├── python_lang.py  # Python
+│       ├── typescript.py   # TypeScript/JavaScript/React
+│       ├── go.py           # Go
+│       ├── rust.py         # Rust
+│       └── ruby.py         # Ruby
+├── tests/                  # Python test suite (370 tests, 81% coverage)
 ├── action.yml              # GitHub Action definition
 ├── build.sh                # Static site build script
-├── solution-explorer.json.example  # Multi-repo config template
-├── tests/
-│   └── test_analyzer.py    # Python test suite
 └── viewer/                 # React/TypeScript frontend
     ├── src/
     │   ├── components/     # React components (nodes, panels, search, tour)
     │   ├── utils/          # Layout engine, search, documentation
-    │   ├── store.ts        # Zustand state management
+    │   ├── store.ts        # Zustand state management (with lazy loading)
     │   └── types.ts        # TypeScript type definitions
     ├── vite.config.ts      # Build configuration
     └── vitest.config.ts    # Test configuration

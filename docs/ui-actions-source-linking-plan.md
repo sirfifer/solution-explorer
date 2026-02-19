@@ -16,7 +16,7 @@ Every file path and symbol line reference becomes a clickable GitHub link.
 
 ### 1A. Analyzer: detect default branch
 
-**File: `analyze.py` (~line 364, Architecture dataclass)**
+**File: `analyzer/models.py` (Architecture dataclass)**
 
 Add `default_branch` field:
 ```python
@@ -26,7 +26,7 @@ class Architecture:
     default_branch: str = "main"
 ```
 
-**File: `analyze.py` (~line 4072, after repository URL detection)**
+**File: `analyzer/scanner.py` (ArchitectureScanner, after repository URL detection)**
 
 Detect from `.git/HEAD`:
 ```python
@@ -83,7 +83,7 @@ export function buildSourceUrl(
 
 | File | Change |
 |------|--------|
-| `analyze.py` :364, :4072 | `default_branch` field + `.git/HEAD` detection |
+| `analyzer/models.py`, `analyzer/scanner.py` | `default_branch` field + `.git/HEAD` detection |
 | `viewer/src/types.ts` :134 | `default_branch?: string` |
 | `viewer/src/utils/sourceLink.ts` | **New**: `buildSourceUrl()` |
 | `viewer/src/components/DetailPanel.tsx` | GitHub links on symbols, files, details |
@@ -107,13 +107,13 @@ Capture interactive UI elements as new symbol kinds within the existing symbol e
 
 ### 2B. Shared brace-body extraction
 
-**File: `analyze.py` (~line 1431)**
+**File: `analyzer/utils.py` (`_extract_brace_body` function)**
 
-The `_extract_brace_body` helper currently lives on `SwiftUIFlowDetector`. Extract it as a module-level function (or a `@staticmethod` on `BaseParser`) so both `SwiftParser` and `SwiftUIFlowDetector` can use it for parsing nested blocks.
+The `_extract_brace_body` helper has been extracted to `analyzer/utils.py` as a shared module-level function. Both `SwiftParser` and `SwiftUIFlowDetector` can import it for parsing nested blocks.
 
 ### 2C. Extend SwiftParser.extract_symbols
 
-**File: `analyze.py` :569-641 (SwiftParser.extract_symbols)**
+**File: `analyzer/parsers/swift.py` (SwiftParser.extract_symbols)**
 
 Add new detection blocks after the existing function/extension detection (after line 640). The approach: within the same line-by-line loop, track the currently enclosing struct/class via a `current_type_id` variable that updates on type declaration entry and resets when brace depth returns to the entry level.
 
@@ -189,18 +189,18 @@ def _extract_action_target(self, lines, line_idx):
 
 ### 2D. Cross-language (lighter touch)
 
-**React** (`JSParser.extract_symbols` ~line 980): Scan JSX for `onClick={handleFoo}`, create `kind: "button"` symbols.
+**React** (`analyzer/parsers/typescript.py`, TypeScriptParser.extract_symbols): Scan JSX for `onClick={handleFoo}`, create `kind: "button"` symbols.
 
-**Python** (`PythonParser` ~line 716): Route decorators create `kind: "endpoint-handler"` symbols.
+**Python** (`analyzer/parsers/python_lang.py`, PythonParser): Route decorators create `kind: "endpoint-handler"` symbols.
 
 ### Phase 2 files
 
 | File | Change |
 |------|--------|
-| `analyze.py` :569-641 | Extend `SwiftParser.extract_symbols`: Button, @State, toolbar, contextMenu, swipeActions, Menu |
-| `analyze.py` :1431 | Extract `_extract_brace_body` as shared utility |
-| `analyze.py` :980 | `JSParser`: React event handler detection |
-| `analyze.py` :716 | `PythonParser`: endpoint handler symbols |
+| `analyzer/parsers/swift.py` | Extend `SwiftParser.extract_symbols`: Button, @State, toolbar, contextMenu, swipeActions, Menu |
+| `analyzer/utils.py` | `_extract_brace_body` already extracted as shared utility |
+| `analyzer/parsers/typescript.py` | `TypeScriptParser`: React event handler detection |
+| `analyzer/parsers/python_lang.py` | `PythonParser`: endpoint handler symbols |
 
 ---
 
