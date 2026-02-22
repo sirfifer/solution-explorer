@@ -56,7 +56,7 @@ cd viewer && npm run lint
 - Formatted and linted with [Ruff](https://docs.astral.sh/ruff/)
 - Line length limit: 120 characters
 - Target: Python 3.10+
-- Dependencies kept minimal and CI-friendly
+- Core analyzer uses only Python stdlib; optional dependencies for advanced features are declared in `pyproject.toml`
 - `analyze.py` at root is a thin CLI wrapper
 
 **TypeScript (viewer):**

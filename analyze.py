@@ -3,6 +3,9 @@
 Architecture Analyzer - Extracts architecture from any codebase.
 
 Outputs a hierarchical architecture.json for the interactive viewer.
+Core analyzer requires only Python stdlib. Optional dependencies for
+advanced features (incremental analysis, live monitoring) are declared
+in pyproject.toml.
 
 Usage:
     python analyze.py /path/to/repo -o architecture.json

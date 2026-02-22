@@ -270,7 +270,7 @@ export function HelpSystem() {
                     </ul>
                   </div>
                   <p className={`text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
-                    Analyzer uses zero external dependencies (Python stdlib only).
+                    Analyzer core uses only Python stdlib. Optional dependencies for advanced features.
                     Viewer built with React, React Flow, and TailwindCSS.
                   </p>
                 </div>

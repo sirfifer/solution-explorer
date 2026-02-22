@@ -27,7 +27,7 @@ After researching Sourcegraph, Sourcetrail, CodeScene, NDepend, Structure101, Se
 
 ### What's Actually Working Well
 
-1. **Zero-dependency analyzer.** Python stdlib only. Runs anywhere, including GitHub Actions. This is a genuine strength, not a weakness to fix.
+1. **Stdlib-core analyzer.** The core analyzer requires only Python stdlib and runs anywhere, including GitHub Actions. Optional dependencies for advanced features (incremental analysis, live monitoring) are declared in pyproject.toml. This is a genuine strength, not a weakness to fix.
 
 2. **Hierarchical drill-down in the viewer.** The Zustand store with breadcrumbs and drill levels means we never render 500+ nodes at once. This is the right pattern and already solves the rendering scalability problem at the graph level.
 
@@ -97,7 +97,7 @@ After researching Sourcegraph, Sourcetrail, CodeScene, NDepend, Structure101, Se
 
 ### What NOT to change
 
-1. **Python for the analyzer.** The zero-dependency constraint is a feature. It means the GitHub Action works on any runner without setup. Rewriting in TypeScript/Rust would add build complexity for marginal benefit. The analyzer doesn't need to be fast (it runs in CI, not interactively); it needs to be comprehensive and correct.
+1. **Python for the analyzer.** The stdlib-only core is a feature. It means the GitHub Action works on any runner without setup. Optional dependencies are available for advanced features but never required for basic analysis. Rewriting in TypeScript/Rust would add build complexity for marginal benefit. The analyzer doesn't need to be fast (it runs in CI, not interactively); it needs to be comprehensive and correct.
 
 2. **React + React Flow for the viewer.** The custom node rendering (device frames, badges, role indicators) is the product differentiator. React Flow handles our scale because drill-down keeps visible nodes under ~100. Switching to Cytoscape or Sigma would mean rebuilding all the rich node UI.
 
@@ -204,7 +204,7 @@ Symbols and files are chunked per component and loaded on demand when a user ope
 
 ### The case against
 
-- **Zero-dependency Python is a genuine advantage.** The analyzer runs in GitHub Actions on any runner without `npm install` or build steps. Adding Node.js as a runtime dependency is a real cost.
+- **Stdlib-core Python is a genuine advantage.** The analyzer runs in GitHub Actions on any runner without `npm install` or build steps. Adding Node.js as a runtime dependency is a real cost. Optional Python dependencies exist for advanced features but are never required for core analysis.
 - **The analyzer isn't the bottleneck.** It runs once in CI, not interactively. Speed doesn't matter; correctness and comprehensiveness do.
 - **Python's regex and string processing is perfectly adequate** for the kind of pattern matching we do. Tree-sitter would give better ASTs, but it's not required for the scope patterns we detect (function declarations, imports, SwiftUI modifiers).
 - **The risk-reward ratio is wrong.** A full rewrite carries risk of re-introducing bugs in well-tested code. The modular refactor (Change 1) gives 80% of the architectural benefit at 5% of the effort.
@@ -280,7 +280,7 @@ After each wave:
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Rewrite in TypeScript? | **No (revisit later)** | Zero-dependency Python is a genuine advantage for CI/CD. Rewrite remains viable future option. |
+| Rewrite in TypeScript? | **No (revisit later)** | Stdlib-core Python is a genuine advantage for CI/CD. Rewrite remains viable future option. |
 | Modularize analyze.py? | **Yes** | Unblocks testing, new features, and maintainability |
 | Switch rendering library? | **No** | Drill-down keeps visible nodes under ~100; React Flow is fine |
 | Split JSON output? | **Yes** | 5.1 MB single blob doesn't scale; symbols/files load on demand |

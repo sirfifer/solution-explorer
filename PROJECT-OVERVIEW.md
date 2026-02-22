@@ -172,7 +172,7 @@ The analyzer runs once, either in CI or locally, and produces a JSON file. The v
 
 ### The Analyzer
 
-The analyzer is written in Python with minimal dependencies chosen for CI/CD compatibility. It runs in GitHub Actions on any runner with a simple `pip install`, which is critical for the CI/CD integration model.
+The analyzer is written in Python with a stdlib-only core for maximum CI/CD compatibility. It runs in GitHub Actions on any runner without additional setup. Optional dependencies for advanced features (incremental analysis, live monitoring) are declared in pyproject.toml and installed only when needed.
 
 How it works:
 
@@ -290,7 +290,7 @@ Test coverage jumped from ~10% (43 tests) to 81% (370 tests) across five test fi
 
 Before the v1.1.0 refactor, a thorough architectural assessment was conducted. Research into Sourcegraph, Sourcetrail, CodeScene, NDepend, Structure101, Semgrep, SonarQube, and other tools informed the key decisions.
 
-The question of rewriting the analyzer in TypeScript was considered and rejected. The Python analyzer is a genuine advantage for CI/CD: it runs on any GitHub Actions runner without Node.js setup and with minimal pip dependencies. A TypeScript rewrite would add runtime complexity for marginal benefit, since the analyzer runs once in CI, not interactively. Speed does not matter; correctness and comprehensiveness do.
+The question of rewriting the analyzer in TypeScript was considered and rejected. The Python analyzer's stdlib-only core is a genuine advantage for CI/CD: it runs on any GitHub Actions runner without Node.js setup and with no required pip dependencies. Optional dependencies for advanced features are declared in pyproject.toml but never required for basic analysis. A TypeScript rewrite would add runtime complexity for marginal benefit, since the analyzer runs once in CI, not interactively. Speed does not matter; correctness and comprehensiveness do.
 
 The incremental refactoring (modular package, split output, configurable caps) delivered the architectural benefits at a fraction of the rewrite effort. The option to rewrite remains viable as a future choice, but the current architecture scales for the foreseeable roadmap.
 
@@ -334,7 +334,7 @@ For projects exceeding 5,000 files, additional optimizations are planned:
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| Analyzer | Python 3.10+ | Minimal dependencies, CI-friendly |
+| Analyzer | Python 3.10+ | Stdlib core, optional deps via pyproject.toml, CI-friendly |
 | Viewer | React 19, TypeScript, Tailwind CSS | Vite build |
 | Graph | React Flow + ELK layout engine | SVG-based, ~100 visible nodes per drill level |
 | Search | Fuse.js | Fuzzy matching, progressive indexing in split mode |
