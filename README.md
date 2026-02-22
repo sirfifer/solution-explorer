@@ -13,7 +13,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
   <a href="https://github.com/sirfifer/solution-explorer/releases"><img src="https://img.shields.io/github/v/release/sirfifer/solution-explorer" alt="Release"></a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/node-18%2B-green" alt="Node 18+">
+  <img src="https://img.shields.io/badge/node-22%2B-green" alt="Node 22+">
 </p>
 
 <p align="center">
@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: sirfifer/solution-explorer@v1
+      - uses: sirfifer/solution-explorer@main
 ```
 
 This analyzes your repo and uploads the visualization as a downloadable artifact. To deploy it automatically, see [Deployment Options](#deployment-options) below.
@@ -102,8 +102,18 @@ bash build.sh /path/to/your/repo
 
 ### Requirements
 
-- **Python 3.10+**
-- **Node.js 18+** (for the viewer)
+- **Python 3.10+** (no pip install needed for core analysis)
+- **Node.js 22+** (for the viewer)
+
+Optional Python dependencies for advanced features:
+
+```bash
+pip install -e ".[treesitter]"   # AST-based parsing (7 languages)
+pip install -e ".[incremental]"  # Git-based incremental analysis
+pip install -e ".[models]"       # Pydantic validation (--validate)
+pip install -e ".[live]"         # Live monitoring data generation
+pip install -e ".[all]"          # Everything above
+```
 
 ## How It Works
 
@@ -131,8 +141,8 @@ bash build.sh /path/to/your/repo
 
 | Tier | Languages | What's Extracted |
 |------|-----------|-----------------|
-| **Full parsing** | Swift, Python, Rust, TypeScript/JavaScript, Go | Components, symbols, relationships, frameworks, API endpoints |
-| **Detection + metrics** | Java, Kotlin, Ruby, C/C++, C#, Dart, Vue, Svelte, HTML/CSS, SQL, Shell | File counts, line counts, size, language breakdown |
+| **Full parsing** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby | Components, symbols, relationships, frameworks, API endpoints |
+| **Detection + metrics** | Java, Kotlin, C/C++, C#, Dart, Vue, Svelte, HTML/CSS, SQL, Shell | File counts, line counts, size, language breakdown |
 
 ### What It Detects
 
@@ -142,22 +152,28 @@ bash build.sh /path/to/your/repo
 | **Symbols** | Classes, structs, enums, protocols/traits/interfaces, functions, React components |
 | **Relationships** | Import dependencies, port-based HTTP connections, Docker Compose links, URL patterns |
 | **Metrics** | File counts, line counts, size, language breakdown per component |
-| **Frameworks** | SwiftUI, UIKit, React, Next.js, Flask, Django, Axum, Express, Vue, and more |
+| **Frameworks** | SwiftUI, UIKit, React, Next.js, Flask, Django, Axum, Express, Vue, Rails, Sinatra, and more |
 | **Documentation** | README, CLAUDE.md, CHANGELOG, API endpoints, env vars, architectural patterns |
 | **Cloud Services** | AWS, Firebase, Supabase, and other external service references |
+| **SwiftUI Flows** | TabView tabs, NavigationLink targets, sheet/fullScreenCover destinations, embedded view composition |
 
 ## Viewer Features
 
 - **Hierarchical drill-down**: Click to see details, double-click to drill into sub-components
 - **Breadcrumb navigation**: Always know where you are, click to jump back
+- **Three views**: Graph (interactive diagram), tree (hierarchical list), and list (tabular)
 - **Fuzzy search**: Cmd/Ctrl+K to search across components, files, and symbols
+- **Detail panel**: Tabbed view with overview, files, symbols, relationships, and AI insights
 - **Code preview**: Inline syntax-highlighted code for every symbol
-- **Relationship visualization**: Arrows show dependencies and HTTP connections
+- **Relationship visualization**: Arrows show dependencies, HTTP connections, and AI-discovered relationships
 - **Tree sidebar**: Collapsible component tree for quick navigation
-- **Dark/light mode**: Toggle with one click
+- **Review mode**: Add architectural annotations to components, then view a summary of all feedback
+- **AI enhancements**: Role badges, criticality indicators, help text tooltips, and data flow descriptions (when AI data is present)
+- **Live monitoring**: CI status overlay on components, admin dashboard with version history and activity log
+- **Dark/light mode**: Toggle with one click, persisted in localStorage
 - **Mobile-friendly**: Touch gestures, bottom sheet panels, responsive layout
 - **Multi-repo grouping**: Repository-level nodes when visualizing multi-repo solutions
-- **Onboarding tour**: Guided walkthrough for first-time users
+- **Split mode support**: Lazy-loads component details on demand for large projects
 
 ### Keyboard Shortcuts
 
@@ -215,7 +231,7 @@ For private repos, set the `GITHUB_TOKEN` environment variable.
 ### Multi-Repo with the GitHub Action
 
 ```yaml
-- uses: sirfifer/solution-explorer@v1
+- uses: sirfifer/solution-explorer@main
   with:
     config: solution-explorer.json
     github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -237,7 +253,7 @@ The viewer builds to a static site (`viewer/dist/`). Deploy it to any static hos
 Using the GitHub Action:
 
 ```yaml
-- uses: sirfifer/solution-explorer@v1
+- uses: sirfifer/solution-explorer@main
   with:
     deploy-to: cloudflare
     cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -262,7 +278,7 @@ Using Cloudflare's git integration directly:
 ### GitHub Pages
 
 ```yaml
-- uses: sirfifer/solution-explorer@v1
+- uses: sirfifer/solution-explorer@main
   with:
     deploy-to: github-pages
 ```
@@ -295,7 +311,7 @@ Run `bash build.sh` and copy `viewer/dist/` to your server or bucket.
 ## GitHub Action Reference
 
 ```yaml
-- uses: sirfifer/solution-explorer@v1
+- uses: sirfifer/solution-explorer@main
   with:
     # Single-repo: path to analyze (default: ".")
     path: '.'
@@ -313,6 +329,9 @@ Run `bash build.sh` and copy `viewer/dist/` to your server or bucket.
 
     # For cloning private repos in multi-repo mode
     github-token: ''
+
+    # Enable live monitoring data generation
+    live-monitor: 'false'
 ```
 
 ## CLI Options
@@ -320,15 +339,61 @@ Run `bash build.sh` and copy `viewer/dist/` to your server or bucket.
 ```
 python3 analyze.py [path] [options]
 
-Options:
-  -o, --output        Output path (default: architecture.json)
-  --config            Path to solution-explorer.json for multi-repo mode
-  --split             Output split files for lazy loading (manifest.json + per-component detail files)
-  --max-file-size     Skip files larger than N bytes (default: 500KB)
-  --max-symbols       Limit symbols in output (default: 5000 in single-file mode, unlimited in split mode; 0=unlimited)
-  --preview-lines     Lines per code preview (default: 5)
-  --compact           Compact JSON (no indentation)
+Output:
+  -o, --output PATH       Output file (default: architecture.json)
+  --split                 Split files for lazy loading (manifest.json + per-component details)
+  --compact               Compact JSON (no indentation)
+  --pretty                Pretty-print JSON (default)
+
+Analysis:
+  --config PATH           Multi-repo config file (solution-explorer.json)
+  --max-file-size BYTES   Skip files larger than N bytes (default: 500KB)
+  --max-symbols N         Limit symbols (default: 5000 single-file, unlimited split; 0=unlimited)
+  --preview-lines N       Lines per code preview (default: 5)
+  --validate              Validate output against data model (requires pydantic)
+
+Incremental:
+  --incremental           Only rescan changed files and their importers
+  --base-sha SHA          Base commit for diff (default: previous HEAD)
+  --head-sha SHA          Head commit for diff (default: HEAD)
+  --baseline PATH         Previous architecture.json to merge into
 ```
+
+## AI Enhancement
+
+Solution Explorer supports optional AI-powered enhancement of architecture data. The `/ai-assist` Claude Code skill analyzes source files and enriches the architecture JSON with:
+
+- **Component descriptions**: Contextual help text, architectural role classification, criticality ratings
+- **Relationship annotations**: Data flow descriptions, importance ratings, AI-discovered connections
+- **Architecture summary**: High-level system description and data flow narrative
+
+All AI data lives under optional `ai_enhance` keys in the JSON. The viewer renders this data when present (role badges, criticality dots, help tooltips, an AI Insights tab) and works identically without it.
+
+## Tree-sitter Parsers
+
+Each language parser has an optional tree-sitter upgrade that provides more accurate AST-based extraction. Tree-sitter parsers are used automatically when the dependencies are installed:
+
+```bash
+pip install -e ".[treesitter]"
+```
+
+If tree-sitter is not available, the analyzer falls back to regex parsers silently. No configuration needed.
+
+## Live Monitoring
+
+When enabled, Solution Explorer can continuously update architecture data as the codebase changes:
+
+- **Incremental analysis** in CI rescans only changed files and their importers
+- **CI status collection** overlays build pass/fail indicators on components
+- **Version history** tracks architecture changes over time
+- **Admin dashboard** provides repo monitoring, activity logs, and version comparisons
+
+Two backend modes are supported:
+
+- **GitHub Pages** (free): Stores live data as static files on GitHub Pages, polled every 30 seconds
+- **Cloudflare** (optional): Uses Workers + D1 + R2 for lower-latency updates (15-second polling)
+
+Enable in the GitHub Action with `live-monitor: 'true'`. See [Live Architecture Monitoring](docs/research/live-architecture-monitoring.md) for the full design.
 
 ## Architecture Data Format
 
@@ -408,6 +473,16 @@ Options:
     "total_files": "number",
     "total_lines": "number",
     "total_symbols": "number"
+  },
+  "ai_enhance": {
+    "summary": "string (optional, from AI enhancement)",
+    "data_flow_narrative": "string (optional)",
+    "component_groups": ["..."]
+  },
+  "live_status": {
+    "component_statuses": {},
+    "monitored_branch": "string",
+    "last_commit_sha": "string"
   }
 }
 ```
@@ -439,23 +514,28 @@ For contributing to solution-explorer itself:
 git clone https://github.com/sirfifer/solution-explorer.git
 cd solution-explorer
 
-# Run Python tests
-python3 -m pytest tests/ -v
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run Python tests with coverage
+python3 -m pytest tests/ -v --cov=analyzer
+
+# Run Python linter
+ruff check analyzer/ tests/
 
 # Analyze this repo as a test
 python3 analyze.py . -o viewer/public/architecture.json
 
 # Start the viewer in dev mode
-cd viewer && npm install && npm run dev
+cd viewer && npm ci && npm run dev
 
 # Run TypeScript tests and linting
 npm test
 npm run lint
+npx tsc -b
 ```
 
-> **Note:** `analyze.py` is a thin wrapper around the `analyzer/` package. Both `python3 analyze.py` and `python3 -m analyzer` work identically.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
+> **Note:** `analyze.py` is a thin wrapper around the `analyzer/` package. See the `analyzer/` directory for the full implementation.
 
 ## Project Structure
 
@@ -463,45 +543,55 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
 solution-explorer/
 ├── analyze.py              # CLI entry point (thin wrapper)
 ├── analyzer/               # Core analysis package
-│   ├── __init__.py
 │   ├── cli.py              # Argument parsing, split/single-file output
 │   ├── models.py           # Dataclasses: Component, Symbol, Relationship, etc.
 │   ├── scanner.py          # ArchitectureScanner (component discovery, metrics, docs)
+│   ├── incremental.py      # Incremental analysis engine (selective rescan)
 │   ├── swiftui_flow.py     # SwiftUI navigation/tab flow detection
 │   ├── multi_repo.py       # Multi-repo orchestration
 │   ├── config_parsers.py   # Config file parsers (package.json, Cargo.toml, etc.)
 │   ├── constants.py        # Skip dirs, language maps, component markers
 │   ├── utils.py            # Shared helpers
 │   └── parsers/            # Per-language source parsers
-│       ├── __init__.py     # Parser registry
 │       ├── base.py         # BaseParser interface
-│       ├── swift.py        # Swift/SwiftUI
-│       ├── python_lang.py  # Python
-│       ├── typescript.py   # TypeScript/JavaScript/React
-│       ├── go.py           # Go
-│       ├── rust.py         # Rust
-│       └── ruby.py         # Ruby
-├── tests/                  # Python test suite (370 tests, 81% coverage)
-├── action.yml              # GitHub Action definition
-├── build.sh                # Static site build script
+│       ├── swift.py        # Swift/SwiftUI (regex)
+│       ├── swift_ts.py     # Swift/SwiftUI (tree-sitter)
+│       ├── python_lang.py  # Python (regex)
+│       ├── python_ts.py    # Python (tree-sitter)
+│       ├── typescript.py   # TypeScript/JavaScript (regex)
+│       ├── typescript_ts.py # TypeScript/JavaScript (tree-sitter)
+│       ├── go.py           # Go (regex)
+│       ├── go_ts.py        # Go (tree-sitter)
+│       ├── rust.py         # Rust (regex)
+│       ├── rust_ts.py      # Rust (tree-sitter)
+│       ├── ruby.py         # Ruby (regex)
+│       ├── ruby_ts.py      # Ruby (tree-sitter)
+│       └── tree_sitter_base.py  # Tree-sitter base class
+├── infrastructure/         # Optional backend infrastructure
+│   └── cloudflare/         # Cloudflare Worker for live monitoring
+├── scripts/                # CI helper scripts
+├── tests/                  # Python test suite
+├── action.yml              # Reusable GitHub Action definition
+├── pyproject.toml          # Python project configuration
 └── viewer/                 # React/TypeScript frontend
     ├── src/
-    │   ├── components/     # React components (nodes, panels, search, tour)
-    │   ├── utils/          # Layout engine, search, documentation
-    │   ├── store.ts        # Zustand state management (with lazy loading)
+    │   ├── components/     # React components (graph, nodes, panels, search, admin)
+    │   ├── hooks/          # useLiveMonitor, useAdminData
+    │   ├── utils/          # Layout engine, search, status, documentation
+    │   ├── store.ts        # Zustand state management (drill-down, lazy loading)
     │   └── types.ts        # TypeScript type definitions
     ├── vite.config.ts      # Build configuration
     └── vitest.config.ts    # Test configuration
 ```
 
-## Contributing
+## Documentation
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on:
-
-- Setting up the development environment
-- Running tests and linters
-- Submitting pull requests
-- Adding language support
+- [Project Overview](PROJECT-OVERVIEW.md): Vision, user experience, and system architecture
+- [Architecture](docs/architecture.md): Technical architecture and design decisions
+- [Architectural Assessment](docs/architectural-assessment.md): Evolution plan and industry research
+- [Analyzer Package](docs/analyzer-package.md): Analyzer module structure and extension guide
+- [Live Monitoring Research](docs/research/live-architecture-monitoring.md): Live architecture design and cost analysis
+- [Deployments](DEPLOYMENTS.md): Installation tracking and redeployment guide
 
 ## License
 

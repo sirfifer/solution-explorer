@@ -188,12 +188,19 @@ How it works:
 
 | Tier | Languages | Capabilities |
 |------|-----------|-------------|
-| **Full parsing** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby | Components, symbols, relationships, frameworks, API endpoints |
+| **Full parsing (regex)** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby | Components, symbols, relationships, frameworks, API endpoints |
+| **Full parsing (tree-sitter)** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby | Same as above, with more accurate AST-based extraction |
 | **Detection + metrics** | Java, Kotlin, C/C++, C#, Dart, Vue, Svelte, HTML/CSS, SQL, Shell | File counts, line counts, size, language breakdown |
 
 **SwiftUI flow detection** is a specialized capability. The SwiftUIFlowDetector identifies TabView tabs, NavigationLink targets, sheet and fullScreenCover modals, and embedded view composition. It uses distance-based breadth-first search to assign screens to their closest tab, preventing contamination across navigation hierarchies. The result is a faithful representation of an iOS app's navigation structure rendered as navigable nodes in the viewer.
 
 **Output modes:** The analyzer supports two output formats. Single-file mode produces one `architecture.json` with everything (default 5,000 symbol limit, configurable). Split mode (`--split` flag) produces a directory with a lightweight `manifest.json` (~20-100 KB) containing the component tree, relationships, and stats, plus per-component detail files loaded on demand. Split mode has no symbol limit.
+
+**Tree-sitter parsers.** Each of the six language parsers has an optional tree-sitter upgrade that provides AST-based extraction instead of regex matching. Tree-sitter parsers activate automatically when the `treesitter` dependency group is installed (`pip install -e ".[treesitter]"`). If tree-sitter is unavailable, the analyzer falls back to regex parsers silently. This dual-parser architecture means the core analyzer remains zero-dependency while teams that need higher parsing accuracy can opt in.
+
+**Incremental analysis.** The `--incremental` flag enables selective re-scanning. The `IncrementalAnalyzer` compares git revisions (via `--base-sha` and `--head-sha`), identifies which files changed, maps those changes to affected components, and rescans only those components plus their direct importers. Results merge back into a `--baseline` file to produce an updated architecture. Marker file changes (package.json, Cargo.toml, etc.) trigger a full rescan. This reduces CI analysis time significantly for large projects with small changesets.
+
+**Validation.** The `--validate` flag (requires the `models` dependency group with pydantic) validates the output JSON against the data model, checking cross-references between components, symbols, files, and relationships.
 
 ### AI Enhancement
 
@@ -219,6 +226,45 @@ The key architectural decision in the viewer is hierarchical drill-down. At any 
 ### Deployment
 
 A GitHub Action workflow handles the full pipeline. Push to main triggers the analyzer (or uses a pre-built JSON if one exists, preserving AI enhancements), builds the viewer, and deploys to the configured target. Supported targets include Cloudflare Pages, GitHub Pages, Vercel, Netlify, and any static host. The viewer builds to a `dist/` directory that can be served from anywhere.
+
+### Live Monitoring
+
+Solution Explorer supports continuous architecture updates as the codebase changes. When enabled, a dedicated CI workflow (`live-monitor.yml`) runs on every push to main:
+
+1. Restores the previous architecture baseline from cache
+2. Runs incremental analysis (only changed files and their importers)
+3. Collects CI status from GitHub Actions (build pass/fail per component)
+4. Generates version metadata, live configuration, and admin summary
+5. Publishes live data to GitHub Pages and/or Cloudflare R2
+
+The viewer polls for updates and displays them in real time:
+
+- **CI status overlay**: Build pass/fail/running indicators on component nodes
+- **Admin dashboard**: Repository monitoring, version history, activity log, and version comparisons
+- **Adaptive polling**: 15-30 seconds when active (depending on backend mode), 120 seconds when idle, pauses when the browser tab is hidden
+
+Two backend modes are supported:
+
+| Mode | Cost | Polling | Storage | Setup |
+|------|------|---------|---------|-------|
+| **GitHub Pages** | Free (public repos) | 30-second intervals | Static files on GitHub Pages | Enable `live-monitor: 'true'` in the action |
+| **Cloudflare** | Free tier sufficient | 15-second intervals | Workers + D1 + R2 + KV | Configure Worker, set secrets |
+
+The Cloudflare backend (`infrastructure/cloudflare/worker/`) provides an API Worker with D1 database for version history, R2 bucket for architecture data, and KV namespace for settings. It accepts data via authenticated POST `/ingest` from CI and serves it to the viewer with lower latency than GitHub Pages polling.
+
+Both modes are optional. The viewer works without live monitoring, displaying only the statically-generated architecture data.
+
+### CI Pipeline
+
+Three GitHub Actions workflows automate the full lifecycle:
+
+| Workflow | Trigger | What It Does |
+|----------|---------|-------------|
+| `ci.yml` | Push, PR | Quality gate: ruff lint, pytest with coverage, eslint, vitest with coverage, type checking, build verification |
+| `architecture-viz.yml` | Push to main | Runs analyzer, builds viewer, deploys to Cloudflare Pages |
+| `live-monitor.yml` | Push to main, post-deploy, manual | Incremental analysis, CI status collection, live data publishing |
+
+The CI gate job requires all checks to pass before merging. Coverage reports (HTML) are uploaded as artifacts.
 
 ---
 
@@ -286,6 +332,18 @@ Split JSON output was introduced. Instead of loading a 5+ MB monolithic file on 
 
 Test coverage jumped from ~10% (43 tests) to 81% (370 tests) across five test files. Ruby was added as the sixth fully-parsed language.
 
+### v1.2.0 (February 2025): Tree-sitter, Incremental Analysis, and Live Monitoring
+
+Three major capabilities were added in parallel:
+
+**Tree-sitter parsers.** Every language gained an optional tree-sitter parser alongside the existing regex parser. The tree-sitter variants provide more accurate AST-based symbol extraction, while the regex parsers remain the zero-dependency default. The upgrade is automatic when tree-sitter dependencies are installed and silent when they are not.
+
+**Incremental analysis.** The `IncrementalAnalyzer` enabled selective re-scanning in CI. Instead of re-analyzing the entire codebase on every push, only changed files and their direct importers are rescanned. Results merge into a cached baseline. This reduced analysis time for large projects with small changesets from minutes to seconds.
+
+**Live monitoring.** A complete live architecture pipeline was implemented: a CI workflow that publishes incremental updates, CI status collection, version tracking, an admin dashboard in the viewer, and adaptive polling. Two backend modes (GitHub Pages for zero cost, Cloudflare Workers for lower latency) give teams flexibility. The viewer gained a StatusDashboard component for CI overlays and an AdminDashboard for monitoring.
+
+**CI pipeline.** A proper quality gate (`ci.yml`) was added with Python linting (ruff), TypeScript linting (eslint), test suites for both layers (pytest with coverage, vitest with coverage), type checking, and build verification. The architecture visualization and live monitoring workflows were separated into dedicated pipeline files.
+
 ### The Decision Not to Rewrite
 
 Before the v1.1.0 refactor, a thorough architectural assessment was conducted. Research into Sourcegraph, Sourcetrail, CodeScene, NDepend, Structure101, Semgrep, SonarQube, and other tools informed the key decisions.
@@ -322,7 +380,6 @@ For projects exceeding 5,000 files, additional optimizations are planned:
 
 ### Possible Future Directions
 
-- **Tree-sitter integration** via py-tree-sitter for proper AST parsing, staying in Python while getting real parse trees instead of regex-based extraction
 - **Runtime action recording** to capture actual user workflows alongside the static analysis
 - **IDE integration** for navigating between the architecture viewer and the code editor
 
@@ -334,34 +391,38 @@ For projects exceeding 5,000 files, additional optimizations are planned:
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| Analyzer | Python 3.10+ | Stdlib core, optional deps via pyproject.toml, CI-friendly |
-| Viewer | React 19, TypeScript, Tailwind CSS | Vite build |
+| Analyzer | Python 3.10+ | Stdlib core, optional tree-sitter/pydantic/gitpython via pyproject.toml |
+| Viewer | React 19, TypeScript, Tailwind CSS | Vite 6 build, Node.js 22+ |
 | Graph | React Flow + ELK layout engine | SVG-based, ~100 visible nodes per drill level |
 | Search | Fuse.js | Fuzzy matching, progressive indexing in split mode |
 | State | Zustand | Lazy loading support for split mode |
-| Deployment | GitHub Action | Cloudflare Pages, GitHub Pages, Vercel, Netlify, static hosting |
+| CI | GitHub Actions (3 workflows) | Quality gate, architecture viz, live monitor |
+| Deployment | Reusable GitHub Action | Cloudflare Pages, GitHub Pages, Vercel, Netlify, static hosting |
+| Live Backend | Cloudflare Workers + D1 + R2 + KV | Optional, for lower-latency live monitoring |
 | AI Enhancement | Claude (via /ai-assist skill) | Optional, backward-compatible |
+| Testing | pytest + vitest | Coverage reporting, testing-library for React |
 
 ### Key Numbers
 
 | Metric | Value |
 |--------|-------|
-| Test coverage | 81% (370 tests) |
-| Languages (full parsing) | 6 (Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby) |
+| Languages (full parsing) | 6 parser pairs (Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby), each with regex + tree-sitter |
 | Languages (detection + metrics) | 10+ |
 | Component types recognized | 21 |
 | Architectural roles (AI) | 18 |
 | Device frame styles | 10 |
 | Annotation target types | 9 |
 | Detail panel tabs | 6 |
+| CI workflows | 3 (quality gate, architecture viz, live monitor) |
 
 ### Related Documents
 
 | Document | Purpose |
 |----------|---------|
 | [README.md](README.md) | Installation, configuration, CLI reference, deployment options |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, code style, PR guidelines |
-| [CHANGELOG.md](CHANGELOG.md) | Version history and release notes |
+| [docs/architecture.md](docs/architecture.md) | Technical architecture, data model, design decisions |
 | [docs/architectural-assessment.md](docs/architectural-assessment.md) | Technical design decisions, industry research, evolution plan |
-| [docs/ui-actions-source-linking-plan.md](docs/ui-actions-source-linking-plan.md) | Wave 2 feature design (UI actions, source linking, deep navigation) |
 | [docs/analyzer-package.md](docs/analyzer-package.md) | Analyzer package structure and module guide |
+| [docs/research/live-architecture-monitoring.md](docs/research/live-architecture-monitoring.md) | Live monitoring design, cost analysis, dual-mode architecture |
+| [docs/ui-actions-source-linking-plan.md](docs/ui-actions-source-linking-plan.md) | Wave 2 feature design (UI actions, source linking, deep navigation) |
+| [DEPLOYMENTS.md](DEPLOYMENTS.md) | Installation tracking and redeployment guide |

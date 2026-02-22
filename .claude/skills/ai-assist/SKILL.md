@@ -284,6 +284,21 @@ Deployment complete:
   Production: <deployment-url>
 ```
 
+#### 6h. Live monitoring note
+
+Check `DEPLOYMENTS.md` for the target repo's live monitoring mode. If it has live monitoring
+enabled (any mode), inform the user:
+
+```
+Live monitoring: The enhanced JSON will propagate through the Live Monitor workflow
+automatically on this push. The live dashboard will reflect AI enhancements within
+15-90 seconds (Cloudflare mode) or 10-20 minutes (GitHub mode).
+```
+
+No additional action is needed. The `live-monitor.yml` workflow triggers on push to main
+alongside the `Architecture Visualization` workflow, and both use the same committed
+`architecture.json` as their input.
+
 ## Key Rules
 
 1. NEVER remove or alter data produced by the static analyzer
