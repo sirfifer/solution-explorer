@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { Component, AnnotationTarget, AnnotationTargetContext } from "../types";
 import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, getHeroGlow, ROLE_META, getRoleBadgeColors } from "../utils/layout";
+import { getWorstStatusLevel, getStatusSummary, getStatusDotClasses } from "../utils/status";
 import { useArchStore } from "../store";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, getPatternRef, TYPE_DESCRIPTIONS, METRIC_DESCRIPTIONS } from "../utils/techDocs";
@@ -869,6 +870,15 @@ export const ComponentNode = memo(function ComponentNode({
               }`} />
             </Tooltip>
           )}
+          {component.live_status?.statuses && (() => {
+            const worst = getWorstStatusLevel(component.live_status.statuses);
+            if (worst === "ok") return null;
+            return (
+              <Tooltip content={getStatusSummary(component.live_status.statuses)}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${getStatusDotClasses(worst)}`} />
+              </Tooltip>
+            );
+          })()}
           {langColor && (() => {
             const langRef = component.language ? getTechRef(component.language) : null;
             const langEl = (

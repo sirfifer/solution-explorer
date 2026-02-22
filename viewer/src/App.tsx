@@ -9,6 +9,7 @@ import { HelpSystem } from "./components/HelpSystem";
 import { ReviewModeButton } from "./components/ReviewModeButton";
 import { AnnotationInput } from "./components/AnnotationInput";
 import { ReviewSummary } from "./components/ReviewSummary";
+import { StatusDashboard } from "./components/StatusDashboard";
 import { initializeSearch } from "./utils/search";
 import { formatNumber, formatRelativeTime } from "./utils/layout";
 import type { Architecture } from "./types";
@@ -369,6 +370,9 @@ export function App() {
           <span>Review Mode: click any component to add feedback</span>
         </div>
       )}
+
+      {/* Status dashboard banner */}
+      <StatusDashboard />
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden relative">
