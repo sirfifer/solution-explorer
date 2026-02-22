@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import type { Component, FileInfo, Symbol as ArchSymbol, Relationship } from "../types";
+import type { Component, FileInfo, Symbol as ArchSymbol, Relationship, ComponentStatus } from "../types";
 import { useArchStore } from "../store";
 import {
   getTypeColors,
@@ -15,7 +15,7 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, getPatternRef, getProtocolRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
 
-type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai";
+type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai" | "status";
 
 export function DetailPanel() {
   const {
@@ -117,6 +117,10 @@ function ComponentDetail({
     { key: "overview", label: "Overview" },
     ...(hasDocContent ? [{ key: "docs" as Tab, label: "Docs" }] : []),
     ...(component.ai_enhance ? [{ key: "ai" as Tab, label: "AI Insights" }] : []),
+    ...(component.live_status?.statuses && Object.keys(component.live_status.statuses).length > 0
+      ? [{ key: "status" as Tab, label: "Status",
+           count: Object.keys(component.live_status.statuses).length }]
+      : []),
     { key: "files", label: "Files", count: files.length },
     { key: "symbols", label: "Symbols", count: symbols.length },
     { key: "relationships", label: "Links", count: relationships.length },
@@ -275,6 +279,9 @@ function ComponentDetail({
         )}
         {activeTab === "ai" && (
           <AIInsightsTab component={component} relationships={relationships} />
+        )}
+        {activeTab === "status" && component.live_status?.statuses && (
+          <StatusTab statuses={component.live_status.statuses} />
         )}
         {activeTab === "relationships" && (
           <RelationshipsTab componentId={component.id} relationships={relationships} />
@@ -924,6 +931,81 @@ function AIInsightsTab({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatusTab({ statuses }: { statuses: Record<string, ComponentStatus> }) {
+  const { darkMode } = useArchStore();
+
+  const sortedEntries = Object.entries(statuses).sort(([, a], [, b]) => {
+    const levelOrder: Record<string, number> = { error: 0, warning: 1, info: 2, ok: 3 };
+    return (levelOrder[a.level] ?? 4) - (levelOrder[b.level] ?? 4);
+  });
+
+  const levelColors: Record<string, { bg: string; dot: string; text: string }> = {
+    error: {
+      bg: darkMode ? "bg-red-950/30 border-red-800/40" : "bg-red-50 border-red-200",
+      dot: "bg-red-500 animate-pulse",
+      text: darkMode ? "text-red-300" : "text-red-700",
+    },
+    warning: {
+      bg: darkMode ? "bg-amber-950/30 border-amber-800/40" : "bg-amber-50 border-amber-200",
+      dot: "bg-amber-500",
+      text: darkMode ? "text-amber-300" : "text-amber-700",
+    },
+    info: {
+      bg: darkMode ? "bg-blue-950/30 border-blue-800/40" : "bg-blue-50 border-blue-200",
+      dot: "bg-blue-500",
+      text: darkMode ? "text-blue-300" : "text-blue-700",
+    },
+    ok: {
+      bg: darkMode ? "bg-green-950/30 border-green-800/40" : "bg-green-50 border-green-200",
+      dot: "bg-green-500",
+      text: darkMode ? "text-green-300" : "text-green-700",
+    },
+  };
+
+  return (
+    <div className="p-4 space-y-3">
+      {sortedEntries.map(([key, status]) => {
+        const colors = levelColors[status.level] || levelColors.info;
+        return (
+          <div key={key} className={`rounded-lg border p-3 ${colors.bg}`}>
+            <div className="flex items-start gap-2">
+              <span className={`w-2 h-2 rounded-full shrink-0 mt-1 ${colors.dot}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className={`text-sm font-medium ${colors.text}`}>{status.title}</h4>
+                  <span className={`text-[10px] shrink-0 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                    {status.category}
+                  </span>
+                </div>
+                {status.detail && (
+                  <p className={`text-xs mt-1 leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+                    {status.detail}
+                  </p>
+                )}
+                <div className="flex items-center justify-between mt-2">
+                  {status.url ? (
+                    <a
+                      href={status.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`text-[10px] hover:underline ${darkMode ? "text-blue-400" : "text-blue-600"}`}
+                    >
+                      View details &#x2192;
+                    </a>
+                  ) : <span />}
+                  <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                    {new Date(status.updated_at).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
