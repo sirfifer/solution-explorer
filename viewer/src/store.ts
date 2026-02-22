@@ -11,6 +11,9 @@ import type {
   Symbol,
   FileInfo,
   Relationship,
+  LiveConfig,
+  LiveVersion,
+  StatusOverlay,
 } from "./types";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 
@@ -98,6 +101,20 @@ interface ArchStore {
   getAnnotationsForComponent: (componentId: string) => Annotation[];
   getAnnotationsForTarget: (targetType: AnnotationTarget, targetId: string) => Annotation[];
 
+  // Live monitoring
+  adminOpen: boolean;
+  liveConfig: LiveConfig | null;
+  liveVersion: LiveVersion | null;
+  liveMonitorStatus: "idle" | "polling" | "updating" | "error" | "paused";
+  statusOverlay: StatusOverlay | null;
+
+  setAdminOpen: (open: boolean) => void;
+  setLiveConfig: (config: LiveConfig | null) => void;
+  setLiveVersion: (version: LiveVersion | null) => void;
+  setLiveMonitorStatus: (status: "idle" | "polling" | "updating" | "error" | "paused") => void;
+  applyStatusOverlay: (overlay: StatusOverlay) => void;
+  navigateToComponent: (componentId: string) => void;
+
   // Component detail cache (for split mode)
   componentDetailCache: Record<string, { symbols: Symbol[]; files: FileInfo[] }>;
   componentDetailLoading: string | null;
@@ -115,6 +132,29 @@ function findComponent(components: Component[], id: string): Component | null {
   for (const comp of components) {
     if (comp.id === id) return comp;
     const found = findComponent(comp.children, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function buildComponentIndex(components: Component[]): Map<string, Component> {
+  const index = new Map<string, Component>();
+  function walk(comps: Component[]) {
+    for (const comp of comps) {
+      index.set(comp.id, comp);
+      walk(comp.children);
+    }
+  }
+  walk(components);
+  return index;
+}
+
+function findParentId(components: Component[], targetId: string): string | null {
+  for (const comp of components) {
+    for (const child of comp.children) {
+      if (child.id === targetId) return comp.id;
+    }
+    const found = findParentId(comp.children, targetId);
     if (found) return found;
   }
   return null;
@@ -164,6 +204,12 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   annotations: [],
   annotatingComponentId: null,
   annotatingTarget: null,
+
+  adminOpen: false,
+  liveConfig: null,
+  liveVersion: null,
+  liveMonitorStatus: "idle",
+  statusOverlay: null,
 
   setArchitecture: (arch) => set({ architecture: arch, loading: false }),
   setLoading: (loading) => set({ loading }),
@@ -301,6 +347,86 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   })),
 
   clearAllAnnotations: () => set({ annotations: [], annotatingComponentId: null, annotatingTarget: null }),
+
+  setAdminOpen: (open) => set({ adminOpen: open }),
+  setLiveConfig: (config) => set({ liveConfig: config }),
+  setLiveVersion: (version) => set({ liveVersion: version }),
+  setLiveMonitorStatus: (status) => set({ liveMonitorStatus: status }),
+
+  applyStatusOverlay: (overlay) => {
+    const arch = get().architecture;
+    if (!arch) {
+      set({ statusOverlay: overlay });
+      return;
+    }
+
+    // Build flat index for O(1) lookups
+    const index = buildComponentIndex(arch.components);
+
+    // Deep clone components to avoid mutating the existing tree
+    const updatedComponents = JSON.parse(JSON.stringify(arch.components)) as Component[];
+    const updatedIndex = buildComponentIndex(updatedComponents);
+
+    // Merge component statuses
+    for (const [componentId, statuses] of Object.entries(overlay.components)) {
+      const comp = updatedIndex.get(componentId);
+      if (comp) {
+        comp.live_status = {
+          statuses,
+          last_updated: overlay.updated_at,
+        };
+      }
+    }
+
+    // Set architecture-level live_status
+    const updatedArch: Architecture = {
+      ...arch,
+      components: updatedComponents,
+      live_status: {
+        ...arch.live_status,
+        statuses: overlay.architecture,
+        last_commit_sha: overlay.commit_sha,
+        last_updated: overlay.updated_at,
+      },
+    };
+
+    set({ architecture: updatedArch, statusOverlay: overlay });
+  },
+
+  navigateToComponent: (componentId) => {
+    const arch = get().architecture;
+    if (!arch) return;
+
+    const comp = findComponent(arch.components, componentId);
+    if (!comp) return;
+
+    // Check if the component is top-level (no parent)
+    const parentId = findParentId(arch.components, componentId);
+
+    if (parentId) {
+      // Nested component: drill to parent, then select
+      const parent = findComponent(arch.components, parentId);
+      if (parent) {
+        const crumbs = buildBreadcrumbs(arch.components, parentId);
+        set({
+          drillLevel: parentId,
+          breadcrumbs: crumbs,
+          selectedComponentId: componentId,
+          detailItem: { type: "component", data: comp },
+          activePanel: "detail",
+        });
+      }
+    } else {
+      // Top-level component: just select it
+      set({
+        drillLevel: null,
+        breadcrumbs: [],
+        selectedComponentId: componentId,
+        detailItem: { type: "component", data: comp },
+        activePanel: "detail",
+      });
+    }
+  },
 
   getAnnotationsForComponent: (componentId) => {
     return get().annotations.filter((a) => a.componentId === componentId);

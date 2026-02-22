@@ -83,6 +83,96 @@ export interface ArchitectureAIEnhance {
   component_groups?: Array<{ name: string; component_ids: string[] }>;
 }
 
+// Live monitoring types
+
+export interface ComponentStatus {
+  level: "ok" | "warning" | "error" | "info";
+  title: string;
+  detail?: string;
+  url?: string;
+  category: string;
+  updated_at: string;
+}
+
+export interface ArchitectureStatus {
+  level: "ok" | "warning" | "error" | "info";
+  title: string;
+  detail?: string;
+  url?: string;
+  category: string;
+  updated_at: string;
+}
+
+export interface StatusOverlay {
+  components: Record<string, Record<string, ComponentStatus>>;
+  architecture: Record<string, ArchitectureStatus>;
+  updated_at: string;
+  commit_sha: string;
+}
+
+export interface ComponentLiveStatus {
+  statuses: Record<string, ComponentStatus>;
+  last_updated?: string;
+}
+
+export interface LiveVersion {
+  version: number;
+  updated_at: string;
+  commit_sha: string;
+}
+
+export interface LiveConfig {
+  enabled: boolean;
+  data_url: string;
+  backend_mode: "github" | "cloudflare" | "hybrid";
+  project_id?: string;
+  worker_url?: string;
+  polling: {
+    default_interval_seconds: number;
+    min_interval_seconds: number;
+    idle_interval_seconds: number;
+    adaptive: boolean;
+    pause_when_hidden: boolean;
+  };
+  features: {
+    activity_log: boolean;
+    admin_dashboard: boolean;
+    version_history: boolean;
+    ci_status_overlay: boolean;
+    realtime_ci_webhooks: boolean;
+    realtime_push: boolean;
+  };
+}
+
+export interface AdminSummaryRepo {
+  name: string;
+  last_update: string;
+  version: number;
+  component_count: number;
+  status: "ok" | "stale" | "error";
+  error_message?: string;
+}
+
+export interface AdminSummaryActivity {
+  timestamp: string;
+  commit_sha: string;
+  commit_message: string;
+  diff_summary: {
+    components_added: number;
+    components_removed: number;
+    components_modified: number;
+    relationships_changed: number;
+    files_changed: number;
+  };
+}
+
+export interface AdminSummary {
+  repos: AdminSummaryRepo[];
+  activity: AdminSummaryActivity[];
+  daily_counts: Record<string, number>;
+  generated_at: string;
+}
+
 export interface Component {
   id: string;
   name: string;
@@ -100,6 +190,7 @@ export interface Component {
   docs: ComponentDoc;
   external_services?: ExternalService[];
   ai_enhance?: ComponentAIEnhance;
+  live_status?: ComponentLiveStatus;
 }
 
 export interface Relationship {
@@ -143,6 +234,12 @@ export interface Architecture {
   repositories?: RepositoryInfo[];
   ai_enhance?: ArchitectureAIEnhance;
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
+  live_status?: {
+    statuses?: Record<string, ArchitectureStatus>;
+    monitored_branch?: string;
+    last_commit_sha?: string;
+    last_updated?: string;
+  };
 }
 
 // Review annotations

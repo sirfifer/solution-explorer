@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useArchStore } from "../store";
-import type { Architecture, Component } from "../types";
+import type { Architecture, Component, StatusOverlay } from "../types";
 
 function makeComponent(overrides: Partial<Component> = {}): Component {
   return {
@@ -75,6 +75,11 @@ describe("ArchStore", () => {
       searchOpen: false,
       searchQuery: "",
       darkMode: true,
+      adminOpen: false,
+      liveConfig: null,
+      liveVersion: null,
+      liveMonitorStatus: "idle",
+      statusOverlay: null,
     });
   });
 
@@ -317,6 +322,168 @@ describe("ArchStore", () => {
 
       useArchStore.getState().setSearchOpen(false);
       expect(useArchStore.getState().searchQuery).toBe("");
+    });
+  });
+
+  describe("adminOpen", () => {
+    it("toggles admin open state", () => {
+      expect(useArchStore.getState().adminOpen).toBe(false);
+
+      useArchStore.getState().setAdminOpen(true);
+      expect(useArchStore.getState().adminOpen).toBe(true);
+
+      useArchStore.getState().setAdminOpen(false);
+      expect(useArchStore.getState().adminOpen).toBe(false);
+    });
+  });
+
+  describe("liveMonitorStatus", () => {
+    it("transitions between statuses", () => {
+      expect(useArchStore.getState().liveMonitorStatus).toBe("idle");
+
+      useArchStore.getState().setLiveMonitorStatus("polling");
+      expect(useArchStore.getState().liveMonitorStatus).toBe("polling");
+
+      useArchStore.getState().setLiveMonitorStatus("updating");
+      expect(useArchStore.getState().liveMonitorStatus).toBe("updating");
+
+      useArchStore.getState().setLiveMonitorStatus("error");
+      expect(useArchStore.getState().liveMonitorStatus).toBe("error");
+
+      useArchStore.getState().setLiveMonitorStatus("paused");
+      expect(useArchStore.getState().liveMonitorStatus).toBe("paused");
+
+      useArchStore.getState().setLiveMonitorStatus("idle");
+      expect(useArchStore.getState().liveMonitorStatus).toBe("idle");
+    });
+  });
+
+  describe("applyStatusOverlay", () => {
+    it("merges component statuses correctly", () => {
+      const comp1 = makeComponent({ id: "comp-1", name: "Service A" });
+      const comp2 = makeComponent({ id: "comp-2", name: "Service B" });
+      const arch = makeArchitecture({ components: [comp1, comp2] });
+      useArchStore.getState().setArchitecture(arch);
+
+      const overlay: StatusOverlay = {
+        components: {
+          "comp-1": {
+            "ci:build": { level: "error", title: "Build failed", category: "ci", updated_at: "2025-01-01T00:00:00Z" },
+          },
+          "comp-2": {
+            "ci:build": { level: "ok", title: "Build passed", category: "ci", updated_at: "2025-01-01T00:00:00Z" },
+          },
+        },
+        architecture: {},
+        updated_at: "2025-01-01T00:00:00Z",
+        commit_sha: "abc123",
+      };
+
+      useArchStore.getState().applyStatusOverlay(overlay);
+
+      const state = useArchStore.getState();
+      const updatedComp1 = state.architecture!.components.find((c) => c.id === "comp-1");
+      const updatedComp2 = state.architecture!.components.find((c) => c.id === "comp-2");
+
+      expect(updatedComp1?.live_status?.statuses["ci:build"].level).toBe("error");
+      expect(updatedComp2?.live_status?.statuses["ci:build"].level).toBe("ok");
+      expect(state.statusOverlay).toBe(overlay);
+    });
+
+    it("sets architecture-level statuses", () => {
+      const arch = makeArchitecture({});
+      useArchStore.getState().setArchitecture(arch);
+
+      const overlay: StatusOverlay = {
+        components: {},
+        architecture: {
+          "deploy:production": { level: "warning", title: "Deploy pending", category: "deploy", updated_at: "2025-01-01T00:00:00Z" },
+        },
+        updated_at: "2025-01-01T00:00:00Z",
+        commit_sha: "def456",
+      };
+
+      useArchStore.getState().applyStatusOverlay(overlay);
+
+      const state = useArchStore.getState();
+      expect(state.architecture!.live_status?.statuses?.["deploy:production"]?.level).toBe("warning");
+      expect(state.architecture!.live_status?.last_commit_sha).toBe("def456");
+      expect(state.architecture!.live_status?.last_updated).toBe("2025-01-01T00:00:00Z");
+    });
+
+    it("merges statuses for nested components", () => {
+      const child = makeComponent({ id: "child-1", name: "Nested Service" });
+      const parent = makeComponent({ id: "parent-1", name: "Parent", children: [child] });
+      const arch = makeArchitecture({ components: [parent] });
+      useArchStore.getState().setArchitecture(arch);
+
+      const overlay: StatusOverlay = {
+        components: {
+          "child-1": {
+            "security:scan": { level: "warning", title: "Vulnerability found", category: "security", updated_at: "2025-01-01T00:00:00Z" },
+          },
+        },
+        architecture: {},
+        updated_at: "2025-01-01T00:00:00Z",
+        commit_sha: "ghi789",
+      };
+
+      useArchStore.getState().applyStatusOverlay(overlay);
+
+      const state = useArchStore.getState();
+      const nestedComp = state.architecture!.components[0].children[0];
+      expect(nestedComp.live_status?.statuses["security:scan"].level).toBe("warning");
+    });
+  });
+
+  describe("navigateToComponent", () => {
+    it("selects and drills to nested component", () => {
+      const grandchild = makeComponent({ id: "gc-1", name: "Grandchild" });
+      const child = makeComponent({ id: "child-1", name: "Child", children: [grandchild] });
+      const parent = makeComponent({ id: "parent-1", name: "Parent", children: [child] });
+      const arch = makeArchitecture({ components: [parent] });
+      useArchStore.getState().setArchitecture(arch);
+
+      useArchStore.getState().navigateToComponent("gc-1");
+
+      const state = useArchStore.getState();
+      expect(state.selectedComponentId).toBe("gc-1");
+      expect(state.drillLevel).toBe("child-1");
+      expect(state.activePanel).toBe("detail");
+      expect(state.detailItem?.type).toBe("component");
+      expect((state.detailItem?.data as Component).id).toBe("gc-1");
+    });
+
+    it("handles top-level component without drilling", () => {
+      const comp = makeComponent({ id: "top-1", name: "Top Level" });
+      const arch = makeArchitecture({ components: [comp] });
+      useArchStore.getState().setArchitecture(arch);
+
+      useArchStore.getState().navigateToComponent("top-1");
+
+      const state = useArchStore.getState();
+      expect(state.selectedComponentId).toBe("top-1");
+      expect(state.drillLevel).toBeNull();
+      expect(state.breadcrumbs).toHaveLength(0);
+      expect(state.activePanel).toBe("detail");
+    });
+
+    it("does nothing for nonexistent component", () => {
+      const arch = makeArchitecture({ components: [] });
+      useArchStore.getState().setArchitecture(arch);
+
+      useArchStore.getState().navigateToComponent("nonexistent");
+
+      const state = useArchStore.getState();
+      expect(state.selectedComponentId).toBeNull();
+      expect(state.drillLevel).toBeNull();
+    });
+
+    it("does nothing when no architecture loaded", () => {
+      useArchStore.getState().navigateToComponent("some-id");
+
+      const state = useArchStore.getState();
+      expect(state.selectedComponentId).toBeNull();
     });
   });
 });
