@@ -39,7 +39,7 @@ jobs:
         run: pip install pytest ruff
 
       - name: Lint Python
-        run: ruff check analyze.py tests/
+        run: ruff check analyze.py analyzer/ scripts/ tests/
 
       - name: Test Python
         run: pytest tests/ -v

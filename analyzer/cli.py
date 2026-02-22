@@ -149,6 +149,27 @@ def main():
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(arch_dict, f, indent=indent, default=str)
 
+        # Validate if requested
+        if args.validate:
+            from types import SimpleNamespace
+
+            from .models import _validate_cross_refs
+
+            ns = SimpleNamespace(
+                components=arch_dict.get("components", []),
+                relationships=arch_dict.get("relationships", []),
+            )
+            errors = _validate_cross_refs(ns)
+            if errors:
+                print(
+                    f"\nValidation found {len(errors)} issue(s):",
+                    file=sys.stderr,
+                )
+                for err in errors:
+                    print(f"  - {err}", file=sys.stderr)
+            else:
+                print("\nValidation passed: all cross-references valid.")
+
         # Save baseline with cache files for next run
         baseline_dir = root / ".arch-baseline"
         save_baseline_cache(arch_dict, baseline_dir, root)

@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from analyzer.cli import main, write_split
 from analyzer.models import Architecture, Component, FileInfo, Symbol
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -343,7 +342,7 @@ class TestCLIArgumentDefaults:
         data = json.loads(raw)
         assert data["name"] is not None
         # Compact output should have few or no indented lines
-        indented_lines = [l for l in lines if l.startswith("  ")]
+        indented_lines = [line for line in lines if line.startswith("  ")]
         assert len(indented_lines) == 0
 
     def test_max_symbols_explicit_override(self, monkeypatch, temp_repo):

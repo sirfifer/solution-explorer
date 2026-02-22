@@ -31,8 +31,23 @@ all = [
 ]
 dev = [
     "pytest",
+    "pytest-cov",
     "ruff",
 ]
 
 [tool.setuptools.packages.find]
 include = ["analyzer*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow",
+]
+
+[tool.coverage.run]
+source = ["analyzer"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

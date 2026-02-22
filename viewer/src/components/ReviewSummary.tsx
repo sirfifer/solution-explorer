@@ -100,7 +100,7 @@ export function ReviewSummary() {
 
   const handleNavigate = (componentId: string) => {
     const store = useArchStore.getState();
-    store.reviewMode && useArchStore.setState({ reviewMode: false });
+    if (store.reviewMode) useArchStore.setState({ reviewMode: false });
     selectComponent(componentId);
     useArchStore.setState({ reviewMode: true });
   };

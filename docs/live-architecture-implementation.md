@@ -213,7 +213,7 @@ Types to add:
 Follow [SearchOverlay.tsx](viewer/src/components/SearchOverlay.tsx) pattern:
 - Fixed `inset-0 z-50` with backdrop blur
 - Wider content panel than search (`max-w-4xl` vs `max-w-lg`)
-- ESC to close, Cmd+Shift+A to toggle (register via useEffect keyboard listener)
+- ESC to close, Ctrl+Shift+A to toggle (register via useEffect keyboard listener)
 - Store-controlled via `adminOpen` / `setAdminOpen`
 - Tab state: `"health" | "activity" | "history" | "settings" | "resources"`
 - Tab bar uses same style as [DetailPanel.tsx](viewer/src/components/DetailPanel.tsx) tabs (line 229-255)
@@ -259,13 +259,13 @@ Follow [SearchOverlay.tsx](viewer/src/components/SearchOverlay.tsx) pattern:
 - [ ] Add admin button in header, between dark mode toggle (line 301-307) and stats div (line 310)
   - Only renders when `liveConfig` is present
   - Shows red pulsing status dot when any architecture-level status is "error"
-  - Title: "Admin Dashboard (Cmd+Shift+A)"
+  - Title: "Admin Dashboard (Ctrl+Shift+A)"
 - [ ] Add `{adminOpen && <AdminDashboard />}` alongside SearchOverlay render
 
 ### Verification C
 
 - [ ] Admin button appears only when `liveConfig` is set
-- [ ] Cmd+Shift+A opens/closes the dashboard
+- [ ] Ctrl+Shift+A opens/closes the dashboard
 - [ ] ESC closes the dashboard
 - [ ] All 5 tabs render (testable with mock data via browser console `useArchStore.setState()`)
 - [ ] Resources tab hidden in GitHub mode
@@ -1360,7 +1360,7 @@ Organized by milestone. Each milestone can be validated independently once its r
 - [ ] Verify: StatusDashboard shows between banners and graph
 - [ ] Verify: Component nodes show status dots
 - [ ] Verify: DetailPanel shows Status tab for components with statuses
-- [ ] Verify: Cmd+Shift+A opens admin dashboard
+- [ ] Verify: Ctrl+Shift+A opens admin dashboard
 - [ ] Verify: All 5 admin tabs render with mock data
 - [ ] Verify: Resources tab hidden (GitHub mode)
 
@@ -1429,20 +1429,92 @@ Organized by milestone. Each milestone can be validated independently once its r
 
 ### Milestone 5: True Incremental Analysis (Stream K)
 
-**Test 5.1: Selective Re-Scan**
+**Test 5.1: Scoped Scanner Integration**
 - [ ] Create test git repo with 10+ components
-- [ ] Modify one file, run `--incremental`
-- [ ] Verify: only the affected component (and its importers) are rescanned
-- [ ] Verbose output confirms skipped components
+- [ ] Modify one file, run `python analyze.py --incremental --base-sha HEAD~1 --head-sha HEAD -o /tmp/test/ .`
+- [ ] Verify: `ArchitectureScanner` receives `scope_paths` and `baseline` parameters
+- [ ] Verify: only scope_paths directories are walked during file scanning
+- [ ] Verify: non-scoped components are restored from baseline unchanged
+- [ ] Verify: dependency graph expands affected set to include direct importers (one level deep)
 
 **Test 5.2: Correctness**
 - [ ] Run full scan on HEAD, save result A
 - [ ] Run incremental scan (HEAD~1 -> HEAD), save result B
-- [ ] Diff A and B: architecturally identical (may differ in generation timestamp)
+- [ ] Compare: components, relationships, and stats should be structurally equivalent
+- [ ] Accept differences in: generation timestamp, `incremental` metadata fields, `_diff_summary`
 
-**Test 5.3: Performance**
+**Test 5.3: Baseline Cache**
+- [ ] Run full scan and verify `.arch-baseline/` contains three files:
+  - `architecture.json` (full snapshot)
+  - `file-index.json` (file path to component ID + content hash mapping)
+  - `import-graph.json` (component dependency graph)
+- [ ] Run incremental scan and verify baseline updated with new data
+- [ ] Verify `file-index.json` entries contain `component_id`, `content_hash`, `lines`, `size_bytes`
+
+**Test 5.4: Performance**
 - [ ] Incremental scan of 1-file change completes in <10% of full scan time
 - [ ] Baseline loading + diff computation takes <1s
+- [ ] Full rescan triggers correctly for marker file changes (package.json, Cargo.toml, etc.)
+
+### Milestone 6: Cross-Stream Integration
+
+Now that all streams are complete, these tests verify multi-stream interactions end-to-end.
+
+**Test 6.1: Incremental + Tree-Sitter (Streams J + K)**
+- [ ] Install tree-sitter: `pip install -e ".[treesitter]"`
+- [ ] Run `python analyze.py --incremental --base-sha HEAD~1 --head-sha HEAD -o /tmp/test/ .`
+- [ ] Verify: tree-sitter parsers used for scoped files (check verbose output for parser selection)
+- [ ] Uninstall tree-sitter: `pip uninstall tree-sitter`
+- [ ] Run same incremental command
+- [ ] Verify: regex fallback parsers used, output structure unchanged
+
+**Test 6.2: Incremental + Pydantic Validation (Streams I + K)**
+- [ ] Install Pydantic: `pip install -e ".[models]"`
+- [ ] Run `python analyze.py --incremental --base-sha HEAD~1 --head-sha HEAD --validate -o /tmp/test/ .`
+- [ ] Verify: validation covers incrementally-produced output
+- [ ] Verify: validation report includes cross-reference checks on merged results
+- [ ] Uninstall Pydantic and verify incremental still works with dataclass fallback
+
+**Test 6.3: Full Pipeline, Analysis to Viewer (Streams F + K + D + E)**
+- [ ] Run analysis: `python analyze.py --incremental --compact -o /tmp/arch-output/ .`
+- [ ] Generate live data files:
+  - `python scripts/generate-admin-summary.py` to produce `admin-summary.json`
+  - `python scripts/collect-ci-status.py --repo owner/repo --sha HEAD -o /tmp/arch-output/status-overlay.json` (requires GITHUB_TOKEN)
+  - Create `version.json` with current timestamp and commit SHA
+  - Create `live-config.json` with `backend_mode: "github"`, `data_url: "."`, `enabled: true`
+- [ ] Copy all generated files to `viewer/public/`
+- [ ] Start `cd viewer && npm run dev`
+- [ ] Verify: live indicator appears in header
+- [ ] Verify: status overlay data renders in StatusDashboard and component status dots
+- [ ] Verify: admin dashboard tabs populate with generated data
+- [ ] Clean up: remove live data files from `viewer/public/`
+
+**Test 6.4: Baseline Cache Integrity (Stream K)**
+- [ ] Delete `.arch-baseline/` if it exists
+- [ ] Run full scan: `python analyze.py -o /tmp/full/ .`
+- [ ] Verify: `.arch-baseline/` created with `architecture.json`, `file-index.json`, `import-graph.json`
+- [ ] Make a small code change and commit
+- [ ] Run incremental scan: `python analyze.py --incremental --base-sha HEAD~1 --head-sha HEAD -o /tmp/incr/ .`
+- [ ] Verify: `.arch-baseline/` updated with new data
+- [ ] Verify: `file-index.json` entries contain `component_id` and `content_hash` fields
+- [ ] Verify: `import-graph.json` reflects current relationship data
+
+**Test 6.5: Cloudflare Mode Full Path (Streams H + F + E)**
+- [ ] Start local worker: `cd infrastructure/cloudflare/worker && wrangler dev`
+- [ ] Create `live-config.json` with `backend_mode: "cloudflare"` and `worker_url` pointing to local dev
+- [ ] Simulate ingest: POST metadata to `/ingest` with valid auth
+- [ ] Simulate webhook: POST workflow_run event to `/webhook` with valid signature
+- [ ] Verify: `/health` reflects updated state
+- [ ] Verify: viewer with Cloudflare-mode config polls and receives updates
+
+### Known Limitations
+
+These are documented, tested-and-accepted constraints in the current implementation:
+
+- **One-level dependency expansion**: Incremental analysis expands the affected set to direct importers only. Transitive re-exports (A imports B imports C, C changes) may miss updating A. This is acceptable for most codebases where transitive chains are rare. A full rescan catches any drift.
+- **No component discovery in incremental mode**: New directories that don't match existing component paths require a full rescan to be discovered. Marker file changes (package.json, Cargo.toml, etc.) automatically trigger full rescan.
+- **Content hashes stored but not yet used for skip optimization**: The `file-index.json` stores SHA-256 content hashes per file, but the current implementation does not use them to skip unchanged files. This is infrastructure for a future optimization.
+- **Pre-existing `test_detect_ports` failure**: This test failure predates the live architecture work and is unrelated to any stream.
 
 ---
 

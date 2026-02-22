@@ -5,6 +5,7 @@ import json
 import pytest
 
 from analyzer.models import (
+    _PYDANTIC,
     Architecture,
     Component,
     ComponentDoc,
@@ -15,10 +16,8 @@ from analyzer.models import (
     Symbol,
     SymbolKind,
     Visibility,
-    _PYDANTIC,
     to_dict,
 )
-
 
 # ---------------------------------------------------------------------------
 # Enum tests (always run, no pydantic dependency)

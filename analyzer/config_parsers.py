@@ -1,7 +1,6 @@
 """Config file parsers for metadata extraction."""
 
 import json
-import os
 import re
 from pathlib import Path
 

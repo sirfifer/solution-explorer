@@ -9,7 +9,6 @@ from dataclasses import asdict, dataclass, field, is_dataclass
 from enum import Enum
 from typing import Optional
 
-
 # ---------------------------------------------------------------------------
 # Enums (always available, no pydantic dependency)
 # Using (str, Enum) for Python 3.10 compatibility (StrEnum requires 3.11)

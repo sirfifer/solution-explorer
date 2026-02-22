@@ -10,13 +10,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from analyzer.parsers.python_lang import PythonParser
+from analyzer.parsers.rust import RustParser
 from analyzer.parsers.swift import SwiftParser
 from analyzer.parsers.typescript import TypeScriptParser
-from analyzer.parsers.rust import RustParser
-from analyzer.parsers.python_lang import PythonParser
-from analyzer.parsers.go import GoParser
-from analyzer.parsers.ruby import RubyParser
-
 
 # ===================================================================
 # Fixtures
@@ -561,8 +558,8 @@ class TestRegistry:
     def test_tree_sitter_parsers_used_when_available(self):
         """If tree-sitter is installed, PARSERS should use tree-sitter parsers."""
         try:
-            import tree_sitter
-            import tree_sitter_swift
+            import tree_sitter  # noqa: F401
+            import tree_sitter_swift  # noqa: F401
         except ImportError:
             pytest.skip("tree-sitter-swift not installed")
         from analyzer.parsers import PARSERS

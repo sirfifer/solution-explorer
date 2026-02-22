@@ -1468,7 +1468,7 @@ class ArchitectureScanner:
 
         # Add external services as metadata on components
         for comp_id, services in external_services_by_component.items():
-            for path, comp in self._component_map.items():
+            for _path, comp in self._component_map.items():
                 if comp.id == comp_id:
                     if not hasattr(comp, "external_services"):
                         comp.external_services = []

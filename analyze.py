@@ -17,6 +17,8 @@ See analyzer/ for the full implementation.
 
 # Re-export key classes for backward compatibility with existing imports
 # (e.g., tests, scripts that do `from analyze import ArchitectureScanner`)
+from analyzer.cli import main  # noqa: F401
+from analyzer.incremental import IncrementalAnalyzer  # noqa: F401
 from analyzer.models import (  # noqa: F401
     Architecture,
     Component,
@@ -25,6 +27,7 @@ from analyzer.models import (  # noqa: F401
     Relationship,
     Symbol,
 )
+from analyzer.multi_repo import MultiRepoOrchestrator  # noqa: F401
 from analyzer.parsers import (  # noqa: F401
     PARSERS,
     BaseParser,
@@ -36,10 +39,7 @@ from analyzer.parsers import (  # noqa: F401
     TypeScriptParser,
 )
 from analyzer.scanner import ArchitectureScanner  # noqa: F401
-from analyzer.incremental import IncrementalAnalyzer  # noqa: F401
-from analyzer.multi_repo import MultiRepoOrchestrator  # noqa: F401
 from analyzer.swiftui_flow import SwiftUIFlowDetector  # noqa: F401
-from analyzer.cli import main  # noqa: F401
 
 if __name__ == "__main__":
     main()

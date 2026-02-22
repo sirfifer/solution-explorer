@@ -15,6 +15,9 @@ from analyzer.incremental import (
     MARKER_FILES,
     IncrementalAnalyzer,
     _affected_ids_to_paths,
+    _find_component_in_tree,
+    _recalculate_stats,
+    _resolve_import_from_baseline,
     build_component_dependency_graph,
     load_file_index,
     load_import_graph,
@@ -22,13 +25,9 @@ from analyzer.incremental import (
     redetect_relationships,
     rescan_component,
     save_baseline_cache,
-    _find_component_in_tree,
-    _recalculate_stats,
-    _resolve_import_from_baseline,
 )
 from analyzer.models import to_dict
 from analyzer.scanner import ArchitectureScanner
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

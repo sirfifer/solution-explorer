@@ -8,26 +8,25 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from analyzer.utils import (
-    _should_skip_dir,
-    _is_vendored_repo,
-    _is_conditional_import,
-    _framework_priority,
-    _name_from_server_script,
-    _extract_brace_body,
-)
 from analyzer.config_parsers import (
-    parse_package_json,
-    parse_cargo_toml,
-    parse_pyproject_toml,
-    parse_info_plist,
     _extract_ruby_app_name,
-    parse_gemfile,
+    parse_cargo_toml,
     parse_docker_compose,
+    parse_gemfile,
+    parse_info_plist,
+    parse_package_json,
+    parse_pyproject_toml,
     parse_sam_template,
     parse_serverless_yml,
 )
-
+from analyzer.utils import (
+    _extract_brace_body,
+    _framework_priority,
+    _is_conditional_import,
+    _is_vendored_repo,
+    _name_from_server_script,
+    _should_skip_dir,
+)
 
 # ---------------------------------------------------------------------------
 # _should_skip_dir

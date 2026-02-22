@@ -1,6 +1,5 @@
 """SwiftUI flow detection for screens, tabs, and navigation."""
 
-import os
 import re
 from pathlib import Path
 from typing import Optional
@@ -605,7 +604,7 @@ class SwiftUIFlowDetector:
                         screen_parts = Path(screen_dir).parts
                         # Find common prefix depth
                         common = 0
-                        for a, b in zip(tab_parts, screen_parts):
+                        for a, b in zip(tab_parts, screen_parts, strict=False):
                             if a == b:
                                 common += 1
                             else:

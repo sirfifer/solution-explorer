@@ -4,7 +4,7 @@ import os
 import re
 from pathlib import Path
 
-from .constants import SKIP_DIRS, SKIP_DIR_SUFFIXES, FRAMEWORK_PRIORITY
+from .constants import FRAMEWORK_PRIORITY, SKIP_DIR_SUFFIXES, SKIP_DIRS
 
 
 def _should_skip_dir(name: str) -> bool:

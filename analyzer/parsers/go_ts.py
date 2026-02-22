@@ -1,6 +1,5 @@
 """Go tree-sitter parser with regex fallback."""
 
-from typing import Optional
 
 from ..models import Symbol
 from .go import GoParser

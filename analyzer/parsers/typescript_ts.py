@@ -3,8 +3,8 @@
 from typing import Optional
 
 from ..models import Symbol
-from .typescript import TypeScriptParser
 from .tree_sitter_base import TreeSitterParser
+from .typescript import TypeScriptParser
 
 try:
     import tree_sitter_typescript as ts_typescript

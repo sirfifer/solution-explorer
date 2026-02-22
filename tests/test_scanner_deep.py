@@ -10,14 +10,13 @@ import json
 import sys
 from pathlib import Path
 
-from analyzer.models import to_dict
-
 import pytest
+
+from analyzer.models import to_dict
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from analyzer.models import Architecture
 from analyzer.scanner import ArchitectureScanner
-
 
 # ---------------------------------------------------------------------------
 # Helpers

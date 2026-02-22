@@ -6,10 +6,9 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from analyzer.models import Component
 from analyzer.parsers.ruby import RubyParser
 from analyzer.swiftui_flow import SwiftUIFlowDetector
-from analyzer.models import Component
-
 
 # ===========================================================================
 # Fixtures
