@@ -33,6 +33,10 @@ inputs:
     description: 'GitHub token for cloning private repos in multi-repo mode'
     required: false
     default: ''
+  live-monitor:
+    description: 'Enable live monitoring data generation alongside viewer build'
+    required: false
+    default: 'false'
 
 runs:
   using: 'composite'
@@ -81,6 +85,54 @@ runs:
       run: |
         npm ci
         npm run build
+
+    - name: Generate Live Data
+      if: inputs.live-monitor == 'true'
+      shell: bash
+      env:
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_SHA: ${{ github.sha }}
+      run: |
+        mkdir -p .solution-explorer/viewer/dist/live
+        python3 -c "
+        import json, time, datetime, os
+        sha = os.environ['GITHUB_SHA']
+        repo = os.environ['GITHUB_REPOSITORY']
+        owner, repo_name = repo.split('/')
+
+        # version.json
+        version = {
+            'version': int(time.time()),
+            'updated_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            'commit_sha': sha
+        }
+        with open('.solution-explorer/viewer/dist/live/version.json', 'w') as f:
+            json.dump(version, f, indent=2)
+
+        # live-config.json
+        config = {
+            'enabled': True,
+            'data_url': f'https://{owner}.github.io/{repo_name}/live',
+            'backend_mode': 'github',
+            'polling': {
+                'default_interval_seconds': 30,
+                'min_interval_seconds': 15,
+                'idle_interval_seconds': 120,
+                'adaptive': True,
+                'pause_when_hidden': True
+            },
+            'features': {
+                'activity_log': True,
+                'admin_dashboard': True,
+                'version_history': True,
+                'ci_status_overlay': True,
+                'realtime_ci_webhooks': False,
+                'realtime_push': False
+            }
+        }
+        with open('.solution-explorer/viewer/dist/live/live-config.json', 'w') as f:
+            json.dump(config, f, indent=2)
+        "
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
