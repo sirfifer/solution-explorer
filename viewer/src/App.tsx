@@ -11,6 +11,7 @@ import { AnnotationInput } from "./components/AnnotationInput";
 import { ReviewSummary } from "./components/ReviewSummary";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { StatusDashboard } from "./components/StatusDashboard";
+import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { initializeSearch } from "./utils/search";
 import { formatNumber, formatRelativeTime } from "./utils/layout";
 import type { Architecture } from "./types";
@@ -66,7 +67,10 @@ export function App() {
     adminOpen,
     setAdminOpen,
     liveConfig,
+    liveMonitorStatus,
   } = useArchStore();
+
+  useLiveMonitor();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"graph" | "tree" | "detail">("graph");
@@ -340,6 +344,19 @@ export function App() {
               </>
             )}
           </div>
+
+          {/* Live connection indicator */}
+          {liveConfig && (
+            <div className={`flex items-center gap-1.5 text-xs ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}>
+              <span className={`inline-block w-2 h-2 rounded-full ${
+                liveMonitorStatus === "error" ? "bg-red-500" :
+                liveMonitorStatus === "paused" ? (darkMode ? "bg-zinc-600" : "bg-zinc-400") :
+                liveMonitorStatus === "updating" ? "bg-green-500 animate-pulse" :
+                "bg-green-500"
+              }`} />
+              <span>Live</span>
+            </div>
+          )}
 
           {/* Solution Explorer link */}
           <a
