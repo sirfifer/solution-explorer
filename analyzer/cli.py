@@ -64,6 +64,26 @@ def main():
         default=None,
         help="Path to solution-explorer.json for multi-repo analysis",
     )
+    parser.add_argument(
+        "--incremental",
+        action="store_true",
+        help="Run incremental analysis with diff metadata against a baseline",
+    )
+    parser.add_argument(
+        "--base-sha",
+        default="",
+        help="Base git commit SHA for incremental diff (default: empty, triggers full rescan)",
+    )
+    parser.add_argument(
+        "--head-sha",
+        default="HEAD",
+        help="Head git commit SHA for incremental diff (default: HEAD)",
+    )
+    parser.add_argument(
+        "--baseline",
+        default=None,
+        help="Path to previous architecture.json baseline for diff comparison",
+    )
 
     args = parser.parse_args()
 
@@ -84,6 +104,67 @@ def main():
             preview_lines=args.preview_lines,
         )
         arch = orchestrator.run()
+    elif args.incremental:
+        from .incremental import IncrementalAnalyzer
+
+        root = Path(args.path).resolve()
+        if not root.is_dir():
+            print(f"Error: {root} is not a directory", file=sys.stderr)
+            sys.exit(1)
+
+        # Resolve baseline path
+        baseline_path = None
+        if args.baseline:
+            baseline_path = Path(args.baseline)
+        else:
+            default_baseline = root / ".arch-baseline" / "architecture.json"
+            if default_baseline.is_file():
+                baseline_path = default_baseline
+
+        max_symbols = args.max_symbols if args.max_symbols is not None else 0
+
+        print(f"Incremental scan: {root}")
+        analyzer = IncrementalAnalyzer(
+            root,
+            base_sha=args.base_sha,
+            head_sha=args.head_sha,
+            baseline_path=baseline_path,
+            max_file_size=args.max_file_size,
+            max_symbols=max_symbols,
+            preview_lines=args.preview_lines,
+        )
+        arch_dict = analyzer.run()
+
+        # Write output
+        indent = None if args.compact else 2
+        output_path = Path(args.output)
+        if str(args.output).endswith("/") or output_path.is_dir():
+            output_path = output_path / "architecture.json"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(arch_dict, f, indent=indent, default=str)
+
+        # Save baseline for next run
+        baseline_dir = root / ".arch-baseline"
+        baseline_dir.mkdir(parents=True, exist_ok=True)
+        baseline_out = baseline_dir / "architecture.json"
+        with open(baseline_out, "w", encoding="utf-8") as f:
+            json.dump(arch_dict, f, default=str)
+
+        stats = arch_dict.get("stats", {})
+        incr = arch_dict.get("incremental", {})
+        diff = incr.get("diff", {})
+        print("\nAnalysis complete:")
+        print(f"  Components: {stats.get('total_components', 0)}")
+        print(f"  Files: {stats.get('total_files', 0)}")
+        print(f"  Lines: {stats.get('total_lines', 0):,}")
+        print(f"  Full rescan: {incr.get('full_rescan', True)}")
+        print(f"  Components added: {len(diff.get('components_added', []))}")
+        print(f"  Components modified: {len(diff.get('components_modified', []))}")
+        print(f"  Components removed: {len(diff.get('components_removed', []))}")
+        print(f"\nOutput: {output_path}")
+        print(f"Baseline saved: {baseline_out}")
+        return
     else:
         root = Path(args.path).resolve()
         if not root.is_dir():
@@ -99,7 +180,7 @@ def main():
         )
         arch = scanner.scan()
 
-    # Write output
+    # Write output (config and default paths)
     indent = None if args.compact else 2
 
     if args.split:

@@ -33,6 +33,7 @@ from analyzer.parsers import (  # noqa: F401
     TypeScriptParser,
 )
 from analyzer.scanner import ArchitectureScanner  # noqa: F401
+from analyzer.incremental import IncrementalAnalyzer  # noqa: F401
 from analyzer.multi_repo import MultiRepoOrchestrator  # noqa: F401
 from analyzer.swiftui_flow import SwiftUIFlowDetector  # noqa: F401
 from analyzer.cli import main  # noqa: F401
