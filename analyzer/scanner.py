@@ -4,7 +4,6 @@ import json
 import os
 import re
 from collections import defaultdict
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -39,6 +38,7 @@ from .models import (
     FileInfo,
     Relationship,
     Symbol,
+    to_dict,
 )
 from .parsers import PARSERS
 from .swiftui_flow import SwiftUIFlowDetector
@@ -112,7 +112,7 @@ class ArchitectureScanner:
 
         # Assemble
         self.architecture.components = self._build_component_tree()
-        self.architecture.files = [asdict(f) for f in self._all_files]
+        self.architecture.files = [to_dict(f) for f in self._all_files]
 
         # Limit symbols if needed, prioritizing public types
         symbols = self._all_symbols
@@ -127,7 +127,7 @@ class ArchitectureScanner:
                 0 if s.visibility == "public" else 1,
                 s.file,
             ))[:self.max_symbols]
-        self.architecture.symbols = [asdict(s) for s in symbols]
+        self.architecture.symbols = [to_dict(s) for s in symbols]
         self.architecture.stats = {
             "total_files": len(self._all_files),
             "total_lines": self._total_lines,
@@ -1373,7 +1373,7 @@ class ArchitectureScanner:
         ui_rels = getattr(self, "_ui_relationships", [])
         relationships.extend(ui_rels)
 
-        self.architecture.relationships = [asdict(r) for r in relationships]
+        self.architecture.relationships = [to_dict(r) for r in relationships]
 
     def _compute_metrics(self):
         """Compute metrics for each component."""
@@ -1561,7 +1561,7 @@ class ArchitectureScanner:
                     tech.append("Vite")
             doc.tech_stack = sorted(set(tech))
 
-            comp.docs = asdict(doc)
+            comp.docs = to_dict(doc)
 
     def _detect_patterns(self, comp: Component) -> list[str]:
         """Detect architectural patterns in a component."""
@@ -1677,7 +1677,7 @@ class ArchitectureScanner:
         # Recursively serialize
         def serialize(path: str) -> dict:
             comp = self._component_map[path]
-            d = asdict(comp)
+            d = to_dict(comp)
             # Build children from path-based hierarchy
             path_children = [serialize(cp) for cp in sorted(children_map.get(path, []))]
             # Preserve UI flow children added by _detect_ui_flows (Component objects
@@ -1685,7 +1685,7 @@ class ArchitectureScanner:
             ui_children = []
             for child in comp.children:
                 if isinstance(child, Component):
-                    ui_children.append(asdict(child))
+                    ui_children.append(to_dict(child))
             d["children"] = ui_children + path_children
             return d
 
