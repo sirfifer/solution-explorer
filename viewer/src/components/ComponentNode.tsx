@@ -110,6 +110,105 @@ function BrowserFrame({ darkMode, colors, children }: FrameProps) {
   );
 }
 
+function EnhancedMobileFrame({ darkMode, children }: FrameProps) {
+  return (
+    <div className={`
+      relative w-[220px] min-h-[380px] rounded-[38px] border-[5px] flex flex-col
+      ${darkMode ? "border-orange-700/60 bg-orange-950/40" : "border-orange-300 bg-orange-50"}
+    `}
+      style={{ boxShadow: darkMode ? "0 0 40px rgba(249, 115, 22, 0.12)" : "none" }}
+    >
+      {/* Dynamic Island notch with camera & sensor */}
+      <div className="absolute top-[14px] left-1/2 -translate-x-1/2 z-10">
+        <div className={`w-14 h-5 rounded-xl relative ${darkMode ? "bg-orange-950/90" : "bg-orange-200"}`}
+          style={{ boxShadow: darkMode ? "inset 0 1px 4px rgba(0,0,0,0.8), 0 0.5px 0 rgba(255,200,150,0.08)" : "none" }}
+        >
+          {/* Camera */}
+          <div className="absolute top-[6px] right-[14px] w-[9px] h-[9px] rounded-full"
+            style={{ background: darkMode ? "radial-gradient(circle at 35% 35%, #282838, #101018)" : "radial-gradient(circle at 35% 35%, #e0e0f0, #b0b0c0)",
+              boxShadow: darkMode ? "inset 0 0 3px rgba(100,120,255,0.5), 0 0 5px rgba(100,120,255,0.15)" : "inset 0 0 2px rgba(0,0,0,0.2)" }} />
+          {/* Sensor */}
+          <div className={`absolute top-[8px] left-[14px] w-[5px] h-[5px] rounded-full ${darkMode ? "bg-orange-950" : "bg-orange-300"}`} />
+        </div>
+      </div>
+      {/* Silent switch */}
+      <div className={`absolute -left-[5px] top-[48px] w-[4px] h-[16px] rounded-sm ${darkMode ? "bg-orange-700/50" : "bg-orange-300/80"}`}
+        style={{ background: darkMode ? "linear-gradient(to left, hsl(20,45%,20%), hsl(20,45%,14%), hsl(20,45%,20%))" : undefined }} />
+      {/* Volume buttons */}
+      <div className="absolute -left-[5px] top-[70px] flex flex-col gap-3">
+        <div className={`w-[4px] h-7 rounded-sm ${darkMode ? "" : "bg-orange-300/80"}`}
+          style={{ background: darkMode ? "linear-gradient(to left, hsl(20,45%,20%), hsl(20,45%,14%), hsl(20,45%,20%))" : undefined }} />
+        <div className={`w-[4px] h-7 rounded-sm ${darkMode ? "" : "bg-orange-300/80"}`}
+          style={{ background: darkMode ? "linear-gradient(to left, hsl(20,45%,20%), hsl(20,45%,14%), hsl(20,45%,20%))" : undefined }} />
+      </div>
+      {/* Power button */}
+      <div className={`absolute -right-[5px] top-[72px] w-[4px] h-[38px] rounded-sm ${darkMode ? "" : "bg-orange-300/80"}`}
+        style={{ background: darkMode ? "linear-gradient(to right, hsl(20,45%,20%), hsl(20,45%,14%), hsl(20,45%,20%))" : undefined }} />
+      {/* Screen */}
+      <div className={`rounded-[28px] overflow-hidden relative flex-1 flex flex-col ${darkMode ? "bg-orange-950/60" : "bg-white"}`}>
+        {/* Screen reflection */}
+        <div className="absolute inset-0 rounded-[28px] pointer-events-none z-[5]"
+          style={{ background: darkMode ? "linear-gradient(160deg, rgba(255,230,200,0.05) 0%, rgba(255,230,200,0.02) 20%, transparent 40%)" : "none" }} />
+        {/* Status bar */}
+        <div className="flex justify-between items-center px-5 pt-1.5 pb-0.5 relative z-[4]">
+          <span className={`text-[10px] font-semibold font-sans ${darkMode ? "text-orange-700/80" : "text-orange-400"}`}>9:41</span>
+          <div className="flex items-center gap-1">
+            <div className="flex gap-px items-end">
+              <div className={`w-[2px] rounded-[0.5px] ${darkMode ? "bg-orange-700/60" : "bg-orange-300"}`} style={{ height: "4px" }} />
+              <div className={`w-[2px] rounded-[0.5px] ${darkMode ? "bg-orange-700/60" : "bg-orange-300"}`} style={{ height: "6px" }} />
+              <div className={`w-[2px] rounded-[0.5px] ${darkMode ? "bg-orange-700/60" : "bg-orange-300"}`} style={{ height: "8px" }} />
+              <div className={`w-[2px] rounded-[0.5px] ${darkMode ? "bg-orange-700/60" : "bg-orange-300"}`} style={{ height: "10px" }} />
+            </div>
+            <div className={`w-4 h-2 rounded-sm relative flex items-center p-px ${darkMode ? "border border-orange-700/50" : "border border-orange-300"}`}>
+              <div className={`w-[70%] h-full rounded-[1px] ${darkMode ? "bg-orange-700/60" : "bg-orange-300"}`} />
+              <div className={`absolute -right-[3px] top-1/2 -translate-y-1/2 w-[2px] h-1 rounded-r-sm ${darkMode ? "bg-orange-700/50" : "bg-orange-300"}`} />
+            </div>
+          </div>
+        </div>
+        {/* Content */}
+        <div className="flex-1 pt-1">
+          {children}
+        </div>
+        {/* Home indicator */}
+        <div className={`w-20 h-1 rounded-full mx-auto mb-2 mt-1.5 ${darkMode ? "bg-orange-700/30" : "bg-orange-300/50"}`} />
+      </div>
+    </div>
+  );
+}
+
+function EnhancedWatchFrame({ darkMode, children }: FrameProps) {
+  return (
+    <div className={`
+      relative w-[200px] rounded-[48px] border-[5px] mt-[22px] mb-[22px]
+      ${darkMode ? "border-pink-700/50 bg-pink-950/30" : "border-pink-300 bg-pink-50"}
+    `}
+      style={{ boxShadow: darkMode ? "0 0 50px rgba(236, 72, 153, 0.15)" : "none" }}
+    >
+      {/* Band top */}
+      <div className={`absolute left-1/2 -translate-x-1/2 -top-[22px] w-[52%] h-[22px] rounded-[5px] ${darkMode ? "bg-pink-800/30" : "bg-pink-200/60"}`} />
+      {/* Crown */}
+      <div className={`absolute -right-[9px] top-[30px] w-1 h-8 rounded-sm ${darkMode ? "bg-pink-700/60" : "bg-pink-300"}`} />
+      {/* Side button */}
+      <div className={`absolute -right-[8px] top-[70px] w-[3px] h-4 rounded-sm ${darkMode ? "bg-pink-700/40" : "bg-pink-300/70"}`} />
+      {/* Screen */}
+      <div className={`rounded-[42px] overflow-hidden relative ${darkMode ? "bg-pink-950/40" : "bg-white"}`}>
+        {/* Screen reflection */}
+        <div className="absolute inset-0 rounded-[42px] pointer-events-none z-[5]"
+          style={{ background: darkMode ? "linear-gradient(160deg, rgba(255,200,230,0.05) 0%, rgba(255,200,230,0.02) 20%, transparent 40%)" : "none" }} />
+        {/* Time */}
+        <div className={`text-center pt-2.5 pb-0.5 text-[10px] font-semibold font-sans tracking-wider ${darkMode ? "text-pink-500/70" : "text-pink-400/80"}`}>
+          12:00
+        </div>
+        <div className="pb-[18px]">
+          {children}
+        </div>
+      </div>
+      {/* Band bottom */}
+      <div className={`absolute left-1/2 -translate-x-1/2 -bottom-[22px] w-[52%] h-[22px] rounded-[5px] ${darkMode ? "bg-pink-800/30" : "bg-pink-200/60"}`} />
+    </div>
+  );
+}
+
 function WatchFrame({ darkMode, children }: FrameProps) {
   return (
     <div className={`
@@ -252,22 +351,22 @@ function TabContainerFrame({ darkMode, colors, children }: FrameProps) {
   );
 }
 
-function DeviceFrame({ type, darkMode, colors, children }: { type: string; darkMode: boolean; colors: ReturnType<typeof getTypeColors>; children: ReactNode }) {
+function DeviceFrame({ type, darkMode, colors, enhancedFrames, children }: { type: string; darkMode: boolean; colors: ReturnType<typeof getTypeColors>; enhancedFrames: boolean; children: ReactNode }) {
   const props = { darkMode, colors, children };
   switch (type) {
     case "mobile-client":
     case "ios-client":
     case "android-client":
-      return <MobileFrame {...props} />;
+      return enhancedFrames ? <EnhancedMobileFrame {...props} /> : <MobileFrame {...props} />;
     case "api-server": return <ServerFrame {...props} />;
     case "web-client": return <BrowserFrame {...props} />;
-    case "watch-app": return <WatchFrame {...props} />;
+    case "watch-app": return enhancedFrames ? <EnhancedWatchFrame {...props} /> : <WatchFrame {...props} />;
     case "desktop-app": return <DesktopFrame {...props} />;
     case "cli-tool": return <TerminalFrame {...props} />;
     case "service": return <ServiceFrame {...props} />;
     case "screen": return <ScreenFrame {...props} />;
     case "tab-container": return <TabContainerFrame {...props} />;
-    case "tab": return <MobileFrame {...props} />;
+    case "tab": return enhancedFrames ? <EnhancedMobileFrame {...props} /> : <MobileFrame {...props} />;
     case "application":
       // Application: enhanced hero styling, no device frame
       return (
@@ -629,7 +728,7 @@ export const ComponentNode = memo(function ComponentNode({
   selected,
 }: NodeProps) {
   const { component } = data as ComponentNodeData;
-  const { selectComponent, drillInto, darkMode, reviewMode, annotations, architecture } = useArchStore();
+  const { selectComponent, drillInto, darkMode, enhancedFrames, reviewMode, annotations, architecture } = useArchStore();
   const colors = getTypeColors(component.type, darkMode);
   const annotationCount = annotations.filter((a) => a.componentId === component.id).length;
   const incomingCount = architecture?.relationships.filter((r) => r.target === component.id).length ?? 0;
@@ -712,7 +811,7 @@ export const ComponentNode = memo(function ComponentNode({
       )}
 
       {/* Device-shaped frame wrapping all content */}
-      <DeviceFrame type={component.type} darkMode={darkMode} colors={colors}>
+      <DeviceFrame type={component.type} darkMode={darkMode} colors={colors} enhancedFrames={enhancedFrames}>
         {/* Header */}
         <div className={isHero ? "px-4 pt-3 pb-2" : "px-4 pt-3 pb-2"}>
           <div className="flex items-start justify-between gap-2">

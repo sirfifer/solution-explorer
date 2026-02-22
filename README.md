@@ -13,7 +13,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
   <a href="https://github.com/sirfifer/solution-explorer/releases"><img src="https://img.shields.io/github/v/release/sirfifer/solution-explorer" alt="Release"></a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/node-22%2B-green" alt="Node 22+">
+  <img src="https://img.shields.io/badge/node-20%2B-green" alt="Node 20+">
 </p>
 
 <p align="center">
@@ -56,9 +56,39 @@ Double-click a component to drill into it and see its internal structure. Breadc
 
 ## Quick Start
 
-### Using the GitHub Action (recommended)
+### One command (recommended)
 
-Add this workflow to your repo at `.github/workflows/architecture.yml`:
+```bash
+npx solution-explorer /path/to/your/repo
+```
+
+This analyzes your codebase, builds an interactive architecture visualization, and opens it in your browser. No cloning, no setup.
+
+To export a static site you can host anywhere:
+
+```bash
+npx solution-explorer --out ./docs/architecture /path/to/your/repo
+```
+
+### Set up automated updates
+
+Run the interactive setup wizard in your project directory:
+
+```bash
+npx solution-explorer init
+```
+
+This creates a GitHub Actions workflow and config file. Every push to main regenerates and deploys your architecture visualization automatically.
+
+For live monitoring with CI status overlays and version history:
+
+```bash
+npx solution-explorer init --live
+```
+
+### Using the GitHub Action directly
+
+If you prefer to write the workflow yourself:
 
 ```yaml
 name: Architecture Visualization
@@ -77,33 +107,21 @@ jobs:
       - uses: sirfifer/solution-explorer@main
 ```
 
-This analyzes your repo and uploads the visualization as a downloadable artifact. To deploy it automatically, see [Deployment Options](#deployment-options) below.
+See [Deployment Options](#deployment-options) for Cloudflare Pages, GitHub Pages, and other hosting.
 
-### Running Locally
+### Running from source
 
 ```bash
-# 1. Clone solution-explorer
 git clone https://github.com/sirfifer/solution-explorer.git
 cd solution-explorer
-
-# 2. Analyze your project
-python3 analyze.py /path/to/your/repo -o viewer/public/architecture.json
-
-# 3. Start the viewer
-cd viewer && npm install && npm run dev
-```
-
-Or use the build script to produce a deployable static site:
-
-```bash
 bash build.sh /path/to/your/repo
 # Output: viewer/dist/ (deploy anywhere)
 ```
 
 ### Requirements
 
-- **Python 3.10+** (no pip install needed for core analysis)
-- **Node.js 22+** (for the viewer)
+- **Python 3.10+** (for code analysis, no pip install needed)
+- **Node.js 20+** (for the CLI and viewer)
 
 Optional Python dependencies for advanced features:
 
@@ -541,7 +559,7 @@ npx tsc -b
 
 ```
 solution-explorer/
-├── analyze.py              # CLI entry point (thin wrapper)
+├── analyze.py              # Python CLI entry point (thin wrapper)
 ├── analyzer/               # Core analysis package
 │   ├── cli.py              # Argument parsing, split/single-file output
 │   ├── models.py           # Dataclasses: Component, Symbol, Relationship, etc.
@@ -567,6 +585,10 @@ solution-explorer/
 │       ├── ruby.py         # Ruby (regex)
 │       ├── ruby_ts.py      # Ruby (tree-sitter)
 │       └── tree_sitter_base.py  # Tree-sitter base class
+├── packages/cli/           # npm CLI package (npx solution-explorer)
+│   ├── src/commands/       # generate, serve, init commands
+│   ├── src/lib/            # Python detection, viewer management
+│   └── src/templates/      # Workflow and config templates
 ├── infrastructure/         # Optional backend infrastructure
 │   └── cloudflare/         # Cloudflare Worker for live monitoring
 ├── scripts/                # CI helper scripts

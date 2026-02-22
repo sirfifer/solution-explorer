@@ -63,6 +63,8 @@ export function App() {
     setSearchOpen,
     setActivePanel,
     toggleDarkMode,
+    enhancedFrames,
+    toggleEnhancedFrames,
     navigateToBreadcrumb,
     adminOpen,
     setAdminOpen,
@@ -328,6 +330,15 @@ export function App() {
             title={darkMode ? "Light mode" : "Dark mode"}
           >
             {darkMode ? "\u2600" : "\u263E"}
+          </button>
+
+          {/* Enhanced frames toggle */}
+          <button
+            onClick={toggleEnhancedFrames}
+            className={`p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"} ${enhancedFrames ? (darkMode ? "text-orange-400" : "text-orange-500") : (darkMode ? "text-zinc-400" : "text-zinc-600")}`}
+            title={enhancedFrames ? "Switch to classic frames" : "Switch to enhanced frames"}
+          >
+            {"\u{1F4F1}"}
           </button>
 
           {/* Stats */}

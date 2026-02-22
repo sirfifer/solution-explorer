@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device Frame Style Comparison</title>
+<style>
+  /* ─── Reset & Base ─────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #050508;
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', system-ui, sans-serif;
+    padding: 40px 24px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #f97316, #ec4899, #0ea5e9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 48px;
+  }
+
+  /* ─── Grid Layout ──────────────────────────────────────── */
+  .level-section { margin-bottom: 72px; }
+  .level-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .level-header h2 { font-size: 20px; font-weight: 600; color: #ccc; }
+  .level-header .tag {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; padding: 2px 8px; border-radius: 4px;
+  }
+  .tag-current { background: #1a2e1a; color: #4ade80; }
+  .tag-base { background: #2a2410; color: #fbbf24; }
+  .tag-enhanced { background: #1a1a2e; color: #818cf8; }
+  .tag-max { background: #2e1a1a; color: #f87171; }
+
+  .level-desc { font-size: 13px; color: #555; margin-bottom: 24px; }
+
+  .device-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 40px;
+    max-width: 1100px;
+    margin: 0 auto;
+    align-items: start;
+  }
+
+  .device-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .device-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: #555; margin-bottom: 16px;
+  }
+
+  /* ─── Shared Content Styles ────────────────────────────── */
+  .content { padding: 10px 12px 12px; }
+  .content-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .content-icon { font-size: 14px; }
+  .content-name { font-size: 14px; font-weight: 700; }
+  .content-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .badge { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+  .content-desc { font-size: 11px; margin-bottom: 8px; line-height: 1.4; }
+  .content-patterns { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 8px; }
+  .pattern { font-size: 9px; padding: 1px 5px; border-radius: 3px; }
+  .content-metrics { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+  .lang-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .content-footer {
+    margin-top: 8px; padding-top: 6px;
+    font-size: 10px;
+  }
+
+  /* ─── Dark content (L1/L2 dark screens) ────────────────── */
+  .dark-content .content-desc { color: #888; }
+  .dark-content .pattern { background: rgba(255,255,255,0.06); color: #888; }
+  .dark-content .content-metrics { color: #666; }
+  .dark-content .content-footer { border-top: 1px solid rgba(255,255,255,0.06); color: #555; }
+
+  /* ─── Gray-screen content (L3/L4 lighter screens) ──────── */
+  .gray-content .content-desc { color: #555; }
+  .gray-content .pattern { background: rgba(0,0,0,0.08); color: #555; }
+  .gray-content .content-metrics { color: #555; }
+  .gray-content .content-footer { border-top: 1px solid rgba(0,0,0,0.08); color: #666; }
+
+  /* ─── iPhone Colors ────────────────────────────────────── */
+  .iphone .content-name { color: #fdba74; }
+  .iphone .badge-type { background: rgba(249,115,22,0.25); color: #fb923c; }
+  .iphone .badge-tech { background: rgba(255,255,255,0.06); color: #a3a3a3; }
+  .iphone .badge-role { background: rgba(244,114,182,0.15); color: #f472b6; }
+  .iphone .lang-dot { background: #f97316; }
+  /* Gray-screen overrides for iPhone */
+  .iphone .gray-content .content-name { color: #c2410c; }
+  .iphone .gray-content .badge-type { background: rgba(249,115,22,0.15); color: #c2410c; }
+  .iphone .gray-content .badge-tech { background: rgba(0,0,0,0.06); color: #666; }
+  .iphone .gray-content .badge-role { background: rgba(244,114,182,0.1); color: #be185d; }
+
+  /* ─── Watch Colors ─────────────────────────────────────── */
+  .watch .content-name { color: #f9a8d4; }
+  .watch .badge-type { background: rgba(236,72,153,0.25); color: #f472b6; }
+  .watch .badge-tech { background: rgba(255,255,255,0.06); color: #a3a3a3; }
+  .watch .lang-dot { background: #ec4899; }
+  /* Gray-screen overrides for Watch */
+  .watch .gray-content .content-name { color: #be185d; }
+  .watch .gray-content .badge-type { background: rgba(236,72,153,0.15); color: #be185d; }
+  .watch .gray-content .badge-tech { background: rgba(0,0,0,0.06); color: #666; }
+
+  /* ─── Browser Colors ───────────────────────────────────── */
+  .browser .content-name { color: #7dd3fc; }
+  .browser .badge-type { background: rgba(14,165,233,0.25); color: #38bdf8; }
+  .browser .badge-tech { background: rgba(255,255,255,0.06); color: #a3a3a3; }
+  .browser .badge-role { background: rgba(244,114,182,0.15); color: #f472b6; }
+  .browser .lang-dot { background: #f97316; }
+  /* Gray-screen overrides for Browser */
+  .browser .gray-content .content-name { color: #0369a1; }
+  .browser .gray-content .badge-type { background: rgba(14,165,233,0.12); color: #0369a1; }
+  .browser .gray-content .badge-tech { background: rgba(0,0,0,0.06); color: #666; }
+  .browser .gray-content .badge-role { background: rgba(244,114,182,0.1); color: #be185d; }
+
+  /* ─── Animations ───────────────────────────────────────── */
+  @keyframes blink-led {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .blink-led { animation: blink-led 2s ease-in-out infinite; }
+
+  /* =====================================================
+     LEVEL 1: CURRENT (what we ship today)
+     Flat colored borders, minimal hardware hints
+     ===================================================== */
+
+  .l1-iphone {
+    position: relative;
+    border-radius: 28px;
+    border: 5px solid rgba(194, 65, 12, 0.6);
+    background: rgba(67, 20, 7, 0.4);
+    min-width: 260px; max-width: 300px;
+  }
+  .l1-iphone .notch {
+    position: absolute; top: 6px; left: 50%; transform: translateX(-50%); z-index: 10;
+    width: 80px; height: 7px; border-radius: 9999px;
+    background: rgba(124, 45, 18, 0.8);
+  }
+  .l1-iphone .vol-buttons {
+    position: absolute; left: -8px; top: 40px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .l1-iphone .vol-btn {
+    width: 3px; height: 20px; border-radius: 9999px;
+    background: rgba(194, 65, 12, 0.5);
+  }
+  .l1-iphone .pwr-btn {
+    position: absolute; right: -8px; top: 50px;
+    width: 3px; height: 28px; border-radius: 9999px;
+    background: rgba(194, 65, 12, 0.5);
+  }
+  .l1-iphone .screen {
+    border-radius: 22px; overflow: hidden;
+    background: rgba(67, 20, 7, 0.6); padding-top: 16px;
+  }
+
+  .l1-watch {
+    position: relative;
+    border-radius: 28px;
+    border: 5px solid rgba(190, 24, 93, 0.5);
+    background: rgba(69, 10, 38, 0.3);
+    min-width: 220px; max-width: 260px;
+  }
+  .l1-watch .crown {
+    position: absolute; right: -9px; top: 35px;
+    width: 4px; height: 32px; border-radius: 2px;
+    background: rgba(190, 24, 93, 0.6);
+  }
+  .l1-watch .side-btn {
+    position: absolute; right: -8px; top: 70px;
+    width: 3px; height: 16px; border-radius: 2px;
+    background: rgba(190, 24, 93, 0.4);
+  }
+  .l1-watch .screen {
+    border-radius: 22px; overflow: hidden;
+    background: rgba(69, 10, 38, 0.4);
+  }
+  .l1-watch .time {
+    text-align: center; padding: 8px 0 2px;
+    font-size: 9px; font-family: ui-monospace, monospace;
+    letter-spacing: 0.1em; color: rgba(236, 72, 153, 0.6);
+  }
+
+  .l1-browser {
+    position: relative; border-radius: 12px;
+    border: 3px solid rgba(2, 132, 199, 0.4);
+    background: rgba(8, 47, 73, 0.6);
+    min-width: 280px; max-width: 340px;
+  }
+  .l1-browser .titlebar {
+    display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+    border-radius: 10px 10px 0 0;
+    border-bottom: 1px solid rgba(7, 89, 133, 0.3);
+    background: rgba(8, 47, 73, 0.5);
+  }
+  .l1-browser .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .l1-browser .dot-r { background: rgba(239, 68, 68, 0.8); }
+  .l1-browser .dot-y { background: rgba(234, 179, 8, 0.8); }
+  .l1-browser .dot-g { background: rgba(34, 197, 94, 0.8); }
+  .l1-browser .urlbar-wrap {
+    padding: 4px 12px;
+    border-bottom: 1px solid rgba(7, 89, 133, 0.2);
+    background: rgba(8, 47, 73, 0.3);
+  }
+  .l1-browser .urlbar {
+    height: 16px; border-radius: 6px;
+    display: flex; align-items: center; padding: 0 8px;
+    background: rgba(12, 74, 110, 0.4);
+    font-size: 9px; font-family: ui-monospace, monospace;
+    color: rgba(14, 165, 233, 0.6);
+  }
+  .l1-browser .viewport { background: rgba(8, 47, 73, 0.3); }
+
+  /* =====================================================
+     LEVEL 2: REALISTIC BASE
+     Full metallic bezel, status bar, crown knurling.
+     This was "Level 4" from the first comparison.
+     ===================================================== */
+
+  .l2-iphone {
+    position: relative;
+    border-radius: 36px;
+    width: 230px; min-height: 420px;
+    padding: 10px;
+    display: flex; flex-direction: column;
+    background: linear-gradient(140deg,
+      hsl(20, 70%, 12%) 0%, hsl(20, 65%, 18%) 12%, hsl(20, 70%, 10%) 28%,
+      hsl(20, 60%, 16%) 45%, hsl(20, 70%, 9%) 62%, hsl(20, 65%, 17%) 78%,
+      hsl(20, 70%, 11%) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 200, 150, 0.15),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+      inset 1px 0 0 rgba(255, 200, 150, 0.05),
+      inset -1px 0 0 rgba(255, 200, 150, 0.05),
+      0 0 0 1px rgba(0, 0, 0, 0.8),
+      0 0 0 2px hsl(20, 70%, 8%),
+      0 0 0 2.5px rgba(255, 180, 120, 0.08),
+      0 4px 8px rgba(0, 0, 0, 0.4),
+      0 8px 24px rgba(0, 0, 0, 0.3),
+      0 0 40px rgba(249, 115, 22, 0.12);
+  }
+  .l2-iphone .notch {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 10;
+    width: 58px; height: 20px; border-radius: 12px;
+    background: #050202;
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.9), 0 0.5px 0 rgba(255,180,120,0.06);
+  }
+  .l2-iphone .notch-cam {
+    position: absolute; top: 6px; right: 16px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #1a1a30, #060610);
+    box-shadow: inset 0 0 3px rgba(100,120,255,0.4), 0 0 2px rgba(0,0,0,0.5), 0 0 4px rgba(100,120,255,0.1);
+  }
+  .l2-iphone .notch-sensor {
+    position: absolute; top: 8px; left: 16px;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: #0a0808; box-shadow: inset 0 0 2px rgba(0,0,0,0.5);
+  }
+  .l2-iphone .silent-switch {
+    position: absolute; left: -4px; top: 45px;
+    width: 3px; height: 14px; border-radius: 1px;
+    background: linear-gradient(to left, hsl(20, 65%, 16%), hsl(20, 60%, 12%), hsl(20, 65%, 16%));
+    box-shadow: -1px 0 3px rgba(0,0,0,0.4);
+  }
+  .l2-iphone .vol-buttons {
+    position: absolute; left: -4px; top: 62px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .l2-iphone .vol-btn {
+    width: 3px; height: 26px; border-radius: 1px;
+    background: linear-gradient(to left, hsl(20, 65%, 16%), hsl(20, 60%, 12%), hsl(20, 65%, 16%));
+    box-shadow: -1px 0 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,180,120,0.08), inset 0 -1px 0 rgba(0,0,0,0.3);
+  }
+  .l2-iphone .pwr-btn {
+    position: absolute; right: -4px; top: 68px;
+    width: 3px; height: 36px; border-radius: 1px;
+    background: linear-gradient(to right, hsl(20, 65%, 16%), hsl(20, 60%, 12%), hsl(20, 65%, 16%));
+    box-shadow: 1px 0 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,180,120,0.08);
+  }
+  .l2-iphone .screen {
+    border-radius: 26px; overflow: hidden;
+    background: #050302; position: relative;
+    flex: 1; display: flex; flex-direction: column;
+  }
+  .l2-iphone .status-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 20px 2px; position: relative; z-index: 4;
+  }
+  .l2-iphone .status-time {
+    font-size: 10px; font-weight: 600;
+    color: rgba(253, 186, 116, 0.7); font-family: -apple-system, sans-serif;
+  }
+  .l2-iphone .status-icons { display: flex; align-items: center; gap: 4px; }
+  .l2-iphone .status-signal { display: flex; gap: 1px; align-items: flex-end; }
+  .l2-iphone .signal-bar {
+    width: 2px; background: rgba(253, 186, 116, 0.5); border-radius: 0.5px;
+  }
+  .l2-iphone .status-battery {
+    width: 16px; height: 8px;
+    border: 1px solid rgba(253, 186, 116, 0.4); border-radius: 2px;
+    position: relative; display: flex; align-items: center; padding: 1px;
+  }
+  .l2-iphone .status-battery::after {
+    content: ''; position: absolute; right: -3px; top: 50%; transform: translateY(-50%);
+    width: 2px; height: 4px;
+    background: rgba(253, 186, 116, 0.4); border-radius: 0 1px 1px 0;
+  }
+  .l2-iphone .battery-fill {
+    width: 70%; height: 100%;
+    background: rgba(253, 186, 116, 0.5); border-radius: 1px;
+  }
+  .l2-iphone .screen-reflection {
+    position: absolute; inset: 0; border-radius: 26px;
+    background: linear-gradient(160deg, rgba(255, 220, 180, 0.04) 0%, rgba(255, 220, 180, 0.01) 20%, transparent 40%);
+    pointer-events: none; z-index: 5;
+  }
+  .l2-iphone .screen-content { padding-top: 4px; flex: 1; }
+
+  /* L2 Watch - corrected rectangular shape for Apple Watch */
+  .l2-watch {
+    position: relative;
+    width: 205px;
+    border-radius: 48px;
+    padding: 10px;
+    background: linear-gradient(140deg,
+      hsl(330, 70%, 10%) 0%, hsl(330, 65%, 16%) 12%, hsl(330, 70%, 8%) 28%,
+      hsl(330, 60%, 14%) 45%, hsl(330, 70%, 7%) 62%, hsl(330, 65%, 15%) 78%,
+      hsl(330, 70%, 9%) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 180, 220, 0.12),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+      inset 1px 0 0 rgba(255, 180, 220, 0.04),
+      inset -1px 0 0 rgba(255, 180, 220, 0.04),
+      0 0 0 1px rgba(0, 0, 0, 0.8),
+      0 0 0 2px hsl(330, 70%, 6%),
+      0 0 0 2.5px rgba(255, 160, 200, 0.06),
+      0 4px 8px rgba(0, 0, 0, 0.4),
+      0 8px 24px rgba(0, 0, 0, 0.3),
+      0 0 40px rgba(236, 72, 153, 0.12);
+  }
+  .l2-watch .crown {
+    position: absolute; right: -8px; top: 28px;
+    width: 7px; height: 36px; border-radius: 1px 4px 4px 1px;
+    background: repeating-linear-gradient(to bottom,
+      hsl(330, 60%, 14%) 0px, hsl(330, 65%, 18%) 2px,
+      hsl(330, 60%, 12%) 3px, hsl(330, 65%, 16%) 5px
+    );
+    box-shadow: 2px 0 5px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,180,220,0.1), inset 0 -1px 0 rgba(0,0,0,0.3);
+  }
+  .l2-watch .crown-dot {
+    position: absolute; right: -7px; top: 42px;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, hsl(330, 60%, 20%), hsl(330, 65%, 10%));
+    box-shadow: inset 0 0 2px rgba(0,0,0,0.5);
+  }
+  .l2-watch .side-btn {
+    position: absolute; right: -6px; top: 74px;
+    width: 5px; height: 18px; border-radius: 1px 3px 3px 1px;
+    background: linear-gradient(to right, hsl(330, 65%, 14%), hsl(330, 60%, 10%), hsl(330, 65%, 14%));
+    box-shadow: 1px 0 4px rgba(0,0,0,0.5);
+  }
+  .l2-watch .band-top, .l2-watch .band-bottom {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    width: 55%; height: 18px; border-radius: 4px;
+    background: linear-gradient(to bottom, #1a0610, #2d0818, #1a0610);
+    box-shadow: 0 0 4px rgba(0,0,0,0.3);
+  }
+  .l2-watch .band-top { top: -18px; }
+  .l2-watch .band-bottom { bottom: -18px; }
+  .l2-watch .screen {
+    border-radius: 40px; overflow: hidden;
+    background: #040108; position: relative;
+  }
+  .l2-watch .screen-reflection {
+    position: absolute; inset: 0; border-radius: 40px;
+    background: linear-gradient(160deg, rgba(255, 180, 220, 0.04) 0%, rgba(255, 180, 220, 0.01) 20%, transparent 40%);
+    pointer-events: none; z-index: 5;
+  }
+  .l2-watch .screen .content { padding-bottom: 16px; }
+  .l2-watch .time {
+    text-align: center; padding: 10px 0 2px;
+    font-size: 10px; font-weight: 500;
+    font-family: -apple-system, sans-serif;
+    letter-spacing: 0.05em; color: rgba(236, 72, 153, 0.6);
+  }
+
+  /* L2 Browser */
+  .l2-browser {
+    position: relative; border-radius: 10px;
+    min-width: 280px; max-width: 340px;
+    background: #0a1520; overflow: hidden;
+    box-shadow:
+      inset 0 1px 0 rgba(120, 200, 255, 0.08),
+      0 0 0 0.5px rgba(120, 200, 255, 0.05),
+      0 0 0 1px #060e18,
+      0 0 0 1.5px rgba(120, 200, 255, 0.04),
+      0 0 0 3px #0a1520,
+      0 2px 4px rgba(0, 0, 0, 0.3),
+      0 8px 24px rgba(0, 0, 0, 0.4),
+      0 0 40px rgba(14, 165, 233, 0.1);
+  }
+  .l2-browser .titlebar {
+    display: flex; align-items: center;
+    padding: 9px 12px;
+    background: linear-gradient(to bottom, #0f2a42, #0c2236);
+    border-bottom: 1px solid rgba(7, 89, 133, 0.15);
+  }
+  .l2-browser .dots { display: flex; gap: 6px; margin-right: 12px; }
+  .l2-browser .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .l2-browser .dot-r {
+    background: radial-gradient(circle at 35% 35%, #ff8a80, #ef4444, #b91c1c);
+    box-shadow: 0 0 6px rgba(239,68,68,0.25);
+  }
+  .l2-browser .dot-y {
+    background: radial-gradient(circle at 35% 35%, #fff176, #eab308, #a16207);
+    box-shadow: 0 0 6px rgba(234,179,8,0.25);
+  }
+  .l2-browser .dot-g {
+    background: radial-gradient(circle at 35% 35%, #69f0ae, #22c55e, #15803d);
+    box-shadow: 0 0 6px rgba(34,197,94,0.25);
+  }
+  .l2-browser .tab-strip {
+    display: flex; align-items: flex-end; gap: 1px; flex: 1; height: 22px;
+  }
+  .l2-browser .tab-active {
+    background: #0c2236; padding: 4px 14px;
+    border-radius: 6px 6px 0 0; font-size: 9px; color: #7dd3fc;
+    border: 1px solid rgba(7, 89, 133, 0.25);
+    border-bottom: 1px solid #0c2236; position: relative; top: 1px;
+  }
+  .l2-browser .tab-inactive {
+    padding: 3px 10px; border-radius: 4px 4px 0 0;
+    font-size: 9px; color: rgba(125, 211, 252, 0.3);
+  }
+  .l2-browser .urlbar-wrap {
+    padding: 5px 12px;
+    border-bottom: 1px solid rgba(7, 89, 133, 0.12);
+    background: rgba(8, 47, 73, 0.2);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .l2-browser .nav-btn {
+    width: 14px; height: 14px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(125, 211, 252, 0.2); font-size: 10px;
+  }
+  .l2-browser .urlbar {
+    height: 22px; border-radius: 8px;
+    display: flex; align-items: center; padding: 0 10px; gap: 6px; flex: 1;
+    background: rgba(12, 74, 110, 0.3);
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.3), inset 0 0 0 0.5px rgba(120, 200, 255, 0.04);
+    font-size: 9px; font-family: ui-monospace, monospace;
+    color: rgba(14, 165, 233, 0.45);
+  }
+  .l2-browser .lock-icon {
+    width: 7px; height: 5px;
+    border: 1.5px solid rgba(34, 197, 94, 0.7);
+    border-radius: 3px 3px 0 0; position: relative; flex-shrink: 0;
+  }
+  .l2-browser .lock-icon::after {
+    content: ''; position: absolute; top: 3px; left: -1.5px;
+    width: 10px; height: 6px;
+    background: rgba(34, 197, 94, 0.7); border-radius: 1px;
+  }
+  .l2-browser .viewport {
+    background: rgba(8, 47, 73, 0.15); position: relative;
+  }
+
+  /* =====================================================
+     LEVEL 3: ENHANCED REALISM
+     Gray screen backgrounds for contrast, corrected
+     shapes, more prominent hardware, better readability
+     ===================================================== */
+
+  .l3-iphone {
+    position: relative;
+    border-radius: 38px;
+    width: 220px; min-height: 450px;
+    border: 5px solid rgba(194, 65, 12, 0.6);
+    background: rgba(67, 20, 7, 0.4);
+    display: flex; flex-direction: column;
+    box-shadow: 0 0 40px rgba(249, 115, 22, 0.12);
+  }
+  .l3-iphone .notch {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 10;
+    width: 56px; height: 20px; border-radius: 12px;
+    background: #181210;
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.8), 0 0.5px 0 rgba(255,200,150,0.08);
+  }
+  .l3-iphone .notch-cam {
+    position: absolute; top: 6px; right: 14px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #282838, #101018);
+    box-shadow: inset 0 0 3px rgba(100,120,255,0.5), 0 0 2px rgba(0,0,0,0.5), 0 0 5px rgba(100,120,255,0.15);
+  }
+  .l3-iphone .notch-sensor {
+    position: absolute; top: 8px; left: 14px;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: #141210; box-shadow: inset 0 0 2px rgba(0,0,0,0.5);
+  }
+  .l3-iphone .silent-switch {
+    position: absolute; left: -5px; top: 48px;
+    width: 4px; height: 16px; border-radius: 1px;
+    background: linear-gradient(to left, hsl(20, 45%, 20%), hsl(20, 45%, 14%), hsl(20, 45%, 20%));
+    box-shadow: -1px 0 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,200,150,0.08);
+  }
+  .l3-iphone .vol-buttons {
+    position: absolute; left: -5px; top: 70px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .l3-iphone .vol-btn {
+    width: 4px; height: 28px; border-radius: 1px;
+    background: linear-gradient(to left, hsl(20, 45%, 20%), hsl(20, 45%, 14%), hsl(20, 45%, 20%));
+    box-shadow: -2px 0 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,200,150,0.08), inset 0 -1px 0 rgba(0,0,0,0.3);
+  }
+  .l3-iphone .pwr-btn {
+    position: absolute; right: -5px; top: 72px;
+    width: 4px; height: 38px; border-radius: 1px;
+    background: linear-gradient(to right, hsl(20, 45%, 20%), hsl(20, 45%, 14%), hsl(20, 45%, 20%));
+    box-shadow: 2px 0 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,200,150,0.08);
+  }
+  .l3-iphone .screen {
+    border-radius: 28px; overflow: hidden;
+    background: #1a1714; position: relative;
+    flex: 1; display: flex; flex-direction: column;
+  }
+  .l3-iphone .status-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 20px 2px; position: relative; z-index: 4;
+  }
+  .l3-iphone .status-time {
+    font-size: 10px; font-weight: 600;
+    color: rgba(194, 65, 12, 0.8); font-family: -apple-system, sans-serif;
+  }
+  .l3-iphone .status-icons { display: flex; align-items: center; gap: 4px; }
+  .l3-iphone .status-signal { display: flex; gap: 1px; align-items: flex-end; }
+  .l3-iphone .signal-bar {
+    width: 2px; background: rgba(194, 65, 12, 0.6); border-radius: 0.5px;
+  }
+  .l3-iphone .status-battery {
+    width: 16px; height: 8px;
+    border: 1px solid rgba(194, 65, 12, 0.5); border-radius: 2px;
+    position: relative; display: flex; align-items: center; padding: 1px;
+  }
+  .l3-iphone .status-battery::after {
+    content: ''; position: absolute; right: -3px; top: 50%; transform: translateY(-50%);
+    width: 2px; height: 4px; background: rgba(194, 65, 12, 0.5); border-radius: 0 1px 1px 0;
+  }
+  .l3-iphone .battery-fill {
+    width: 70%; height: 100%; background: rgba(194, 65, 12, 0.6); border-radius: 1px;
+  }
+  .l3-iphone .screen-reflection {
+    position: absolute; inset: 0; border-radius: 28px;
+    background: linear-gradient(160deg, rgba(255, 230, 200, 0.05) 0%, rgba(255, 230, 200, 0.02) 20%, transparent 40%);
+    pointer-events: none; z-index: 5;
+  }
+  .l3-iphone .screen-content { padding-top: 4px; flex: 1; }
+  .l3-iphone .home-indicator {
+    width: 80px; height: 4px; border-radius: 2px;
+    background: rgba(194, 65, 12, 0.3);
+    margin: 6px auto 8px;
+  }
+
+  /* L3 Watch - rectangular Apple Watch with simple border */
+  .l3-watch {
+    position: relative;
+    width: 200px;
+    border-radius: 48px;
+    border: 5px solid rgba(190, 24, 93, 0.5);
+    background: rgba(69, 10, 38, 0.3);
+    box-shadow: 0 0 50px rgba(236, 72, 153, 0.15);
+  }
+  .l3-watch .crown {
+    position: absolute; right: -9px; top: 30px;
+    width: 4px; height: 32px; border-radius: 2px;
+    background: rgba(190, 24, 93, 0.6);
+  }
+  .l3-watch .side-btn {
+    position: absolute; right: -8px; top: 70px;
+    width: 3px; height: 16px; border-radius: 2px;
+    background: rgba(190, 24, 93, 0.4);
+  }
+  .l3-watch .band-top, .l3-watch .band-bottom {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    width: 52%; height: 22px; border-radius: 5px;
+    background: rgba(190, 24, 93, 0.3);
+  }
+  .l3-watch .band-top { top: -22px; }
+  .l3-watch .band-bottom { bottom: -22px; }
+  .l3-watch .screen {
+    border-radius: 42px; overflow: hidden;
+    background: #18101a; position: relative;
+  }
+  .l3-watch .screen-reflection {
+    position: absolute; inset: 0; border-radius: 42px;
+    background: linear-gradient(160deg, rgba(255, 200, 230, 0.05) 0%, rgba(255, 200, 230, 0.02) 20%, transparent 40%);
+    pointer-events: none; z-index: 5;
+  }
+  .l3-watch .screen .content { padding-bottom: 18px; }
+  .l3-watch .time {
+    text-align: center; padding: 10px 0 2px;
+    font-size: 10px; font-weight: 600;
+    font-family: -apple-system, sans-serif;
+    letter-spacing: 0.05em; color: rgba(236, 72, 153, 0.7);
+  }
+
+  /* L3 Browser - better contrast, lighter viewport */
+  .l3-browser {
+    position: relative; border-radius: 10px;
+    min-width: 280px; max-width: 340px;
+    background: #0c1e30; overflow: hidden;
+    box-shadow:
+      inset 0 1px 0 rgba(120, 200, 255, 0.1),
+      0 0 0 1px #060e18,
+      0 0 0 2px rgba(120, 200, 255, 0.05),
+      0 0 0 3.5px #0a1a2a,
+      0 6px 16px rgba(0, 0, 0, 0.5),
+      0 0 50px rgba(14, 165, 233, 0.12);
+  }
+  .l3-browser .titlebar {
+    display: flex; align-items: center;
+    padding: 10px 14px;
+    background: linear-gradient(to bottom, #102e4a, #0c2236);
+    border-bottom: 1px solid rgba(7, 89, 133, 0.2);
+  }
+  .l3-browser .dots { display: flex; gap: 7px; margin-right: 14px; }
+  .l3-browser .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .l3-browser .dot-r {
+    background: radial-gradient(circle at 35% 35%, #ff8a80, #ef4444, #b91c1c);
+    box-shadow: 0 0 6px rgba(239,68,68,0.3);
+  }
+  .l3-browser .dot-y {
+    background: radial-gradient(circle at 35% 35%, #fff176, #eab308, #a16207);
+    box-shadow: 0 0 6px rgba(234,179,8,0.3);
+  }
+  .l3-browser .dot-g {
+    background: radial-gradient(circle at 35% 35%, #69f0ae, #22c55e, #15803d);
+    box-shadow: 0 0 6px rgba(34,197,94,0.3);
+  }
+  .l3-browser .tab-strip {
+    display: flex; align-items: flex-end; gap: 1px; flex: 1; height: 24px;
+  }
+  .l3-browser .tab-active {
+    background: #0e2840; padding: 5px 14px;
+    border-radius: 7px 7px 0 0; font-size: 10px; color: #7dd3fc;
+    border: 1px solid rgba(7, 89, 133, 0.3);
+    border-bottom: 1px solid #0e2840; position: relative; top: 1px;
+  }
+  .l3-browser .tab-inactive {
+    padding: 4px 10px; border-radius: 5px 5px 0 0;
+    font-size: 10px; color: rgba(125, 211, 252, 0.3);
+  }
+  .l3-browser .urlbar-wrap {
+    padding: 6px 14px;
+    border-bottom: 1px solid rgba(7, 89, 133, 0.15);
+    background: rgba(8, 47, 73, 0.25);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .l3-browser .nav-btn {
+    width: 16px; height: 16px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(125, 211, 252, 0.3); font-size: 11px;
+  }
+  .l3-browser .urlbar {
+    height: 24px; border-radius: 8px;
+    display: flex; align-items: center; padding: 0 10px; gap: 6px; flex: 1;
+    background: rgba(12, 74, 110, 0.35);
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.3), inset 0 0 0 0.5px rgba(120, 200, 255, 0.06);
+    font-size: 10px; font-family: ui-monospace, monospace;
+    color: rgba(14, 165, 233, 0.55);
+  }
+  .l3-browser .lock-icon {
+    width: 8px; height: 6px;
+    border: 1.5px solid rgba(34, 197, 94, 0.7);
+    border-radius: 3px 3px 0 0; position: relative; flex-shrink: 0;
+  }
+  .l3-browser .lock-icon::after {
+    content: ''; position: absolute; top: 4px; left: -1.5px;
+    width: 11px; height: 7px;
+    background: rgba(34, 197, 94, 0.7); border-radius: 1px;
+  }
+  .l3-browser .viewport {
+    background: #0d2035; position: relative;
+  }
+
+  /* =====================================================
+     LEVEL 4: MAXIMUM REALISM
+     Everything from L3 but pushed further: thicker bezels,
+     stronger metallic effect, more prominent hardware,
+     gray screens for maximum contrast, home indicator
+     ===================================================== */
+
+  .l4-iphone {
+    position: relative;
+    border-radius: 40px;
+    width: 215px; min-height: 470px;
+    padding: 12px;
+    display: flex; flex-direction: column;
+    background: linear-gradient(140deg,
+      hsl(20, 50%, 16%) 0%, hsl(20, 45%, 24%) 8%, hsl(20, 55%, 13%) 20%,
+      hsl(20, 50%, 22%) 32%, hsl(20, 55%, 11%) 45%, hsl(20, 45%, 21%) 58%,
+      hsl(20, 55%, 12%) 70%, hsl(20, 50%, 23%) 82%, hsl(20, 55%, 14%) 100%
+    );
+    box-shadow:
+      inset 0 2px 0 rgba(255, 220, 180, 0.2),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+      inset 2px 0 0 rgba(255, 220, 180, 0.08),
+      inset -2px 0 0 rgba(255, 220, 180, 0.08),
+      0 0 0 1px rgba(0, 0, 0, 0.9),
+      0 0 0 3px hsl(20, 50%, 10%),
+      0 0 0 3.5px rgba(255, 200, 150, 0.12),
+      0 8px 16px rgba(0, 0, 0, 0.5),
+      0 16px 40px rgba(0, 0, 0, 0.4),
+      0 0 60px rgba(249, 115, 22, 0.18);
+  }
+  .l4-iphone .notch {
+    position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 10;
+    width: 52px; height: 22px; border-radius: 12px;
+    background: #1c1814;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.8), 0 1px 0 rgba(255,210,170,0.1);
+  }
+  .l4-iphone .notch-cam {
+    position: absolute; top: 7px; right: 14px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #2a2a40, #0e0e18);
+    box-shadow: inset 0 0 4px rgba(100,120,255,0.5), 0 0 3px rgba(0,0,0,0.5), 0 0 6px rgba(100,120,255,0.15);
+  }
+  .l4-iphone .notch-sensor {
+    position: absolute; top: 9px; left: 14px;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #181614; box-shadow: inset 0 0 3px rgba(0,0,0,0.5);
+  }
+  .l4-iphone .silent-switch {
+    position: absolute; left: -6px; top: 52px;
+    width: 4px; height: 18px; border-radius: 2px;
+    background: linear-gradient(to left, hsl(20, 45%, 22%), hsl(20, 45%, 15%), hsl(20, 45%, 22%));
+    box-shadow: -2px 0 5px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,210,170,0.1);
+  }
+  .l4-iphone .vol-buttons {
+    position: absolute; left: -6px; top: 76px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .l4-iphone .vol-btn {
+    width: 4px; height: 30px; border-radius: 2px;
+    background: linear-gradient(to left, hsl(20, 45%, 22%), hsl(20, 45%, 15%), hsl(20, 45%, 22%));
+    box-shadow: -2px 0 5px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,210,170,0.1), inset 0 -1px 0 rgba(0,0,0,0.3);
+  }
+  .l4-iphone .pwr-btn {
+    position: absolute; right: -6px; top: 78px;
+    width: 4px; height: 42px; border-radius: 2px;
+    background: linear-gradient(to right, hsl(20, 45%, 22%), hsl(20, 45%, 15%), hsl(20, 45%, 22%));
+    box-shadow: 2px 0 5px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,210,170,0.1);
+  }
+  .l4-iphone .screen {
+    border-radius: 28px; overflow: hidden;
+    background: #201c18; position: relative;
+    flex: 1; display: flex; flex-direction: column;
+  }
+  .l4-iphone .status-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 22px 2px; position: relative; z-index: 4;
+  }
+  .l4-iphone .status-time {
+    font-size: 11px; font-weight: 700;
+    color: rgba(194, 65, 12, 0.9); font-family: -apple-system, sans-serif;
+  }
+  .l4-iphone .status-icons { display: flex; align-items: center; gap: 5px; }
+  .l4-iphone .status-signal { display: flex; gap: 1.5px; align-items: flex-end; }
+  .l4-iphone .signal-bar {
+    width: 2.5px; background: rgba(194, 65, 12, 0.7); border-radius: 0.5px;
+  }
+  .l4-iphone .status-battery {
+    width: 18px; height: 9px;
+    border: 1.5px solid rgba(194, 65, 12, 0.6); border-radius: 2px;
+    position: relative; display: flex; align-items: center; padding: 1px;
+  }
+  .l4-iphone .status-battery::after {
+    content: ''; position: absolute; right: -3px; top: 50%; transform: translateY(-50%);
+    width: 2px; height: 5px; background: rgba(194, 65, 12, 0.5); border-radius: 0 1px 1px 0;
+  }
+  .l4-iphone .battery-fill {
+    width: 70%; height: 100%; background: rgba(194, 65, 12, 0.7); border-radius: 1px;
+  }
+  .l4-iphone .screen-reflection {
+    position: absolute; inset: 0; border-radius: 28px;
+    background: linear-gradient(155deg, rgba(255, 240, 210, 0.06) 0%, rgba(255, 240, 210, 0.02) 25%, transparent 45%);
+    pointer-events: none; z-index: 5;
+  }
+  .l4-iphone .screen-content { padding-top: 4px; flex: 1; }
+  .l4-iphone .home-indicator {
+    width: 90px; height: 5px; border-radius: 3px;
+    background: rgba(194, 65, 12, 0.35);
+    margin: 8px auto 10px;
+  }
+
+  /* L4 Watch - very prominent rectangular Apple Watch */
+  .l4-watch {
+    position: relative;
+    width: 200px;
+    border-radius: 50px;
+    padding: 12px;
+    background: linear-gradient(140deg,
+      hsl(330, 50%, 14%) 0%, hsl(330, 45%, 22%) 8%, hsl(330, 55%, 11%) 20%,
+      hsl(330, 50%, 20%) 32%, hsl(330, 55%, 10%) 45%, hsl(330, 45%, 19%) 58%,
+      hsl(330, 55%, 11%) 70%, hsl(330, 50%, 21%) 82%, hsl(330, 55%, 13%) 100%
+    );
+    box-shadow:
+      inset 0 2px 0 rgba(255, 190, 230, 0.18),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+      inset 2px 0 0 rgba(255, 190, 230, 0.06),
+      inset -2px 0 0 rgba(255, 190, 230, 0.06),
+      0 0 0 1px rgba(0, 0, 0, 0.9),
+      0 0 0 3px hsl(330, 50%, 8%),
+      0 0 0 3.5px rgba(255, 180, 220, 0.1),
+      0 8px 16px rgba(0, 0, 0, 0.5),
+      0 16px 40px rgba(0, 0, 0, 0.4),
+      0 0 60px rgba(236, 72, 153, 0.18);
+  }
+  .l4-watch .crown {
+    position: absolute; right: -10px; top: 32px;
+    width: 9px; height: 42px; border-radius: 2px 5px 5px 2px;
+    background: repeating-linear-gradient(to bottom,
+      hsl(330, 45%, 18%) 0px, hsl(330, 50%, 22%) 2px,
+      hsl(330, 45%, 15%) 3px, hsl(330, 50%, 20%) 5px
+    );
+    box-shadow: 3px 0 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,190,230,0.15), inset 0 -1px 0 rgba(0,0,0,0.3);
+  }
+  .l4-watch .crown-dot {
+    position: absolute; right: -9px; top: 48px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, hsl(330, 50%, 24%), hsl(330, 55%, 12%));
+    box-shadow: inset 0 0 3px rgba(0,0,0,0.5), 0 0 2px rgba(255,180,220,0.1);
+  }
+  .l4-watch .side-btn {
+    position: absolute; right: -8px; top: 84px;
+    width: 7px; height: 22px; border-radius: 2px 4px 4px 2px;
+    background: linear-gradient(to right, hsl(330, 45%, 18%), hsl(330, 45%, 12%), hsl(330, 45%, 18%));
+    box-shadow: 2px 0 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,190,230,0.08);
+  }
+  .l4-watch .band-top, .l4-watch .band-bottom {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    width: 55%; height: 28px; border-radius: 6px;
+    background: linear-gradient(to right,
+      hsl(330, 35%, 6%), hsl(330, 40%, 12%), hsl(330, 45%, 16%), hsl(330, 50%, 18%),
+      hsl(330, 45%, 16%), hsl(330, 40%, 12%), hsl(330, 35%, 6%)
+    );
+    box-shadow: 0 0 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,190,230,0.05);
+  }
+  .l4-watch .band-top { top: -28px; }
+  .l4-watch .band-bottom { bottom: -28px; }
+  .l4-watch .screen {
+    border-radius: 42px; overflow: hidden;
+    background: #1c1220; position: relative;
+  }
+  .l4-watch .screen-reflection {
+    position: absolute; inset: 0; border-radius: 42px;
+    background: linear-gradient(155deg, rgba(255, 210, 240, 0.06) 0%, rgba(255, 210, 240, 0.02) 25%, transparent 45%);
+    pointer-events: none; z-index: 5;
+  }
+  .l4-watch .screen .content { padding-bottom: 20px; }
+  .l4-watch .time {
+    text-align: center; padding: 12px 0 2px;
+    font-size: 11px; font-weight: 700;
+    font-family: -apple-system, sans-serif;
+    letter-spacing: 0.05em; color: rgba(236, 72, 153, 0.8);
+  }
+
+  /* L4 Browser - bolder frame, stronger contrast */
+  .l4-browser {
+    position: relative; border-radius: 12px;
+    min-width: 280px; max-width: 340px;
+    background: #0c2030; overflow: hidden;
+    box-shadow:
+      inset 0 2px 0 rgba(120, 200, 255, 0.12),
+      0 0 0 1px #060e18,
+      0 0 0 2.5px rgba(120, 200, 255, 0.06),
+      0 0 0 4px #0a1a2a,
+      0 8px 20px rgba(0, 0, 0, 0.5),
+      0 16px 40px rgba(0, 0, 0, 0.4),
+      0 0 60px rgba(14, 165, 233, 0.14);
+  }
+  .l4-browser .titlebar {
+    display: flex; align-items: center;
+    padding: 10px 14px;
+    background: linear-gradient(to bottom, #123350, #0e2a42);
+    border-bottom: 1px solid rgba(7, 89, 133, 0.25);
+  }
+  .l4-browser .dots { display: flex; gap: 7px; margin-right: 14px; }
+  .l4-browser .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .l4-browser .dot-r {
+    background: radial-gradient(circle at 35% 35%, #ff8a80, #ef4444, #b91c1c);
+    box-shadow: 0 0 8px rgba(239,68,68,0.35);
+  }
+  .l4-browser .dot-y {
+    background: radial-gradient(circle at 35% 35%, #fff176, #eab308, #a16207);
+    box-shadow: 0 0 8px rgba(234,179,8,0.35);
+  }
+  .l4-browser .dot-g {
+    background: radial-gradient(circle at 35% 35%, #69f0ae, #22c55e, #15803d);
+    box-shadow: 0 0 8px rgba(34,197,94,0.35);
+  }
+  .l4-browser .tab-strip {
+    display: flex; align-items: flex-end; gap: 1px; flex: 1; height: 24px;
+  }
+  .l4-browser .tab-active {
+    background: #0e2a42; padding: 5px 16px;
+    border-radius: 7px 7px 0 0; font-size: 10px; color: #7dd3fc;
+    border: 1px solid rgba(7, 89, 133, 0.3);
+    border-bottom: 1px solid #0e2a42; position: relative; top: 1px;
+    font-weight: 500;
+  }
+  .l4-browser .tab-inactive {
+    padding: 4px 12px; border-radius: 5px 5px 0 0;
+    font-size: 10px; color: rgba(125, 211, 252, 0.3);
+  }
+  .l4-browser .urlbar-wrap {
+    padding: 6px 14px;
+    border-bottom: 1px solid rgba(7, 89, 133, 0.15);
+    background: rgba(8, 47, 73, 0.3);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .l4-browser .nav-btn {
+    width: 16px; height: 16px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(125, 211, 252, 0.35); font-size: 12px; font-weight: 600;
+  }
+  .l4-browser .urlbar {
+    height: 24px; border-radius: 8px;
+    display: flex; align-items: center; padding: 0 10px; gap: 6px; flex: 1;
+    background: rgba(12, 74, 110, 0.35);
+    box-shadow: inset 0 1px 4px rgba(0,0,0,0.35), inset 0 0 0 0.5px rgba(120, 200, 255, 0.06);
+    font-size: 10px; font-family: ui-monospace, monospace;
+    color: rgba(14, 165, 233, 0.6);
+  }
+  .l4-browser .lock-icon {
+    width: 8px; height: 6px;
+    border: 1.5px solid rgba(34, 197, 94, 0.8);
+    border-radius: 3px 3px 0 0; position: relative; flex-shrink: 0;
+  }
+  .l4-browser .lock-icon::after {
+    content: ''; position: absolute; top: 4px; left: -1.5px;
+    width: 11px; height: 7px;
+    background: rgba(34, 197, 94, 0.8); border-radius: 1px;
+  }
+  .l4-browser .viewport {
+    background: #0e2540; position: relative;
+  }
+</style>
+</head>
+<body>
+
+<h1>Device Frame Style Spectrum</h1>
+<p class="subtitle">iPhone, Apple Watch, and Web Client across four levels. Same content, same palette, increasing realism and contrast.</p>
+
+<!-- ═══════════════════════════════════════════════════════
+     LEVEL 1: CURRENT
+     ═══════════════════════════════════════════════════════ -->
+<div class="level-section">
+  <div style="max-width:1100px; margin:0 auto;">
+    <div class="level-header">
+      <h2>Level 1: Current</h2>
+      <span class="tag tag-current">What we ship today</span>
+    </div>
+    <p class="level-desc">Flat colored borders, minimal hardware hints, dark screens. Recognizable only if you look carefully.</p>
+  </div>
+  <div class="device-row">
+    <div class="device-cell iphone">
+      <div class="device-label">iPhone</div>
+      <div class="l1-iphone">
+        <div class="notch"></div>
+        <div class="vol-buttons"><div class="vol-btn"></div><div class="vol-btn"></div></div>
+        <div class="pwr-btn"></div>
+        <div class="screen">
+          <div class="content dark-content">
+            <div class="content-header"><span class="content-icon">🍎</span><span class="content-name">UnaMentis</span></div>
+            <div class="content-badges"><span class="badge badge-type">iOS Client</span><span class="badge badge-tech">UIKit</span></div>
+            <div class="content-desc">Primary iOS client for voice-based AI tutoring.</div>
+            <div class="content-patterns"><span class="pattern">Service Layer</span></div>
+            <div class="content-metrics"><span class="lang-dot"></span><span>swift</span><span>25 files</span><span>5,896 loc</span></div>
+            <div class="content-footer">43 sub-components</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="device-cell watch">
+      <div class="device-label">Apple Watch</div>
+      <div class="l1-watch">
+        <div class="crown"></div>
+        <div class="side-btn"></div>
+        <div class="screen">
+          <div class="time">12:00</div>
+          <div class="content dark-content">
+            <div class="content-header"><span class="content-icon">⌚</span><span class="content-name">UnaMentis</span></div>
+            <div class="content-badges"><span class="badge badge-type">Watch App</span><span class="badge badge-tech">SwiftUI</span></div>
+            <div class="content-desc">watchOS companion for on-wrist learning.</div>
+            <div class="content-metrics"><span class="lang-dot"></span><span>swift</span><span>3 files</span><span>45 loc</span></div>
+            <div class="content-footer">7 sub-components</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="device-cell browser">
+      <div class="device-label">Web Client</div>
+      <div class="l1-browser">
+        <div class="titlebar"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+        <div class="urlbar-wrap"><div class="urlbar">https://...</div></div>
+        <div class="viewport">
+          <div class="content dark-content">
+            <div class="content-header"><span class="content-icon">🌐</span><span class="content-name">web</span></div>
+            <div class="content-badges"><span class="badge badge-type">Web Client</span><span class="badge badge-tech">Next.js</span><span class="badge badge-role">Presentation</span></div>
+            <div class="content-desc">Admin web dashboard.</div>
+            <div class="content-patterns"><span class="pattern">Dependency Injection</span><span class="pattern">Tests (2 files)</span></div>
+            <div class="content-metrics"><span class="lang-dot"></span><span>typescript</span><span>13 files</span><span>16,299 loc</span></div>
+            <div class="content-footer">12 sub-components</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     LEVEL 2: REALISTIC BASE
+     ═══════════════════════════════════════════════════════ -->
+<div class="level-section">
+  <div style="max-width:1100px; margin:0 auto;">
+    <div class="level-header">
+      <h2>Level 2: Realistic Base</h2>
+      <span class="tag tag-base">Metallic bezels &amp; hardware</span>
+    </div>
+    <p class="level-desc">Full metallic gradient bezels, status bar, crown knurling, browser tabs and lock icon. Corrected Apple Watch shape (rectangular). Bigger bands.</p>
+  </div>
+  <div class="device-row">
+    <div class="device-cell iphone">
+      <div class="device-label">iPhone</div>
+      <div class="l2-iphone">
+        <div class="notch"><div class="notch-cam"></div><div class="notch-sensor"></div></div>
+        <div class="silent-switch"></div>
+        <div class="vol-buttons"><div class="vol-btn"></div><div class="vol-btn"></div></div>
+        <div class="pwr-btn"></div>
+        <div class="screen">
+          <div class="screen-reflection"></div>
+          <div class="status-bar">
+            <span class="status-time">9:41</span>
+            <div class="status-icons">
+              <div class="status-signal"><div class="signal-bar" style="height:4px"></div><div class="signal-bar" style="height:6px"></div><div class="signal-bar" style="height:8px"></div><div class="signal-bar" style="height:10px"></div></div>
+              <div class="status-battery"><div class="battery-fill"></div></div>
+            </div>
+          </div>
+          <div class="screen-content">
+            <div class="content dark-content">
+              <div class="content-header"><span class="content-icon">🍎</span><span class="content-name">UnaMentis</span></div>
+              <div class="content-badges"><span class="badge badge-type">iOS Client</span><span class="badge badge-tech">UIKit</span></div>
+              <div class="content-desc">Primary iOS client for voice-based AI tutoring.</div>
+              <div class="content-patterns"><span class="pattern">Service Layer</span></div>
+              <div class="content-metrics"><span class="lang-dot"></span><span>swift</span><span>25 files</span><span>5,896 loc</span></div>
+              <div class="content-footer">43 sub-components</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="device-cell watch">
+      <div class="device-label">Apple Watch</div>
+      <div class="l2-watch" style="margin-top: 22px; margin-bottom: 22px;">
+        <div class="band-top"></div>
+        <div class="crown"></div>
+        <div class="crown-dot"></div>
+        <div class="side-btn"></div>
+        <div class="screen">
+          <div class="screen-reflection"></div>
+          <div class="time">12:00</div>
+          <div class="content dark-content">
+            <div class="content-header"><span class="content-icon">⌚</span><span class="content-name">UnaMentis</span></div>
+            <div class="content-badges"><span class="badge badge-type">Watch App</span><span class="badge badge-tech">SwiftUI</span></div>
+            <div class="content-desc">watchOS companion for on-wrist learning.</div>
+            <div class="content-metrics"><span class="lang-dot"></span><span>swift</span><span>3 files</span><span>45 loc</span></div>
+            <div class="content-footer">7 sub-components</div>
+          </div>
+        </div>
+        <div class="band-bottom"></div>
+      </div>
+    </div>
+    <div class="device-cell browser">
+      <div class="device-label">Web Client</div>
+      <div class="l2-browser">
+        <div class="titlebar">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <div class="tab-strip"><div class="tab-active">web</div><div class="tab-inactive">+</div></div>
+        </div>
+        <div class="urlbar-wrap">
+          <div class="nav-btn">&lt;</div><div class="nav-btn">&gt;</div>
+          <div class="urlbar"><div class="lock-icon"></div><span>admin.unamentis.com</span></div>
+        </div>
+        <div class="viewport">
+          <div class="content dark-content">
+            <div class="content-header"><span class="content-icon">🌐</span><span class="content-name">web</span></div>
+            <div class="content-badges"><span class="badge badge-type">Web Client</span><span class="badge badge-tech">Next.js</span><span class="badge badge-role">Presentation</span></div>
+            <div class="content-desc">Admin web dashboard.</div>
+            <div class="content-patterns"><span class="pattern">Dependency Injection</span><span class="pattern">Tests (2 files)</span></div>
+            <div class="content-metrics"><span class="lang-dot"></span><span>typescript</span><span>13 files</span><span>16,299 loc</span></div>
+            <div class="content-footer">12 sub-components</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     LEVEL 3: ENHANCED REALISM
+     ═══════════════════════════════════════════════════════ -->
+<div class="level-section">
+  <div style="max-width:1100px; margin:0 auto;">
+    <div class="level-header">
+      <h2>Level 3: Enhanced</h2>
+      <span class="tag tag-enhanced">Warmer screens &amp; stronger features</span>
+    </div>
+    <p class="level-desc">Warm gray screen backgrounds for contrast with bezels and notch. Thicker, more prominent hardware. Home indicator. Larger bands. Stronger content contrast.</p>
+  </div>
+  <div class="device-row">
+    <div class="device-cell iphone">
+      <div class="device-label">iPhone</div>
+      <div class="l3-iphone">
+        <div class="notch"><div class="notch-cam"></div><div class="notch-sensor"></div></div>
+        <div class="silent-switch"></div>
+        <div class="vol-buttons"><div class="vol-btn"></div><div class="vol-btn"></div></div>
+        <div class="pwr-btn"></div>
+        <div class="screen">
+          <div class="screen-reflection"></div>
+          <div class="status-bar">
+            <span class="status-time">9:41</span>
+            <div class="status-icons">
+              <div class="status-signal"><div class="signal-bar" style="height:4px"></div><div class="signal-bar" style="height:6px"></div><div class="signal-bar" style="height:8px"></div><div class="signal-bar" style="height:10px"></div></div>
+              <div class="status-battery"><div class="battery-fill"></div></div>
+            </div>
+          </div>
+          <div class="screen-content">
+            <div class="content dark-content">
+              <div class="content-header"><span class="content-icon">🍎</span><span class="content-name">UnaMentis</span></div>
+              <div class="content-badges"><span class="badge badge-type">iOS Client</span><span class="badge badge-tech">UIKit</span></div>
+              <div class="content-desc">Primary iOS client for voice-based AI tutoring.</div>
+              <div class="content-patterns"><span class="pattern">Service Layer</span></div>
+              <div class="content-metrics"><span class="lang-dot"></span><span>swift</span><span>25 files</span><span>5,896 loc</span></div>
+              <div class="content-footer">43 sub-components</div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+    <div class="device-cell watch">
+      <div class="device-label">Apple Watch</div>
+      <div class="l3-watch" style="margin-top: 26px; margin-bottom: 26px;">
+        <div class="band-top"></div>
+        <div class="crown"></div>
+        <div class="side-btn"></div>
+        <div class="screen">
+          <div class="screen-reflection"></div>
+          <div class="time">12:00</div>
+          <div class="content dark-content">
+            <div class="content-header"><span class="content-icon">⌚</span><span class="content-name">UnaMentis</span></div>
+            <div class="content-badges"><span class="badge badge-type">Watch App</span><span class="badge badge-tech">SwiftUI</span></div>
+            <div class="content-desc">watchOS companion for on-wrist learning.</div>
+            <div class="content-metrics"><span class="lang-dot"></span><span>swift</span><span>3 files</span><span>45 loc</span></div>
+            <div class="content-footer">7 sub-components</div>
+          </div>
+        </div>
+        <div class="band-bottom"></div>
+      </div>
+    </div>
+    <div class="device-cell browser">
+      <div class="device-label">Web Client</div>
+      <div class="l3-browser">
+        <div class="titlebar">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <div class="tab-strip"><div class="tab-active">web</div><div class="tab-inactive">+</div></div>
+        </div>
+        <div class="urlbar-wrap">
+          <div class="nav-btn">&lt;</div><div class="nav-btn">&gt;</div>
+          <div class="urlbar"><div class="lock-icon"></div><span>admin.unamentis.com</span></div>
+        </div>
+        <div class="viewport">
+          <div class="content dark-content">
+            <div class="content-header"><span class="content-icon">🌐</span><span class="content-name">web</span></div>
+            <div class="content-badges"><span class="badge badge-type">Web Client</span><span class="badge badge-tech">Next.js</span><span class="badge badge-role">Presentation</span></div>
+            <div class="content-desc">Admin web dashboard.</div>
+            <div class="content-patterns"><span class="pattern">Dependency Injection</span><span class="pattern">Tests (2 files)</span></div>
+            <div class="content-metrics"><span class="lang-dot"></span><span>typescript</span><span>13 files</span><span>16,299 loc</span></div>
+            <div class="content-footer">12 sub-components</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     LEVEL 4: MAXIMUM
+     ═══════════════════════════════════════════════════════ -->
+<div class="level-section">
+  <div style="max-width:1100px; margin:0 auto;">
+    <div class="level-header">
+      <h2>Level 4: Maximum</h2>
+      <span class="tag tag-max">Pushed to the limit</span>
+    </div>
+    <p class="level-desc">Even thicker bezels, stronger metallic sheen, bolder hardware, more pronounced glow. Larger bands, bolder status bar. Maximum "that's a phone" instant recognition.</p>
+  </div>
+  <div class="device-row">
+    <div class="device-cell iphone">
+      <div class="device-label">iPhone</div>
+      <div class="l4-iphone">
+        <div class="notch"><div class="notch-cam"></div><div class="notch-sensor"></div></div>
+        <div class="silent-switch"></div>
+        <div class="vol-buttons"><div class="vol-btn"></div><div class="vol-btn"></div></div>
+        <div class="pwr-btn"></div>
+        <div class="screen">
+          <div class="screen-reflection"></div>
+          <div class="status-bar">
+            <span class="status-time">9:41</span>
+            <div class="status-icons">
+              <div class="status-signal"><div class="signal-bar" style="height:5px"></div><div class="signal-bar" style="height:7px"></div><div class="signal-bar" style="height:9px"></div><div class="signal-bar" style="height:11px"></div></div>
+              <div class="status-battery"><div class="battery-fill"></div></div>
+            </div>
+          </div>
+          <div class="screen-content">
+            <div class="content dark-content">
+              <div class="content-header"><span class="content-icon">🍎</span><span class="content-name">UnaMentis</span></div>
+              <div class="content-badges"><span class="badge badge-type">iOS Client</span><span class="badge badge-tech">UIKit</span></div>
+              <div class="content-desc">Primary iOS client for voice-based AI tutoring.</div>
+              <div class="content-patterns"><span class="pattern">Service Layer</span></div>
+              <div class="content-metrics"><span class="lang-dot"></span><span>swift</span><span>25 files</span><span>5,896 loc</span></div>
+              <div class="content-footer">43 sub-components</div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+    <div class="device-cell watch">
+      <div class="device-label">Apple Watch</div>
+      <div class="l4-watch" style="margin-top: 32px; margin-bottom: 32px;">
+        <div class="band-top"></div>
+        <div class="crown"></div>
+        <div class="crown-dot"></div>
+        <div class="side-btn"></div>
+        <div class="screen">
+          <div class="screen-reflection"></div>
+          <div class="time">12:00</div>
+          <div class="content dark-content">
+            <div class="content-header"><span class="content-icon">⌚</span><span class="content-name">UnaMentis</span></div>
+            <div class="content-badges"><span class="badge badge-type">Watch App</span><span class="badge badge-tech">SwiftUI</span></div>
+            <div class="content-desc">watchOS companion for on-wrist learning.</div>
+            <div class="content-metrics"><span class="lang-dot"></span><span>swift</span><span>3 files</span><span>45 loc</span></div>
+            <div class="content-footer">7 sub-components</div>
+          </div>
+        </div>
+        <div class="band-bottom"></div>
+      </div>
+    </div>
+    <div class="device-cell browser">
+      <div class="device-label">Web Client</div>
+      <div class="l4-browser">
+        <div class="titlebar">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <div class="tab-strip"><div class="tab-active">web</div><div class="tab-inactive">+</div></div>
+        </div>
+        <div class="urlbar-wrap">
+          <div class="nav-btn">&lt;</div><div class="nav-btn">&gt;</div>
+          <div class="urlbar"><div class="lock-icon"></div><span>admin.unamentis.com</span></div>
+        </div>
+        <div class="viewport">
+          <div class="content dark-content">
+            <div class="content-header"><span class="content-icon">🌐</span><span class="content-name">web</span></div>
+            <div class="content-badges"><span class="badge badge-type">Web Client</span><span class="badge badge-tech">Next.js</span><span class="badge badge-role">Presentation</span></div>
+            <div class="content-desc">Admin web dashboard.</div>
+            <div class="content-patterns"><span class="pattern">Dependency Injection</span><span class="pattern">Tests (2 files)</span></div>
+            <div class="content-metrics"><span class="lang-dot"></span><span>typescript</span><span>13 files</span><span>16,299 loc</span></div>
+            <div class="content-footer">12 sub-components</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     NOTES
+     ═══════════════════════════════════════════════════════ -->
+<div style="max-width: 1100px; margin: 40px auto 0; padding: 24px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);">
+  <h2 style="font-size: 16px; margin-bottom: 12px; color: #aaa;">Notes</h2>
+  <ul style="font-size: 13px; color: #666; line-height: 1.8; padding-left: 20px;">
+    <li><strong>Level 1:</strong> Exactly what ships today. Flat borders, thin hardware hints.</li>
+    <li><strong>Level 2:</strong> The "realistic base" you liked. Metallic bezels, status bar, knurled crown, tabs + lock icon. Apple Watch now rectangular with bigger bands.</li>
+    <li><strong>Level 3:</strong> Warmer gray screens for notch/bezel contrast. Thicker hardware buttons. Home indicator bar. Larger watch bands. Stronger browser chrome.</li>
+    <li><strong>Level 4:</strong> Everything pushed further. Thicker padding/bezels, bolder metallic sheen, more pronounced glow, biggest bands, maximum "instant device recognition."</li>
+    <li><strong>All pure CSS.</strong> No SVG, no images. Everything here can ship in React components with Tailwind.</li>
+    <li><strong>Phone is always portrait.</strong> Width constrained to 215-230px with min-height 420-470px for a distinctly tall, narrow phone silhouette.</li>
+    <li><strong>Mix and match:</strong> You can pick different levels per device type.</li>
+  </ul>
+</div>
+
+</body>
+</html>

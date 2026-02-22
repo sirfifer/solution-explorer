@@ -35,6 +35,9 @@ dev = [
     "ruff",
 ]
 
+[project.scripts]
+solution-explorer = "analyzer.cli:main"
+
 [tool.setuptools.packages.find]
 include = ["analyzer*"]
 

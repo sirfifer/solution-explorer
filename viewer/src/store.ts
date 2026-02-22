@@ -19,6 +19,7 @@ import { isHeroType, isClientType, isServerType } from "./utils/layout";
 
 // Storage key for dark mode preference (localStorage for persistence across sessions)
 const DARK_MODE_KEY = "arch-dark-mode";
+const ENHANCED_FRAMES_KEY = "arch-enhanced-frames";
 
 function getStoredDarkMode(): boolean {
   try {
@@ -36,6 +37,27 @@ function getStoredDarkMode(): boolean {
 function saveStoredDarkMode(value: boolean): void {
   try {
     localStorage.setItem(DARK_MODE_KEY, JSON.stringify(value));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function getStoredEnhancedFrames(): boolean {
+  try {
+    const stored = localStorage.getItem(ENHANCED_FRAMES_KEY);
+    if (stored !== null) {
+      return JSON.parse(stored) as boolean;
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  // Default to enhanced frames
+  return true;
+}
+
+function saveStoredEnhancedFrames(value: boolean): void {
+  try {
+    localStorage.setItem(ENHANCED_FRAMES_KEY, JSON.stringify(value));
   } catch {
     // Ignore storage errors
   }
@@ -63,6 +85,7 @@ interface ArchStore {
 
   // Theme
   darkMode: boolean;
+  enhancedFrames: boolean;
 
   // Review mode
   reviewMode: boolean;
@@ -89,6 +112,7 @@ interface ArchStore {
   setSearchQuery: (query: string) => void;
 
   toggleDarkMode: () => void;
+  toggleEnhancedFrames: () => void;
 
   // Review actions
   toggleReviewMode: () => void;
@@ -196,6 +220,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   searchQuery: "",
 
   darkMode: getStoredDarkMode(),
+  enhancedFrames: getStoredEnhancedFrames(),
 
   componentDetailCache: {},
   componentDetailLoading: null,
@@ -296,6 +321,11 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     const newValue = !s.darkMode;
     saveStoredDarkMode(newValue);
     return { darkMode: newValue };
+  }),
+  toggleEnhancedFrames: () => set((s) => {
+    const newValue = !s.enhancedFrames;
+    saveStoredEnhancedFrames(newValue);
+    return { enhancedFrames: newValue };
   }),
 
   toggleReviewMode: () => set((s) => ({

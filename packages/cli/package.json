@@ -1,0 +1,41 @@
+{
+  "name": "solution-explorer",
+  "version": "1.0.0",
+  "description": "Generate interactive architecture diagrams from any codebase",
+  "type": "module",
+  "bin": {
+    "solution-explorer": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "viewer-dist",
+    "analyzer",
+    "analyze.py",
+    "scripts-bundle"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "bash scripts/prepare-bundle.sh && npm run build",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "architecture",
+    "visualization",
+    "codebase",
+    "diagram",
+    "static-analysis"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "prompts": "^2.4.2",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/prompts": "^2.4.9",
+    "typescript": "^5.7.0"
+  }
+}
