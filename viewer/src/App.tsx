@@ -118,14 +118,19 @@ export function App() {
 
   // Load architecture data (try split manifest.json first, fall back to monolithic)
   useEffect(() => {
+    // Guard against Vite SPA fallback: non-existent paths return 200 with text/html
+    function isJsonResponse(res: Response): boolean {
+      return res.ok && (res.headers.get("content-type")?.includes("json") ?? false);
+    }
+
     async function load() {
       try {
         setLoading(true);
 
         // Try split mode first (manifest.json)
-        let res = await fetch("./architecture/manifest.json");
-        if (res.ok) {
-          const manifest = await res.json();
+        const manifestRes = await fetch("./architecture/manifest.json");
+        if (isJsonResponse(manifestRes)) {
+          const manifest = await manifestRes.json();
           // Split mode: manifest has components/relationships but no symbols/files
           const data: Architecture = { ...manifest, symbols: manifest.symbols || [], files: manifest.files || [] };
           setArchitecture(data);
@@ -134,13 +139,23 @@ export function App() {
         }
 
         // Fall back to monolithic architecture.json
-        res = await fetch("./architecture.json");
-        if (!res.ok) throw new Error(`Failed to load architecture data: ${res.status}`);
-        const data: Architecture = await res.json();
-        setArchitecture(data);
-        initializeSearch(data);
+        const monoRes = await fetch("./architecture.json");
+        if (isJsonResponse(monoRes)) {
+          const data: Architecture = await monoRes.json();
+          setArchitecture(data);
+          initializeSearch(data);
+          return;
+        }
+
+        // Both paths failed to return JSON
+        const status = monoRes.ok
+          ? "Server returned HTML instead of JSON (no architecture data file found)"
+          : `HTTP ${monoRes.status}`;
+        throw new Error(
+          `Could not load architecture data. ${status}. Run the analyzer to generate the data file.`
+        );
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load data");
+        setError(err instanceof Error ? err.message : "Failed to load architecture data");
       }
     }
     load();

@@ -192,13 +192,34 @@ Start the local preview server in the background for immediate review:
 cd /Users/ramerman/dev/solution-explorer/viewer && npx vite preview --port 4173
 ```
 
-Tell the user:
+Do NOT tell the user the preview is ready yet. Run validation first.
+
+#### 6c. Validate the preview
+
+After the preview server is running, validate that the viewer is serving correctly:
+
+```bash
+sleep 2 && bash /Users/ramerman/dev/solution-explorer/scripts/validate-preview.sh http://localhost:4173
+```
+
+This script verifies:
+- `architecture.json` is valid JSON with expected structure
+- The built `dist/` has the expected files
+- The preview server returns HTML for the index page
+- The preview server returns valid JSON for `/architecture.json`
+- Non-existent JSON paths are not misidentified as JSON (SPA fallback guard)
+
+**If validation fails, do NOT tell the user the preview is ready.** Instead, read the
+failure output, diagnose the issue, fix it, rebuild, and re-run validation. Only
+proceed to deployment (or report the preview URL) after all checks pass.
+
+Once validation passes, tell the user:
 
 ```
 Local preview is ready at: http://localhost:4173/
 ```
 
-#### 6c. Determine deployment target
+#### 6d. Determine deployment target
 
 Get the target codebase's GitHub remote:
 
@@ -215,7 +236,7 @@ the GitHub repo. Extract the deployment URL.
 If no matching installation is found in DEPLOYMENTS.md, tell the user and skip
 deployment. The local preview URL is the final output.
 
-#### 6d. Deploy
+#### 6e. Deploy
 
 Copy the enhanced JSON to the target codebase and push:
 
@@ -236,7 +257,7 @@ analyzer, preserving all AI enhancements.
 If the current branch is not main, warn the user that deployment to production
 only triggers on push to main.
 
-#### 6e. Monitor deployment
+#### 6f. Monitor deployment
 
 Wait 15 seconds, then check the workflow status:
 
@@ -246,7 +267,7 @@ gh run list -R <owner/repo> -w "Architecture Visualization" --limit 1
 
 If the run is still in progress, wait 30 seconds and check again (up to 3 times).
 
-#### 6f. Report results
+#### 6g. Report results
 
 Output both URLs:
 
@@ -274,6 +295,7 @@ Deployment complete:
 7. Validate the JSON is parseable before declaring success
 8. When filling `docs.purpose` or `description`, do not overwrite non-empty values
 9. The final output MUST include a local preview URL and, if deployed, the production URL and deployment status
+10. ALWAYS run the validation script (Step 6c) after building and starting the preview. Never tell the user the preview is ready until all validation checks pass.
 
 ## Schema Reference
 

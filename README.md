@@ -26,7 +26,7 @@
 
 ---
 
-Solution Explorer is a static analysis tool that scans codebases to extract components, relationships, and metrics, then renders them as an interactive architecture diagram. It supports solutions that span multiple repositories, works with many languages, and requires zero external Python dependencies.
+Solution Explorer is a static analysis tool that scans codebases to extract components, relationships, and metrics, then renders them as an interactive architecture diagram. It supports solutions that span multiple repositories and works with many languages.
 
 ## Screenshots
 
@@ -102,7 +102,7 @@ bash build.sh /path/to/your/repo
 
 ### Requirements
 
-- **Python 3.10+** (no pip packages needed, stdlib only)
+- **Python 3.10+**
 - **Node.js 18+** (for the viewer)
 
 ## How It Works
@@ -110,7 +110,7 @@ bash build.sh /path/to/your/repo
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐
 │  Your Codebase  │────>│  analyzer/        │────>│  architecture.json  │
-│                 │     │  (Python stdlib)  │     │                     │
+│                 │     │  (Python)         │     │                     │
 └─────────────────┘     └──────────────────┘     └──────────┬──────────┘
                                                             │
                                                             v
@@ -120,7 +120,7 @@ bash build.sh /path/to/your/repo
                                                  └─────────────────────┘
 ```
 
-1. **Python Analyzer** (`analyzer/` package) walks the codebase with zero external dependencies (stdlib only)
+1. **Python Analyzer** (`analyzer/` package) walks the codebase
 2. Detects components via marker files (package.json, Cargo.toml, Info.plist, Dockerfile, etc.)
 3. Parses source files to extract symbols, imports, and API patterns
 4. Detects inter-component relationships (imports, HTTP/port references, protocols)

@@ -12,7 +12,7 @@ Thank you for your interest in contributing to Solution Explorer! This guide wil
    ```
 3. **Set up the development environment**:
    ```bash
-   # Python analyzer (no external dependencies needed)
+   # Python analyzer
    python3 --version  # Requires 3.10+
 
    # React viewer
@@ -56,7 +56,7 @@ cd viewer && npm run lint
 - Formatted and linted with [Ruff](https://docs.astral.sh/ruff/)
 - Line length limit: 120 characters
 - Target: Python 3.10+
-- Zero external dependencies (stdlib only)
+- Dependencies kept minimal and CI-friendly
 - `analyze.py` at root is a thin CLI wrapper
 
 **TypeScript (viewer):**
@@ -138,7 +138,7 @@ Understanding the project structure helps with contributing:
 ```
 solution-explorer/
 ├── analyze.py          # CLI entry point (thin wrapper)
-├── analyzer/           # Core analysis package (Python, zero dependencies)
+├── analyzer/           # Core analysis package (Python)
 │   ├── cli.py          # Argument parsing, output handling
 │   ├── models.py       # Data model (Component, Symbol, Relationship, etc.)
 │   ├── scanner.py      # ArchitectureScanner (discovery, metrics, docs)
