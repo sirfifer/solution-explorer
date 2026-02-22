@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import subprocess
-from dataclasses import asdict
+from .models import to_dict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -404,7 +404,7 @@ class IncrementalAnalyzer:
             preview_lines=self.preview_lines,
         )
         arch = scanner.scan()
-        arch_dict = asdict(arch)
+        arch_dict = to_dict(arch)
 
         # Compute diff
         diff_summary = self.compute_diff_summary(
