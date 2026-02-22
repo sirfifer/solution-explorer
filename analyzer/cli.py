@@ -110,7 +110,7 @@ def main():
         )
         arch = orchestrator.run()
     elif args.incremental:
-        from .incremental import IncrementalAnalyzer
+        from .incremental import IncrementalAnalyzer, save_baseline_cache
 
         root = Path(args.path).resolve()
         if not root.is_dir():
@@ -149,12 +149,9 @@ def main():
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(arch_dict, f, indent=indent, default=str)
 
-        # Save baseline for next run
+        # Save baseline with cache files for next run
         baseline_dir = root / ".arch-baseline"
-        baseline_dir.mkdir(parents=True, exist_ok=True)
-        baseline_out = baseline_dir / "architecture.json"
-        with open(baseline_out, "w", encoding="utf-8") as f:
-            json.dump(arch_dict, f, default=str)
+        save_baseline_cache(arch_dict, baseline_dir, root)
 
         stats = arch_dict.get("stats", {})
         incr = arch_dict.get("incremental", {})
@@ -168,7 +165,7 @@ def main():
         print(f"  Components modified: {len(diff.get('components_modified', []))}")
         print(f"  Components removed: {len(diff.get('components_removed', []))}")
         print(f"\nOutput: {output_path}")
-        print(f"Baseline saved: {baseline_out}")
+        print(f"Baseline saved: {baseline_dir}")
         return
     else:
         root = Path(args.path).resolve()
