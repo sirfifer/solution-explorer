@@ -9,6 +9,7 @@ import { HelpSystem } from "./components/HelpSystem";
 import { ReviewModeButton } from "./components/ReviewModeButton";
 import { AnnotationInput } from "./components/AnnotationInput";
 import { ReviewSummary } from "./components/ReviewSummary";
+import { AdminDashboard } from "./components/AdminDashboard";
 import { initializeSearch } from "./utils/search";
 import { formatNumber, formatRelativeTime } from "./utils/layout";
 import type { Architecture } from "./types";
@@ -61,6 +62,9 @@ export function App() {
     setActivePanel,
     toggleDarkMode,
     navigateToBreadcrumb,
+    adminOpen,
+    setAdminOpen,
+    liveConfig,
   } = useArchStore();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -296,6 +300,21 @@ export function App() {
 
           {/* Review mode */}
           <ReviewModeButton />
+
+          {/* Admin dashboard button - only when live config is present */}
+          {liveConfig && (
+            <button
+              onClick={() => setAdminOpen(!adminOpen)}
+              className={`p-2 rounded-lg relative ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
+              title="Admin Dashboard (Cmd+Shift+A)"
+            >
+              {"\u2699"}
+              {architecture?.live_status?.statuses &&
+                Object.values(architecture.live_status.statuses).some((s) => s.level === "error") && (
+                <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              )}
+            </button>
+          )}
 
           {/* Theme toggle */}
           <button
@@ -535,6 +554,9 @@ export function App() {
 
       {/* Search overlay */}
       <SearchOverlay />
+
+      {/* Admin dashboard */}
+      {adminOpen && <AdminDashboard />}
 
       {/* Help system */}
       <HelpSystem />
