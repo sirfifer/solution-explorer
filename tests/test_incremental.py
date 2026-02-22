@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +14,7 @@ from analyzer import __version__
 from analyzer.incremental import (
     MARKER_FILES,
     IncrementalAnalyzer,
+    _affected_ids_to_paths,
     build_component_dependency_graph,
     load_file_index,
     load_import_graph,
@@ -24,6 +26,8 @@ from analyzer.incremental import (
     _recalculate_stats,
     _resolve_import_from_baseline,
 )
+from analyzer.models import to_dict
+from analyzer.scanner import ArchitectureScanner
 
 
 # ---------------------------------------------------------------------------
@@ -1100,3 +1104,272 @@ class TestIncrementalIntegration:
         # app imports lib, so it should be expanded
         assert "app" in incr["expanded_via_dependency"]
         assert "app" in incr["affected_components"]
+
+
+# ---------------------------------------------------------------------------
+# TestScopedScanner
+# ---------------------------------------------------------------------------
+
+
+class TestScopedScanner:
+    """Tests for ArchitectureScanner with scope_paths/baseline parameters."""
+
+    def test_scope_paths_without_baseline_raises(self, tmp_path):
+        """scope_paths without baseline must raise ValueError."""
+        with pytest.raises(ValueError, match="scope_paths requires a baseline"):
+            ArchitectureScanner(tmp_path, scope_paths=["src"])
+
+    def test_scope_paths_with_baseline_accepted(self, tmp_path):
+        """scope_paths with a baseline dict should not raise."""
+        baseline = {"components": [], "relationships": [], "files": [],
+                    "symbols": [], "stats": {}}
+        scanner = ArchitectureScanner(
+            tmp_path, scope_paths=["src"], baseline=baseline,
+        )
+        assert scanner._scope_paths == ["src"]
+        assert scanner._baseline is baseline
+
+    def test_scoped_scan_only_processes_scope_paths(self, tmp_path):
+        """Files outside scope_paths should come from baseline, not disk."""
+        # Create two component directories with source files
+        (tmp_path / "app").mkdir()
+        (tmp_path / "app" / "package.json").write_text("{}")
+        (tmp_path / "app" / "main.py").write_text(
+            "import os\nprint('hello')\n"
+        )
+        (tmp_path / "lib").mkdir()
+        (tmp_path / "lib" / "package.json").write_text("{}")
+        (tmp_path / "lib" / "utils.py").write_text(
+            "def helper(): pass\n"
+        )
+
+        # First do a full scan to get a valid baseline
+        full_scanner = ArchitectureScanner(tmp_path)
+        full_arch = full_scanner.scan()
+        baseline = to_dict(full_arch)
+
+        # Now modify only lib/utils.py
+        (tmp_path / "lib" / "utils.py").write_text(
+            "def helper(): pass\ndef new_func(): pass\n"
+        )
+
+        # Run scoped scan targeting only lib
+        scoped_scanner = ArchitectureScanner(
+            tmp_path, scope_paths=["lib"], baseline=baseline,
+        )
+        scoped_arch = scoped_scanner.scan()
+        scoped_result = to_dict(scoped_arch)
+
+        # Should have components from both app and lib
+        all_ids = set()
+
+        def collect_ids(comps):
+            for c in comps:
+                all_ids.add(c["id"])
+                collect_ids(c.get("children", []))
+
+        collect_ids(scoped_result.get("components", []))
+        assert "lib" in all_ids
+        assert "app" in all_ids
+
+    def test_scoped_scan_preserves_unaffected_relationships(self, tmp_path):
+        """Relationships between unaffected components survive scoped scan."""
+        # Create three components
+        for d in ["app", "lib", "api"]:
+            (tmp_path / d).mkdir()
+            (tmp_path / d / "package.json").write_text("{}")
+
+        (tmp_path / "app" / "main.py").write_text("import lib.utils\n")
+        (tmp_path / "lib" / "utils.py").write_text("def helper(): pass\n")
+        (tmp_path / "api" / "server.py").write_text("import lib.utils\n")
+
+        # Full scan
+        full_scanner = ArchitectureScanner(tmp_path)
+        baseline = to_dict(full_scanner.scan())
+
+        # Find relationships involving api and lib in baseline
+        baseline_rels = baseline.get("relationships", [])
+        api_lib_rels = [
+            r for r in baseline_rels
+            if r["source"] == "api" and r["target"] == "lib"
+        ]
+
+        # Run scoped scan targeting only app (api and lib are unaffected)
+        scoped_scanner = ArchitectureScanner(
+            tmp_path, scope_paths=["app"], baseline=baseline,
+        )
+        scoped_result = to_dict(scoped_scanner.scan())
+
+        # api->lib relationships should be preserved
+        scoped_rels = scoped_result.get("relationships", [])
+        scoped_api_lib = [
+            r for r in scoped_rels
+            if r["source"] == "api" and r["target"] == "lib"
+        ]
+        assert len(scoped_api_lib) == len(api_lib_rels)
+
+    def test_scoped_scan_detects_new_file(self, tmp_path):
+        """New files added within scope_paths should be picked up."""
+        (tmp_path / "lib").mkdir()
+        (tmp_path / "lib" / "package.json").write_text("{}")
+        (tmp_path / "lib" / "utils.py").write_text("x = 1\n")
+
+        # Full scan baseline
+        baseline = to_dict(ArchitectureScanner(tmp_path).scan())
+        baseline_file_count = len([
+            f for f in baseline.get("files", [])
+            if f["path"].startswith("lib/")
+        ])
+
+        # Add a new file
+        (tmp_path / "lib" / "helpers.py").write_text("y = 2\n")
+
+        # Scoped scan
+        scoped = to_dict(ArchitectureScanner(
+            tmp_path, scope_paths=["lib"], baseline=baseline,
+        ).scan())
+
+        scoped_file_count = len([
+            f for f in scoped.get("files", [])
+            if f["path"].startswith("lib/")
+        ])
+        assert scoped_file_count == baseline_file_count + 1
+
+    def test_scoped_scan_handles_deleted_file(self, tmp_path):
+        """Deleted files within scope_paths should disappear from output."""
+        (tmp_path / "lib").mkdir()
+        (tmp_path / "lib" / "package.json").write_text("{}")
+        (tmp_path / "lib" / "utils.py").write_text("x = 1\n")
+        (tmp_path / "lib" / "old.py").write_text("y = 2\n")
+
+        baseline = to_dict(ArchitectureScanner(tmp_path).scan())
+        baseline_file_count = len([
+            f for f in baseline.get("files", [])
+            if f["path"].startswith("lib/")
+        ])
+
+        # Delete a file
+        (tmp_path / "lib" / "old.py").unlink()
+
+        scoped = to_dict(ArchitectureScanner(
+            tmp_path, scope_paths=["lib"], baseline=baseline,
+        ).scan())
+
+        scoped_file_count = len([
+            f for f in scoped.get("files", [])
+            if f["path"].startswith("lib/")
+        ])
+        assert scoped_file_count == baseline_file_count - 1
+
+    def test_affected_ids_to_paths_basic(self):
+        """_affected_ids_to_paths extracts correct directory paths."""
+        baseline = {
+            "components": [
+                {
+                    "id": "root", "path": "",
+                    "children": [
+                        {"id": "app", "path": "app", "children": []},
+                        {"id": "lib", "path": "lib", "children": []},
+                        {"id": "api", "path": "api", "children": []},
+                    ],
+                }
+            ]
+        }
+        result = _affected_ids_to_paths({"app", "api"}, baseline)
+        assert result == ["api", "app"]  # sorted
+
+    def test_affected_ids_to_paths_nested(self):
+        """_affected_ids_to_paths finds deeply nested components."""
+        baseline = {
+            "components": [
+                {
+                    "id": "root", "path": "",
+                    "children": [
+                        {
+                            "id": "app", "path": "app",
+                            "children": [
+                                {"id": "app/ui", "path": "app/ui",
+                                 "children": []},
+                            ],
+                        },
+                    ],
+                }
+            ]
+        }
+        result = _affected_ids_to_paths({"app/ui"}, baseline)
+        assert result == ["app/ui"]
+
+    def test_affected_ids_to_paths_empty(self):
+        """Empty affected set returns empty list."""
+        baseline = {
+            "components": [
+                {"id": "root", "path": "", "children": []}
+            ]
+        }
+        assert _affected_ids_to_paths(set(), baseline) == []
+
+    def test_scoped_scan_unaffected_components_match_baseline(self, tmp_path):
+        """Unaffected components in scoped scan match baseline exactly."""
+        for d in ["app", "lib"]:
+            (tmp_path / d).mkdir()
+            (tmp_path / d / "package.json").write_text("{}")
+
+        (tmp_path / "app" / "main.py").write_text("x = 1\n")
+        (tmp_path / "lib" / "utils.py").write_text("y = 2\n")
+
+        baseline = to_dict(ArchitectureScanner(tmp_path).scan())
+
+        # Find lib component data in baseline
+        def find_comp(comps, comp_id):
+            for c in comps:
+                if c["id"] == comp_id:
+                    return c
+                found = find_comp(c.get("children", []), comp_id)
+                if found:
+                    return found
+            return None
+
+        baseline_lib = find_comp(baseline["components"], "lib")
+
+        # Scoped scan targeting only app (lib is unaffected)
+        scoped = to_dict(ArchitectureScanner(
+            tmp_path, scope_paths=["app"], baseline=baseline,
+        ).scan())
+
+        scoped_lib = find_comp(scoped["components"], "lib")
+
+        # Files should match
+        assert baseline_lib["files"] == scoped_lib["files"]
+
+    def test_deprecated_functions_emit_warnings(self, tmp_path):
+        """Deprecated standalone functions should emit DeprecationWarning."""
+        baseline = {
+            "components": [
+                {"id": "root", "path": "", "children": [],
+                 "files": [], "metrics": {"files": 0, "lines": 0}}
+            ],
+            "relationships": [],
+            "files": [],
+            "symbols": [],
+            "stats": {"total_files": 0, "total_components": 1},
+        }
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            rescan_component("root", baseline, tmp_path)
+            assert any("rescan_component" in str(x.message) for x in w)
+            assert any(issubclass(x.category, DeprecationWarning) for x in w)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            merge_component_into_baseline(baseline, "nonexistent", {})
+            assert any(
+                "merge_component_into_baseline" in str(x.message) for x in w
+            )
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            redetect_relationships(baseline, set(), tmp_path)
+            assert any(
+                "redetect_relationships" in str(x.message) for x in w
+            )

@@ -59,11 +59,18 @@ class ArchitectureScanner:
     """
 
     def __init__(self, root: Path, max_file_size: int = 500_000,
-                 max_symbols: int = 0, preview_lines: int = 5):
+                 max_symbols: int = 0, preview_lines: int = 5,
+                 scope_paths: Optional[list[str]] = None,
+                 baseline: Optional[dict] = None):
+        if scope_paths is not None and baseline is None:
+            raise ValueError("scope_paths requires a baseline dict")
         self.root = root.resolve()
         self.max_file_size = max_file_size
         self.max_symbols = max_symbols
         self.preview_lines = preview_lines
+        self._scope_paths = scope_paths
+        self._baseline = baseline
+        self._scoped_component_ids: set[str] = set()
         self.architecture = Architecture(
             name=self.root.name,
             description="",
@@ -80,7 +87,11 @@ class ArchitectureScanner:
 
     def scan(self) -> Architecture:
         """Run the full scan pipeline."""
-        # Phase 1: Discover components
+        # Compute scoped component IDs if in scoped mode
+        if self._scope_paths is not None:
+            self._compute_scoped_components()
+
+        # Phase 1: Discover components (or load from baseline in scoped mode)
         self._discover_components()
 
         # Phase 2: Scan files and extract symbols
@@ -150,8 +161,80 @@ class ArchitectureScanner:
             return True
         return False
 
+    def _load_baseline_components(self) -> None:
+        """Hydrate _component_map from a baseline dict instead of filesystem discovery.
+
+        For non-scoped components, also restores their files list. For scoped
+        components, leaves files empty (will be repopulated by _scan_files).
+        """
+        ui_types = {"screen", "tab-container", "tab", "feature-group"}
+
+        def _walk(components: list[dict]) -> None:
+            for comp_dict in components:
+                path = comp_dict.get("path", "")
+                comp_id = comp_dict.get("id", "")
+                comp = Component(
+                    id=comp_id,
+                    name=comp_dict.get("name", ""),
+                    type=comp_dict.get("type", "module"),
+                    path=path,
+                    language=comp_dict.get("language"),
+                    framework=comp_dict.get("framework"),
+                    description=comp_dict.get("description"),
+                    port=comp_dict.get("port"),
+                )
+                comp.config_files = list(comp_dict.get("config_files", []))
+                comp.docs = dict(comp_dict.get("docs", {})) if comp_dict.get("docs") else {}
+                comp.metrics = dict(comp_dict.get("metrics", {})) if comp_dict.get("metrics") else {}
+                comp.external_services = list(comp_dict.get("external_services", []))
+                comp.entry_points = list(comp_dict.get("entry_points", []))
+
+                # Non-scoped components keep their baseline files
+                if comp_id not in self._scoped_component_ids:
+                    comp.files = list(comp_dict.get("files", []))
+
+                # Detect vendored paths from baseline (library type at non-root)
+                if comp.type == "library" and path:
+                    self._vendored_paths.add(path)
+
+                self._component_map[path] = comp
+
+                # Process children: separate UI synthetic children from path-based
+                for child_dict in comp_dict.get("children", []):
+                    child_type = child_dict.get("type", "")
+                    if child_type in ui_types:
+                        # Restore UI children as Component objects on parent.children
+                        ui_child = self._restore_ui_component(child_dict)
+                        comp.children.append(ui_child)
+                    else:
+                        # Path-based children go into _component_map
+                        _walk([child_dict])
+
+        _walk(self._baseline.get("components", []))
+
+    def _restore_ui_component(self, comp_dict: dict) -> Component:
+        """Recursively restore a synthetic UI component from a baseline dict."""
+        comp = Component(
+            id=comp_dict.get("id", ""),
+            name=comp_dict.get("name", ""),
+            type=comp_dict.get("type", "screen"),
+            path=comp_dict.get("path", ""),
+            language=comp_dict.get("language"),
+            framework=comp_dict.get("framework"),
+        )
+        comp.files = list(comp_dict.get("files", []))
+        comp.metrics = dict(comp_dict.get("metrics", {})) if comp_dict.get("metrics") else {}
+        for child_dict in comp_dict.get("children", []):
+            comp.children.append(self._restore_ui_component(child_dict))
+        return comp
+
     def _discover_components(self):
         """Walk the tree and identify component boundaries."""
+        # In scoped mode, load from baseline instead of filesystem discovery
+        if self._scope_paths is not None and self._baseline is not None:
+            self._load_baseline_components()
+            return
+
         # Root is always a component
         root_comp = Component(
             id=self._make_component_id(""),
@@ -288,101 +371,184 @@ class ArchitectureScanner:
                 return True
         return False
 
+    def _compute_scoped_components(self) -> None:
+        """Identify which component IDs fall within scope_paths."""
+        if not self._scope_paths or not self._baseline:
+            return
+
+        def _walk(components: list[dict]) -> None:
+            for comp in components:
+                comp_path = comp.get("path", "")
+                comp_id = comp.get("id", "")
+                for sp in self._scope_paths:
+                    if (comp_path == sp
+                            or comp_path.startswith(sp + "/")
+                            or sp.startswith(comp_path + "/")
+                            or (sp == "" and comp_path == "")):
+                        self._scoped_component_ids.add(comp_id)
+                        break
+                _walk(comp.get("children", []))
+
+        _walk(self._baseline.get("components", []))
+
+    def _restore_baseline_files(self) -> None:
+        """Restore file info and symbols for non-scoped components from baseline."""
+        if not self._baseline:
+            return
+
+        # Restore files from baseline that belong to non-scoped components
+        for f in self._baseline.get("files", []):
+            fpath = f.get("path", "")
+            file_comp = self._find_component_for_file(fpath)
+            if file_comp and file_comp.id in self._scoped_component_ids:
+                continue  # Will be re-scanned from disk
+
+            file_info = FileInfo(
+                path=fpath,
+                language=f.get("language", ""),
+                lines=f.get("lines", 0),
+                size_bytes=f.get("size_bytes", 0),
+                symbols=list(f.get("symbols", [])),
+                imports=list(f.get("imports", [])),
+                module_doc=f.get("module_doc"),
+            )
+            self._all_files.append(file_info)
+            self._total_lines += file_info.lines
+            self._total_size += file_info.size_bytes
+            if file_info.language:
+                self._language_counts[file_info.language] += file_info.lines
+
+        # Restore symbols for non-scoped files
+        for s in self._baseline.get("symbols", []):
+            s_file = s.get("file", "")
+            file_comp = self._find_component_for_file(s_file)
+            if file_comp and file_comp.id in self._scoped_component_ids:
+                continue  # Will be re-extracted from disk
+
+            sym = Symbol(
+                id=s.get("id", ""),
+                name=s.get("name", ""),
+                kind=s.get("kind", ""),
+                file=s_file,
+                line=s.get("line", 0),
+                end_line=s.get("end_line", 0),
+                code_preview=s.get("code_preview", ""),
+                visibility=s.get("visibility", "internal"),
+                docstring=s.get("docstring"),
+                parent=s.get("parent"),
+            )
+            self._all_symbols.append(sym)
+
     def _scan_files(self):
         """Scan all code files and extract symbols."""
-        for dirpath, dirnames, filenames in os.walk(self.root):
-            dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
+        # In scoped mode, restore non-scoped data from baseline first
+        if self._scope_paths is not None and self._baseline is not None:
+            self._restore_baseline_files()
 
-            # Skip vendored directories
-            rel_dir = os.path.relpath(dirpath, self.root)
-            if rel_dir != "." and self._is_under_vendored(rel_dir):
-                dirnames.clear()
-                continue
+        # Determine directories to walk
+        if self._scope_paths is not None:
+            walk_roots = []
+            for sp in self._scope_paths:
+                walk_root = self.root / sp if sp else self.root
+                if walk_root.is_dir():
+                    walk_roots.append(walk_root)
+        else:
+            walk_roots = [self.root]
 
-            for fname in sorted(filenames):
-                fpath = Path(dirpath) / fname
-                if self._should_skip(fpath):
+        for walk_root in walk_roots:
+            for dirpath, dirnames, filenames in os.walk(walk_root):
+                dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
+
+                # Skip vendored directories
+                rel_dir = os.path.relpath(dirpath, self.root)
+                if rel_dir != "." and self._is_under_vendored(rel_dir):
+                    dirnames.clear()
                     continue
 
-                ext = fpath.suffix.lower()
-                lang = LANGUAGE_MAP.get(ext)
-                if not lang:
-                    continue
-
-                try:
-                    stat = fpath.stat()
-                    if stat.st_size > self.max_file_size:
+                for fname in sorted(filenames):
+                    fpath = Path(dirpath) / fname
+                    if self._should_skip(fpath):
                         continue
-                    if stat.st_size == 0:
+
+                    ext = fpath.suffix.lower()
+                    lang = LANGUAGE_MAP.get(ext)
+                    if not lang:
                         continue
-                except OSError:
-                    continue
 
-                rel = os.path.relpath(fpath, self.root)
-                try:
-                    content = fpath.read_text(encoding="utf-8", errors="replace")
-                except OSError:
-                    continue
+                    try:
+                        stat = fpath.stat()
+                        if stat.st_size > self.max_file_size:
+                            continue
+                        if stat.st_size == 0:
+                            continue
+                    except OSError:
+                        continue
 
-                lines = content.count("\n") + 1
-                self._total_lines += lines
-                self._total_size += stat.st_size
-                self._language_counts[lang] += lines
+                    rel = os.path.relpath(fpath, self.root)
+                    try:
+                        content = fpath.read_text(encoding="utf-8", errors="replace")
+                    except OSError:
+                        continue
 
-                # Parse symbols
-                parser = PARSERS.get(lang)
-                symbols = []
-                imports = []
-                if parser:
-                    symbols = parser.extract_symbols(content, rel)
-                    imports = parser.extract_imports(content)
+                    lines = content.count("\n") + 1
+                    self._total_lines += lines
+                    self._total_size += stat.st_size
+                    self._language_counts[lang] += lines
 
-                    # Detect framework at file level.
-                    # Platform-specific frameworks (AppKit, UIKit, Vapor) take
-                    # priority over cross-platform ones (SwiftUI).
-                    fw = parser.detect_framework(content)
-                    if fw:
-                        comp = self._find_component_for_file(rel)
-                        if comp:
-                            if not comp.framework:
-                                comp.framework = fw
-                            elif _framework_priority(fw) > _framework_priority(comp.framework):
-                                comp.framework = fw
+                    # Parse symbols
+                    parser = PARSERS.get(lang)
+                    symbols = []
+                    imports = []
+                    if parser:
+                        symbols = parser.extract_symbols(content, rel)
+                        imports = parser.extract_imports(content)
 
-                    # Detect ports (only in code files, not docs/config)
-                    # Only assign to server-type components to avoid client code
-                    if lang in CODE_LANGUAGES:
-                        ports = parser.detect_ports(content)
-                        if ports:
+                        # Detect framework at file level.
+                        # Platform-specific frameworks (AppKit, UIKit, Vapor) take
+                        # priority over cross-platform ones (SwiftUI).
+                        fw = parser.detect_framework(content)
+                        if fw:
                             comp = self._find_component_for_file(rel)
-                            if comp and not comp.port:
-                                # Only assign ports to server-type components
-                                server_types = {"api-server", "service", "infrastructure"}
-                                if comp.type in server_types:
-                                    comp.port = ports[0]
+                            if comp:
+                                if not comp.framework:
+                                    comp.framework = fw
+                                elif _framework_priority(fw) > _framework_priority(comp.framework):
+                                    comp.framework = fw
 
-                # Extract file-level documentation
-                module_doc = None
-                if parser:
-                    module_doc = parser.extract_file_doc(content)
+                        # Detect ports (only in code files, not docs/config)
+                        # Only assign to server-type components to avoid client code
+                        if lang in CODE_LANGUAGES:
+                            ports = parser.detect_ports(content)
+                            if ports:
+                                comp = self._find_component_for_file(rel)
+                                if comp and not comp.port:
+                                    # Only assign ports to server-type components
+                                    server_types = {"api-server", "service", "infrastructure"}
+                                    if comp.type in server_types:
+                                        comp.port = ports[0]
 
-                file_info = FileInfo(
-                    path=rel,
-                    language=lang,
-                    lines=lines,
-                    size_bytes=stat.st_size,
-                    symbols=[s.id for s in symbols],
-                    imports=imports,
-                    module_doc=module_doc,
-                )
+                    # Extract file-level documentation
+                    module_doc = None
+                    if parser:
+                        module_doc = parser.extract_file_doc(content)
 
-                self._all_files.append(file_info)
-                self._all_symbols.extend(symbols)
+                    file_info = FileInfo(
+                        path=rel,
+                        language=lang,
+                        lines=lines,
+                        size_bytes=stat.st_size,
+                        symbols=[s.id for s in symbols],
+                        imports=imports,
+                        module_doc=module_doc,
+                    )
 
-                # Associate file with component
-                comp = self._find_component_for_file(rel)
-                if comp:
-                    comp.files.append(rel)
+                    self._all_files.append(file_info)
+                    self._all_symbols.extend(symbols)
+
+                    # Associate file with component
+                    comp = self._find_component_for_file(rel)
+                    if comp:
+                        comp.files.append(rel)
 
     # ------------------------------------------------------------------
     # Phase 2.5: Promote generic types to architectural roles
@@ -393,6 +559,9 @@ class ArchitectureScanner:
         architectural roles (mobile-client, api-server, etc.) using
         framework detection, dependency analysis, and directory heuristics."""
         for rel_path, comp in self._component_map.items():
+            # In scoped mode, skip non-scoped components (types already correct)
+            if self._scope_paths is not None and comp.id not in self._scoped_component_ids:
+                continue
             # Skip root for content detection but still promote its type
             if rel_path:
                 if self._is_content_only(comp, rel_path):
@@ -731,6 +900,8 @@ class ArchitectureScanner:
         for rel_path, comp in self._component_map.items():
             if not rel_path:
                 continue
+            if self._scope_paths is not None and comp.id not in self._scoped_component_ids:
+                continue
             folder_name = os.path.basename(rel_path)
             # Only improve if the name is still the generic folder name
             if comp.name != folder_name:
@@ -774,6 +945,8 @@ class ArchitectureScanner:
 
         # First pass: direct port assignment to server components
         for comp in self._component_map.values():
+            if self._scope_paths is not None and comp.id not in self._scoped_component_ids:
+                continue
             if comp.port:
                 continue  # Already has a port
             if comp.type not in server_types:
@@ -842,7 +1015,23 @@ class ArchitectureScanner:
         appropriate UI flow detector to discover screens, tab structures, and
         navigation relationships. Detected screens become child Components;
         navigation paths become Relationships.
+
+        In scoped mode, runs fully (not skipped) because _component_map is
+        complete from baseline and all files exist on disk. The detector
+        builds everything from scratch, producing a complete replacement.
+        Baseline UI children are cleared first to prevent duplication.
         """
+        # In scoped mode, clear baseline UI children so the detector can
+        # rebuild them from scratch without creating duplicates.
+        ui_types = {"screen", "tab-container", "tab", "feature-group"}
+        if self._scope_paths is not None:
+            self._ui_relationships = []
+            for comp in self._component_map.values():
+                comp.children = [
+                    c for c in comp.children
+                    if not (isinstance(c, Component) and c.type in ui_types)
+                ]
+
         client_types = {
             "ios-client", "android-client", "web-client",
             "mobile-client", "desktop-app", "watch-app",
@@ -906,6 +1095,25 @@ class ArchitectureScanner:
         """Detect inter-component relationships."""
         relationships = []
         seen = set()
+
+        # In scoped mode, pre-populate with baseline relationships between
+        # non-scoped components. The seen set prevents re-detection of these.
+        if self._scope_paths is not None and self._baseline is not None:
+            for rel in self._baseline.get("relationships", []):
+                src = rel.get("source", "")
+                tgt = rel.get("target", "")
+                if (src not in self._scoped_component_ids
+                        and tgt not in self._scoped_component_ids):
+                    relationships.append(Relationship(
+                        source=src,
+                        target=tgt,
+                        type=rel.get("type", "import"),
+                        label=rel.get("label"),
+                        protocol=rel.get("protocol"),
+                        port=rel.get("port"),
+                        bidirectional=rel.get("bidirectional", False),
+                    ))
+                    seen.add((src, tgt, rel.get("type", "")))
 
         # Content components should not participate in relationships
         content_ids = {comp.id for comp in self._component_map.values()
@@ -1417,6 +1625,8 @@ class ArchitectureScanner:
     def _extract_component_docs(self):
         """Extract rich documentation for every component."""
         for rel_path, comp in self._component_map.items():
+            if self._scope_paths is not None and comp.id not in self._scoped_component_ids:
+                continue
             comp_dir = self.root / rel_path if rel_path else self.root
             if not comp_dir.is_dir():
                 continue

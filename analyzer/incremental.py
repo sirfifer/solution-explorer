@@ -7,9 +7,7 @@ results are merged back into the baseline to produce an updated architecture.
 Known limitations of incremental mode:
 - Dependency expansion is one level deep (direct importers only). Transitive
   re-exports can cause missed updates. Add --deep-incremental later if needed.
-- No UI flow re-detection (screens/tabs/navigation preserved from baseline).
 - No component discovery (new dirs without marker files need full rescan).
-- HTTP client heuristics and service-name detection are not re-run.
 - Content hashes are stored but not yet used for skip optimization.
 """
 
@@ -19,8 +17,8 @@ import logging
 import os
 import re
 import subprocess
+import warnings
 from collections import defaultdict
-from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -144,12 +142,22 @@ def rescan_component(
 ) -> Optional[dict]:
     """Re-scan a single component's files and return updated data.
 
+    .. deprecated::
+        Use ``ArchitectureScanner(scope_paths=..., baseline=...)`` instead.
+        This function duplicates scanner logic and misses several phases.
+
     Walks the component's directory, re-parses all code files using the
     standard parsers, and returns a dict with updated file lists, symbols,
     metrics, framework, and port info.
 
     Returns None if the component is not found in the baseline.
     """
+    warnings.warn(
+        "rescan_component() is deprecated. Use ArchitectureScanner with "
+        "scope_paths and baseline parameters instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     comp = _find_component_in_tree(
         baseline.get("components", []), component_id
     )
@@ -285,10 +293,19 @@ def merge_component_into_baseline(
 ) -> dict:
     """Merge rescanned component data back into the baseline.
 
+    .. deprecated::
+        Use ``ArchitectureScanner(scope_paths=..., baseline=...)`` instead.
+
     Replaces the component's files and metrics in the baseline tree.
     Updates the architecture-level files and symbols lists.
     Preserves structural fields (children, type, name, path, docs, config_files).
     """
+    warnings.warn(
+        "merge_component_into_baseline() is deprecated. Use "
+        "ArchitectureScanner with scope_paths and baseline parameters instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     comp = _find_component_in_tree(
         baseline.get("components", []), component_id
     )
@@ -391,10 +408,20 @@ def redetect_relationships(
 ) -> list[dict]:
     """Re-detect relationships for affected components.
 
+    .. deprecated::
+        Use ``ArchitectureScanner(scope_paths=..., baseline=...)`` instead.
+        This function only runs 2 of 11 relationship strategies.
+
     Preserves relationships between unaffected components. Removes all
     relationships where source OR target is affected, then re-detects
     import-based and port-based relationships for those components.
     """
+    warnings.warn(
+        "redetect_relationships() is deprecated. Use ArchitectureScanner "
+        "with scope_paths and baseline parameters instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     # Preserve unaffected relationships
     preserved = [
         rel for rel in baseline.get("relationships", [])
@@ -691,6 +718,30 @@ def _recalculate_stats(arch_dict: dict) -> dict:
         "total_components": total_components,
         "total_relationships": len(arch_dict.get("relationships", [])),
     }
+
+
+def _affected_ids_to_paths(
+    affected_ids: set[str], baseline: dict
+) -> list[str]:
+    """Convert affected component IDs to their directory paths.
+
+    Walks the baseline component tree and collects the ``path`` field
+    for every component whose ``id`` is in *affected_ids*.  Returns a
+    deduplicated, sorted list of directory paths suitable for passing
+    as ``scope_paths`` to ``ArchitectureScanner``.
+    """
+    paths: set[str] = set()
+
+    def _walk(components: list[dict]) -> None:
+        for comp in components:
+            if comp.get("id", "") in affected_ids:
+                p = comp.get("path", "")
+                if p:
+                    paths.add(p)
+            _walk(comp.get("children", []))
+
+    _walk(baseline.get("components", []))
+    return sorted(paths)
 
 
 # ------------------------------------------------------------------
@@ -1099,7 +1150,14 @@ class IncrementalAnalyzer:
         baseline: dict,
         changed_files: list[tuple[str, str]],
     ) -> dict:
-        """Run true incremental re-analysis on affected components only."""
+        """Run true incremental re-analysis on affected components only.
+
+        Uses ArchitectureScanner with scope_paths to rescan only the affected
+        components while preserving baseline data for everything else. This
+        eliminates code duplication and runs all scanner phases (type promotion,
+        port assignment, UI flow detection, all 11 relationship strategies,
+        documentation extraction) on the affected components.
+        """
         # Map changed files to directly affected components
         directly_affected = self.map_files_to_components(changed_files, baseline)
 
@@ -1117,28 +1175,23 @@ class IncrementalAnalyzer:
             f"{len(affected)} total (with importers)"
         )
 
-        # Deep-copy baseline as working copy
-        working = deepcopy(baseline)
+        # Convert affected component IDs to scope_paths (directory paths)
+        scope_paths = _affected_ids_to_paths(affected, baseline)
+        print(f"  Scope paths: {scope_paths}")
 
-        # Rescan each affected component and merge
-        for comp_id in sorted(affected):
-            print(f"  Rescanning: {comp_id}")
-            new_data = rescan_component(
-                comp_id, working, self.root,
-                max_file_size=self.max_file_size,
-                preview_lines=self.preview_lines,
-            )
-            if new_data is not None:
-                working = merge_component_into_baseline(
-                    working, comp_id, new_data
-                )
+        # Run scoped scanner: rescans only scope_paths, preserves baseline
+        # for everything else. All scanner phases run with proper scoping.
+        scanner = ArchitectureScanner(
+            self.root,
+            max_file_size=self.max_file_size,
+            max_symbols=self.max_symbols,
+            preview_lines=self.preview_lines,
+            scope_paths=scope_paths,
+            baseline=baseline,
+        )
+        arch = scanner.scan()
+        working = to_dict(arch)
 
-        # Re-detect relationships for affected components
-        updated_rels = redetect_relationships(working, affected, self.root)
-        working["relationships"] = updated_rels
-
-        # Recalculate stats
-        working["stats"] = _recalculate_stats(working)
         working["generated_at"] = datetime.now(timezone.utc).isoformat()
         working["analyzer_version"] = __version__
 
