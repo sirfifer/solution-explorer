@@ -12,3 +12,6 @@ node_modules/
 # Generated
 architecture.json
 .arch-baseline/
+
+# Cloudflare Worker
+infrastructure/cloudflare/worker/.wrangler/
