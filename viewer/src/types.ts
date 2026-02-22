@@ -171,6 +171,20 @@ export interface AdminSummary {
   activity: AdminSummaryActivity[];
   daily_counts: Record<string, number>;
   generated_at: string;
+  resource_usage?: {
+    worker_requests: number;
+    d1_reads: number;
+    d1_writes: number;
+    r2_reads: number;
+    r2_writes: number;
+    limits: {
+      worker_requests_per_day: number;
+      d1_reads_per_day: number;
+      d1_writes_per_day: number;
+      r2_reads_per_month: number;
+      r2_writes_per_month: number;
+    };
+  };
 }
 
 export interface Component {
