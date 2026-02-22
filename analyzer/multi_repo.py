@@ -6,12 +6,11 @@ import re
 import subprocess
 import sys
 import tempfile
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from .models import Architecture
+from .models import Architecture, to_dict
 from .scanner import ArchitectureScanner
 
 
@@ -219,7 +218,7 @@ class MultiRepoOrchestrator:
         """Recursively prefix all component IDs."""
         result = []
         for comp in components:
-            c = dict(comp) if isinstance(comp, dict) else asdict(comp)
+            c = dict(comp) if isinstance(comp, dict) else to_dict(comp)
             c["id"] = prefix + c["id"]
             c["path"] = prefix + c["path"]
             c["files"] = [prefix + f for f in c.get("files", [])]
@@ -230,7 +229,7 @@ class MultiRepoOrchestrator:
     def _prefix_relationships(self, relationships: list, prefix: str) -> list:
         result = []
         for rel in relationships:
-            r = dict(rel) if isinstance(rel, dict) else asdict(rel)
+            r = dict(rel) if isinstance(rel, dict) else to_dict(rel)
             r["source"] = prefix + r["source"]
             r["target"] = prefix + r["target"]
             result.append(r)
@@ -239,7 +238,7 @@ class MultiRepoOrchestrator:
     def _prefix_symbols(self, symbols: list, prefix: str) -> list:
         result = []
         for sym in symbols:
-            s = dict(sym) if isinstance(sym, dict) else asdict(sym)
+            s = dict(sym) if isinstance(sym, dict) else to_dict(sym)
             s["id"] = prefix + s["id"]
             s["file"] = prefix + s["file"]
             if s.get("parent"):
@@ -250,7 +249,7 @@ class MultiRepoOrchestrator:
     def _prefix_files(self, files: list, prefix: str) -> list:
         result = []
         for fi in files:
-            f = dict(fi) if isinstance(fi, dict) else asdict(fi)
+            f = dict(fi) if isinstance(fi, dict) else to_dict(fi)
             f["path"] = prefix + f["path"]
             f["symbols"] = [prefix + s for s in f.get("symbols", [])]
             result.append(f)

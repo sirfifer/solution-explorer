@@ -195,13 +195,13 @@ class TestArchitectureScanner:
 
     def test_output_serializable(self, temp_repo):
         """Architecture output must be JSON-serializable."""
-        from dataclasses import asdict
+        from analyzer.models import to_dict
 
         scanner = ArchitectureScanner(temp_repo)
         arch = scanner.scan()
 
         # Should not raise
-        result = json.dumps(asdict(arch), default=str)
+        result = json.dumps(to_dict(arch), default=str)
         parsed = json.loads(result)
         assert parsed["name"] == temp_repo.name
 
@@ -280,8 +280,8 @@ class TestMultiRepoOrchestrator:
         orch = MultiRepoOrchestrator(config_path)
         arch = orch.run()
 
-        from dataclasses import asdict
-        result = json.dumps(asdict(arch), default=str)
+        from analyzer.models import to_dict
+        result = json.dumps(to_dict(arch), default=str)
         parsed = json.loads(result)
         assert parsed["name"] == "Test Platform"
         assert len(parsed["repositories"]) == 2

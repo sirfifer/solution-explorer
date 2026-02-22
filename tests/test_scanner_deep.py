@@ -8,8 +8,9 @@ edge cases (empty repos, binary files, oversized files).
 
 import json
 import sys
-from dataclasses import asdict
 from pathlib import Path
+
+from analyzer.models import to_dict
 
 import pytest
 
@@ -918,7 +919,7 @@ class TestEdgeCases:
         scanner = ArchitectureScanner(multi_component_repo)
         arch = scanner.scan()
 
-        result = json.dumps(asdict(arch), default=str)
+        result = json.dumps(to_dict(arch), default=str)
         parsed = json.loads(result)
         assert parsed["name"] == multi_component_repo.name
 

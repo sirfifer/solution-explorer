@@ -3,9 +3,9 @@
 import argparse
 import json
 import sys
-from dataclasses import asdict
 from pathlib import Path
 
+from .models import to_dict
 from .multi_repo import MultiRepoOrchestrator
 from .scanner import ArchitectureScanner
 
@@ -64,6 +64,11 @@ def main():
         default=None,
         help="Path to solution-explorer.json for multi-repo analysis",
     )
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate architecture data and report issues (requires pydantic)",
+    )
 
     args = parser.parse_args()
 
@@ -99,6 +104,16 @@ def main():
         )
         arch = scanner.scan()
 
+    # Validate if requested
+    if args.validate:
+        errors = arch.validate_cross_references()
+        if errors:
+            print(f"\nValidation found {len(errors)} issue(s):", file=sys.stderr)
+            for err in errors:
+                print(f"  - {err}", file=sys.stderr)
+        else:
+            print("\nValidation passed: all cross-references valid.")
+
     # Write output
     indent = None if args.compact else 2
 
@@ -110,7 +125,7 @@ def main():
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(asdict(arch), f, indent=indent, default=str)
+            json.dump(to_dict(arch), f, indent=indent, default=str)
         output_label = str(output_path)
 
     stats = arch.stats
@@ -130,7 +145,7 @@ def write_split(arch, output_dir: Path, indent):
     data_dir = output_dir / "data"
     data_dir.mkdir(exist_ok=True)
 
-    arch_dict = asdict(arch)
+    arch_dict = to_dict(arch)
 
     # Build lookup tables for files and symbols
     all_file_paths = {f["path"]: f for f in arch_dict.get("files", [])}
