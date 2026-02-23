@@ -281,6 +281,31 @@ export interface Architecture {
     last_commit_sha?: string;
     last_updated?: string;
   };
+  changelog?: ChangelogEntry[];
+  changelog_serial?: number;
+}
+
+// Changelog types for architecture change notifications
+export interface ChangelogChange {
+  kind: "component_added" | "component_removed" | "component_modified"
+      | "relationship_added" | "relationship_removed";
+  target_id: string;
+  target_name: string;
+  target_type: string;
+  detail: string;
+  source_id?: string;
+  source_name?: string;
+  dest_id?: string;
+  dest_name?: string;
+}
+
+export interface ChangelogEntry {
+  serial: number;
+  timestamp: string;
+  commit_sha?: string;
+  scan_type: "initial" | "full" | "incremental";
+  summary: string;
+  changes: ChangelogChange[];
 }
 
 // Review annotations

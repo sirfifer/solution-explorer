@@ -351,32 +351,47 @@ function TabContainerFrame({ darkMode, colors, children }: FrameProps) {
   );
 }
 
-function DeviceFrame({ type, darkMode, colors, enhancedFrames, children }: { type: string; darkMode: boolean; colors: ReturnType<typeof getTypeColors>; enhancedFrames: boolean; children: ReactNode }) {
+function DeviceFrame({ type, darkMode, colors, enhancedFrames, heroGlow, children }: { type: string; darkMode: boolean; colors: ReturnType<typeof getTypeColors>; enhancedFrames: boolean; heroGlow?: string; children: ReactNode }) {
   const props = { darkMode, colors, children };
+  // Wrap frame in a div that applies the hero glow with matching border-radius
+  const withGlow = (frame: ReactNode, borderRadius: string) => {
+    if (!heroGlow || heroGlow === "none") return frame;
+    return <div style={{ boxShadow: heroGlow, borderRadius }}>{frame}</div>;
+  };
   switch (type) {
     case "mobile-client":
     case "ios-client":
     case "android-client":
-      return enhancedFrames ? <EnhancedMobileFrame {...props} /> : <MobileFrame {...props} />;
-    case "api-server": return <ServerFrame {...props} />;
-    case "web-client": return <BrowserFrame {...props} />;
-    case "watch-app": return enhancedFrames ? <EnhancedWatchFrame {...props} /> : <WatchFrame {...props} />;
-    case "desktop-app": return <DesktopFrame {...props} />;
-    case "cli-tool": return <TerminalFrame {...props} />;
-    case "service": return <ServiceFrame {...props} />;
-    case "screen": return <ScreenFrame {...props} />;
-    case "tab-container": return <TabContainerFrame {...props} />;
-    case "tab": return enhancedFrames ? <EnhancedMobileFrame {...props} /> : <MobileFrame {...props} />;
+      return withGlow(
+        enhancedFrames ? <EnhancedMobileFrame {...props} /> : <MobileFrame {...props} />,
+        enhancedFrames ? "38px" : "28px"
+      );
+    case "api-server": return withGlow(<ServerFrame {...props} />, "6px");
+    case "web-client": return withGlow(<BrowserFrame {...props} />, "12px");
+    case "watch-app": return withGlow(
+      enhancedFrames ? <EnhancedWatchFrame {...props} /> : <WatchFrame {...props} />,
+      enhancedFrames ? "48px" : "28px"
+    );
+    case "desktop-app": return withGlow(<DesktopFrame {...props} />, "8px");
+    case "cli-tool": return withGlow(<TerminalFrame {...props} />, "8px");
+    case "service": return withGlow(<ServiceFrame {...props} />, "12px");
+    case "screen": return withGlow(<ScreenFrame {...props} />, "20px");
+    case "tab-container": return withGlow(<TabContainerFrame {...props} />, "12px");
+    case "tab": return withGlow(
+      enhancedFrames ? <EnhancedMobileFrame {...props} /> : <MobileFrame {...props} />,
+      enhancedFrames ? "38px" : "28px"
+    );
     case "application":
       // Application: enhanced hero styling, no device frame
-      return (
+      return withGlow(
         <div className={`
           rounded-xl border-[3px] min-w-[280px] max-w-[360px] backdrop-blur-sm
           ${colors.bg} ${colors.border}
           ring-1 ring-offset-0 ${darkMode ? "ring-white/10" : "ring-black/10"}
         `}>
           {children}
-        </div>
+        </div>,
+        "12px"
       );
     default:
       // Non-hero types (module, content, package, library, etc.)
@@ -771,7 +786,6 @@ export const ComponentNode = memo(function ComponentNode({
         hover:scale-[1.02] transition-transform duration-150
         cursor-pointer
       `}
-      style={isHero ? { boxShadow: getHeroGlow(component.type, darkMode) } : undefined}
       onClick={() => selectComponent(component.id)}
       onDoubleClick={() => hasChildren && drillInto(component)}
       onMouseEnter={handleMouseEnter}
@@ -811,7 +825,7 @@ export const ComponentNode = memo(function ComponentNode({
       )}
 
       {/* Device-shaped frame wrapping all content */}
-      <DeviceFrame type={component.type} darkMode={darkMode} colors={colors} enhancedFrames={enhancedFrames}>
+      <DeviceFrame type={component.type} darkMode={darkMode} colors={colors} enhancedFrames={enhancedFrames} heroGlow={isHero ? getHeroGlow(component.type, darkMode) : undefined}>
         {/* Header */}
         <div className={isHero ? "px-4 pt-3 pb-2" : "px-4 pt-3 pb-2"}>
           <div className="flex items-start justify-between gap-2">

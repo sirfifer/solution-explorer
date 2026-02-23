@@ -1003,12 +1003,18 @@ class IncrementalAnalyzer:
         new_ids = set(self._collect_component_ids(new_arch.get("components", [])))
 
         if old_baseline is None:
+            all_rels = {
+                (r.get("source"), r.get("target"), r.get("type"))
+                for r in new_arch.get("relationships", [])
+            }
             return {
                 "components_added": sorted(new_ids),
                 "components_removed": [],
                 "components_modified": [],
-                "relationships_added": len(new_arch.get("relationships", [])),
+                "relationships_added": len(all_rels),
                 "relationships_removed": 0,
+                "relationships_added_tuples": sorted(all_rels),
+                "relationships_removed_tuples": [],
                 "files_changed": changed_file_count,
             }
 
@@ -1047,6 +1053,8 @@ class IncrementalAnalyzer:
             "components_modified": modified,
             "relationships_added": len(new_rels - old_rels),
             "relationships_removed": len(old_rels - new_rels),
+            "relationships_added_tuples": sorted(new_rels - old_rels),
+            "relationships_removed_tuples": sorted(old_rels - new_rels),
             "files_changed": changed_file_count,
         }
 
@@ -1076,6 +1084,185 @@ class IncrementalAnalyzer:
                 )
             )
         return result
+
+    # ------------------------------------------------------------------
+    # Changelog
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_component_info_map(
+        components: list,
+    ) -> dict[str, dict[str, str]]:
+        """Build id -> {name, type} map from a component tree."""
+        result: dict[str, dict[str, str]] = {}
+
+        def walk(comps: list) -> None:
+            for comp in comps:
+                cid = comp.get("id", "")
+                result[cid] = {
+                    "name": comp.get("name", cid),
+                    "type": comp.get("type", "module"),
+                }
+                walk(comp.get("children", []))
+
+        walk(components)
+        return result
+
+    def build_changelog_entry(
+        self,
+        diff_summary: dict,
+        old_arch: Optional[dict],
+        new_arch: dict,
+        scan_type: str,
+        serial: int,
+    ) -> dict:
+        """Convert a diff summary into a structured changelog entry.
+
+        Each change references specific component/relationship IDs with
+        human-readable names so the viewer can render clickable links.
+        """
+        # Build name/type lookup from both old and new trees
+        info = self._build_component_info_map(
+            new_arch.get("components", [])
+        )
+        if old_arch:
+            old_info = self._build_component_info_map(
+                old_arch.get("components", [])
+            )
+            # Merge old info for removed components (not in new tree)
+            for cid, cinfo in old_info.items():
+                if cid not in info:
+                    info[cid] = cinfo
+
+        changes: list[dict] = []
+
+        # Component changes
+        for cid in diff_summary.get("components_added", []):
+            ci = info.get(cid, {"name": cid, "type": "module"})
+            changes.append({
+                "kind": "component_added",
+                "target_id": cid,
+                "target_name": ci["name"],
+                "target_type": ci["type"],
+                "detail": "New component discovered",
+            })
+
+        for cid in diff_summary.get("components_removed", []):
+            ci = info.get(cid, {"name": cid, "type": "module"})
+            changes.append({
+                "kind": "component_removed",
+                "target_id": cid,
+                "target_name": ci["name"],
+                "target_type": ci["type"],
+                "detail": "Component no longer detected",
+            })
+
+        for cid in diff_summary.get("components_modified", []):
+            ci = info.get(cid, {"name": cid, "type": "module"})
+            changes.append({
+                "kind": "component_modified",
+                "target_id": cid,
+                "target_name": ci["name"],
+                "target_type": ci["type"],
+                "detail": "Component structure changed",
+            })
+
+        # Relationship changes
+        for src, tgt, rtype in diff_summary.get(
+            "relationships_added_tuples", []
+        ):
+            src_info = info.get(src, {"name": src})
+            tgt_info = info.get(tgt, {"name": tgt})
+            changes.append({
+                "kind": "relationship_added",
+                "target_id": f"{src}->{tgt}",
+                "target_name": (
+                    f"{src_info['name']} -> {tgt_info['name']}"
+                ),
+                "target_type": rtype or "dependency",
+                "source_id": src,
+                "source_name": src_info["name"],
+                "dest_id": tgt,
+                "dest_name": tgt_info["name"],
+                "detail": f"{rtype or 'dependency'} connection",
+            })
+
+        for src, tgt, rtype in diff_summary.get(
+            "relationships_removed_tuples", []
+        ):
+            src_info = info.get(src, {"name": src})
+            tgt_info = info.get(tgt, {"name": tgt})
+            changes.append({
+                "kind": "relationship_removed",
+                "target_id": f"{src}->{tgt}",
+                "target_name": (
+                    f"{src_info['name']} -> {tgt_info['name']}"
+                ),
+                "target_type": rtype or "dependency",
+                "source_id": src,
+                "source_name": src_info["name"],
+                "dest_id": tgt,
+                "dest_name": tgt_info["name"],
+                "detail": f"{rtype or 'dependency'} connection removed",
+            })
+
+        # Build summary string
+        parts = []
+        added = len(diff_summary.get("components_added", []))
+        removed = len(diff_summary.get("components_removed", []))
+        modified = len(diff_summary.get("components_modified", []))
+        rel_added = diff_summary.get("relationships_added", 0)
+        rel_removed = diff_summary.get("relationships_removed", 0)
+        if added:
+            parts.append(
+                f"{added} component{'s' if added != 1 else ''} added"
+            )
+        if modified:
+            parts.append(
+                f"{modified} component{'s' if modified != 1 else ''} modified"
+            )
+        if removed:
+            parts.append(
+                f"{removed} component{'s' if removed != 1 else ''} removed"
+            )
+        if rel_added:
+            parts.append(
+                f"{rel_added} relationship{'s' if rel_added != 1 else ''} added"
+            )
+        if rel_removed:
+            parts.append(
+                f"{rel_removed} relationship{'s' if rel_removed != 1 else ''} removed"
+            )
+        summary = ", ".join(parts) if parts else "No structural changes"
+
+        # Get commit sha
+        commit_sha = getattr(self, "head_sha", None) or ""
+
+        return {
+            "serial": serial,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "commit_sha": commit_sha,
+            "scan_type": scan_type,
+            "summary": summary,
+            "changes": changes,
+        }
+
+    @staticmethod
+    def _append_changelog(
+        arch_dict: dict,
+        entry: dict,
+        baseline: Optional[dict],
+        max_entries: int = 50,
+    ) -> None:
+        """Append a changelog entry to arch_dict, preserving history from baseline."""
+        existing = list(baseline.get("changelog", [])) if baseline else []
+        if entry.get("changes"):
+            existing.append(entry)
+        # Cap at max_entries, trimming oldest
+        if len(existing) > max_entries:
+            existing = existing[-max_entries:]
+        arch_dict["changelog"] = existing
+        arch_dict["changelog_serial"] = entry["serial"]
 
     # ------------------------------------------------------------------
     # Orchestration
@@ -1142,6 +1329,14 @@ class IncrementalAnalyzer:
             ),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+
+        # Build and append changelog entry
+        scan_type = "initial" if baseline is None else "full"
+        prev_serial = (baseline or {}).get("changelog_serial", 0)
+        entry = self.build_changelog_entry(
+            diff_summary, baseline, arch_dict, scan_type, prev_serial + 1
+        )
+        self._append_changelog(arch_dict, entry, baseline)
 
         return arch_dict
 
@@ -1214,5 +1409,12 @@ class IncrementalAnalyzer:
             "expanded_via_dependency": sorted(affected - directly_affected),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+
+        # Build and append changelog entry
+        prev_serial = baseline.get("changelog_serial", 0)
+        entry = self.build_changelog_entry(
+            diff_summary, baseline, working, "incremental", prev_serial + 1
+        )
+        self._append_changelog(working, entry, baseline)
 
         return working

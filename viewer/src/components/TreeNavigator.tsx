@@ -2,6 +2,7 @@ import { useState, memo, useMemo, useCallback, useEffect } from "react";
 import type { Component } from "../types";
 import { useArchStore, flattenTopLevel } from "../store";
 import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType } from "../utils/layout";
+import { ChangelogPanel } from "./ChangelogPanel";
 
 // Session storage key for expanded nodes
 const EXPANDED_KEY = "arch-tree-expanded";
@@ -299,6 +300,9 @@ export function TreeNavigator() {
         </h2>
       </div>
       <div className="flex-1 overflow-y-auto py-2">
+        {/* Changelog / What's New notifications */}
+        <ChangelogPanel />
+
         {/* Top-level components (main graph items) */}
         {topLevel.map((comp) => (
           <TreeNode

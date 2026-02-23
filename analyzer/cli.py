@@ -213,18 +213,22 @@ def main():
         else:
             print("\nValidation passed: all cross-references valid.")
 
-    # Write output
+    # Convert to dict and apply changelog
+    arch_dict = to_dict(arch)
     indent = None if args.compact else 2
 
     if args.split:
         output_dir = Path(args.output) if args.output != "architecture.json" else Path("architecture")
-        write_split(arch, output_dir, indent)
+        manifest_path = output_dir / "manifest.json"
+        _apply_changelog(arch_dict, manifest_path)
+        write_split(arch_dict, output_dir, indent)
         output_label = f"{output_dir}/"
     else:
         output_path = Path(args.output)
+        _apply_changelog(arch_dict, output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(to_dict(arch), f, indent=indent, default=str)
+            json.dump(arch_dict, f, indent=indent, default=str)
         output_label = str(output_path)
 
     stats = arch.stats
@@ -238,13 +242,41 @@ def main():
     print(f"\nOutput: {output_label}")
 
 
-def write_split(arch, output_dir: Path, indent):
+def _apply_changelog(arch_dict: dict, output_path: Path) -> None:
+    """Add changelog to arch_dict by diffing against previous output if it exists.
+
+    For non-incremental scans, we load the previous architecture.json at the
+    output path (if any) as a baseline, compute a diff, and append a changelog
+    entry. If no previous file exists, this is an initial scan.
+    """
+    from .incremental import IncrementalAnalyzer
+
+    baseline = None
+    if output_path.is_file():
+        try:
+            with open(output_path, "r", encoding="utf-8") as f:
+                baseline = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Use a lightweight stub to access the diff/changelog methods
+    analyzer = object.__new__(IncrementalAnalyzer)
+    analyzer.head_sha = ""
+
+    diff_summary = analyzer.compute_diff_summary(baseline, arch_dict)
+    scan_type = "initial" if baseline is None else "full"
+    prev_serial = (baseline or {}).get("changelog_serial", 0)
+    entry = analyzer.build_changelog_entry(
+        diff_summary, baseline, arch_dict, scan_type, prev_serial + 1
+    )
+    IncrementalAnalyzer._append_changelog(arch_dict, entry, baseline)
+
+
+def write_split(arch_dict: dict, output_dir: Path, indent):
     """Write split output: manifest.json + per-component detail files."""
     output_dir.mkdir(parents=True, exist_ok=True)
     data_dir = output_dir / "data"
     data_dir.mkdir(exist_ok=True)
-
-    arch_dict = to_dict(arch)
 
     # Build lookup tables for files and symbols
     all_file_paths = {f["path"]: f for f in arch_dict.get("files", [])}

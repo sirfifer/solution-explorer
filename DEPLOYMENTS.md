@@ -6,10 +6,12 @@ Tracks where solution-explorer is installed and how to redeploy after changes.
 
 | Project | GitHub Repo | CF Project | URL | Live Mode | Live Data URL |
 |---------|-------------|------------|-----|-----------|---------------|
-| UnaMentis | `UnaMentis/unamentis` | `um-solution-explorer` | [um-arch.unamentis.org](https://um-arch.unamentis.org) | cloudflare (pending) | TBD |
+| UnaMentis (static) | `UnaMentis/unamentis` | `um-solution-explorer` | [um-arch.unamentis.org](https://um-arch.unamentis.org) | - | - |
+| UnaMentis (full) | `UnaMentis/unamentis` | `solution-explorer-unamentis` | [solution-explorer.unamentis.org](https://solution-explorer.unamentis.org) | github | [unamentis.github.io/unamentis](https://unamentis.github.io/unamentis) |
 
 **Workflows per installation:**
 - `architecture.yml`: Static build and Cloudflare Pages deploy (all installations)
+- `architecture-full.yml`: Advanced build with live-config injection and Cloudflare Pages deploy
 - `live-monitor.yml`: Live data generation, GitHub Pages + optional R2 deploy (if live mode is set)
 
 ## How to Redeploy
@@ -19,6 +21,9 @@ After pushing changes to `sirfifer/solution-explorer` main:
 ```bash
 # Redeploy all installations (static viewer)
 gh workflow run "Architecture Visualization" -R UnaMentis/unamentis --ref main
+
+# Redeploy advanced viewer (with live monitoring support)
+gh workflow run "Advanced Architecture Visualization" -R UnaMentis/unamentis --ref main
 
 # Redeploy live monitoring data (if live mode is enabled)
 gh workflow run "Live Monitor" -R UnaMentis/unamentis --ref main

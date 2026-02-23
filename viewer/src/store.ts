@@ -14,12 +14,60 @@ import type {
   LiveConfig,
   LiveVersion,
   StatusOverlay,
+  ChangelogEntry,
 } from "./types";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 
 // Storage key for dark mode preference (localStorage for persistence across sessions)
 const DARK_MODE_KEY = "arch-dark-mode";
 const ENHANCED_FRAMES_KEY = "arch-enhanced-frames";
+const CHANGELOG_READ_KEY = "arch-changelog-read";
+
+// High-water mark + sparse read set for efficient read tracking.
+// w = watermark (everything at or below is read), r = individually-read serials above watermark.
+interface ChangelogReadState {
+  w: number;
+  r: number[];
+}
+
+function getStoredChangelogRead(): ChangelogReadState {
+  try {
+    const stored = localStorage.getItem(CHANGELOG_READ_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (typeof parsed.w === "number" && Array.isArray(parsed.r)) {
+        return parsed as ChangelogReadState;
+      }
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return { w: 0, r: [] };
+}
+
+function saveStoredChangelogRead(state: ChangelogReadState): void {
+  try {
+    localStorage.setItem(CHANGELOG_READ_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+// Collapse the watermark forward when sparse reads fill contiguous gaps.
+function collapseChangelogRead(state: ChangelogReadState): ChangelogReadState {
+  const sorted = [...state.r].sort((a, b) => a - b);
+  let w = state.w;
+  let i = 0;
+  while (i < sorted.length && sorted[i] <= w + 1) {
+    if (sorted[i] === w + 1) w = sorted[i];
+    i++;
+  }
+  return { w, r: sorted.slice(i) };
+}
+
+function isSerialRead(state: ChangelogReadState, serial: number): boolean {
+  return serial <= state.w || state.r.includes(serial);
+}
 
 function getStoredDarkMode(): boolean {
   try {
@@ -144,6 +192,14 @@ interface ArchStore {
   componentDetailLoading: string | null;
   loadComponentDetail: (componentId: string) => Promise<{ symbols: Symbol[]; files: FileInfo[] } | null>;
 
+  // Changelog
+  changelogReadState: ChangelogReadState;
+  isChangelogEntryRead: (serial: number) => boolean;
+  markChangelogEntryRead: (serial: number) => void;
+  markAllChangelogRead: () => void;
+  getUnreadChangelogCount: () => number;
+  getChangelog: () => ChangelogEntry[];
+
   // Helpers
   getComponentById: (id: string) => Component | null;
   getVisibleComponents: () => Component[];
@@ -235,6 +291,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   liveVersion: null,
   liveMonitorStatus: "idle",
   statusOverlay: null,
+  changelogReadState: getStoredChangelogRead(),
 
   setArchitecture: (arch) => set({ architecture: arch, loading: false }),
   setLoading: (loading) => set({ loading }),
@@ -456,6 +513,36 @@ export const useArchStore = create<ArchStore>((set, get) => ({
         activePanel: "detail",
       });
     }
+  },
+
+  isChangelogEntryRead: (serial) => {
+    return isSerialRead(get().changelogReadState, serial);
+  },
+
+  markChangelogEntryRead: (serial) => {
+    const current = get().changelogReadState;
+    if (isSerialRead(current, serial)) return;
+    const updated = collapseChangelogRead({ w: current.w, r: [...current.r, serial] });
+    saveStoredChangelogRead(updated);
+    set({ changelogReadState: updated });
+  },
+
+  markAllChangelogRead: () => {
+    const arch = get().architecture;
+    const serial = arch?.changelog_serial ?? 0;
+    const updated: ChangelogReadState = { w: serial, r: [] };
+    saveStoredChangelogRead(updated);
+    set({ changelogReadState: updated });
+  },
+
+  getUnreadChangelogCount: () => {
+    const { architecture, changelogReadState } = get();
+    if (!architecture?.changelog) return 0;
+    return architecture.changelog.filter((e) => !isSerialRead(changelogReadState, e.serial)).length;
+  },
+
+  getChangelog: () => {
+    return get().architecture?.changelog ?? [];
   },
 
   getAnnotationsForComponent: (componentId) => {
