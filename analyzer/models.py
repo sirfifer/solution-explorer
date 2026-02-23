@@ -78,6 +78,10 @@ class RelationshipType(str, Enum):
     TAB = "tab"
     MODAL = "modal"
     EMBED = "embed"
+    MESSAGE_QUEUE = "message_queue"
+    PUBSUB = "pubsub"
+    EVENT_BUS = "event_bus"
+    CACHE = "cache"
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +242,7 @@ if _PYDANTIC:
         metrics: dict = Field(default_factory=dict)
         docs: dict = Field(default_factory=dict)
         external_services: list = Field(default_factory=list)
+        testing: dict = Field(default_factory=dict)
 
         @field_validator("id")
         @classmethod
@@ -261,6 +266,14 @@ if _PYDANTIC:
         protocol: Optional[str] = None
         port: Optional[int] = None
         bidirectional: bool = False
+        authentication: Optional[str] = None
+        data_format: Optional[str] = None
+        api_style: Optional[str] = None
+        endpoints: list = Field(default_factory=list)
+        middleware: list = Field(default_factory=list)
+        transport: Optional[str] = None
+        queue_name: Optional[str] = None
+        connection_pattern: Optional[str] = None
 
         @field_validator("source", "target")
         @classmethod
@@ -357,6 +370,7 @@ else:
         metrics: dict = field(default_factory=dict)
         docs: dict = field(default_factory=dict)
         external_services: list = field(default_factory=list)
+        testing: dict = field(default_factory=dict)
 
     @dataclass
     class Relationship:
@@ -367,6 +381,14 @@ else:
         protocol: Optional[str] = None
         port: Optional[int] = None
         bidirectional: bool = False
+        authentication: Optional[str] = None
+        data_format: Optional[str] = None
+        api_style: Optional[str] = None
+        endpoints: list = field(default_factory=list)
+        middleware: list = field(default_factory=list)
+        transport: Optional[str] = None
+        queue_name: Optional[str] = None
+        connection_pattern: Optional[str] = None
 
     @dataclass
     class Architecture:

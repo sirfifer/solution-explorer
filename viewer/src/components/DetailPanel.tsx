@@ -15,7 +15,7 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, getPatternRef, getProtocolRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
 
-type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai" | "status";
+type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai" | "status" | "testing";
 
 export function DetailPanel() {
   const {
@@ -117,6 +117,10 @@ function ComponentDetail({
     { key: "overview", label: "Overview" },
     ...(hasDocContent ? [{ key: "docs" as Tab, label: "Docs" }] : []),
     ...(component.ai_enhance ? [{ key: "ai" as Tab, label: "AI Insights" }] : []),
+    ...(component.testing && (component.testing.test_files > 0 || component.testing.test_frameworks.length > 0)
+      ? [{ key: "testing" as Tab, label: "Testing",
+           count: component.testing.unit_tests + component.testing.integration_tests + component.testing.e2e_tests }]
+      : []),
     ...(component.live_status?.statuses && Object.keys(component.live_status.statuses).length > 0
       ? [{ key: "status" as Tab, label: "Status",
            count: Object.keys(component.live_status.statuses).length }]
@@ -279,6 +283,9 @@ function ComponentDetail({
         )}
         {activeTab === "ai" && (
           <AIInsightsTab component={component} relationships={relationships} />
+        )}
+        {activeTab === "testing" && component.testing && (
+          <TestingTab component={component} />
         )}
         {activeTab === "status" && component.live_status?.statuses && (
           <StatusTab statuses={component.live_status.statuses} />
@@ -1010,6 +1017,98 @@ function StatusTab({ statuses }: { statuses: Record<string, ComponentStatus> }) 
   );
 }
 
+function TestingTab({ component }: { component: Component }) {
+  const { darkMode } = useArchStore();
+  const t = component.testing;
+  if (!t) return null;
+
+  const totalTests = t.unit_tests + t.integration_tests + t.e2e_tests;
+  const dimText = darkMode ? "text-zinc-500" : "text-zinc-400";
+  const cardBg = darkMode ? "bg-zinc-800/50" : "bg-zinc-50";
+
+  return (
+    <div className="p-3 space-y-4">
+      {/* Metrics grid */}
+      <div className="grid grid-cols-2 gap-2">
+        {[
+          { label: "Test Files", value: t.test_files },
+          { label: "Total Tests", value: totalTests },
+          { label: "Unit Tests", value: t.unit_tests },
+          { label: "Integration", value: t.integration_tests },
+          { label: "E2E Tests", value: t.e2e_tests },
+          { label: "Test Lines", value: t.test_lines },
+        ].filter(m => m.value > 0).map((m, i) => (
+          <div key={i} className={`px-3 py-2 rounded-lg ${cardBg}`}>
+            <div className={`text-[10px] uppercase tracking-wider ${dimText}`}>{m.label}</div>
+            <div className={`text-lg font-semibold ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+              {m.value.toLocaleString()}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Coverage bar */}
+      {t.coverage_percent !== null && (
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <span className={`text-xs ${dimText}`}>Line Coverage</span>
+            <span className={`text-xs font-mono ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
+              {t.coverage_percent.toFixed(1)}%
+            </span>
+          </div>
+          <div className={`w-full h-2 rounded-full ${darkMode ? "bg-zinc-800" : "bg-zinc-200"}`}>
+            <div
+              className={`h-full rounded-full ${
+                t.coverage_percent >= 80 ? "bg-green-500" : t.coverage_percent >= 50 ? "bg-amber-500" : "bg-red-500"
+              }`}
+              style={{ width: `${Math.min(100, t.coverage_percent)}%` }}
+            />
+          </div>
+          {t.coverage_source && (
+            <span className={`text-[10px] ${dimText}`}>Source: {t.coverage_source}</span>
+          )}
+        </div>
+      )}
+
+      {/* Test frameworks */}
+      {t.test_frameworks.length > 0 && (
+        <div>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${dimText}`}>
+            Frameworks
+          </h4>
+          <div className="flex flex-wrap gap-1.5">
+            {t.test_frameworks.map((fw, i) => (
+              <span key={i} className={`text-xs px-2 py-1 rounded-md ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-zinc-100 text-zinc-700"}`}>
+                {fw}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* CI tests indicator */}
+      {t.has_ci_tests && (
+        <div className={`flex items-center gap-2 text-xs ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+          <span className="w-2 h-2 rounded-full bg-green-500" />
+          Tests run in CI
+        </div>
+      )}
+
+      {/* AI testing assessment */}
+      {component.ai_enhance?.testing_assessment && (
+        <div>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-1 ${dimText}`}>
+            AI Assessment
+          </h4>
+          <p className={`text-xs ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+            {component.ai_enhance.testing_assessment}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RelationshipsTab({
   componentId,
   relationships,
@@ -1031,7 +1130,13 @@ function RelationshipsTab({
       websocket: darkMode ? "text-violet-400" : "text-violet-600",
       grpc: darkMode ? "text-emerald-400" : "text-emerald-600",
       ffi: darkMode ? "text-amber-400" : "text-amber-600",
+      database: darkMode ? "text-pink-400" : "text-pink-600",
+      cache: darkMode ? "text-red-400" : "text-red-600",
+      message_queue: darkMode ? "text-amber-400" : "text-amber-600",
+      pubsub: darkMode ? "text-fuchsia-400" : "text-fuchsia-600",
     };
+    const hasEnrichment = rel.authentication || rel.data_format || rel.api_style ||
+      rel.queue_name || rel.connection_pattern || (rel.middleware && rel.middleware.length > 0);
 
     return (
       <div>
@@ -1072,9 +1177,48 @@ function RelationshipsTab({
             </span>
           )}
         </button>
+        {hasEnrichment && (
+          <div className="px-3 pb-1 flex flex-wrap gap-1">
+            {rel.authentication && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded ${darkMode ? "bg-amber-900/30 text-amber-400" : "bg-amber-50 text-amber-700"}`}>
+                {"\u{1F512}"} {rel.authentication}
+              </span>
+            )}
+            {rel.data_format && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded ${darkMode ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-700"}`}>
+                {rel.data_format}
+              </span>
+            )}
+            {rel.api_style && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded ${darkMode ? "bg-emerald-900/30 text-emerald-400" : "bg-emerald-50 text-emerald-700"}`}>
+                {rel.api_style}
+              </span>
+            )}
+            {rel.queue_name && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+                {rel.queue_name}
+              </span>
+            )}
+            {rel.connection_pattern && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+                {rel.connection_pattern}
+              </span>
+            )}
+            {rel.middleware && rel.middleware.length > 0 && rel.middleware.map((mw, j) => (
+              <span key={j} className={`text-[9px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}>
+                {mw}
+              </span>
+            ))}
+          </div>
+        )}
         {rel.ai_enhance?.data_flow_description && (
           <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             {rel.ai_enhance.data_flow_description}
+          </p>
+        )}
+        {rel.ai_enhance?.security_notes && (
+          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            {"\u{1F512}"} {rel.ai_enhance.security_notes}
           </p>
         )}
       </div>

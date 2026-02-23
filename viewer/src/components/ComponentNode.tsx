@@ -1029,6 +1029,17 @@ export const ComponentNode = memo(function ComponentNode({
               </span>
             </Tooltip>
           )}
+          {component.testing && (component.testing.unit_tests + component.testing.integration_tests + component.testing.e2e_tests) > 0 && (
+            <Tooltip content={`${component.testing.unit_tests + component.testing.integration_tests + component.testing.e2e_tests} tests${component.testing.coverage_percent !== null ? ` (${component.testing.coverage_percent.toFixed(0)}% coverage)` : ""}`}>
+              <span className={`text-[9px] ${
+                component.testing.coverage_percent !== null && component.testing.coverage_percent >= 80
+                  ? (darkMode ? "text-green-600" : "text-green-500")
+                  : (darkMode ? "text-amber-600" : "text-amber-500")
+              }`}>
+                TST
+              </span>
+            </Tooltip>
+          )}
           {connectionCount > 0 && (
             <Tooltip content={METRIC_DESCRIPTIONS.conn}>
               <span className={darkMode ? "text-zinc-600" : "text-zinc-400"}>

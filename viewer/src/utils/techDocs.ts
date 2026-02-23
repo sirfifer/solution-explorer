@@ -243,6 +243,8 @@ export const METRIC_DESCRIPTIONS: Record<string, string> = {
   symbols: "Number of exported or public code symbols (classes, functions, types, etc.).",
   size: "Total file size on disk for all source files.",
   conn: "Number of connections (relationships) to other components in the architecture.",
+  tests: "Total number of test cases (unit + integration + e2e) detected in this component.",
+  coverage: "Percentage of source code lines covered by tests, parsed from coverage report files (LCOV, Istanbul, Cobertura).",
 };
 
 /** Design pattern references with descriptions and links */
@@ -316,6 +318,17 @@ export const PROTOCOL_DOCS: Record<string, TechRef> = {
   "SQL": { description: "Structured Query Language for managing relational databases", url: "https://en.wikipedia.org/wiki/SQL" },
   "FFI": { description: "Foreign Function Interface, calling code written in one language from another", url: "https://en.wikipedia.org/wiki/Foreign_function_interface" },
   "WatchConnectivity": { description: "Apple framework for communication between iPhone and Apple Watch apps", url: "https://developer.apple.com/documentation/watchconnectivity" },
+  "Kafka": { description: "Distributed event streaming platform for high-throughput data pipelines", url: "https://kafka.apache.org" },
+  "RabbitMQ": { description: "Open-source message broker supporting AMQP, MQTT, and STOMP", url: "https://www.rabbitmq.com" },
+  "SQS": { description: "Amazon Simple Queue Service, fully managed message queuing", url: "https://aws.amazon.com/sqs/" },
+  "NATS": { description: "Cloud-native messaging system for microservices and IoT", url: "https://nats.io" },
+  "Protobuf": { description: "Language-neutral binary data serialization format by Google", url: "https://protobuf.dev" },
+  "MongoDB": { description: "Document-oriented NoSQL database for flexible schema storage", url: "https://www.mongodb.com" },
+  "MySQL": { description: "Open-source relational database management system", url: "https://www.mysql.com" },
+  "Elasticsearch": { description: "Distributed search and analytics engine", url: "https://www.elastic.co/elasticsearch" },
+  "Memcached": { description: "High-performance distributed memory caching system", url: "https://memcached.org" },
+  "Celery": { description: "Distributed task queue for Python applications", url: "https://docs.celeryq.dev" },
+  "SQLite": { description: "Self-contained embedded SQL database engine", url: "https://www.sqlite.org" },
 };
 
 /** Case-insensitive lookup for a protocol reference */

@@ -63,18 +63,36 @@ export interface ExternalService {
   category: string;
 }
 
+export interface ComponentTesting {
+  test_files: number;
+  test_lines: number;
+  unit_tests: number;
+  integration_tests: number;
+  e2e_tests: number;
+  test_frameworks: string[];
+  coverage_percent: number | null;
+  coverage_source: string | null;
+  has_ci_tests: boolean;
+}
+
 // AI enhancement data (optional, present only when AI assist has been run)
 export interface ComponentAIEnhance {
   help_text?: string;
   architectural_role?: string;
   data_handled?: string;
   criticality?: "critical" | "important" | "supporting";
+  testing_assessment?: string;
 }
 
 export interface RelationshipAIEnhance {
   data_flow_description?: string;
   importance?: "primary" | "secondary" | "internal";
   ai_discovered?: boolean;
+  authentication_detail?: string;
+  payload_examples?: string[];
+  error_handling?: string;
+  sla_notes?: string;
+  security_notes?: string;
 }
 
 export interface ArchitectureAIEnhance {
@@ -203,6 +221,7 @@ export interface Component {
   metrics: ComponentMetrics;
   docs: ComponentDoc;
   external_services?: ExternalService[];
+  testing?: ComponentTesting;
   ai_enhance?: ComponentAIEnhance;
   live_status?: ComponentLiveStatus;
 }
@@ -215,6 +234,14 @@ export interface Relationship {
   protocol: string | null;
   port: number | null;
   bidirectional: boolean;
+  authentication?: string;
+  data_format?: string;
+  api_style?: string;
+  endpoints?: Array<{ method: string; path: string }>;
+  middleware?: string[];
+  transport?: string;
+  queue_name?: string;
+  connection_pattern?: string;
   ai_enhance?: RelationshipAIEnhance;
 }
 

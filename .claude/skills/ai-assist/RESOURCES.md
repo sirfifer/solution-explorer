@@ -10,6 +10,7 @@ interface ComponentAIEnhance {
   architectural_role?: string;     // from vocabulary below, or null
   data_handled?: string;           // what data flows through this component
   criticality?: "critical" | "important" | "supporting";
+  testing_assessment?: string;     // 1-2 sentence evaluation of test quality
 }
 ```
 
@@ -20,8 +21,25 @@ interface RelationshipAIEnhance {
   data_flow_description?: string;  // what flows across this connection
   importance?: "primary" | "secondary" | "internal";
   ai_discovered?: boolean;         // true only for AI-added relationships
+  authentication_detail?: string;  // prose explanation of the auth flow
+  payload_examples?: string[];     // 2-3 example payload descriptions
+  error_handling?: string;         // how errors are handled on this connection
+  sla_notes?: string;              // latency expectations, rate limits, timeouts
+  security_notes?: string;         // encryption, certificate pinning, network policies
 }
 ```
+
+### Relationship base fields (fill if empty/null)
+
+The static analyzer may populate these. AI should fill any that remain empty:
+- `authentication`: "jwt" | "oauth2" | "api_key" | "mtls" | "basic" | "session"
+- `data_format`: "json" | "protobuf" | "graphql" | "xml" | "binary" | "msgpack"
+- `api_style`: "rest" | "graphql" | "grpc" | "websocket" | "soap" | "rpc"
+- `endpoints`: `[{"method": "GET", "path": "/users"}]`
+- `middleware`: `["rate_limit", "cors", "auth", "logging", "compression"]`
+- `transport`: "http/2" | "tcp" | "udp" | "amqp" | "mqtt"
+- `queue_name`: topic or queue name for message queue relationships
+- `connection_pattern`: "connection_pool" | "orm" | "per_request" | "singleton"
 
 ### Architecture.ai_enhance (root level)
 
@@ -110,9 +128,16 @@ Use exactly one of these values for `architectural_role`, or null if none apply:
   "label": "REST API",
   "protocol": "HTTP",
   "port": 8080,
+  "authentication": "jwt",
+  "data_format": "json",
+  "api_style": "rest",
+  "middleware": ["rate_limit", "cors", "auth"],
   "ai_enhance": {
     "data_flow_description": "iOS app sends authenticated REST requests for user data, content, and collaboration actions.",
-    "importance": "primary"
+    "importance": "primary",
+    "authentication_detail": "JWT tokens issued during login, refreshed via /auth/refresh endpoint. Tokens include user ID and role claims.",
+    "payload_examples": ["User profile JSON with preferences", "Content list with pagination metadata"],
+    "security_notes": "All traffic over HTTPS with certificate pinning on iOS client."
   }
 }
 ```

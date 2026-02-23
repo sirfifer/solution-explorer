@@ -80,6 +80,8 @@ position in the hierarchy.
 - `data_handled` (string): brief description of what data flows through this component.
 - `criticality` ("critical"|"important"|"supporting"): critical means the system fails
   without it, important means degraded behavior, supporting means convenience or tooling.
+- `testing_assessment` (string|null): 1-2 sentence evaluation of test quality when
+  `testing` data exists. Consider coverage %, test type distribution, and likely gaps.
 
 #### 3b. Relationship enhancements
 
@@ -87,17 +89,31 @@ For every existing relationship:
 
 **Existing fields** (fill only if empty/null):
 - `label`: what flows across this connection (e.g., "REST API calls for user management").
+- `authentication`: auth mechanism if detectable ("jwt", "oauth2", "api_key", "mtls", "basic", "session").
+- `data_format`: serialization format ("json", "protobuf", "graphql", "xml", "binary").
+- `api_style`: API paradigm ("rest", "graphql", "grpc", "websocket", "soap", "rpc").
+- `endpoints`: list of `{"method": "GET", "path": "/users"}` for specific API endpoints used.
+- `middleware`: middleware layers in the request path (e.g., ["rate_limit", "cors", "auth"]).
+- `transport`: underlying transport protocol ("http/2", "tcp", "udp", "amqp").
+- `connection_pattern`: connection management ("connection_pool", "orm", "per_request", "singleton").
 
 **New `ai_enhance` sub-object**:
 - `data_flow_description` (string): 1 sentence describing what data flows and in which direction.
 - `importance` ("primary"|"secondary"|"internal"): primary = core data path,
   secondary = used but not critical, internal = implementation detail.
+- `authentication_detail` (string|null): prose explanation of the auth flow.
+- `payload_examples` (string[]|null): 2-3 example payload descriptions.
+- `error_handling` (string|null): how errors are handled on this connection.
+- `sla_notes` (string|null): latency expectations, rate limits, timeouts.
+- `security_notes` (string|null): encryption, certificate pinning, network policies.
 
 **Discover missing relationships**: Look for connections the static analyzer missed:
 - HTTP calls inferred from URL construction or API client usage
 - Database connections inferred from ORM configuration
 - Message queue connections from producer/consumer patterns
 - Shared state through Redis, caches, or shared file systems
+- WebSocket connections for real-time features
+- gRPC services between microservices
 
 Add new relationships to the `relationships` array. Mark them with:
 ```json

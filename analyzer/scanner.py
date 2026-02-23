@@ -19,17 +19,35 @@ from .config_parsers import (
     parse_serverless_yml,
 )
 from .constants import (
+    AUTH_PATTERNS,
+    CI_CONFIG_FILES,
+    CI_TEST_PATTERNS,
     CODE_LANGUAGES,
     COMPONENT_MARKERS,
     CONTENT_DIR_NAMES,
     CONTENT_EXTENSIONS,
+    COVERAGE_REPORT_FILES,
+    DATA_FORMAT_PATTERNS,
+    DATABASE_PATTERNS,
+    DOCKER_SERVICE_TYPES,
+    E2E_DIR_NAMES,
     EXTERNAL_CLOUD_APIS,
+    GRPC_PATTERNS,
     HTTP_CLIENT_PATTERNS,
+    INTEGRATION_DIR_NAMES,
     LANGUAGE_MAP,
+    MESSAGE_QUEUE_PATTERNS,
+    MIDDLEWARE_PATTERNS,
+    PACKAGE_TEST_DEPS,
+    QUEUE_NAME_PATTERNS,
     SKIP_DIRS,
     SKIP_EXTENSIONS,
+    TEST_DIR_NAMES,
+    TEST_FRAMEWORK_INDICATORS,
+    TEST_FUNCTION_PATTERNS,
     URL_EXTRACTION_PATTERNS,
     WATCH_CONNECTIVITY_IMPORTS,
+    WEBSOCKET_PATTERNS,
 )
 from .models import (
     Architecture,
@@ -114,6 +132,9 @@ class ArchitectureScanner:
 
         # Phase 4: Compute metrics
         self._compute_metrics()
+
+        # Phase 4.5: Detect test coverage
+        self._detect_testing()
 
         # Phase 5: Detect project-level info
         self._detect_project_info()
@@ -1112,6 +1133,14 @@ class ArchitectureScanner:
                         protocol=rel.get("protocol"),
                         port=rel.get("port"),
                         bidirectional=rel.get("bidirectional", False),
+                        authentication=rel.get("authentication"),
+                        data_format=rel.get("data_format"),
+                        api_style=rel.get("api_style"),
+                        endpoints=rel.get("endpoints", []),
+                        middleware=rel.get("middleware", []),
+                        transport=rel.get("transport"),
+                        queue_name=rel.get("queue_name"),
+                        connection_pattern=rel.get("connection_pattern"),
                     ))
                     seen.add((src, tgt, rel.get("type", "")))
 
@@ -1577,11 +1606,325 @@ class ArchitectureScanner:
                                 bidirectional=True,
                             ))
 
+        # Detect additional relationship types
+        self._detect_websocket_relationships(relationships, seen, content_ids)
+        self._detect_grpc_relationships(relationships, seen, content_ids)
+        self._detect_database_relationships(relationships, seen, content_ids)
+        self._detect_message_queue_relationships(relationships, seen, content_ids)
+
+        # Enrich existing HTTP relationships with auth, format, middleware
+        self._enrich_existing_relationships(relationships, content_ids)
+
         # Append UI flow relationships (from Phase 2.8) if any
         ui_rels = getattr(self, "_ui_relationships", [])
         relationships.extend(ui_rels)
 
         self.architecture.relationships = [to_dict(r) for r in relationships]
+
+    # ------------------------------------------------------------------
+    # Additional relationship detection methods
+    # ------------------------------------------------------------------
+
+    def _read_component_code(self, comp_id, content_ids):
+        """Read all code files for a component, returning (content, language) pairs."""
+        comp = None
+        for c in self._component_map.values():
+            if c.id == comp_id:
+                comp = c
+                break
+        if not comp or comp.id in content_ids:
+            return []
+
+        results = []
+        for fpath in comp.files:
+            fi = None
+            for f in self._all_files:
+                if f.path == fpath:
+                    fi = f
+                    break
+            if not fi or fi.language not in CODE_LANGUAGES:
+                continue
+            abs_path = self.root / fpath
+            try:
+                content = abs_path.read_text(encoding="utf-8", errors="replace")
+                results.append((content, fi.language))
+            except OSError:
+                continue
+        return results
+
+    def _detect_websocket_relationships(self, relationships, seen, content_ids):
+        """Detect WebSocket communication between components."""
+        ws_components = []  # (comp_id, comp) pairs that use WebSocket
+
+        for comp in self._component_map.values():
+            if comp.id in content_ids:
+                continue
+            for content, lang in self._read_component_code(comp.id, content_ids):
+                patterns = WEBSOCKET_PATTERNS.get(lang, [])
+                for pattern in patterns:
+                    if re.search(pattern, content):
+                        ws_components.append(comp)
+                        break
+                else:
+                    continue
+                break
+
+        # Connect WebSocket clients to servers
+        # Server types: api-server, service; Client types: web-client, mobile-client, ios-client, etc.
+        servers = [c for c in ws_components
+                   if c.type in ("api-server", "service", "infrastructure")]
+        clients = [c for c in ws_components if c not in servers]
+
+        for client in clients:
+            for server in servers:
+                key = (client.id, server.id, "websocket")
+                if key not in seen:
+                    seen.add(key)
+                    relationships.append(Relationship(
+                        source=client.id,
+                        target=server.id,
+                        type="websocket",
+                        protocol="WebSocket",
+                        label="WebSocket",
+                        bidirectional=True,
+                        data_format="json",
+                    ))
+
+    def _detect_grpc_relationships(self, relationships, seen, content_ids):
+        """Detect gRPC communication between components."""
+        grpc_components = []
+
+        for comp in self._component_map.values():
+            if comp.id in content_ids:
+                continue
+            for content, lang in self._read_component_code(comp.id, content_ids):
+                patterns = GRPC_PATTERNS.get(lang, [])
+                for pattern in patterns:
+                    if re.search(pattern, content):
+                        grpc_components.append(comp)
+                        break
+                else:
+                    continue
+                break
+
+        servers = [c for c in grpc_components
+                   if c.type in ("api-server", "service")]
+        clients = [c for c in grpc_components if c not in servers]
+
+        for client in clients:
+            for server in servers:
+                key = (client.id, server.id, "grpc")
+                if key not in seen:
+                    seen.add(key)
+                    relationships.append(Relationship(
+                        source=client.id,
+                        target=server.id,
+                        type="grpc",
+                        protocol="gRPC",
+                        label="gRPC",
+                        bidirectional=True,
+                        data_format="protobuf",
+                        transport="http/2",
+                    ))
+
+    def _detect_database_relationships(self, relationships, seen, content_ids):
+        """Detect database/cache connections between components."""
+        # Build map of infrastructure components by their docker image type
+        infra_services = {}  # db_engine -> component
+        for comp in self._component_map.values():
+            if comp.type == "infrastructure":
+                comp_name_lower = comp.name.lower()
+                for image_key, (rel_type, engine, default_port) in DOCKER_SERVICE_TYPES.items():
+                    if image_key in comp_name_lower:
+                        infra_services[engine] = (comp, rel_type, default_port)
+                        break
+
+        # Detect database usage in code components
+        for comp in self._component_map.values():
+            if comp.id in content_ids or comp.type == "infrastructure":
+                continue
+            for content, lang in self._read_component_code(comp.id, content_ids):
+                patterns = DATABASE_PATTERNS.get(lang, [])
+                for pattern_regex, lib_name, db_engine in patterns:
+                    if re.search(pattern_regex, content):
+                        # Try to find the infrastructure target
+                        if db_engine in infra_services:
+                            target_comp, rel_type, default_port = infra_services[db_engine]
+                            key = (comp.id, target_comp.id, rel_type)
+                            if key not in seen:
+                                seen.add(key)
+                                relationships.append(Relationship(
+                                    source=comp.id,
+                                    target=target_comp.id,
+                                    type=rel_type,
+                                    protocol=db_engine,
+                                    label=lib_name,
+                                    port=default_port,
+                                    connection_pattern=lib_name,
+                                ))
+                        elif db_engine == "redis":
+                            # Check for redis in infra_services
+                            if "redis" in infra_services:
+                                target_comp, rel_type, default_port = infra_services["redis"]
+                                key = (comp.id, target_comp.id, "cache")
+                                if key not in seen:
+                                    seen.add(key)
+                                    relationships.append(Relationship(
+                                        source=comp.id,
+                                        target=target_comp.id,
+                                        type="cache",
+                                        protocol="redis",
+                                        label=lib_name,
+                                        port=default_port,
+                                        connection_pattern=lib_name,
+                                    ))
+
+    def _detect_message_queue_relationships(self, relationships, seen, content_ids):
+        """Detect message queue/pub-sub relationships between components."""
+        # Collect which components use which queue systems
+        queue_users = defaultdict(list)  # queue_system -> [(comp, queue_name)]
+
+        for comp in self._component_map.values():
+            if comp.id in content_ids or comp.type == "infrastructure":
+                continue
+            for content, lang in self._read_component_code(comp.id, content_ids):
+                patterns = MESSAGE_QUEUE_PATTERNS.get(lang, [])
+                for pattern_regex, system_name in patterns:
+                    if re.search(pattern_regex, content):
+                        # Try to extract queue/topic name
+                        q_name = None
+                        for qp in QUEUE_NAME_PATTERNS:
+                            m = re.search(qp, content)
+                            if m:
+                                q_name = m.group(1)
+                                break
+                        queue_users[system_name].append((comp, q_name))
+                        break
+
+        # Find infrastructure targets for queue systems
+        infra_queues = {}
+        for comp in self._component_map.values():
+            if comp.type == "infrastructure":
+                comp_name_lower = comp.name.lower()
+                for image_key, (rel_type, engine, default_port) in DOCKER_SERVICE_TYPES.items():
+                    if image_key in comp_name_lower and rel_type == "message_queue":
+                        infra_queues[engine] = (comp, default_port)
+                        break
+
+        # Create relationships
+        for system_name, users in queue_users.items():
+            # Map system_name to infrastructure component
+            target_info = infra_queues.get(system_name)
+            if target_info:
+                target_comp, default_port = target_info
+                for user_comp, q_name in users:
+                    key = (user_comp.id, target_comp.id, "message_queue")
+                    if key not in seen:
+                        seen.add(key)
+                        relationships.append(Relationship(
+                            source=user_comp.id,
+                            target=target_comp.id,
+                            type="message_queue",
+                            protocol=system_name,
+                            label=system_name,
+                            port=default_port,
+                            queue_name=q_name,
+                        ))
+            else:
+                # No infrastructure target found; connect queue users to each other
+                if len(users) >= 2:
+                    for i, (comp_a, q_name) in enumerate(users):
+                        for comp_b, _ in users[i + 1:]:
+                            key = (comp_a.id, comp_b.id, "message_queue")
+                            if key not in seen:
+                                seen.add(key)
+                                relationships.append(Relationship(
+                                    source=comp_a.id,
+                                    target=comp_b.id,
+                                    type="message_queue",
+                                    protocol=system_name,
+                                    label=system_name,
+                                    bidirectional=True,
+                                    queue_name=q_name,
+                                ))
+
+    def _enrich_existing_relationships(self, relationships, content_ids):
+        """Second pass: enrich existing HTTP relationships with auth, format, middleware."""
+        for rel in relationships:
+            if rel.type != "http":
+                continue
+            # Read source component code to detect enrichment data
+            source_code_parts = self._read_component_code(rel.source, content_ids)
+            if not source_code_parts:
+                continue
+
+            combined_content = "\n".join(content for content, _ in source_code_parts)
+
+            # Detect authentication
+            if not rel.authentication:
+                rel.authentication = self._detect_auth_type(combined_content)
+
+            # Detect data format
+            if not rel.data_format:
+                rel.data_format = self._detect_data_format(combined_content)
+
+            # Detect API style
+            if not rel.api_style:
+                rel.api_style = self._detect_api_style(combined_content)
+
+            # Detect middleware (from target if it's a server)
+            if not rel.middleware:
+                target_code_parts = self._read_component_code(rel.target, content_ids)
+                if target_code_parts:
+                    target_content = "\n".join(c for c, _ in target_code_parts)
+                    rel.middleware = self._detect_middleware(target_content)
+
+    def _detect_auth_type(self, content):
+        """Detect the authentication mechanism from code content."""
+        for auth_type, patterns in AUTH_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, content):
+                    return auth_type
+        return None
+
+    def _detect_data_format(self, content):
+        """Detect the data serialization format from code content."""
+        # Check in priority order (more specific first)
+        for fmt in ("protobuf", "graphql", "msgpack", "xml", "json"):
+            patterns = DATA_FORMAT_PATTERNS.get(fmt, [])
+            for pattern in patterns:
+                if re.search(pattern, content):
+                    return fmt
+        return None
+
+    def _detect_api_style(self, content):
+        """Detect the API style from code content."""
+        # Check for GraphQL
+        for pattern in DATA_FORMAT_PATTERNS.get("graphql", []):
+            if re.search(pattern, content):
+                return "graphql"
+        # Check for gRPC
+        for lang_patterns in GRPC_PATTERNS.values():
+            for pattern in lang_patterns:
+                if re.search(pattern, content):
+                    return "grpc"
+        # Check for WebSocket
+        for lang_patterns in WEBSOCKET_PATTERNS.values():
+            for pattern in lang_patterns:
+                if re.search(pattern, content):
+                    return "websocket"
+        # Default to REST for HTTP relationships
+        return "rest"
+
+    def _detect_middleware(self, content):
+        """Detect middleware patterns from server code content."""
+        found = []
+        for mw_type, patterns in MIDDLEWARE_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, content):
+                    found.append(mw_type)
+                    break
+        return found
 
     def _compute_metrics(self):
         """Compute metrics for each component."""
@@ -1621,6 +1964,324 @@ class ArchitectureScanner:
         for child in comp.children:
             if isinstance(child, Component):
                 self._compute_component_metrics(child)
+
+    # ------------------------------------------------------------------
+    # Test coverage detection
+    # ------------------------------------------------------------------
+
+    def _detect_testing(self):
+        """Detect test coverage metrics for each component."""
+        # Build a lookup from file path to FileInfo for fast access
+        file_lookup = {fi.path: fi for fi in self._all_files}
+
+        for rel_path, comp in self._component_map.items():
+            if self._scope_paths is not None and comp.id not in self._scoped_component_ids:
+                continue
+            comp_dir = self.root / rel_path if rel_path else self.root
+            if not comp_dir.is_dir():
+                continue
+
+            testing = self._detect_component_testing(comp, comp_dir, file_lookup)
+            if testing:
+                comp.testing = testing
+
+    def _detect_component_testing(self, comp, comp_dir, file_lookup):
+        """Detect testing metrics for a single component."""
+        test_files = []  # list of (abs_path, language, line_count)
+        non_test_count = 0
+
+        # 1. Identify test files already in comp.files
+        for fpath in comp.files:
+            fi = file_lookup.get(fpath)
+            if not fi:
+                continue
+            abs_path = self.root / fpath
+            if self._is_test_file(abs_path, fi.language):
+                test_files.append((abs_path, fi.language, fi.lines))
+            else:
+                non_test_count += 1
+
+        # 2. Scan associated test directories adjacent to the component
+        for test_dir_name in TEST_DIR_NAMES:
+            test_dir = comp_dir / test_dir_name
+            if test_dir.is_dir():
+                self._collect_test_files_from_dir(test_dir, test_files)
+
+        if not test_files:
+            # Check for framework indicators and coverage even without test files
+            frameworks = self._detect_test_frameworks(comp_dir, comp)
+            coverage_pct, coverage_src = self._find_coverage_report(comp_dir)
+            has_ci = self._check_ci_tests(comp_dir)
+            if not frameworks and not has_ci and coverage_pct is None:
+                return {}
+            return {
+                "test_files": 0,
+                "test_lines": 0,
+                "unit_tests": 0,
+                "integration_tests": 0,
+                "e2e_tests": 0,
+                "test_frameworks": frameworks,
+                "coverage_percent": coverage_pct,
+                "coverage_source": coverage_src,
+                "has_ci_tests": has_ci,
+            }
+
+        # 3. Count test functions and classify
+        unit_count = 0
+        integration_count = 0
+        e2e_count = 0
+        total_test_lines = 0
+
+        for abs_path, lang, lines in test_files:
+            total_test_lines += lines
+            count = self._count_test_functions(abs_path, lang)
+            category = self._classify_test_category(abs_path)
+            if category == "e2e":
+                e2e_count += count
+            elif category == "integration":
+                integration_count += count
+            else:
+                unit_count += count
+
+        # 4. Detect test frameworks
+        frameworks = self._detect_test_frameworks(comp_dir, comp)
+
+        # 5. Search for coverage reports
+        coverage_pct, coverage_src = self._find_coverage_report(comp_dir)
+
+        # 6. Check CI for test commands
+        has_ci = self._check_ci_tests(comp_dir)
+
+        return {
+            "test_files": len(test_files),
+            "test_lines": total_test_lines,
+            "unit_tests": unit_count,
+            "integration_tests": integration_count,
+            "e2e_tests": e2e_count,
+            "test_frameworks": frameworks,
+            "coverage_percent": coverage_pct,
+            "coverage_source": coverage_src,
+            "has_ci_tests": has_ci,
+        }
+
+    def _is_test_file(self, path, language):
+        """Check if a file is a test file based on naming conventions."""
+        name = path.name.lower()
+        # Check if any parent directory is a test directory
+        for parent in path.parents:
+            if parent.name.lower() in TEST_DIR_NAMES:
+                return True
+        # Language-specific naming conventions
+        if language in ("python",):
+            return name.startswith("test_") or name.endswith("_test.py")
+        if language in ("typescript", "javascript"):
+            return (name.endswith((".test.ts", ".spec.ts", ".test.js", ".spec.js",
+                                   ".test.tsx", ".spec.tsx", ".test.jsx", ".spec.jsx")))
+        if language == "swift":
+            return "test" in name.lower() and name.endswith(".swift")
+        if language == "go":
+            return name.endswith("_test.go")
+        if language == "rust":
+            # Rust tests are often inline; check for test directory
+            return name == "tests.rs" or "test" in name
+        if language == "ruby":
+            return name.endswith(("_spec.rb", "_test.rb"))
+        if language in ("java", "kotlin"):
+            return "test" in name.lower()
+        return False
+
+    def _collect_test_files_from_dir(self, test_dir, test_files):
+        """Collect test files from a directory, avoiding those already tracked."""
+        tracked_abs = {str(tf[0]) for tf in test_files} if test_files else set()
+        try:
+            for item in test_dir.rglob("*"):
+                if not item.is_file():
+                    continue
+                ext = item.suffix.lower()
+                lang = LANGUAGE_MAP.get(ext)
+                if not lang or lang not in CODE_LANGUAGES:
+                    continue
+                if str(item) in tracked_abs:
+                    continue
+                try:
+                    lines = len(item.read_text(encoding="utf-8", errors="replace").splitlines())
+                except OSError:
+                    lines = 0
+                test_files.append((item, lang, lines))
+        except OSError:
+            pass
+
+    def _count_test_functions(self, abs_path, language):
+        """Count individual test functions/methods in a file."""
+        patterns = TEST_FUNCTION_PATTERNS.get(language, [])
+        if not patterns:
+            return 0
+        try:
+            content = abs_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return 0
+        count = 0
+        for pattern in patterns:
+            count += len(re.findall(pattern, content, re.MULTILINE))
+        return count
+
+    def _classify_test_category(self, abs_path):
+        """Classify a test file as unit, integration, or e2e."""
+        path_str = str(abs_path).lower()
+        for part in abs_path.parts:
+            part_lower = part.lower()
+            if part_lower in E2E_DIR_NAMES:
+                return "e2e"
+            if part_lower in INTEGRATION_DIR_NAMES:
+                return "integration"
+        if ".e2e." in path_str:
+            return "e2e"
+        if ".integration." in path_str:
+            return "integration"
+        return "unit"
+
+    def _detect_test_frameworks(self, comp_dir, comp):
+        """Detect which test frameworks are used."""
+        frameworks = set()
+        # Check for framework indicator files
+        for fname, fw_name in TEST_FRAMEWORK_INDICATORS.items():
+            if (comp_dir / fname).exists():
+                frameworks.add(fw_name)
+        # Check package dependencies (already parsed in config_files)
+        for cfg in comp.config_files:
+            if isinstance(cfg, dict):
+                cfg_type = cfg.get("type", "")
+            else:
+                cfg_type = getattr(cfg, "type", "")
+            if cfg_type == "package.json":
+                cfg_path = comp_dir / "package.json"
+                if cfg_path.exists():
+                    try:
+                        pkg = json.loads(cfg_path.read_text(encoding="utf-8", errors="replace"))
+                        all_deps = {}
+                        all_deps.update(pkg.get("dependencies", {}))
+                        all_deps.update(pkg.get("devDependencies", {}))
+                        for dep_name, fw_name in PACKAGE_TEST_DEPS.items():
+                            if dep_name in all_deps:
+                                frameworks.add(fw_name)
+                    except (OSError, json.JSONDecodeError):
+                        pass
+            elif cfg_type == "pyproject.toml":
+                cfg_path = comp_dir / "pyproject.toml"
+                if cfg_path.exists():
+                    try:
+                        content = cfg_path.read_text(encoding="utf-8", errors="replace")
+                        if "pytest" in content:
+                            frameworks.add("pytest")
+                    except OSError:
+                        pass
+        # Check for XCTest imports in Swift test files
+        if comp.language == "swift":
+            for fpath in comp.files:
+                abs_path = self.root / fpath
+                if "test" in abs_path.name.lower():
+                    try:
+                        content = abs_path.read_text(encoding="utf-8", errors="replace")
+                        if "import XCTest" in content:
+                            frameworks.add("XCTest")
+                            break
+                    except OSError:
+                        pass
+        # Check for Go testing
+        if comp.language == "go":
+            for fpath in comp.files:
+                if fpath.endswith("_test.go"):
+                    frameworks.add("Go testing")
+                    break
+        return sorted(frameworks)
+
+    def _find_coverage_report(self, comp_dir):
+        """Search for coverage report files and parse coverage percentage."""
+        for rel_report, fmt in COVERAGE_REPORT_FILES:
+            report_path = comp_dir / rel_report
+            if not report_path.exists():
+                continue
+            try:
+                content = report_path.read_text(encoding="utf-8", errors="replace")
+                pct = self._parse_coverage_report(content, fmt)
+                if pct is not None:
+                    return (round(pct, 1), rel_report)
+            except OSError:
+                continue
+        return (None, None)
+
+    def _parse_coverage_report(self, content, fmt):
+        """Parse a coverage report and return the overall percentage."""
+        if fmt == "lcov":
+            total_lines = 0
+            hit_lines = 0
+            for line in content.splitlines():
+                if line.startswith("LF:"):
+                    try:
+                        total_lines += int(line[3:])
+                    except ValueError:
+                        pass
+                elif line.startswith("LH:"):
+                    try:
+                        hit_lines += int(line[3:])
+                    except ValueError:
+                        pass
+            if total_lines > 0:
+                return (hit_lines / total_lines) * 100
+        elif fmt == "cobertura":
+            # Parse line-rate attribute from <coverage> element
+            match = re.search(r'<coverage[^>]*\bline-rate=["\']([^"\']+)', content)
+            if match:
+                try:
+                    return float(match.group(1)) * 100
+                except ValueError:
+                    pass
+        elif fmt == "istanbul":
+            try:
+                data = json.loads(content)
+                total = data.get("total", {})
+                lines = total.get("lines", {})
+                pct = lines.get("pct")
+                if pct is not None:
+                    return float(pct)
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return None
+
+    def _check_ci_tests(self, comp_dir):
+        """Check if CI configuration references test commands."""
+        # Walk up to the repo root to find CI configs
+        search_dir = comp_dir
+        for _ in range(10):  # limit depth
+            for ci_path_pattern in CI_CONFIG_FILES:
+                ci_path = search_dir / ci_path_pattern
+                if ci_path.is_dir():
+                    # Scan workflow files in directory (e.g., .github/workflows/)
+                    try:
+                        for wf_file in ci_path.iterdir():
+                            if wf_file.suffix in (".yml", ".yaml"):
+                                try:
+                                    content = wf_file.read_text(encoding="utf-8", errors="replace")
+                                    for pattern in CI_TEST_PATTERNS:
+                                        if re.search(pattern, content):
+                                            return True
+                                except OSError:
+                                    pass
+                    except OSError:
+                        pass
+                elif ci_path.is_file():
+                    try:
+                        content = ci_path.read_text(encoding="utf-8", errors="replace")
+                        for pattern in CI_TEST_PATTERNS:
+                            if re.search(pattern, content):
+                                return True
+                    except OSError:
+                        pass
+            parent = search_dir.parent
+            if parent == search_dir:
+                break
+            search_dir = parent
+        return False
 
     def _extract_component_docs(self):
         """Extract rich documentation for every component."""
@@ -1828,13 +2489,23 @@ class ArchitectureScanner:
         if any("api" in f or "endpoint" in f or "route" in f for f in file_names):
             patterns.append("API Layer")
 
-        # Test structure
-        test_files = [f for f in file_names if "test" in f or "spec" in f]
-        if test_files:
-            ratio = len(test_files) / max(len(file_names), 1)
-            if ratio > 0.3:
+        # Test structure (use rich testing data if available, fallback to filename heuristic)
+        if comp.testing:
+            t = comp.testing
+            total_tests = t.get("unit_tests", 0) + t.get("integration_tests", 0) + t.get("e2e_tests", 0)
+            if total_tests > 0:
+                patterns.append(f"Tests ({total_tests})")
+            if t.get("coverage_percent") is not None and t["coverage_percent"] >= 80:
                 patterns.append("Well-Tested")
-            patterns.append(f"Tests ({len(test_files)} files)")
+            if t.get("e2e_tests", 0) > 0:
+                patterns.append("E2E Tests")
+        else:
+            test_files = [f for f in file_names if "test" in f or "spec" in f]
+            if test_files:
+                ratio = len(test_files) / max(len(file_names), 1)
+                if ratio > 0.3:
+                    patterns.append("Well-Tested")
+                patterns.append(f"Tests ({len(test_files)} files)")
 
         return patterns
 

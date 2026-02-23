@@ -105,11 +105,18 @@ export function ArchitectureGraph() {
         if (category === "communication") {
           const parts: string[] = [];
           if (r.protocol) parts.push(r.protocol);
+          if (r.api_style && r.api_style !== r.protocol?.toLowerCase()) parts.push(r.api_style.toUpperCase());
           if (r.port) parts.push(`:${r.port}`);
+          if (r.data_format && r.data_format !== "json") parts.push(`[${r.data_format}]`);
+          if (r.authentication) parts.push(`\u{1F512}${r.authentication}`);
           if (parts.length > 0) {
             edgeLabel = parts.join(" ");
           } else if (r.label) {
             edgeLabel = r.label;
+          }
+          // For message queues, show topic/queue name
+          if (r.queue_name) {
+            edgeLabel = edgeLabel ? `${edgeLabel} (${r.queue_name})` : r.queue_name;
           }
         } else {
           // Structural edges get a simpler label

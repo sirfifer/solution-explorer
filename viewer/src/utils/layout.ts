@@ -280,7 +280,7 @@ export function formatRelativeTime(isoString: string): string {
 export type EdgeCategory = "communication" | "structural";
 
 export function getEdgeCategory(type: string): EdgeCategory {
-  if (["http", "websocket", "grpc", "database", "file"].includes(type)) {
+  if (["http", "websocket", "grpc", "database", "file", "message_queue", "pubsub", "event_bus", "cache"].includes(type)) {
     return "communication";
   }
   // navigation, modal, tab, import, ffi, docker, companion are all structural
@@ -300,7 +300,11 @@ const EDGE_STYLES: Record<string, { color: string; animated: boolean; dash: stri
   file:      { color: "#6B7280", animated: true,  dash: "8 4",  strokeWidth: 1.5 },
   navigation:{ color: "#06B6D4", animated: false, dash: "",     strokeWidth: 1.5 },
   tab:       { color: "#818CF8", animated: false, dash: "4 2",  strokeWidth: 1.2 },
-  modal:     { color: "#A78BFA", animated: false, dash: "6 3",  strokeWidth: 1.5 },
+  modal:         { color: "#A78BFA", animated: false, dash: "6 3",  strokeWidth: 1.5 },
+  message_queue: { color: "#F59E0B", animated: true,  dash: "",     strokeWidth: 2 },
+  pubsub:        { color: "#D946EF", animated: true,  dash: "",     strokeWidth: 2 },
+  event_bus:     { color: "#A855F7", animated: true,  dash: "4 4",  strokeWidth: 1.8 },
+  cache:         { color: "#EF4444", animated: true,  dash: "",     strokeWidth: 1.8 },
 };
 
 export function getEdgeStyle(type: string) {

@@ -2,9 +2,9 @@
   "name": "test_max_symbols_explicit_over0",
   "description": "",
   "repository": null,
-  "generated_at": "2026-02-22T20:24:52.187407+00:00",
+  "generated_at": "2026-02-22T23:34:42.181258+00:00",
   "analyzer_version": "1.0.0",
-  "root_path": "/private/var/folders/j1/f88bws916px1k7zn1bltx2j00000gn/T/pytest-of-ramerman/pytest-54/test_max_symbols_explicit_over0",
+  "root_path": "/private/var/folders/j1/f88bws916px1k7zn1bltx2j00000gn/T/pytest-of-ramerman/pytest-57/test_max_symbols_explicit_over0",
   "components": [
     {
       "id": "root",
@@ -52,7 +52,8 @@
         "env_vars": [],
         "api_endpoints": []
       },
-      "external_services": []
+      "external_services": [],
+      "testing": {}
     }
   ],
   "relationships": [],
