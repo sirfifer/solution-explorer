@@ -4,11 +4,8 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from analyzer.scanner import ArchitectureScanner
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -97,9 +94,6 @@ class TestDatabaseDetection:
         )
 
         arch = _scan(tmp_path)
-        # Should find a database relationship
-        db_rels = [r for r in arch.relationships if r.get("type") in ("database", "cache")]
-        # At minimum the docker depends_on creates a relationship
         assert len(arch.relationships) > 0
 
     def test_python_sqlalchemy(self, tmp_path):
@@ -237,9 +231,6 @@ class TestMessageQueueDetection:
         )
 
         arch = _scan(tmp_path)
-        mq_rels = [r for r in arch.relationships if r.get("type") == "message_queue"]
-        # Should find at least one message queue relationship
-        # (either from docker depends_on or from pattern detection)
         assert len(arch.relationships) > 0
 
 
