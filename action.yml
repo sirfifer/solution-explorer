@@ -45,11 +45,18 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Version Check
-      if: github.action_ref == 'main' || github.action_ref == 'refs/heads/main'
+    - name: Resolve version
+      id: resolve
       shell: bash
+      env:
+        ACTION_REF: ${{ github.action_ref }}
+        VERSION_INPUT: ${{ inputs.version }}
       run: |
-        echo "::warning::Using sirfifer/solution-explorer@main tracks the latest commit. Pin to @latest for stability. See https://github.com/sirfifer/solution-explorer#versioning"
+        REF="${VERSION_INPUT:-$ACTION_REF}"
+        echo "ref=$REF" >> "$GITHUB_OUTPUT"
+        if [ "$ACTION_REF" = "main" ] || [ "$ACTION_REF" = "refs/heads/main" ]; then
+          echo "::warning::Using sirfifer/solution-explorer@main tracks the latest commit. Pin to @latest for stability. See https://github.com/sirfifer/solution-explorer#versioning"
+        fi
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -65,7 +72,7 @@ runs:
       uses: actions/checkout@v4
       with:
         repository: 'sirfifer/solution-explorer'
-        ref: ${{ inputs.version || github.action_ref }}
+        ref: ${{ steps.resolve.outputs.ref }}
         path: '.solution-explorer'
 
     - name: Run Analyzer
