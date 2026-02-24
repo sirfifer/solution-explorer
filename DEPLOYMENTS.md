@@ -14,9 +14,19 @@ Tracks where solution-explorer is installed and how to redeploy after changes.
 - `architecture-full.yml`: Advanced build with live-config injection and Cloudflare Pages deploy
 - `live-monitor.yml`: Live data generation, GitHub Pages + optional R2 deploy (if live mode is set)
 
-## How to Redeploy
+## How Redeployment Works
 
-After pushing changes to `sirfifer/solution-explorer` main:
+Downstream deploys are **automatic**. When changes are pushed to `sirfifer/solution-explorer` main:
+
+1. The Architecture Visualization workflow runs CI + self-deploy
+2. On success, the Deploy Downstream workflow triggers all UnaMentis workflows
+3. Each UnaMentis workflow pulls the latest code from `@main` and redeploys
+
+This is powered by `.github/workflows/deploy-downstream.yml` using a fine-grained PAT (`DEPLOY_TOKEN` secret) with Actions write permission on UnaMentis repos.
+
+### Manual Fallback
+
+If automatic triggers fail or you need to redeploy on demand:
 
 ```bash
 # Redeploy all installations (static viewer)
@@ -28,8 +38,6 @@ gh workflow run "Advanced Architecture Visualization" -R UnaMentis/unamentis --r
 # Redeploy live monitoring data (if live mode is enabled)
 gh workflow run "Live Monitor" -R UnaMentis/unamentis --ref main
 ```
-
-Each installation uses `sirfifer/solution-explorer@main` as a GitHub Action, so triggering their workflow picks up the latest analyzer and viewer code automatically.
 
 ## Adding a New Installation
 

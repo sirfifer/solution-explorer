@@ -1,0 +1,32 @@
+name: Deploy Downstream
+
+on:
+  workflow_run:
+    workflows: ["Architecture Visualization"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    name: Trigger Downstream Deploys
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - repo: UnaMentis/unamentis
+            workflow: "Architecture Visualization"
+          - repo: UnaMentis/unamentis
+            workflow: "Advanced Architecture Visualization"
+          - repo: UnaMentis/unamentis
+            workflow: "Live Monitor"
+    steps:
+      - name: Trigger ${{ matrix.workflow }}
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          gh workflow run "${{ matrix.workflow }}" \
+            -R "${{ matrix.repo }}" \
+            --ref main
+          echo "Triggered: ${{ matrix.workflow }} in ${{ matrix.repo }}"
