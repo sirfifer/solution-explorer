@@ -337,6 +337,11 @@ export function TreeNavigator() {
           </>
         )}
       </div>
+
+      {/* Version indicator */}
+      <div className={`px-4 py-2 border-t text-[10px] ${darkMode ? "border-zinc-800 text-zinc-600" : "border-zinc-200 text-zinc-400"}`}>
+        v{__APP_VERSION__}
+      </div>
     </div>
   );
 }
