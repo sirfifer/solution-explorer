@@ -68,7 +68,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: sirfifer/solution-explorer@main
+      - uses: sirfifer/solution-explorer@latest
         with:
           config: solution-explorer.json${cloudflareInputs}${deployStep}
 `;

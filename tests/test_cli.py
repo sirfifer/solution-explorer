@@ -9,7 +9,7 @@ import pytest
 # Add project root to path so we can import the analyzer package
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from analyzer.cli import main, write_split
-from analyzer.models import Architecture, Component, FileInfo, Symbol
+from analyzer.models import Architecture, Component, FileInfo, Symbol, to_dict
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -93,7 +93,7 @@ def minimal_arch():
         files=["comp-b/server.py"],
     )
 
-    return Architecture(
+    return to_dict(Architecture(
         name="test-project",
         description="A test project for CLI tests",
         components=[comp_a, comp_b],
@@ -107,7 +107,7 @@ def minimal_arch():
             "total_relationships": 0,
             "languages": {"python": 35},
         },
-    )
+    ))
 
 
 @pytest.fixture
@@ -137,7 +137,7 @@ def arch_with_slashes():
         language="typescript",
         files=["viewer/src/layout.ts"],
     )
-    return Architecture(
+    return to_dict(Architecture(
         name="slash-project",
         description="Project with slash IDs",
         components=[comp],
@@ -151,7 +151,7 @@ def arch_with_slashes():
             "total_relationships": 0,
             "languages": {"typescript": 8},
         },
-    )
+    ))
 
 
 @pytest.fixture
@@ -204,7 +204,7 @@ def arch_with_children():
         files=["parent/__init__.py"],
         children=[child_comp],
     )
-    return Architecture(
+    return to_dict(Architecture(
         name="nested-project",
         description="Project with nested children",
         components=[parent_comp],
@@ -218,7 +218,7 @@ def arch_with_children():
             "total_relationships": 0,
             "languages": {"python": 8},
         },
-    )
+    ))
 
 
 @pytest.fixture
@@ -231,7 +231,7 @@ def arch_empty_component():
         path="empty",
         files=[],
     )
-    return Architecture(
+    return to_dict(Architecture(
         name="empty-project",
         description="Project with empty component",
         components=[comp],
@@ -245,7 +245,7 @@ def arch_empty_component():
             "total_relationships": 0,
             "languages": {},
         },
-    )
+    ))
 
 
 @pytest.fixture
@@ -595,7 +595,7 @@ class TestWriteSplit:
         from analyzer.models import Relationship
 
         rel = Relationship(source="comp-a", target="comp-b", type="import", label="uses")
-        arch = Architecture(
+        arch = to_dict(Architecture(
             name="rel-test",
             description="Relationship test",
             components=[
@@ -613,7 +613,7 @@ class TestWriteSplit:
                 "total_relationships": 1,
                 "languages": {},
             },
-        )
+        ))
 
         out = tmp_path / "output"
         write_split(arch, out, indent=2)
@@ -633,7 +633,7 @@ class TestWriteSplit:
             path="orphan",
             files=["nonexistent/file.py"],
         )
-        arch = Architecture(
+        arch = to_dict(Architecture(
             name="orphan-test",
             description="Missing file reference",
             components=[comp],
@@ -647,7 +647,7 @@ class TestWriteSplit:
                 "total_relationships": 0,
                 "languages": {},
             },
-        )
+        ))
 
         out = tmp_path / "output"
         write_split(arch, out, indent=2)

@@ -1,0 +1,175 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  validate:
+    name: Validate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Extract and validate version
+        id: meta
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CODE_VERSION=$(python3 -c "from analyzer import __version__; print(__version__)")
+
+          echo "Tag version:  $TAG_VERSION"
+          echo "Code version: $CODE_VERSION"
+
+          if [ "$TAG_VERSION" != "$CODE_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match analyzer/__init__.py ($CODE_VERSION)"
+            exit 1
+          fi
+
+          # Detect prerelease (contains alpha, beta, or rc)
+          if echo "$TAG_VERSION" | grep -qE '(alpha|beta|rc)'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: CI Suite
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-npm:
+    name: Publish to npm
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build CLI bundle
+        working-directory: packages/cli
+        run: bash scripts/prepare-bundle.sh && npm run build
+
+      - name: Publish
+        working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ "${{ needs.validate.outputs.prerelease }}" = "true" ]; then
+            npm publish --provenance --access public --tag beta
+          else
+            npm publish --provenance --access public
+          fi
+
+  github-release:
+    name: GitHub Release
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract changelog section
+        id: notes
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          # Try to extract the section for this version from CHANGELOG.md
+          if [ -f CHANGELOG.md ]; then
+            NOTES=$(awk "/^## .*${VERSION//./\\.}/ {found=1; next} /^## / {if(found) exit} found {print}" CHANGELOG.md)
+          fi
+          if [ -z "$NOTES" ]; then
+            NOTES="Release v${VERSION}"
+          fi
+          # Write to file to preserve newlines
+          echo "$NOTES" > /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FLAGS=""
+          if [ "${{ needs.validate.outputs.prerelease }}" = "true" ]; then
+            FLAGS="--prerelease"
+          else
+            FLAGS="--latest"
+          fi
+          gh release create "${{ github.ref_name }}" \
+            --title "v${{ needs.validate.outputs.version }}" \
+            --notes-file /tmp/release-notes.md \
+            $FLAGS
+
+  update-tags:
+    name: Update Channel Tags
+    needs: [validate, publish-pypi, publish-npm, github-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update moving tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COMMIT=$(git rev-parse HEAD)
+
+          if [ "${{ needs.validate.outputs.prerelease }}" = "true" ]; then
+            echo "Updating 'beta' tag to point to $COMMIT"
+            git tag -f beta "$COMMIT"
+            git push origin beta --force
+          else
+            echo "Updating 'latest' tag to point to $COMMIT"
+            git tag -f latest "$COMMIT"
+            git push origin latest --force
+
+            # Also update beta to latest stable (so beta is never behind stable)
+            echo "Updating 'beta' tag to point to $COMMIT"
+            git tag -f beta "$COMMIT"
+            git push origin beta --force
+          fi

@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
+import { fileURLToPath } from "node:url";
 import pc from "picocolors";
 import { generate } from "./commands/generate.js";
 import { serve } from "./commands/serve.js";
 import { init } from "./commands/init.js";
 
-const VERSION = "1.0.0";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const VERSION = JSON.parse(
+  readFileSync(join(__dirname, "..", "package.json"), "utf-8"),
+).version;
 
 const HELP = `
 ${pc.bold("solution-explorer")} - Generate interactive architecture diagrams from any codebase

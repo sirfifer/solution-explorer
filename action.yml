@@ -37,10 +37,20 @@ inputs:
     description: 'Enable live monitoring data generation alongside viewer build'
     required: false
     default: 'false'
+  version:
+    description: 'Solution Explorer version override (e.g., v0.3.0, beta). Defaults to the action ref tag.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
   steps:
+    - name: Version Check
+      if: github.action_ref == 'main' || github.action_ref == 'refs/heads/main'
+      shell: bash
+      run: |
+        echo "::warning::Using sirfifer/solution-explorer@main tracks the latest commit. Pin to @latest for stability. See https://github.com/sirfifer/solution-explorer#versioning"
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
@@ -55,6 +65,7 @@ runs:
       uses: actions/checkout@v4
       with:
         repository: 'sirfifer/solution-explorer'
+        ref: ${{ inputs.version || github.action_ref }}
         path: '.solution-explorer'
 
     - name: Run Analyzer

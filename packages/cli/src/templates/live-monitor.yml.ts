@@ -119,6 +119,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: sirfifer/solution-explorer
+          ref: latest
           path: .solution-explorer
 
       - name: Install Dependencies
