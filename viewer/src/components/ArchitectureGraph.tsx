@@ -26,6 +26,7 @@ const nodeTypes: NodeTypes = {
 export function ArchitectureGraph() {
   const {
     architecture,
+    loading,
     drillLevel,
     selectedComponentId,
     breadcrumbs,
@@ -191,7 +192,7 @@ export function ArchitectureGraph() {
     if (rawNodes.length === 0) {
       setNodes([]);
       setEdges([]);
-      return;
+      // Don't return early — let the empty-state panel render below
     }
 
     // Clear any pending layout
@@ -397,6 +398,37 @@ export function ArchitectureGraph() {
             </div>
           )}
         </Panel>
+
+        {/* Empty state — shown when drill level has no visible components */}
+        {nodes.length === 0 && !loading && (
+          <Panel position="top-center">
+            <div className={`
+              mt-16 flex flex-col items-center gap-3 px-6 py-5 rounded-xl text-sm
+              ${darkMode ? "bg-zinc-900/90 border border-zinc-800 text-zinc-400" : "bg-white/90 border border-zinc-200 text-zinc-600"}
+              backdrop-blur-sm shadow-lg
+            `}>
+              <span className="text-2xl">📭</span>
+              <p className="font-medium">No components to display at this level</p>
+              <p className={`text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                This component may contain only files or data, not sub-components.
+              </p>
+              {drillLevel && (
+                <button
+                  onClick={drillUp}
+                  className={`
+                    mt-1 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors
+                    ${darkMode
+                      ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+                      : "bg-zinc-100 hover:bg-zinc-200 text-zinc-700"
+                    }
+                  `}
+                >
+                  ↑ Go back up
+                </button>
+              )}
+            </div>
+          </Panel>
+        )}
       </ReactFlow>
     </div>
   );

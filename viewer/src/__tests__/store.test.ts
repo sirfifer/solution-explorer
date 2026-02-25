@@ -259,6 +259,71 @@ describe("ArchStore", () => {
       const visible = useArchStore.getState().getVisibleComponents();
       expect(visible.length).toBe(2);
     });
+
+    it("never returns empty when drilling into tab-container with tab children", () => {
+      // This reproduces the black screen bug: tab-container children are
+      // hero-type "tab" components, but if they have few files and no children
+      // of their own, the hero filter would remove everything.
+      const tab1 = makeComponent({
+        id: "tab-home", name: "Home", type: "tab",
+        children: [], files: ["Views/HomeView.swift"],
+      });
+      const tab2 = makeComponent({
+        id: "tab-search", name: "Search", type: "tab",
+        children: [], files: ["Views/SearchView.swift"],
+      });
+      const tabBar = makeComponent({
+        id: "tab-bar", name: "Tab Bar", type: "tab-container",
+        children: [tab1, tab2],
+      });
+      const iosClient = makeComponent({
+        id: "ios-client", name: "UnaMentis", type: "ios-client",
+        children: [tabBar],
+      });
+      const arch = makeArchitecture({ components: [iosClient] });
+      useArchStore.getState().setArchitecture(arch);
+
+      // Drill into iOS client, then into tab bar
+      useArchStore.getState().drillInto(iosClient);
+      useArchStore.getState().drillInto(tabBar);
+
+      const visible = useArchStore.getState().getVisibleComponents();
+      // Must NEVER be empty — the tabs should be visible
+      expect(visible.length).toBeGreaterThan(0);
+      expect(visible.map((c) => c.id)).toContain("tab-home");
+      expect(visible.map((c) => c.id)).toContain("tab-search");
+    });
+
+    it("falls back to showing all children when hero filter removes everything", () => {
+      // Edge case: all children are non-hero with few files, but a hero
+      // grandchild gets promoted and then sibling non-heroes get filtered.
+      const screen = makeComponent({
+        id: "screen-1", name: "Detail Screen", type: "screen",
+        children: [], files: ["DetailScreen.swift"],
+      });
+      const helper = makeComponent({
+        id: "helper-1", name: "Helpers", type: "module",
+        children: [], files: ["Helpers.swift"],
+      });
+      const wrapper = makeComponent({
+        id: "wrapper", name: "Feature", type: "module",
+        children: [screen, helper],
+      });
+      const parent = makeComponent({
+        id: "parent", name: "Parent", type: "ios-client",
+        children: [wrapper],
+      });
+      const arch = makeArchitecture({ components: [parent] });
+      useArchStore.getState().setArchitecture(arch);
+
+      useArchStore.getState().drillInto(parent);
+
+      const visible = useArchStore.getState().getVisibleComponents();
+      // The screen (hero) should survive, and the helper should fall back
+      // to being shown since removing it would leave too few visible items.
+      expect(visible.length).toBeGreaterThan(0);
+      expect(visible.map((c) => c.id)).toContain("screen-1");
+    });
   });
 
   describe("getComponentRelationships", () => {

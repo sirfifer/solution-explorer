@@ -606,16 +606,25 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     const children = parent.children.length > 0 ? parent.children : [parent];
     const promoted = promoteDrillChildren(children);
     const hasHero = promoted.some((c) => isHeroType(c.type));
-    return promoted.filter((c) => {
+    const filtered = promoted.filter((c) => {
       if (c.type === "content") return false;
       // When hero components exist at this level, hide small internal modules
       if (hasHero && !isHeroType(c.type)
-          && c.type !== "library" && c.type !== "infrastructure"
-          && c.children.length === 0 && c.files.length < 10) {
+        && c.type !== "library" && c.type !== "infrastructure"
+        && c.children.length === 0 && c.files.length < 10) {
         return false;
       }
       return true;
     });
+    // Fallback: if filtering removed everything, show all non-content children.
+    // Every part of the model must be reachable; gaps should never be silently hidden.
+    if (filtered.length === 0 && promoted.length > 0) {
+      console.warn(
+        `[store] Hero filter removed all ${promoted.length} components at drill level "${drillLevel}". Falling back to unfiltered view.`,
+      );
+      return promoted.filter((c) => c.type !== "content");
+    }
+    return filtered;
   },
 
   getComponentRelationships: () => {
@@ -750,8 +759,8 @@ function promoteDrillChildren(children: Component[]): Component[] {
         // Also keep non-hero siblings that are substantial
         for (const grandchild of child.children) {
           if (!isHeroType(grandchild.type)
-              && grandchild.type !== "content"
-              && !childHeroes.includes(grandchild)) {
+            && grandchild.type !== "content"
+            && !childHeroes.includes(grandchild)) {
             result.push(grandchild);
           }
         }
