@@ -91,9 +91,14 @@
 }
 
 /* Mobile optimizations */
-@media (max-width: 768px) {
+@media (max-width: 1023px) {
+  .react-flow__minimap {
+    display: none !important;
+  }
   .react-flow__controls {
     @apply scale-90 origin-bottom-left;
+    /* Move above bottom sheet peek area + bottom nav */
+    bottom: 130px !important;
   }
 }
 

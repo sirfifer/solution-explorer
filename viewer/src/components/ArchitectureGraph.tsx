@@ -36,12 +36,42 @@ export function ArchitectureGraph() {
     selectComponent,
     navigateToBreadcrumb,
     drillUp,
+    setMobileChromeHidden,
   } = useArchStore();
 
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const { fitView, setCenter, getNodes, getEdges } = useReactFlow();
   const layoutTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMobileRef = useRef(false);
+
+  // Track if we're on a mobile viewport
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    isMobileRef.current = mq.matches;
+    const handler = (e: MediaQueryListEvent) => { isMobileRef.current = e.matches; };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // Auto-hide chrome on mobile when graph is being panned/zoomed
+  const onMoveStart = useCallback(() => {
+    if (!isMobileRef.current) return;
+    if (chromeTimer.current) clearTimeout(chromeTimer.current);
+    setMobileChromeHidden(true);
+  }, [setMobileChromeHidden]);
+
+  const onMoveEnd = useCallback(() => {
+    if (!isMobileRef.current) return;
+    chromeTimer.current = setTimeout(() => {
+      setMobileChromeHidden(false);
+    }, 2000);
+  }, [setMobileChromeHidden]);
+
+  useEffect(() => {
+    return () => { if (chromeTimer.current) clearTimeout(chromeTimer.current); };
+  }, []);
 
   // Wrap onNodesChange to recompute edge handles when nodes are dragged
   const onNodesChange = useCallback(
@@ -317,6 +347,8 @@ export function ArchitectureGraph() {
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
+        onMoveStart={onMoveStart}
+        onMoveEnd={onMoveEnd}
         nodeTypes={nodeTypes}
         fitView
         minZoom={0.1}

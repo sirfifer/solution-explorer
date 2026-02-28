@@ -12,9 +12,11 @@ import { ReviewSummary } from "./components/ReviewSummary";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
+import { useBottomSheet } from "./hooks/useBottomSheet";
+import type { SnapPoint } from "./hooks/useBottomSheet";
 import { initializeSearch } from "./utils/search";
-import { formatNumber, formatRelativeTime } from "./utils/layout";
-import type { Architecture } from "./types";
+import { formatNumber, formatRelativeTime, getTypeColors } from "./utils/layout";
+import type { Architecture, Component } from "./types";
 
 // Session storage keys for UI state persistence
 const STORAGE_KEYS = {
@@ -47,6 +49,81 @@ function setStoredValue<T>(key: string, value: T, storage: Storage = sessionStor
   }
 }
 
+function MobileBottomSheet({ darkMode, activePanel, bottomSheet }: {
+  darkMode: boolean;
+  activePanel: string;
+  bottomSheet: ReturnType<typeof useBottomSheet>;
+}) {
+  const { detailItem } = useArchStore();
+  const { snap, setSnap, sheetHeight, isDragging, dragOffset, handlers } = bottomSheet;
+
+  // Compute actual height during drag
+  const windowH = typeof window !== "undefined" ? window.innerHeight : 800;
+  const baseHeightPx = (sheetHeight / 100) * windowH;
+  const currentHeightPx = isDragging
+    ? Math.max(0, Math.min(windowH * 0.95, baseHeightPx - dragOffset))
+    : baseHeightPx;
+
+  // Get component info for peek view
+  const component = detailItem?.type === "component" ? (detailItem.data as Component) : null;
+  const colors = component ? getTypeColors(component.type, darkMode) : null;
+
+  return (
+    <div
+      className={`
+        lg:hidden fixed bottom-0 left-0 right-0 z-30
+        flex flex-col rounded-t-2xl shadow-2xl
+        ${darkMode ? "bg-zinc-900 border-t border-zinc-800" : "bg-white border-t border-zinc-200"}
+      `}
+      style={{
+        height: currentHeightPx,
+        transition: isDragging ? "none" : "height 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+        willChange: isDragging ? "height" : "auto",
+        paddingBottom: `env(safe-area-inset-bottom)`,
+      }}
+    >
+      {/* Drag handle area (full width touch target) */}
+      <div
+        className="flex flex-col items-center pt-2 pb-1 cursor-grab active:cursor-grabbing touch-none shrink-0"
+        {...handlers}
+      >
+        <div className={`w-10 h-1 rounded-full ${darkMode ? "bg-zinc-700" : "bg-zinc-300"}`} />
+      </div>
+
+      {/* Peek header: always visible, shows component name */}
+      {component && snap === "peek" && !isDragging && (
+        <div
+          className="flex items-center gap-2 px-4 py-2 shrink-0 cursor-pointer"
+          onClick={() => setSnap("half")}
+        >
+          {colors && (
+            <span
+              className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: colors.bg }}
+            />
+          )}
+          <span className={`text-sm font-medium truncate ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+            {component.name}
+          </span>
+          <span className={`text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            {component.type}
+          </span>
+          <span className={`ml-auto text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            Swipe up for details
+          </span>
+        </div>
+      )}
+
+      {/* Full detail content: visible in half/full mode, or always during drag */}
+      {(snap !== "peek" || isDragging) && (
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {activePanel === "review" ? <ReviewSummary /> : <DetailPanel />}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function App() {
   const {
     architecture,
@@ -70,6 +147,7 @@ export function App() {
     setAdminOpen,
     liveConfig,
     liveMonitorStatus,
+    mobileChromeHidden,
   } = useArchStore();
 
   useLiveMonitor();
@@ -77,6 +155,36 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"graph" | "tree" | "detail">("graph");
   const [summaryDismissed, setSummaryDismissed] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+
+  // Tree sidebar swipe-to-close state
+  const treeTouchStartX = useRef(0);
+  const [treeDragOffset, setTreeDragOffset] = useState(0);
+  const [treeDragging, setTreeDragging] = useState(false);
+
+  const onTreeTouchStart = useCallback((e: React.TouchEvent) => {
+    treeTouchStartX.current = e.touches[0].clientX;
+    setTreeDragging(true);
+  }, []);
+  const onTreeTouchMove = useCallback((e: React.TouchEvent) => {
+    const delta = e.touches[0].clientX - treeTouchStartX.current;
+    // Only allow dragging left (negative delta)
+    setTreeDragOffset(Math.min(0, delta));
+  }, []);
+  const onTreeTouchEnd = useCallback(() => {
+    setTreeDragging(false);
+    if (treeDragOffset < -80) {
+      setSidebarOpen(false);
+    }
+    setTreeDragOffset(0);
+  }, [treeDragOffset]);
+
+  // Mobile bottom sheet
+  const bottomSheet = useBottomSheet({
+    onDismiss: () => setActivePanel(null),
+    initialSnap: "peek" as SnapPoint,
+  });
 
   // Collapsible + resizable sidebar widths (restored from session storage)
   const [leftCollapsed, setLeftCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.leftCollapsed, false));
@@ -86,6 +194,18 @@ export function App() {
   const resizing = useRef<"left" | "right" | null>(null);
   const startX = useRef(0);
   const startWidth = useRef(0);
+
+  // Close more menu on outside click
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [moreMenuOpen]);
 
   // Persist panel state to session storage
   useEffect(() => { setStoredValue(STORAGE_KEYS.leftCollapsed, leftCollapsed); }, [leftCollapsed]);
@@ -222,11 +342,17 @@ export function App() {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
-      <header className={`
-        flex items-center justify-between px-4 py-2 border-b shrink-0 z-30
-        ${darkMode ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"}
-        backdrop-blur-sm
-      `}>
+      <header
+        className={`
+          flex items-center justify-between px-4 py-2 border-b shrink-0 z-30
+          ${darkMode ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"}
+          backdrop-blur-sm transition-transform duration-300
+        `}
+        style={{
+          paddingTop: `max(0.5rem, env(safe-area-inset-top))`,
+          transform: mobileChromeHidden ? "translateY(-100%)" : "none",
+        }}
+      >
         <div className="flex items-center gap-3">
           {/* Mobile sidebar toggle */}
           <button
@@ -240,7 +366,7 @@ export function App() {
             <h1 className={`font-bold text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
               {architecture.name}
             </h1>
-            <span className={`text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            <span className={`hidden sm:inline text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
               Architecture
             </span>
             {architecture.repositories && architecture.repositories.length > 1 && (
@@ -254,7 +380,7 @@ export function App() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`
-                  flex items-center gap-1 text-xs px-2 py-0.5 rounded-md
+                  hidden sm:flex items-center gap-1 text-xs px-2 py-0.5 rounded-md
                   ${darkMode
                     ? "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
                     : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100"
@@ -305,41 +431,83 @@ export function App() {
             </kbd>
           </button>
 
-          {/* Review mode */}
-          <ReviewModeButton />
+          {/* Desktop: show all buttons inline */}
+          <div className="hidden sm:flex items-center gap-2">
+            <ReviewModeButton />
 
-          {/* Admin dashboard button - only when live config is present */}
-          {liveConfig && (
+            {liveConfig && (
+              <button
+                onClick={() => setAdminOpen(!adminOpen)}
+                className={`p-2 rounded-lg relative ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
+                title="Admin Dashboard (Cmd+Shift+A)"
+              >
+                {"\u2699"}
+                {architecture?.live_status?.statuses &&
+                  Object.values(architecture.live_status.statuses).some((s) => s.level === "error") && (
+                  <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                )}
+              </button>
+            )}
+
             <button
-              onClick={() => setAdminOpen(!adminOpen)}
-              className={`p-2 rounded-lg relative ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
-              title="Admin Dashboard (Cmd+Shift+A)"
+              onClick={toggleDarkMode}
+              className={`p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
+              title={darkMode ? "Light mode" : "Dark mode"}
             >
-              {"\u2699"}
-              {architecture?.live_status?.statuses &&
-                Object.values(architecture.live_status.statuses).some((s) => s.level === "error") && (
-                <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              )}
+              {darkMode ? "\u2600" : "\u263E"}
             </button>
-          )}
 
-          {/* Theme toggle */}
-          <button
-            onClick={toggleDarkMode}
-            className={`p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
-            title={darkMode ? "Light mode" : "Dark mode"}
-          >
-            {darkMode ? "\u2600" : "\u263E"}
-          </button>
+            <button
+              onClick={toggleEnhancedFrames}
+              className={`p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"} ${enhancedFrames ? (darkMode ? "text-orange-400" : "text-orange-500") : (darkMode ? "text-zinc-400" : "text-zinc-600")}`}
+              title={enhancedFrames ? "Switch to classic frames" : "Switch to enhanced frames"}
+            >
+              {"\u{1F4F1}"}
+            </button>
+          </div>
 
-          {/* Enhanced frames toggle */}
-          <button
-            onClick={toggleEnhancedFrames}
-            className={`p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"} ${enhancedFrames ? (darkMode ? "text-orange-400" : "text-orange-500") : (darkMode ? "text-zinc-400" : "text-zinc-600")}`}
-            title={enhancedFrames ? "Switch to classic frames" : "Switch to enhanced frames"}
-          >
-            {"\u{1F4F1}"}
-          </button>
+          {/* Mobile: overflow menu for secondary actions */}
+          <div ref={moreMenuRef} className="sm:hidden relative">
+            <button
+              onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+              className={`p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
+              title="More options"
+            >
+              {"\u22EF"}
+            </button>
+            {moreMenuOpen && (
+              <div className={`
+                absolute right-0 top-full mt-1 w-48 rounded-xl shadow-xl border z-50
+                ${darkMode ? "bg-zinc-900 border-zinc-700" : "bg-white border-zinc-200"}
+              `}>
+                <div className="py-1">
+                  <button
+                    onClick={() => { toggleDarkMode(); setMoreMenuOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
+                  >
+                    <span>{darkMode ? "\u2600" : "\u263E"}</span>
+                    <span>{darkMode ? "Light mode" : "Dark mode"}</span>
+                  </button>
+                  <button
+                    onClick={() => { toggleEnhancedFrames(); setMoreMenuOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
+                  >
+                    <span>{"\u{1F4F1}"}</span>
+                    <span>{enhancedFrames ? "Classic frames" : "Enhanced frames"}</span>
+                  </button>
+                  {liveConfig && (
+                    <button
+                      onClick={() => { setAdminOpen(!adminOpen); setMoreMenuOpen(false); }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
+                    >
+                      <span>{"\u2699"}</span>
+                      <span>Admin Dashboard</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Stats */}
           <div className={`hidden md:flex items-center gap-3 text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
@@ -375,7 +543,7 @@ export function App() {
             target="_blank"
             rel="noopener noreferrer"
             className={`
-              flex items-center gap-1 text-[10px] px-2 py-1 rounded-md
+              hidden sm:flex items-center gap-1 text-[10px] px-2 py-1 rounded-md
               ${darkMode
                 ? "text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800"
                 : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
@@ -467,10 +635,19 @@ export function App() {
         {sidebarOpen && (
           <div className="lg:hidden fixed inset-0 z-40 flex">
             <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-            <aside className={`
-              relative w-72 flex flex-col
-              ${darkMode ? "bg-zinc-950" : "bg-white"}
-            `}>
+            <aside
+              className={`
+                relative w-72 flex flex-col
+                ${darkMode ? "bg-zinc-950" : "bg-white"}
+              `}
+              style={{
+                transform: treeDragging ? `translateX(${treeDragOffset}px)` : "none",
+                transition: treeDragging ? "none" : "transform 0.3s ease",
+              }}
+              onTouchStart={onTreeTouchStart}
+              onTouchMove={onTreeTouchMove}
+              onTouchEnd={onTreeTouchEnd}
+            >
               <TreeNavigator />
             </aside>
           </div>
@@ -527,28 +704,26 @@ export function App() {
 
         {/* Detail / Review panel - mobile bottom sheet */}
         {(activePanel === "detail" || activePanel === "review") && (
-          <div className={`
-            lg:hidden fixed bottom-0 left-0 right-0 z-30
-            max-h-[60vh] flex flex-col rounded-t-2xl shadow-2xl
-            ${darkMode ? "bg-zinc-900 border-t border-zinc-800" : "bg-white border-t border-zinc-200"}
-          `}>
-            {/* Drag handle */}
-            <div className="flex justify-center py-2">
-              <div className={`w-10 h-1 rounded-full ${darkMode ? "bg-zinc-700" : "bg-zinc-300"}`} />
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {activePanel === "review" ? <ReviewSummary /> : <DetailPanel />}
-            </div>
-          </div>
+          <MobileBottomSheet
+            darkMode={darkMode}
+            activePanel={activePanel}
+            bottomSheet={bottomSheet}
+          />
         )}
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className={`
-        lg:hidden flex items-center justify-around border-t py-2 shrink-0
-        ${darkMode ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"}
-        backdrop-blur-sm
-      `}>
+      <nav
+        className={`
+          lg:hidden flex items-center justify-around border-t py-2 shrink-0
+          ${darkMode ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"}
+          backdrop-blur-sm transition-transform duration-300
+        `}
+        style={{
+          paddingBottom: `max(0.5rem, env(safe-area-inset-bottom))`,
+          transform: mobileChromeHidden ? "translateY(100%)" : "none",
+        }}
+      >
         {drillLevel && (
           <button
             onClick={() => navigateToBreadcrumb(-1)}
@@ -593,15 +768,6 @@ export function App() {
       {/* Help system */}
       <HelpSystem />
 
-      {/* Mobile timestamp - shown below header on small screens */}
-      {architecture.generated_at && (
-        <div className={`
-          md:hidden text-center text-[10px] py-1 border-b
-          ${darkMode ? "text-zinc-500 bg-zinc-950/80 border-zinc-800/50" : "text-zinc-400 bg-zinc-50/80 border-zinc-200/50"}
-        `}>
-          Generated {formatRelativeTime(architecture.generated_at)} ({new Date(architecture.generated_at).toLocaleString()})
-        </div>
-      )}
     </div>
   );
 }

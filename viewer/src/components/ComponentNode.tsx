@@ -754,24 +754,39 @@ export const ComponentNode = memo(function ComponentNode({
   const [hovered, setHovered] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nodeRef = useRef<HTMLDivElement>(null);
   const helpButtonRef = useRef<HTMLDivElement>(null);
   const isHero = isHeroType(component.type);
   const hasHelpContent = !!(getHelpContent(component));
+  const isTouchDevice = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 
   useEffect(() => {
     return () => {
       if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+      if (longPressTimeout.current) clearTimeout(longPressTimeout.current);
     };
   }, []);
 
   const handleMouseEnter = () => {
+    if (isTouchDevice) return;
     hoverTimeout.current = setTimeout(() => setHovered(true), 400);
   };
   const handleMouseLeave = () => {
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
     setHovered(false);
   };
+
+  // Long-press on touch devices shows hover card
+  const handleTouchStart = useCallback(() => {
+    longPressTimeout.current = setTimeout(() => setHovered(true), 500);
+  }, []);
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimeout.current) clearTimeout(longPressTimeout.current);
+  }, []);
+  const handleTouchMove = useCallback(() => {
+    if (longPressTimeout.current) clearTimeout(longPressTimeout.current);
+  }, []);
   const closeHelp = useCallback(() => setShowHelp(false), []);
 
   const docs = component.docs;
@@ -786,10 +801,13 @@ export const ComponentNode = memo(function ComponentNode({
         hover:scale-[1.02] transition-transform duration-150
         cursor-pointer
       `}
-      onClick={() => selectComponent(component.id)}
+      onClick={() => { setHovered(false); selectComponent(component.id); }}
       onDoubleClick={() => hasChildren && drillInto(component)}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={handleTouchMove}
     >
       {/* Handles on all 4 sides for intelligent edge routing */}
       <Handle id="target-left" type="target" position={Position.Left} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
@@ -896,10 +914,11 @@ export const ComponentNode = memo(function ComponentNode({
               {hasHelpContent && (
                 <button
                   className={`
-                    w-6 h-6 rounded-lg flex items-center justify-center
+                    w-8 h-8 rounded-lg flex items-center justify-center
                     text-xs font-bold
                     ${darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200" : "bg-zinc-200 text-zinc-600 hover:bg-zinc-300"}
                   `}
+                  style={{ minWidth: 32, minHeight: 32 }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowHelp(!showHelp);
@@ -912,10 +931,11 @@ export const ComponentNode = memo(function ComponentNode({
               {hasChildren && (
                 <button
                   className={`
-                    w-6 h-6 rounded-lg flex items-center justify-center
+                    w-8 h-8 rounded-lg flex items-center justify-center
                     text-xs font-bold
                     ${darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200" : "bg-zinc-200 text-zinc-600 hover:bg-zinc-300"}
                   `}
+                  style={{ minWidth: 32, minHeight: 32 }}
                   onClick={(e) => {
                     e.stopPropagation();
                     drillInto(component);

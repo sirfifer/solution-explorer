@@ -135,6 +135,10 @@ interface ArchStore {
   darkMode: boolean;
   enhancedFrames: boolean;
 
+  // Mobile UI
+  mobileChromeHidden: boolean;
+  setMobileChromeHidden: (hidden: boolean) => void;
+
   // Review mode
   reviewMode: boolean;
   annotations: Annotation[];
@@ -285,6 +289,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   annotations: [],
   annotatingComponentId: null,
   annotatingTarget: null,
+
+  mobileChromeHidden: false,
+  setMobileChromeHidden: (hidden) => set({ mobileChromeHidden: hidden }),
 
   adminOpen: false,
   liveConfig: null,
