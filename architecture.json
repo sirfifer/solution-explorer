@@ -2,9 +2,10 @@
   "name": "test_max_symbols_explicit_over0",
   "description": "",
   "repository": null,
-  "generated_at": "2026-02-24T03:37:50.766073+00:00",
+  "default_branch": "main",
+  "generated_at": "2026-03-01T03:59:37.733046+00:00",
   "analyzer_version": "1.0.0",
-  "root_path": "/private/var/folders/j1/f88bws916px1k7zn1bltx2j00000gn/T/pytest-of-ramerman/pytest-3/test_max_symbols_explicit_over0",
+  "root_path": "/private/var/folders/j1/f88bws916px1k7zn1bltx2j00000gn/T/pytest-of-ramerman/pytest-4/test_max_symbols_explicit_over0",
   "components": [
     {
       "id": "root",
@@ -53,7 +54,8 @@
         "api_endpoints": []
       },
       "external_services": [],
-      "testing": {}
+      "testing": {},
+      "actions": []
     }
   ],
   "relationships": [],
@@ -111,5 +113,5 @@
   },
   "repositories": [],
   "changelog": [],
-  "changelog_serial": 6
+  "changelog_serial": 8
 }

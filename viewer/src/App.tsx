@@ -16,6 +16,7 @@ import { useBottomSheet } from "./hooks/useBottomSheet";
 import type { SnapPoint } from "./hooks/useBottomSheet";
 import { initializeSearch } from "./utils/search";
 import { formatNumber, formatRelativeTime, getTypeColors } from "./utils/layout";
+import { parseUrlState, replaceUrlState, pushUrlState } from "./utils/urlState";
 import type { Architecture, Component } from "./types";
 
 // Session storage keys for UI state persistence
@@ -291,6 +292,77 @@ export function App() {
     }
     load();
   }, [setArchitecture, setLoading, setError]);
+
+  // Deep linking: restore navigation state from URL on initial architecture load
+  const urlRestoredRef = useRef(false);
+  useEffect(() => {
+    if (!architecture || urlRestoredRef.current) return;
+    urlRestoredRef.current = true;
+
+    const urlState = parseUrlState();
+    const store = useArchStore.getState();
+
+    // Restore drill level first (so the component is visible in the graph)
+    if (urlState.drill) {
+      const drillComp = store.getComponentById(urlState.drill);
+      if (drillComp) {
+        store.drillInto(drillComp);
+      }
+    }
+
+    // Then restore selected component
+    if (urlState.component) {
+      store.selectComponent(urlState.component);
+    }
+  }, [architecture]);
+
+  // Deep linking: sync store state changes to URL
+  useEffect(() => {
+    const unsubscribe = useArchStore.subscribe((state, prev) => {
+      if (
+        state.selectedComponentId !== prev.selectedComponentId ||
+        state.drillLevel !== prev.drillLevel
+      ) {
+        const isDrillChange = state.drillLevel !== prev.drillLevel;
+        const update = {
+          component: state.selectedComponentId || undefined,
+          drill: state.drillLevel || undefined,
+        };
+        // Use pushState for drill navigation (supports browser back), replaceState for selection
+        if (isDrillChange) {
+          pushUrlState(update);
+        } else {
+          replaceUrlState(update);
+        }
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  // Deep linking: handle browser back/forward
+  useEffect(() => {
+    const handlePopState = () => {
+      const urlState = parseUrlState();
+      const store = useArchStore.getState();
+
+      if (urlState.drill) {
+        const drillComp = store.getComponentById(urlState.drill);
+        if (drillComp) {
+          store.drillInto(drillComp);
+        }
+      } else {
+        store.navigateToBreadcrumb(-1);
+      }
+
+      if (urlState.component) {
+        store.selectComponent(urlState.component);
+      } else {
+        store.selectComponent(null);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   // Auto-expand right panel when content appears
   useEffect(() => {

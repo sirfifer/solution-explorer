@@ -205,6 +205,15 @@ export interface AdminSummary {
   };
 }
 
+export interface UIAction {
+  label: string;
+  action_type: string;
+  handler: string | null;
+  file: string;
+  line: number;
+  target_view: string | null;
+}
+
 export interface Component {
   id: string;
   name: string;
@@ -224,6 +233,7 @@ export interface Component {
   testing?: ComponentTesting;
   ai_enhance?: ComponentAIEnhance;
   live_status?: ComponentLiveStatus;
+  actions?: UIAction[];
 }
 
 export interface Relationship {
@@ -258,12 +268,14 @@ export interface ArchitectureStats {
 export interface RepositoryInfo {
   name: string;
   repository?: string | null;
+  default_branch?: string | null;
 }
 
 export interface Architecture {
   name: string;
   description: string;
   repository: string | null;
+  default_branch?: string;
   generated_at: string;
   analyzer_version: string;
   root_path: string;

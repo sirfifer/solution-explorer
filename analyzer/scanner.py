@@ -58,6 +58,7 @@ from .models import (
     Symbol,
     to_dict,
 )
+from .action_detector import UIActionDetector
 from .parsers import PARSERS
 from .swiftui_flow import SwiftUIFlowDetector
 from .utils import (
@@ -126,6 +127,9 @@ class ArchitectureScanner:
 
         # Phase 2.8: Detect UI flows (screens, tabs, navigation)
         self._detect_ui_flows()
+
+        # Phase 2.9: Detect UI actions (buttons, gestures, toolbar items)
+        self._detect_ui_actions()
 
         # Phase 3: Detect relationships
         self._detect_relationships()
@@ -1111,6 +1115,20 @@ class ArchitectureScanner:
             # Store relationships for later assembly
             self._ui_relationships = getattr(self, "_ui_relationships", [])
             self._ui_relationships.extend(new_relationships)
+
+    def _detect_ui_actions(self):
+        """Phase 2.9: Detect UI actions (buttons, gestures, toolbar items, menus).
+
+        Scans each component's source files for interactive UI elements and
+        stores detected actions on the component's `actions` field.
+        """
+        detector = UIActionDetector()
+        for comp in self._component_map.values():
+            if not comp.language or not comp.files:
+                continue
+            actions = detector.detect(comp.files, self.root, comp.language)
+            if actions:
+                comp.actions = actions
 
     def _detect_relationships(self):
         """Detect inter-component relationships."""
@@ -2541,6 +2559,18 @@ class ArchitectureScanner:
                     self.architecture.repository = url
             except OSError:
                 pass
+
+        # Detect default branch from .git/HEAD
+        head_ref = self.root / ".git" / "HEAD"
+        if head_ref.exists():
+            try:
+                ref = head_ref.read_text(encoding="utf-8").strip()
+                if ref.startswith("ref: refs/heads/"):
+                    self.architecture.default_branch = ref.removeprefix("ref: refs/heads/")
+            except OSError:
+                pass
+        if not self.architecture.default_branch:
+            self.architecture.default_branch = "main"
 
     def _build_component_tree(self) -> list[dict]:
         """Build a hierarchical tree of components."""

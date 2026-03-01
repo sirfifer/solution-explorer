@@ -226,6 +226,15 @@ if _PYDANTIC:
         env_vars: list = Field(default_factory=list)
         api_endpoints: list = Field(default_factory=list)
 
+    class UIAction(BaseModel):
+        """A user-interactive action detected in source code."""
+        label: str
+        action_type: str
+        handler: Optional[str] = None
+        file: str = ""
+        line: int = 0
+        target_view: Optional[str] = None
+
     class Component(BaseModel):
         id: str
         name: str
@@ -243,6 +252,7 @@ if _PYDANTIC:
         docs: dict = Field(default_factory=dict)
         external_services: list = Field(default_factory=list)
         testing: dict = Field(default_factory=dict)
+        actions: list = Field(default_factory=list)
 
         @field_validator("id")
         @classmethod
@@ -293,6 +303,7 @@ if _PYDANTIC:
         name: str
         description: str
         repository: Optional[str] = None
+        default_branch: Optional[str] = None
         generated_at: str = ""
         analyzer_version: str = "1.0.0"
         root_path: str = ""
@@ -354,6 +365,16 @@ else:
         api_endpoints: list = field(default_factory=list)
 
     @dataclass
+    class UIAction:
+        """A user-interactive action detected in source code."""
+        label: str
+        action_type: str
+        handler: Optional[str] = None
+        file: str = ""
+        line: int = 0
+        target_view: Optional[str] = None
+
+    @dataclass
     class Component:
         id: str
         name: str
@@ -371,6 +392,7 @@ else:
         docs: dict = field(default_factory=dict)
         external_services: list = field(default_factory=list)
         testing: dict = field(default_factory=dict)
+        actions: list = field(default_factory=list)
 
     @dataclass
     class Relationship:
@@ -395,6 +417,7 @@ else:
         name: str
         description: str
         repository: Optional[str] = None
+        default_branch: Optional[str] = None
         generated_at: str = ""
         analyzer_version: str = "1.0.0"
         root_path: str = ""

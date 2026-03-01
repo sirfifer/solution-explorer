@@ -206,6 +206,7 @@ interface ArchStore {
 
   // Helpers
   getComponentById: (id: string) => Component | null;
+  getComponentByFile: (filePath: string) => Component | null;
   getVisibleComponents: () => Component[];
   getComponentRelationships: () => Relationship[];
   getComponentFiles: (componentId: string) => FileInfo[];
@@ -216,6 +217,15 @@ function findComponent(components: Component[], id: string): Component | null {
   for (const comp of components) {
     if (comp.id === id) return comp;
     const found = findComponent(comp.children, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findComponentByFile(components: Component[], filePath: string): Component | null {
+  for (const comp of components) {
+    if (comp.files.includes(filePath)) return comp;
+    const found = findComponentByFile(comp.children, filePath);
     if (found) return found;
   }
   return null;
@@ -595,6 +605,12 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     const arch = get().architecture;
     if (!arch) return null;
     return findComponent(arch.components, id);
+  },
+
+  getComponentByFile: (filePath) => {
+    const arch = get().architecture;
+    if (!arch) return null;
+    return findComponentByFile(arch.components, filePath);
   },
 
   getVisibleComponents: () => {

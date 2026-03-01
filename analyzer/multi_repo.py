@@ -136,7 +136,7 @@ class MultiRepoOrchestrator:
             prefix = f"{repo_name}/"
 
             # Record repository metadata
-            repo_info = {"name": repo_name, "repository": arch.repository}
+            repo_info = {"name": repo_name, "repository": arch.repository, "default_branch": arch.default_branch}
             merged.repositories.append(repo_info)
 
             # Prefix all IDs to avoid collisions

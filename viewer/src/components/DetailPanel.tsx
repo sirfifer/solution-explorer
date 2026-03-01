@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import type { Component, FileInfo, Symbol as ArchSymbol, Relationship, ComponentStatus } from "../types";
+import type { Component, FileInfo, Symbol as ArchSymbol, Relationship, ComponentStatus, UIAction } from "../types";
 import { useArchStore } from "../store";
 import {
   getTypeColors,
@@ -10,12 +10,34 @@ import {
   ROLE_META,
   getRoleBadgeColors,
 } from "../utils/layout";
+import { getSourceUrl } from "../utils/sourceLinks";
+import { parseUrlState, replaceUrlState } from "../utils/urlState";
 import { CodePreview } from "./CodePreview";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, getPatternRef, getProtocolRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
 
-type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai" | "status" | "testing";
+function SourceLink({ filePath, line, endLine }: { filePath: string; line?: number; endLine?: number }) {
+  const { architecture, darkMode } = useArchStore();
+  const link = architecture ? getSourceUrl(architecture, filePath, line, endLine) : null;
+  if (!link) return null;
+  return (
+    <a
+      href={link.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className={`shrink-0 inline-flex items-center ${darkMode ? "text-zinc-600 hover:text-blue-400" : "text-zinc-400 hover:text-blue-500"} transition-colors`}
+      title="Open in GitHub"
+    >
+      <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M4.5 1.5H2a.5.5 0 00-.5.5v8a.5.5 0 00.5.5h8a.5.5 0 00.5-.5V7.5M7 1.5h3.5V5M6 6l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </a>
+  );
+}
+
+type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai" | "status" | "testing" | "actions";
 
 export function DetailPanel() {
   const {
@@ -28,7 +50,17 @@ export function DetailPanel() {
     getComponentSymbols,
     showDetail,
   } = useArchStore();
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [activeTab, setActiveTabRaw] = useState<Tab>(() => {
+    const urlTab = parseUrlState().tab;
+    return urlTab && ["overview", "docs", "files", "symbols", "relationships", "ai", "status", "testing", "actions"].includes(urlTab)
+      ? urlTab as Tab
+      : "overview";
+  });
+  const setActiveTab = (tab: Tab) => {
+    setActiveTabRaw(tab);
+    const current = parseUrlState();
+    replaceUrlState({ ...current, tab });
+  };
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
 
   if (!detailItem || !architecture) {
@@ -88,6 +120,7 @@ function ComponentDetail({
     getComponentSymbols,
     showDetail,
   } = useArchStore();
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Lazy-load component details (split mode)
   const loadComponentDetail = useArchStore((s) => s.loadComponentDetail);
@@ -124,6 +157,9 @@ function ComponentDetail({
     ...(component.live_status?.statuses && Object.keys(component.live_status.statuses).length > 0
       ? [{ key: "status" as Tab, label: "Status",
            count: Object.keys(component.live_status.statuses).length }]
+      : []),
+    ...(component.actions && component.actions.length > 0
+      ? [{ key: "actions" as Tab, label: "Actions", count: component.actions.length }]
       : []),
     { key: "files", label: "Files", count: files.length },
     { key: "symbols", label: "Symbols", count: symbols.length },
@@ -169,18 +205,42 @@ function ComponentDetail({
               )}
             </div>
           </div>
-          <button
-            onClick={closeDetail}
-            className={`p-1 rounded-lg transition-colors ${darkMode ? "hover:bg-zinc-800 text-zinc-500" : "hover:bg-zinc-100 text-zinc-400"}`}
-          >
-            &#x2715;
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                setLinkCopied(true);
+                setTimeout(() => setLinkCopied(false), 2000);
+              }}
+              className={`p-1 rounded-lg transition-colors ${darkMode ? "hover:bg-zinc-800 text-zinc-500" : "hover:bg-zinc-100 text-zinc-400"}`}
+              title="Copy link to this component"
+            >
+              {linkCopied ? (
+                <svg className="w-4 h-4 text-green-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M6.5 9.5l3-3M5.5 7.5l-1.3 1.3a2 2 0 002.8 2.8l1.3-1.3M10.5 8.5l1.3-1.3a2 2 0 00-2.8-2.8L7.7 5.7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+            <button
+              onClick={closeDetail}
+              className={`p-1 rounded-lg transition-colors ${darkMode ? "hover:bg-zinc-800 text-zinc-500" : "hover:bg-zinc-100 text-zinc-400"}`}
+            >
+              &#x2715;
+            </button>
+          </div>
         </div>
 
         {component.path && (
-          <p className={`text-xs mt-2 font-mono ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
-            {component.path}
-          </p>
+          <div className="flex items-center gap-1.5 mt-2">
+            <p className={`text-xs font-mono ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+              {component.path}
+            </p>
+            <SourceLink filePath={component.path} />
+          </div>
         )}
 
         {(docs?.purpose || component.description) && (
@@ -292,6 +352,9 @@ function ComponentDetail({
         )}
         {activeTab === "relationships" && (
           <RelationshipsTab componentId={component.id} relationships={relationships} />
+        )}
+        {activeTab === "actions" && component.actions && (
+          <ActionsTab actions={component.actions} />
         )}
       </div>
 
@@ -674,6 +737,7 @@ function FilesTab({ files, componentId }: { files: FileInfo[]; componentId: stri
                   <span className={`text-[10px] tabular-nums ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                     {f.lines}
                   </span>
+                  <SourceLink filePath={f.path} />
                   {reviewMode && (
                     <button
                       onClick={(e) => {
@@ -822,8 +886,9 @@ function SymbolsTab({
                 )}
                 <CodePreview code={sym.code_preview} language={sym.file.split(".").pop() || ""} />
                 <div className={`flex items-center justify-between mt-1`}>
-                  <div className={`text-[10px] font-mono ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                  <div className={`text-[10px] font-mono flex items-center gap-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                     {sym.file}:{sym.line}
+                    <SourceLink filePath={sym.file} line={sym.line} endLine={sym.end_line} />
                   </div>
                   {reviewMode && (
                     <button
@@ -846,6 +911,109 @@ function SymbolsTab({
         {filtered.length > 100 && (
           <div className={`text-xs text-center py-2 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             Showing 100 of {filtered.length} symbols
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ActionsTab({ actions }: { actions: UIAction[] }) {
+  const { darkMode, architecture } = useArchStore();
+  const [filter, setFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+
+  const actionTypes = useMemo(() => {
+    const set = new Set(actions.map((a) => a.action_type));
+    return ["all", ...Array.from(set).sort()];
+  }, [actions]);
+
+  const filtered = useMemo(() => {
+    let result = actions;
+    if (typeFilter !== "all") {
+      result = result.filter((a) => a.action_type === typeFilter);
+    }
+    if (filter) {
+      const q = filter.toLowerCase();
+      result = result.filter(
+        (a) => a.label.toLowerCase().includes(q) || (a.handler && a.handler.toLowerCase().includes(q)),
+      );
+    }
+    return result;
+  }, [actions, filter, typeFilter]);
+
+  const typeIcons: Record<string, string> = {
+    button: "B",
+    toolbar: "T",
+    menu: "M",
+    swipe: "S",
+    gesture: "G",
+    dialog: "D",
+    alert: "!",
+    ibaction: "A",
+    form: "F",
+  };
+
+  return (
+    <div className="p-3">
+      <div className="flex gap-2 mb-3">
+        <input
+          type="text"
+          placeholder="Filter actions..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className={`
+            flex-1 px-3 py-2 rounded-lg text-sm outline-none
+            ${darkMode
+              ? "bg-zinc-800 text-zinc-200 placeholder-zinc-600 focus:ring-1 focus:ring-blue-500"
+              : "bg-zinc-100 text-zinc-800 placeholder-zinc-400 focus:ring-1 focus:ring-blue-500"
+            }
+          `}
+        />
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className={`
+            px-2 py-2 rounded-lg text-sm outline-none
+            ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-zinc-100 text-zinc-700"}
+          `}
+        >
+          {actionTypes.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-1">
+        {filtered.map((action, i) => (
+          <div
+            key={`${action.file}:${action.line}:${i}`}
+            className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm ${darkMode ? "hover:bg-zinc-800/50" : "hover:bg-zinc-100"}`}
+          >
+            <span
+              className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0 ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-200 text-zinc-600"}`}
+              title={action.action_type}
+            >
+              {typeIcons[action.action_type] || "?"}
+            </span>
+            <span className={`flex-1 truncate ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
+              {action.label}
+            </span>
+            {action.handler && (
+              <span className={`text-[10px] font-mono truncate max-w-[100px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                {action.handler}
+              </span>
+            )}
+            <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+              {action.action_type}
+            </span>
+            <SourceLink filePath={action.file} line={action.line} />
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <div className={`text-xs text-center py-4 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            No actions match your filter
           </div>
         )}
       </div>
@@ -1275,9 +1443,12 @@ function FileDetail({ file }: { file: FileInfo }) {
             <h2 className={`font-bold text-lg ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
               {file.path.split("/").pop()}
             </h2>
-            <p className={`text-xs font-mono mt-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
-              {file.path}
-            </p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <p className={`text-xs font-mono ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                {file.path}
+              </p>
+              <SourceLink filePath={file.path} />
+            </div>
           </div>
           <button
             onClick={closeDetail}
@@ -1385,9 +1556,12 @@ function SymbolDetail({ symbol }: { symbol: ArchSymbol }) {
             &#x2715;
           </button>
         </div>
-        <p className={`text-xs font-mono mt-2 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
-          {symbol.file}:{symbol.line}-{symbol.end_line}
-        </p>
+        <div className="flex items-center gap-1.5 mt-2">
+          <p className={`text-xs font-mono ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            {symbol.file}:{symbol.line}-{symbol.end_line}
+          </p>
+          <SourceLink filePath={symbol.file} line={symbol.line} endLine={symbol.end_line} />
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4">
         {symbol.docstring && (
