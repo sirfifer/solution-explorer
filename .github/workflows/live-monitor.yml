@@ -62,17 +62,35 @@ jobs:
         run: |
           mkdir -p .arch-output/live
 
-          BASELINE_FLAG=""
-          if [ -f ".arch-baseline/architecture.json" ]; then
-            BASELINE_FLAG="--baseline .arch-baseline/architecture.json"
-          fi
-
           if [ -f "solution-explorer.json" ]; then
+            # Multi-repo mode: full scan (incremental not yet supported)
             python3 analyze.py --config solution-explorer.json \
               -o .arch-output/architecture.json --compact
+          elif [ -f ".arch-baseline/architecture.json" ]; then
+            # Incremental mode: surgical update of changed components only
+            BASE_SHA=""
+            if [ -f ".arch-baseline/sha" ]; then
+              BASE_SHA="$(cat .arch-baseline/sha)"
+            fi
+            python3 analyze.py . --incremental \
+              --baseline .arch-baseline/architecture.json \
+              --base-sha "${BASE_SHA}" \
+              --head-sha "${{ steps.sha.outputs.sha }}" \
+              -o .arch-output/architecture.json --compact
           else
+            # First run: full scan to establish baseline
             python3 analyze.py . \
               -o .arch-output/architecture.json --compact
+          fi
+
+      - name: Preserve AI Enhancements
+        run: |
+          if [ -f ".arch-baseline/architecture.json" ]; then
+            python3 scripts/merge-ai-enhancements.py \
+              --baseline .arch-baseline/architecture.json \
+              --target .arch-output/architecture.json
+          else
+            echo "No baseline found, skipping AI enhancement merge"
           fi
 
       - name: Collect CI Status
@@ -150,6 +168,12 @@ jobs:
 
       - name: Copy Architecture to Live Directory
         run: cp .arch-output/architecture.json .arch-output/live/architecture.json
+
+      - name: Prepare Baseline for Caching
+        run: |
+          mkdir -p .arch-baseline
+          cp .arch-output/architecture.json .arch-baseline/architecture.json
+          echo "${{ steps.sha.outputs.sha }}" > .arch-baseline/sha
 
       - name: Save Architecture Baseline
         uses: actions/cache/save@v4

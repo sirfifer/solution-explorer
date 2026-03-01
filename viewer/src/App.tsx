@@ -156,6 +156,7 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"graph" | "tree" | "detail">("graph");
   const [summaryDismissed, setSummaryDismissed] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
@@ -632,18 +633,72 @@ export function App() {
       {/* AI summary banner */}
       {architecture.ai_enhance?.summary && !summaryDismissed && (
         <div className={`
-          flex items-start gap-2 px-4 py-2 text-xs shrink-0
+          px-4 py-2 text-xs shrink-0
           ${darkMode ? "bg-indigo-950/30 border-b border-indigo-800/30 text-indigo-300" : "bg-indigo-50 border-b border-indigo-200 text-indigo-700"}
         `}>
-          <span className="shrink-0 mt-0.5">&#x2728;</span>
-          <p className="flex-1 leading-relaxed">{architecture.ai_enhance.summary}</p>
-          <button
-            onClick={() => setSummaryDismissed(true)}
-            className={`shrink-0 p-0.5 rounded ${darkMode ? "hover:bg-indigo-900/40 text-indigo-500" : "hover:bg-indigo-100 text-indigo-400"}`}
-            title="Dismiss"
-          >
-            &#x2715;
-          </button>
+          <div className="flex items-start gap-2">
+            <span className="shrink-0 mt-0.5">&#x2728;</span>
+            <p className="flex-1 leading-relaxed">{architecture.ai_enhance.summary}</p>
+            <div className="flex items-center gap-1 shrink-0">
+              {(architecture.ai_enhance.tech_diversity || architecture.ai_enhance.test_health_summary || architecture.ai_enhance.recent_changes_summary) && (
+                <button
+                  onClick={() => setSummaryExpanded(!summaryExpanded)}
+                  className={`p-0.5 rounded ${darkMode ? "hover:bg-indigo-900/40 text-indigo-500" : "hover:bg-indigo-100 text-indigo-400"}`}
+                  title={summaryExpanded ? "Show less" : "Show more"}
+                >
+                  {summaryExpanded ? "&#x25B2;" : "&#x25BC;"}
+                </button>
+              )}
+              <button
+                onClick={() => setSummaryDismissed(true)}
+                className={`p-0.5 rounded ${darkMode ? "hover:bg-indigo-900/40 text-indigo-500" : "hover:bg-indigo-100 text-indigo-400"}`}
+                title="Dismiss"
+              >
+                &#x2715;
+              </button>
+            </div>
+          </div>
+          {summaryExpanded && (
+            <div className={`mt-2 pt-2 space-y-2 border-t ${darkMode ? "border-indigo-800/30" : "border-indigo-200"}`}>
+              {architecture.ai_enhance.tech_diversity && (
+                <div className="flex items-start gap-2">
+                  <span className={`shrink-0 font-semibold uppercase tracking-wider ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>Tech</span>
+                  <p className="leading-relaxed">{architecture.ai_enhance.tech_diversity}</p>
+                </div>
+              )}
+              {architecture.ai_enhance.test_health_summary && (
+                <div className="flex items-start gap-2">
+                  <span className={`shrink-0 font-semibold uppercase tracking-wider ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>Tests</span>
+                  <p className="leading-relaxed">{architecture.ai_enhance.test_health_summary}</p>
+                </div>
+              )}
+              {architecture.ai_enhance.recent_changes_summary && (
+                <div className="flex items-start gap-2">
+                  <span className={`shrink-0 font-semibold uppercase tracking-wider ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>Recent</span>
+                  <p className="leading-relaxed">{architecture.ai_enhance.recent_changes_summary}</p>
+                </div>
+              )}
+              {architecture.ai_enhance.observations && architecture.ai_enhance.observations.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <span className={`shrink-0 font-semibold uppercase tracking-wider ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>Notes</span>
+                  <div className="space-y-1">
+                    {architecture.ai_enhance.observations.map((obs, i) => (
+                      <div key={i} className="flex items-start gap-1.5">
+                        <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                          obs.confidence === "high"
+                            ? (darkMode ? "bg-indigo-900/40 text-indigo-300" : "bg-indigo-100 text-indigo-600")
+                            : (darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500")
+                        }`}>
+                          {obs.category.replace(/_/g, " ")}
+                        </span>
+                        <span className="leading-relaxed">{obs.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

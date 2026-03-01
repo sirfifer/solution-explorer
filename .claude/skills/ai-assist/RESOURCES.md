@@ -6,11 +6,36 @@
 
 ```typescript
 interface ComponentAIEnhance {
+  // Core fields
   help_text?: string;              // 3-5 sentence explanation for ? tooltip
   architectural_role?: string;     // from vocabulary below, or null
   data_handled?: string;           // what data flows through this component
   criticality?: "critical" | "important" | "supporting";
   testing_assessment?: string;     // 1-2 sentence evaluation of test quality
+
+  // UI actions analysis (populate when component has `actions` array)
+  actions_summary?: string;        // 1-2 sentence summary of UI actions by type
+  key_user_flows?: string[];       // 2-5 key user flows as user-facing descriptions
+
+  // Deeper testing insight (populate when component has `testing` data)
+  testing_gaps?: string[];         // 1-3 specific gaps in test coverage
+  testing_maturity?: "comprehensive" | "adequate" | "minimal" | "untested";
+
+  // External services context (populate when `external_services` exists)
+  external_services_assessment?: string;  // dependencies and critical path analysis
+
+  // Infrastructure context (populate when `port` is set)
+  port_assessment?: string;        // what this port is used for architecturally
+
+  // Codebase health (populate for large components: >5K lines or >20 files)
+  complexity_assessment?: string;  // size/complexity observations
+
+  // Technology context (populate when `language`/`framework` are set)
+  tech_context?: string;           // how tech choices fit the broader architecture
+
+  // Enhancement metadata (always set)
+  ai_enhanced_at?: string;         // ISO timestamp of when enhancement was performed
+  ai_enhance_version?: number;     // schema version, currently 2
 }
 ```
 
@@ -26,6 +51,12 @@ interface RelationshipAIEnhance {
   error_handling?: string;         // how errors are handled on this connection
   sla_notes?: string;              // latency expectations, rate limits, timeouts
   security_notes?: string;         // encryption, certificate pinning, network policies
+
+  // Infrastructure context (populate when relationship has a `port`)
+  port_context?: string;           // what service listens on this port and how
+
+  // Enhancement metadata (always set)
+  ai_enhanced_at?: string;         // ISO timestamp
 }
 ```
 
@@ -45,12 +76,36 @@ The static analyzer may populate these. AI should fill any that remain empty:
 
 ```typescript
 interface ArchitectureAIEnhance {
+  // Core fields
   summary?: string;                // 3-5 sentence executive summary
   data_flow_narrative?: string;    // how a typical request flows through the system
   component_groups?: Array<{
     name: string;
     component_ids: string[];       // component IDs belonging to this group
   }>;
+
+  // Changelog interpretation (populate when `changelog` array exists)
+  recent_changes_summary?: string; // 2-3 sentence summary of recent architectural evolution
+
+  // Analyzer improvement observations
+  observations?: AnalyzerObservation[];
+
+  // Cross-cutting summaries
+  tech_diversity?: string;         // 1-2 sentence summary of technology mix
+  test_health_summary?: string;    // 1-2 sentence overview of testing health
+
+  // Enhancement metadata (always set)
+  ai_enhanced_at?: string;         // ISO timestamp
+  ai_enhance_version?: number;     // schema version, currently 2
+}
+
+interface AnalyzerObservation {
+  category: "missing_relationship" | "misclassified_component" | "naming_issue"
+          | "structural_suggestion" | "detection_gap" | "data_quality";
+  component_id?: string;           // which component this relates to, if any
+  description: string;             // what was observed
+  suggestion?: string;             // what could be improved
+  confidence: "high" | "medium" | "low";
 }
 ```
 
@@ -86,6 +141,22 @@ Use exactly one of these values for `architectural_role`, or null if none apply:
 - **important**: The system works without it but with degraded functionality. Examples: cache layer, search, notification service.
 - **supporting**: Developer tooling, utilities, infrastructure helpers. Examples: logging, monitoring, CI/CD config, test utilities.
 
+## Testing Maturity Guidelines
+
+- **comprehensive**: >80% coverage, multiple test types (unit + integration or e2e), CI integration. Testing is thorough and well-maintained.
+- **adequate**: >50% coverage or reasonable test count proportional to component size. Core paths are tested.
+- **minimal**: Some tests exist but coverage is thin, only one test type, or tests don't cover critical paths.
+- **untested**: Zero test files detected. Use null if no `testing` data exists at all.
+
+## Observation Categories
+
+- **missing_relationship**: A connection between components that the analyzer did not detect but is visible in source code (e.g., HTTP calls, database connections, message queue usage).
+- **misclassified_component**: A component whose `type` or `architectural_role` doesn't match what the code actually does.
+- **naming_issue**: A component `name` that is misleading, too generic, or doesn't reflect the component's purpose.
+- **structural_suggestion**: The component hierarchy could be reorganized for clarity (e.g., a large component should be split, or related components should be grouped).
+- **detection_gap**: A pattern or framework feature the analyzer doesn't detect but should (e.g., a navigation pattern, a service registration mechanism).
+- **data_quality**: Existing analyzer data is incorrect or incomplete (e.g., wrong port, missing framework detection, incorrect language attribution).
+
 ## Importance Guidelines (for relationships)
 
 - **primary**: Core data path. This is how the main user-facing features communicate. Examples: client-to-API calls, API-to-database queries.
@@ -113,7 +184,15 @@ Use exactly one of these values for `architectural_role`, or null if none apply:
     "help_text": "This is the main API server that all client applications communicate with. It receives HTTP requests from the iOS, Android, and web clients, processes them through a service layer, and queries the PostgreSQL database via a repository pattern. It also manages WebSocket connections for real-time collaboration features.",
     "architectural_role": "api-gateway",
     "data_handled": "User authentication tokens, content CRUD operations, real-time collaboration events, file upload metadata",
-    "criticality": "critical"
+    "criticality": "critical",
+    "testing_assessment": "Good coverage with 85% line coverage via Jest. Integration tests cover all major endpoints.",
+    "testing_maturity": "comprehensive",
+    "testing_gaps": ["No load testing for WebSocket connections"],
+    "port_assessment": "Listens on port 8080 as the sole HTTP entry point for all client traffic.",
+    "tech_context": "Express.js with TypeScript, following the service-repository pattern common in Node.js backends.",
+    "external_services_assessment": "Depends on Stripe for payments (critical path) and SendGrid for email (degraded without it).",
+    "ai_enhanced_at": "2026-03-01T12:00:00Z",
+    "ai_enhance_version": 2
   }
 }
 ```
@@ -173,7 +252,28 @@ Use exactly one of these values for `architectural_role`, or null if none apply:
       { "name": "Client Layer", "component_ids": ["ios-app", "web-app"] },
       { "name": "API Layer", "component_ids": ["backend/api"] },
       { "name": "Data Layer", "component_ids": ["postgres", "redis-cache"] }
-    ]
+    ],
+    "recent_changes_summary": "Over the last 3 updates, a NotificationWorker was added for async email delivery and the API server gained WebSocket support. The architecture is evolving toward event-driven patterns.",
+    "tech_diversity": "Primarily TypeScript (72%) with Swift (28%) for the iOS client. Backend and web share TypeScript for maximum code reuse.",
+    "test_health_summary": "4 of 5 components have tests. API server has comprehensive coverage (85%), but the iOS client has minimal testing (12% coverage, unit tests only).",
+    "observations": [
+      {
+        "category": "missing_relationship",
+        "component_id": "backend/api",
+        "description": "API server references Redis for session storage but no cache relationship was detected by the analyzer.",
+        "suggestion": "Add Redis connection pattern detection for ioredis/node-redis imports.",
+        "confidence": "high"
+      },
+      {
+        "category": "detection_gap",
+        "component_id": "ios-app",
+        "description": "SwiftUI sheet presentations in SettingsView are not detected as navigation relationships.",
+        "suggestion": "Extend SwiftUIFlowDetector to handle .sheet(item:) with dynamic destinations.",
+        "confidence": "medium"
+      }
+    ],
+    "ai_enhanced_at": "2026-03-01T12:00:00Z",
+    "ai_enhance_version": 2
   }
 }
 ```

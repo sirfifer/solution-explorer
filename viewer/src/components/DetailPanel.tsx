@@ -1106,6 +1106,102 @@ function AIInsightsTab({
           </div>
         </div>
       )}
+
+      {/* User interactions */}
+      {ai.actions_summary && (
+        <div>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            User Interactions
+          </h4>
+          <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+            {ai.actions_summary}
+          </p>
+          {ai.key_user_flows && ai.key_user_flows.length > 0 && (
+            <ul className={`mt-2 space-y-1 text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+              {ai.key_user_flows.map((flow, i) => (
+                <li key={i} className="flex items-start gap-1.5">
+                  <span className="shrink-0 mt-0.5 text-xs">&#x2022;</span>
+                  <span>{flow}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Testing health */}
+      {ai.testing_maturity && (
+        <div>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            Testing Health
+          </h4>
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              ai.testing_maturity === "comprehensive"
+                ? (darkMode ? "bg-emerald-900/40 text-emerald-300" : "bg-emerald-100 text-emerald-700")
+                : ai.testing_maturity === "adequate"
+                  ? (darkMode ? "bg-blue-900/40 text-blue-300" : "bg-blue-100 text-blue-700")
+                  : ai.testing_maturity === "minimal"
+                    ? (darkMode ? "bg-amber-900/40 text-amber-300" : "bg-amber-100 text-amber-700")
+                    : (darkMode ? "bg-red-900/40 text-red-300" : "bg-red-100 text-red-700")
+            }`}>
+              {ai.testing_maturity}
+            </span>
+          </div>
+          {ai.testing_gaps && ai.testing_gaps.length > 0 && (
+            <ul className="space-y-1">
+              {ai.testing_gaps.map((gap, i) => (
+                <li key={i} className={`text-xs flex items-start gap-1.5 ${darkMode ? "text-amber-400/80" : "text-amber-600"}`}>
+                  <span className="shrink-0 mt-0.5">&#x26A0;</span>
+                  <span>{gap}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Infrastructure and context */}
+      {(ai.port_assessment || ai.external_services_assessment || ai.tech_context) && (
+        <div className="space-y-3">
+          {ai.tech_context && (
+            <div>
+              <h4 className={`text-xs font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                Technology
+              </h4>
+              <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{ai.tech_context}</p>
+            </div>
+          )}
+          {ai.port_assessment && (
+            <div>
+              <h4 className={`text-xs font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                Network
+              </h4>
+              <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{ai.port_assessment}</p>
+            </div>
+          )}
+          {ai.external_services_assessment && (
+            <div>
+              <h4 className={`text-xs font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                External Services
+              </h4>
+              <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{ai.external_services_assessment}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Complexity */}
+      {ai.complexity_assessment && (
+        <div>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            Complexity
+          </h4>
+          <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+            {ai.complexity_assessment}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -12,9 +12,11 @@ descriptions and annotations, and deploy the interactive architecture viewer.
 
 ```
 /ai-assist <path-to-codebase>
+/ai-assist <path-to-codebase> --update
 ```
 
 - `path-to-codebase`: absolute path to the project/repo to analyze
+- `--update`: skip re-analysis, enhance only new/changed components (see Step 1b)
 
 ## Workflow
 
@@ -33,6 +35,32 @@ python3 /Users/ramerman/dev/solution-explorer/analyze.py <codebase-path> \
 If `viewer/public/architecture.json` already exists from a previous run, ask the
 user whether to re-analyze from scratch or enhance the existing file.
 
+### Step 1b: Update mode (when --update is specified)
+
+When `--update` is provided, skip the analyzer run entirely. The JSON must already
+exist at `viewer/public/architecture.json`.
+
+1. Read the existing architecture JSON.
+2. Determine the "core update set" of components that need re-enhancement:
+   - Components with no `ai_enhance` at all (newly added, never enhanced)
+   - Components where `ai_enhance.ai_enhanced_at` is older than the architecture's
+     `generated_at` timestamp (stale after re-analysis)
+   - Components listed in the most recent `changelog` entries as `component_added`
+     or `component_modified`
+3. Expand the update set to include **direct neighbors**: any component connected to
+   a core update set member via a relationship (source or target). This catches
+   ripple effects where a change in one component affects how its neighbors should
+   be described.
+4. Report scope to user: "Update mode: N core + M neighbor components to re-enhance
+   out of T total."
+5. Proceed to Step 2, but only read source files for the expanded update set.
+6. Proceed to Step 3, but only modify `ai_enhance` for the expanded update set.
+   Preserve existing `ai_enhance` data on all other components untouched.
+7. Always regenerate architecture-level `ai_enhance` (Step 3c) since the overall
+   narrative may have shifted.
+
+Then continue to Steps 4-6 as normal.
+
 ### Step 2: Load and understand the architecture
 
 Read the resulting JSON. Process EVERY component at ALL levels of nesting:
@@ -49,6 +77,22 @@ Read the resulting JSON. Process EVERY component at ALL levels of nesting:
 3. Read the selected source files and understand what each component does
    architecturally
 4. Note any relationships the static analyzer may have missed
+5. For each component, also examine the analyzer's structured data:
+   - `actions` array: count UI actions by type (buttons, gestures, forms, etc.),
+     identify the key user flows they represent
+   - `testing` object: note test_files, unit/integration/e2e counts, coverage %,
+     frameworks. Assess testing maturity and identify gaps.
+   - `external_services` array: understand third-party dependencies and whether
+     any are on the critical path
+   - `port` field: understand what network service this component exposes
+   - `entry_points` array: understand how the component is invoked
+   - `metrics` object: note component size (lines, files, symbols) for complexity
+     assessment
+   - `language` and `framework` fields: understand the technology choices
+6. At the architecture level, examine:
+   - `changelog` array: understand recent evolution (components added, removed,
+     modified) to summarize architectural trends
+   - `stats`: aggregate language and size data for cross-cutting summaries
 
 ### Step 3: Enhance the JSON
 
@@ -74,6 +118,8 @@ position in the hierarchy.
 - `docs.patterns`: verify and supplement detected patterns.
 
 **New `ai_enhance` sub-object** (add to each component):
+
+Core fields:
 - `help_text` (string): 3-5 sentence explanation for a help tooltip. Cover what it is,
   what it depends on, and what depends on it. Written for someone reviewing the architecture.
 - `architectural_role` (string|null): one value from the vocabulary in RESOURCES.md, or null.
@@ -82,6 +128,36 @@ position in the hierarchy.
   without it, important means degraded behavior, supporting means convenience or tooling.
 - `testing_assessment` (string|null): 1-2 sentence evaluation of test quality when
   `testing` data exists. Consider coverage %, test type distribution, and likely gaps.
+
+UI actions analysis (populate when `actions` array exists on the component):
+- `actions_summary` (string|null): 1-2 sentence summary of the user interactions
+  available. Group by type (buttons, gestures, forms, etc.) and call out destructive
+  or critical actions. Null if no actions exist.
+- `key_user_flows` (string[]|null): 2-5 key user flows this component enables,
+  written as user-facing descriptions (e.g., "Submit payment form", "Navigate to
+  settings"). Null if no actions exist.
+
+Deeper testing insight (populate when `testing` data exists):
+- `testing_gaps` (string[]|null): 1-3 specific gaps in test coverage. Consider:
+  missing test types (e.g., no integration tests for an API component), low coverage
+  areas, critical paths without tests. Null if testing data absent or comprehensive.
+- `testing_maturity` ("comprehensive"|"adequate"|"minimal"|"untested"|null):
+  See RESOURCES.md for thresholds. Null if no testing data exists.
+
+Context fields (populate when the relevant source data exists):
+- `external_services_assessment` (string|null): When `external_services` exists,
+  describe the dependencies and whether any are on the critical path.
+- `port_assessment` (string|null): When `port` is set, explain what this port is
+  used for in the architecture context.
+- `complexity_assessment` (string|null): When the component has significant
+  `metrics` (>5000 lines or >20 files), provide a brief assessment of complexity
+  and whether decomposition might be warranted. Null for small components.
+- `tech_context` (string|null): When `language` and/or `framework` are set,
+  describe how this component's technology choices fit the broader architecture.
+
+Enhancement metadata (always set):
+- `ai_enhanced_at`: current ISO timestamp (e.g., "2026-03-01T12:00:00Z").
+- `ai_enhance_version`: set to 2.
 
 #### 3b. Relationship enhancements
 
@@ -106,6 +182,9 @@ For every existing relationship:
 - `error_handling` (string|null): how errors are handled on this connection.
 - `sla_notes` (string|null): latency expectations, rate limits, timeouts.
 - `security_notes` (string|null): encryption, certificate pinning, network policies.
+- `port_context` (string|null): When the relationship has a `port`, explain what
+  service listens there and how the connection is managed.
+- `ai_enhanced_at`: current ISO timestamp.
 
 **Discover missing relationships**: Look for connections the static analyzer missed:
 - HTTP calls inferred from URL construction or API client usage
@@ -132,9 +211,35 @@ Add to the root Architecture object:
     { "name": "Client Layer", "component_ids": ["ios-app", "web-app"] },
     { "name": "API Layer", "component_ids": ["api-server"] },
     { "name": "Data Layer", "component_ids": ["postgres", "redis"] }
-  ]
+  ],
+  "recent_changes_summary": "2-3 sentence summary when changelog exists.",
+  "tech_diversity": "1-2 sentence summary of the technology mix.",
+  "test_health_summary": "1-2 sentence overview of testing across the codebase.",
+  "observations": [],
+  "ai_enhanced_at": "2026-03-01T12:00:00Z",
+  "ai_enhance_version": 2
 }
 ```
+
+**Changelog interpretation:** When the architecture has a `changelog` array, read
+the recent entries and summarize the architectural evolution in `recent_changes_summary`.
+What components were added or removed? What trend do the changes suggest?
+
+**Cross-cutting summaries:**
+- `tech_diversity`: Aggregate from `stats.languages` and component `language` fields.
+  Describe the technology mix and what it means architecturally.
+- `test_health_summary`: Aggregate from component `testing` data. What percentage of
+  components have tests? Where are the biggest gaps?
+
+**Observations:** After enhancing all components and relationships, compile a list of
+observations about potential improvements to the automated analysis. Each observation
+should include a `category`, `description`, optional `component_id`, optional `suggestion`,
+and `confidence` level. See RESOURCES.md for valid categories and guidelines.
+
+Focus observations on things that would genuinely improve the analyzer output: missing
+relationships that the analyzer should detect, components that are misclassified,
+names that are misleading, or patterns the analyzer doesn't handle yet. Aim for 3-10
+high-quality observations rather than exhaustive lists.
 
 ### Step 4: Write the enhanced JSON
 
@@ -156,30 +261,41 @@ Verify the output is valid and loadable:
 python3 -c "import json; d=json.load(open('/Users/ramerman/dev/solution-explorer/viewer/public/architecture.json')); print(f'OK: {len(d[\"components\"])} components, {len(d[\"relationships\"])} relationships')"
 ```
 
-Then verify 100% AI enhancement coverage:
+Then verify 100% AI enhancement coverage and metadata:
 
 ```bash
 python3 -c "
 import json
 
 def check(components):
-    missing, total = [], 0
+    missing, stale, total = [], [], 0
     for c in components:
         total += 1
-        if 'ai_enhance' not in c or not c['ai_enhance']:
+        ai = c.get('ai_enhance')
+        if not ai:
             missing.append(c.get('id', 'unknown'))
-        m, t = check(c.get('children', []))
+        elif not ai.get('ai_enhanced_at'):
+            stale.append(c.get('id', 'unknown'))
+        m, s, t = check(c.get('children', []))
         missing.extend(m)
+        stale.extend(s)
         total += t
-    return missing, total
+    return missing, stale, total
 
 d = json.load(open('/Users/ramerman/dev/solution-explorer/viewer/public/architecture.json'))
-missing, total = check(d['components'])
+missing, stale, total = check(d['components'])
+obs = len(d.get('ai_enhance', {}).get('observations', []))
+version = d.get('ai_enhance', {}).get('ai_enhance_version', 'not set')
+
 if missing:
     print(f'INCOMPLETE: {len(missing)}/{total} components missing ai_enhance:')
     for m in missing: print(f'  - {m}')
 else:
     print(f'OK: all {total} components have ai_enhance data')
+if stale:
+    print(f'WARNING: {len(stale)} components missing ai_enhanced_at timestamp')
+print(f'Schema version: {version}')
+print(f'Observations: {obs}')
 "
 ```
 
@@ -265,10 +381,11 @@ git commit -m "Update AI-enhanced architecture visualization"
 git push
 ```
 
-The push to main automatically triggers the Architecture Visualization workflow
-since the target repo's workflow fires on `push: branches: [main]`. The workflow
-detects the pre-built `architecture.json` and uses it instead of running the
-analyzer, preserving all AI enhancements.
+The push to main automatically triggers the Architecture Visualization and Live
+Monitor workflows. These workflows run the analyzer fresh but include a
+"Preserve AI Enhancements" step that merges `ai_enhance` data from the committed
+`architecture.json` (or cached baseline) back into the fresh analysis output. This
+ensures all AI enhancements survive through CI-triggered re-analysis.
 
 If the current branch is not main, warn the user that deployment to production
 only triggers on push to main.

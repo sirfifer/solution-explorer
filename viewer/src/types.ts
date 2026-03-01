@@ -77,11 +77,29 @@ export interface ComponentTesting {
 
 // AI enhancement data (optional, present only when AI assist has been run)
 export interface ComponentAIEnhance {
+  // Core fields
   help_text?: string;
   architectural_role?: string;
   data_handled?: string;
   criticality?: "critical" | "important" | "supporting";
   testing_assessment?: string;
+  // UI actions analysis
+  actions_summary?: string;
+  key_user_flows?: string[];
+  // Deeper testing insight
+  testing_gaps?: string[];
+  testing_maturity?: "comprehensive" | "adequate" | "minimal" | "untested";
+  // External services context
+  external_services_assessment?: string;
+  // Infrastructure context
+  port_assessment?: string;
+  // Codebase health
+  complexity_assessment?: string;
+  // Technology context
+  tech_context?: string;
+  // Enhancement metadata
+  ai_enhanced_at?: string;
+  ai_enhance_version?: number;
 }
 
 export interface RelationshipAIEnhance {
@@ -93,12 +111,35 @@ export interface RelationshipAIEnhance {
   error_handling?: string;
   sla_notes?: string;
   security_notes?: string;
+  // Infrastructure context
+  port_context?: string;
+  // Enhancement metadata
+  ai_enhanced_at?: string;
+}
+
+export interface AnalyzerObservation {
+  category: "missing_relationship" | "misclassified_component" | "naming_issue"
+          | "structural_suggestion" | "detection_gap" | "data_quality";
+  component_id?: string;
+  description: string;
+  suggestion?: string;
+  confidence: "high" | "medium" | "low";
 }
 
 export interface ArchitectureAIEnhance {
   summary?: string;
   data_flow_narrative?: string;
   component_groups?: Array<{ name: string; component_ids: string[] }>;
+  // Changelog interpretation
+  recent_changes_summary?: string;
+  // Analyzer improvement observations
+  observations?: AnalyzerObservation[];
+  // Cross-cutting summaries
+  tech_diversity?: string;
+  test_health_summary?: string;
+  // Enhancement metadata
+  ai_enhanced_at?: string;
+  ai_enhance_version?: number;
 }
 
 // Live monitoring types
