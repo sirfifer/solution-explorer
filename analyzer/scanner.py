@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from .action_detector import UIActionDetector
 from .config_parsers import (
     parse_cargo_toml,
     parse_docker_compose,
@@ -58,7 +59,6 @@ from .models import (
     Symbol,
     to_dict,
 )
-from .action_detector import UIActionDetector
 from .parsers import PARSERS
 from .swiftui_flow import SwiftUIFlowDetector
 from .utils import (
