@@ -106,6 +106,7 @@ interface AnalyzerObservation {
   description: string;             // what was observed
   suggestion?: string;             // what could be improved
   confidence: "high" | "medium" | "low";
+  sources?: string[];              // Phase 4 assembly only: partition IDs that reported this
 }
 ```
 
@@ -162,6 +163,193 @@ Use exactly one of these values for `architectural_role`, or null if none apply:
 - **primary**: Core data path. This is how the main user-facing features communicate. Examples: client-to-API calls, API-to-database queries.
 - **secondary**: Used regularly but not on the critical path. Examples: cache lookups, async notification delivery, analytics events.
 - **internal**: Implementation detail, not architecturally significant. Examples: utility imports, shared type definitions, internal module dependencies.
+
+## DPEA Pipeline Templates
+
+### Terminology Glossary Template (Phase 1 Digest)
+
+The digest agent produces a terminology glossary that all downstream subagents
+must follow. This prevents terminology drift across partitions.
+
+```markdown
+## Terminology Glossary
+| Term | Canonical Name | Do NOT use |
+|------|---------------|------------|
+| The primary database | PostgreSQL database | DB, Postgres, data store, persistence layer |
+| User authentication | JWT authentication | auth, login system, token auth |
+| The iOS client | iOS app | mobile app, iPhone app, client |
+| REST API calls | HTTP requests | API calls, network calls, server calls |
+```
+
+**Rules for glossary construction:**
+- Include every domain-specific entity (services, protocols, data models)
+- Include technology names with their canonical form
+- List 2-4 synonyms to avoid for each term
+- Downstream agents MUST use the exact canonical name
+- Phase 4 normalization checks for violations
+
+### Criticality Calibration Template (Phase 1 Digest)
+
+The digest agent produces calibration guidance so subagents rate criticality
+consistently across partitions.
+
+```markdown
+## Criticality Calibration
+
+In this codebase:
+- "critical" means: Components on the primary user-facing request path.
+  Without these, users cannot use the application at all.
+  Examples: backend/api (sole API entry point, 45 inbound relationships),
+  postgres (primary data store, all state lives here).
+  Guideline: typically 10-15% of components in a well-architected system.
+
+- "important" means: Components that provide significant functionality but
+  whose absence degrades rather than breaks the system.
+  Examples: redis-cache (performance degrades without caching),
+  notification-worker (emails stop but core features work).
+  Guideline: typically 25-35% of components.
+
+- "supporting" means: Developer tooling, utilities, monitoring, logging,
+  CI/CD configuration, test utilities, and leaf-node UI screens that are
+  not on the critical path.
+  Guideline: typically 50-65% of components.
+
+Structural signals for criticality assessment:
+- >10 inbound relationships: likely critical or important
+- Articulation point in dependency graph: likely critical
+- 0 inbound relationships (leaf node): likely supporting
+- Component on the primary data flow path: likely critical
+```
+
+### Quality Rubric (Phase 3 Subagent Context)
+
+Include these calibration examples in every subagent prompt to ensure
+consistent quality. Each example shows the expected level of detail.
+
+**Good help_text (4 sentences, specific, references neighbors):**
+> "The UserService handles all user lifecycle operations including registration,
+> profile updates, and account deletion. It is called by the API Gateway for
+> every authenticated request to validate user sessions. It writes to the
+> PostgreSQL database via the UserRepository and publishes user events to the
+> event bus for downstream consumers. Without this service, no authenticated
+> operations can proceed."
+
+**Bad help_text (too vague, no context):**
+> "This service manages users. It handles CRUD operations."
+
+**Good data_handled (specific data types):**
+> "User profile objects, authentication tokens, session metadata, password hashes, email verification codes"
+
+**Bad data_handled (too generic):**
+> "User data"
+
+**Good criticality justification:**
+> Criticality: "critical" because this is the sole API entry point with 32 inbound
+> relationships and is an articulation point in the dependency graph. Per the digest
+> calibration, components on the primary request path are critical.
+
+**Bad criticality justification:**
+> Criticality: "critical" because it seems important.
+
+### Partition Result Format (Phase 3 Output)
+
+Each subagent writes its output as `enhancement/result-{n}.json`:
+
+```json
+{
+  "partition_id": 0,
+  "components": {
+    "backend/api": {
+      "help_text": "...",
+      "architectural_role": "api-gateway",
+      "data_handled": "...",
+      "criticality": "critical",
+      "testing_assessment": "...",
+      "testing_maturity": "comprehensive",
+      "testing_gaps": ["..."],
+      "port_assessment": "...",
+      "tech_context": "...",
+      "ai_enhanced_at": "2026-03-01T12:00:00Z",
+      "ai_enhance_version": 2
+    }
+  },
+  "component_fields": {
+    "backend/api": {
+      "description": "REST API server handling all client requests.",
+      "docs": {
+        "purpose": "Central API mediating between clients and data.",
+        "key_decisions": ["JWT auth with refresh tokens"],
+        "patterns": ["Service Layer", "Repository Pattern"]
+      }
+    }
+  },
+  "relationships": {
+    "ios-app|backend/api|http": {
+      "data_flow_description": "iOS app sends authenticated REST requests.",
+      "importance": "primary",
+      "authentication_detail": "JWT tokens with refresh rotation.",
+      "ai_enhanced_at": "2026-03-01T12:00:00Z"
+    }
+  },
+  "relationship_fields": {
+    "ios-app|backend/api|http": {
+      "label": "REST API calls",
+      "authentication": "jwt",
+      "data_format": "json",
+      "api_style": "rest"
+    }
+  },
+  "discovered_relationships": [],
+  "local_observations": [
+    {
+      "category": "missing_relationship",
+      "component_id": "backend/api",
+      "description": "API server imports ioredis but no Redis relationship exists.",
+      "suggestion": "Add Redis connection detection for ioredis imports.",
+      "confidence": "high"
+    }
+  ]
+}
+```
+
+### Phase 4 Adjustments Format
+
+The assembly agent writes `enhancement/adjustments.json`:
+
+```json
+{
+  "terminology_replacements": [
+    {
+      "component_id": "backend/workers",
+      "field": "help_text",
+      "old": "Postgres database",
+      "new": "PostgreSQL database"
+    }
+  ],
+  "criticality_overrides": [
+    {
+      "component_id": "shared/utils",
+      "old": "critical",
+      "new": "supporting",
+      "reason": "Leaf node with 0 inbound relationships, no evidence of critical path involvement."
+    }
+  ],
+  "aggregated_observations": [
+    {
+      "category": "missing_relationship",
+      "component_id": "backend/api",
+      "description": "Multiple subagents flagged Redis connection not detected.",
+      "suggestion": "Add Redis connection detection for ioredis/node-redis.",
+      "confidence": "high",
+      "sources": ["partition-0", "partition-2"]
+    }
+  ],
+  "quality_flags": [
+    "Partition 3 has unusually short help_text (avg 2.1 sentences vs 3.8 overall)",
+    "No data-access roles assigned across 256 components, likely a gap"
+  ]
+}
+```
 
 ## Example: Enhanced Component
 

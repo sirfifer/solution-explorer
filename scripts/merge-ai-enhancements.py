@@ -64,13 +64,29 @@ def merge(baseline, target):
         if "ai_enhance" in rel:
             baseline_rels[_make_rel_key(rel)] = rel["ai_enhance"]
 
-    rel_stats = {"preserved": 0, "total": 0}
+    rel_stats = {"preserved": 0, "total": 0, "ai_discovered_carried": 0}
+    target_rel_keys = set()
     for rel in target.get("relationships", []):
         key = _make_rel_key(rel)
+        target_rel_keys.add(key)
         if key in baseline_rels:
             rel["ai_enhance"] = baseline_rels[key]
             rel_stats["preserved"] += 1
         rel_stats["total"] += 1
+
+    # Forward-carry AI-discovered relationships from baseline.
+    # These only exist in the baseline (the static analyzer does not produce them),
+    # so they would be silently dropped without this step.
+    for rel in baseline.get("relationships", []):
+        ai = rel.get("ai_enhance", {})
+        if not ai.get("ai_discovered"):
+            continue
+        key = _make_rel_key(rel)
+        if key not in target_rel_keys:
+            target.setdefault("relationships", []).append(rel)
+            target_rel_keys.add(key)
+            rel_stats["ai_discovered_carried"] += 1
+            rel_stats["total"] += 1
 
     # Architecture-level merge
     if "ai_enhance" in baseline:
@@ -133,10 +149,13 @@ def main():
     with open(target_path, "w", encoding="utf-8") as f:
         json.dump(target, f, indent=None, ensure_ascii=False)
 
+    carried = rel_stats['ai_discovered_carried']
+    carried_msg = f" {carried} AI-discovered relationships carried forward." if carried else ""
     print(
         f"AI enhancement merge: "
         f"{comp_stats['preserved']}/{comp_stats['total']} components, "
-        f"{rel_stats['preserved']}/{rel_stats['total']} relationships preserved. "
+        f"{rel_stats['preserved']}/{rel_stats['total']} relationships preserved."
+        f"{carried_msg} "
         f"{comp_stats['missing']} components without ai_enhance."
     )
 

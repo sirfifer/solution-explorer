@@ -75,6 +75,32 @@ def build_component_dependency_graph(baseline: dict) -> dict[str, set[str]]:
     return dict(graph)
 
 
+def build_architectural_neighbor_graph(baseline: dict) -> dict[str, set[str]]:
+    """Build an undirected neighbor map using ALL relationship types.
+
+    Unlike ``build_component_dependency_graph`` (import-only, directed),
+    this considers every relationship type (http, websocket, database,
+    import, etc.) and treats them as bidirectional. When component A has
+    any relationship with component B, both A and B appear in each
+    other's neighbor set.
+
+    This is used for AI enhancement expansion: if a server changes its
+    auth scheme, the client's relationship description is stale even
+    though the client is not an *import* neighbor.
+
+    Returns a dict mapping each component ID to the set of component IDs
+    that are architecturally related to it via any relationship.
+    """
+    graph: dict[str, set[str]] = defaultdict(set)
+    for rel in baseline.get("relationships", []):
+        source = rel.get("source", "")
+        target = rel.get("target", "")
+        if source and target and source != target:
+            graph[source].add(target)
+            graph[target].add(source)
+    return dict(graph)
+
+
 # ------------------------------------------------------------------
 # K.2: Selective file re-scanning
 # ------------------------------------------------------------------
