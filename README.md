@@ -173,6 +173,7 @@ pip install -e ".[all]"          # Everything above
 | **Frameworks** | SwiftUI, UIKit, React, Next.js, Flask, Django, Axum, Express, Vue, Rails, Sinatra, and more |
 | **Documentation** | README, CLAUDE.md, CHANGELOG, API endpoints, env vars, architectural patterns |
 | **Cloud Services** | AWS, Firebase, Supabase, and other external service references |
+| **UI Actions** | Buttons, tap/long-press gestures, toolbar items, context menus, swipe actions (Swift and TypeScript) |
 | **SwiftUI Flows** | TabView tabs, NavigationLink targets, sheet/fullScreenCover destinations, embedded view composition |
 
 ## Viewer Features
@@ -185,7 +186,10 @@ pip install -e ".[all]"          # Everything above
 - **Code preview**: Inline syntax-highlighted code for every symbol
 - **Relationship visualization**: Arrows show dependencies, HTTP connections, and AI-discovered relationships
 - **Tree sidebar**: Collapsible component tree for quick navigation
+- **Source linking**: Clickable links from symbols and files to their GitHub source code
+- **URL deep linking**: Shareable URLs that encode selected component, tab, and drill-down state
 - **Review mode**: Add architectural annotations to components, then view a summary of all feedback
+- **Architecture changelog**: Track component additions, removals, and modifications over time
 - **AI enhancements**: Role badges, criticality indicators, help text tooltips, and data flow descriptions (when AI data is present)
 - **Live monitoring**: CI status overlay on components, admin dashboard with version history and activity log
 - **Dark/light mode**: Toggle with one click, persisted in localStorage
@@ -350,6 +354,9 @@ Run `bash build.sh` and copy `viewer/dist/` to your server or bucket.
 
     # Enable live monitoring data generation
     live-monitor: 'false'
+
+    # Version override (defaults to the action ref tag)
+    version: ''
 ```
 
 ## CLI Options
@@ -564,6 +571,7 @@ solution-explorer/
 │   ├── cli.py              # Argument parsing, split/single-file output
 │   ├── models.py           # Dataclasses: Component, Symbol, Relationship, etc.
 │   ├── scanner.py          # ArchitectureScanner (component discovery, metrics, docs)
+│   ├── action_detector.py  # UI action detection (buttons, gestures, menus)
 │   ├── incremental.py      # Incremental analysis engine (selective rescan)
 │   ├── swiftui_flow.py     # SwiftUI navigation/tab flow detection
 │   ├── multi_repo.py       # Multi-repo orchestration
@@ -591,15 +599,16 @@ solution-explorer/
 │   └── src/templates/      # Workflow and config templates
 ├── infrastructure/         # Optional backend infrastructure
 │   └── cloudflare/         # Cloudflare Worker for live monitoring
-├── scripts/                # CI helper scripts
+├── scripts/                # CI and AI enhancement helper scripts
 ├── tests/                  # Python test suite
 ├── action.yml              # Reusable GitHub Action definition
 ├── pyproject.toml          # Python project configuration
 └── viewer/                 # React/TypeScript frontend
     ├── src/
-    │   ├── components/     # React components (graph, nodes, panels, search, admin)
-    │   ├── hooks/          # useLiveMonitor, useAdminData
-    │   ├── utils/          # Layout engine, search, status, documentation
+    │   ├── components/     # React components (graph, nodes, panels, search)
+    │   │   └── admin/      # Admin dashboard tabs (activity, health, history)
+    │   ├── hooks/          # useLiveMonitor, useAdminData, useBottomSheet
+    │   ├── utils/          # Layout, search, source links, URL state, prompts
     │   ├── store.ts        # Zustand state management (drill-down, lazy loading)
     │   └── types.ts        # TypeScript type definitions
     ├── vite.config.ts      # Build configuration
@@ -612,7 +621,8 @@ solution-explorer/
 - [Architecture](docs/architecture.md): Technical architecture and design decisions
 - [Architectural Assessment](docs/architectural-assessment.md): Evolution plan and industry research
 - [Analyzer Package](docs/analyzer-package.md): Analyzer module structure and extension guide
-- [Live Monitoring Research](docs/research/live-architecture-monitoring.md): Live architecture design and cost analysis
+- [Live Monitoring Status](docs/live-architecture-status.md): Live architecture monitoring status and configuration
+- [DPEA Pattern](docs/research/scalable-ai-enhancement-dpea-pattern.md): Scalable AI enhancement pipeline design
 - [Deployments](DEPLOYMENTS.md): Installation tracking and redeployment guide
 
 ## License
