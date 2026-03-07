@@ -80,21 +80,60 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
-        # Use pre-built architecture JSON only on push events (AI-enhanced flow).
+        OUTPUT_DIR=".solution-explorer/viewer/public/architecture"
+        SINGLE_FILE=".solution-explorer/viewer/public/architecture.json"
+
+        # Use pre-built architecture data only on push events (AI-enhanced flow).
         # On workflow_dispatch or pull_request, always run fresh analysis.
-        if [ "${{ github.event_name }}" = "push" ] && [ -f "architecture.json" ]; then
+        if [ "${{ github.event_name }}" = "push" ] && [ -f "architecture/manifest.json" ]; then
+          # Split-mode pre-built data (DPEA pipeline output)
+          echo "Using pre-built architecture directory (AI-enhanced, split mode)"
+          mkdir -p "$OUTPUT_DIR"
+          cp -r architecture/* "$OUTPUT_DIR/"
+        elif [ "${{ github.event_name }}" = "push" ] && [ -f "architecture.json" ]; then
+          # Legacy single-file pre-built data
           echo "Using pre-built architecture JSON (AI-enhanced)"
-          mkdir -p .solution-explorer/viewer/public
-          cp architecture.json \
-            .solution-explorer/viewer/public/architecture.json
+          mkdir -p "$(dirname "$SINGLE_FILE")"
+          cp architecture.json "$SINGLE_FILE"
         elif [ -n "${{ inputs.config }}" ]; then
           python3 .solution-explorer/analyze.py \
             --config "${{ inputs.config }}" \
-            -o .solution-explorer/viewer/public/architecture.json --compact
+            --split -o "$OUTPUT_DIR" --compact
         else
           python3 .solution-explorer/analyze.py \
             "${{ inputs.path }}" \
-            -o .solution-explorer/viewer/public/architecture.json --compact
+            --split -o "$OUTPUT_DIR" --compact
+        fi
+
+    - name: Preserve AI Enhancements
+      shell: bash
+      run: |
+        OUTPUT_DIR=".solution-explorer/viewer/public/architecture"
+        BASELINE_DIR="architecture"
+        BASELINE_FILE="architecture.json"
+
+        # If we ran fresh analysis (not pre-built), merge AI enhancements from baseline.
+        # The baseline is the previously committed architecture data in the target repo.
+        if [ "${{ github.event_name }}" != "push" ] || { [ ! -f "$BASELINE_DIR/manifest.json" ] && [ ! -f "$BASELINE_FILE" ]; }; then
+          # Determine which baseline format exists
+          if [ -f "$BASELINE_DIR/manifest.json" ]; then
+            echo "Merging AI enhancements from baseline (split mode)"
+            python3 .solution-explorer/scripts/merge-ai-enhancements.py \
+              --baseline "$BASELINE_DIR/manifest.json" \
+              --target "$OUTPUT_DIR/manifest.json"
+          elif [ -f "$BASELINE_FILE" ]; then
+            echo "Merging AI enhancements from baseline (single file)"
+            # For single-file baseline, merge into the split-mode manifest
+            if [ -f "$OUTPUT_DIR/manifest.json" ]; then
+              python3 .solution-explorer/scripts/merge-ai-enhancements.py \
+                --baseline "$BASELINE_FILE" \
+                --target "$OUTPUT_DIR/manifest.json"
+            fi
+          else
+            echo "No baseline found, skipping AI enhancement merge"
+          fi
+        else
+          echo "Using pre-built data, skipping merge"
         fi
 
     - name: Build Viewer
