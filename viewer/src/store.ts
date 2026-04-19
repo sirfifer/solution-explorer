@@ -17,6 +17,7 @@ import type {
   ChangelogEntry,
 } from "./types";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
+import { safeComponentId } from "./utils/componentId";
 
 // Storage key for dark mode preference (localStorage for persistence across sessions)
 const DARK_MODE_KEY = "arch-dark-mode";
@@ -580,7 +581,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     if (arch && arch.files.length > 0) return null;
 
     set({ componentDetailLoading: componentId });
-    const safeId = componentId.replace(/\//g, "--");
+    const safeId = safeComponentId(componentId);
     try {
       const res = await fetch(`./architecture/data/detail-${safeId}.json`);
       if (res.ok) {

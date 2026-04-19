@@ -272,6 +272,20 @@ def _apply_changelog(arch_dict: dict, output_path: Path) -> None:
     IncrementalAnalyzer._append_changelog(arch_dict, entry, baseline)
 
 
+def safe_component_id(comp_id: str) -> str:
+    """Make a component ID safe for use as a filename on NTFS and GitHub artifacts.
+
+    GitHub's actions/upload-artifact rejects filenames containing any of:
+    " : < > | * ? \\r \\n (NTFS-incompatible characters). Component IDs like
+    "repo:unamentis" (from multi-repo mode) hit this. Viewer's loadComponentDetail
+    must use the same escape scheme.
+    """
+    return (
+        comp_id.replace("/", "--")
+        .replace(":", "__")
+    )
+
+
 def write_split(arch_dict: dict, output_dir: Path, indent):
     """Write split output: manifest.json + per-component detail files."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -287,7 +301,7 @@ def write_split(arch_dict: dict, output_dir: Path, indent):
     def process_components(components):
         for comp in components:
             comp_id = comp["id"]
-            safe_id = comp_id.replace("/", "--")
+            safe_id = safe_component_id(comp_id)
 
             # Collect files for this component
             comp_files = [all_file_paths[fp] for fp in comp.get("files", []) if fp in all_file_paths]

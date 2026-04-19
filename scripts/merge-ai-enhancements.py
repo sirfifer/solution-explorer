@@ -159,6 +159,37 @@ def main():
         f"{comp_stats['missing']} components without ai_enhance."
     )
 
+    # If the baseline has AI data but nothing preserved, the component IDs
+    # drifted between baseline and the freshly-analyzed output. Log samples
+    # from both sides so the mismatch shape is visible in CI output; this is
+    # the single most common cause of silently losing AI work on redeploy.
+    if comp_stats["total"] > 0 and comp_stats["preserved"] == 0:
+        baseline_ai_ids = sorted(
+            cid for cid, c in baseline_index.items() if "ai_enhance" in c
+        )
+        target_index = _build_component_index(target.get("components", []))
+        target_ids = sorted(target_index.keys())
+        if baseline_ai_ids:
+            print(
+                "WARNING: baseline has AI-enhanced components but NONE matched target IDs.",
+                file=sys.stderr,
+            )
+            print(
+                f"  Baseline has {len(baseline_ai_ids)} AI-enhanced component IDs; "
+                f"first 5: {baseline_ai_ids[:5]}",
+                file=sys.stderr,
+            )
+            print(
+                f"  Target has {len(target_ids)} component IDs; "
+                f"first 5: {target_ids[:5]}",
+                file=sys.stderr,
+            )
+            print(
+                "  Likely cause: component ID schema changed "
+                "(e.g. repo-prefix added/removed, path separator change).",
+                file=sys.stderr,
+            )
+
 
 if __name__ == "__main__":
     main()
