@@ -437,7 +437,7 @@ def score_architecture(arch):
 
     # Role distribution
     role_dist = {}
-    for comp_id, comp in comp_index.items():
+    for comp in comp_index.values():
         role = comp.get("ai_enhance", {}).get("architectural_role")
         if role:
             role_dist[role] = role_dist.get(role, 0) + 1

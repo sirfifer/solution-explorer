@@ -249,7 +249,7 @@ def main():
         for e in errors:
             print(f"  ✗ {e}")
         print()
-        print(f"VALIDATION FAILED")
+        print("VALIDATION FAILED")
         print(
             f"  Components: {stats['comp_ai_ok']} ok, "
             f"{stats['comp_ai_mismatches']} mismatches"
@@ -269,7 +269,7 @@ def main():
             f"  {stats['rel_ai_ok']} common relationships: "
             f"ai_enhance preserved"
         )
-        print(f"  Root-level ai_enhance: preserved")
+        print("  Root-level ai_enhance: preserved")
         sys.exit(0)
 
 

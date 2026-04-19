@@ -11,8 +11,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 # ---------------------------------------------------------------------------
 # Helpers to import the merge script's functions directly
 # ---------------------------------------------------------------------------
