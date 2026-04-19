@@ -418,7 +418,7 @@ Two backend modes are supported:
 - **GitHub Pages** (free): Stores live data as static files on GitHub Pages, polled every 30 seconds
 - **Cloudflare** (optional): Uses Workers + D1 + R2 for lower-latency updates (15-second polling)
 
-Enable in the GitHub Action with `live-monitor: 'true'`. See [Live Architecture Monitoring](docs/research/live-architecture-monitoring.md) for the full design.
+Enable in the GitHub Action with `live-monitor: 'true'`. See [Live Monitoring Status](docs/live-architecture-status.md) for configuration details.
 
 ## Architecture Data Format
 
@@ -459,7 +459,17 @@ Enable in the GitHub Action with `live-monitor: 'true'`. See [Live Architecture 
         "tech_stack": ["string"],
         "api_endpoints": ["string"],
         "env_vars": ["string"]
-      }
+      },
+      "actions": [
+        {
+          "label": "string",
+          "action_type": "button | tap_gesture | toolbar_item | context_menu | ...",
+          "handler": "string | null",
+          "file": "string",
+          "line": "number",
+          "target_view": "string | null"
+        }
+      ]
     }
   ],
   "relationships": [
