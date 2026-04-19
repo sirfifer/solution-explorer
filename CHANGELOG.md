@@ -14,7 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **UI Actions detection**: `action_detector.py` detects user-triggered actions in Swift and TypeScript (buttons, taps, toolbar items, context menus) and surfaces them in component details with file and line references.
 - **Source linking**: Components, files, and symbols deep-link to source locations where available.
 - **URL deep linking**: Drill level and selected component are encoded in URL query parameters (`?component=`, `?drill=`), supporting shareable and bookmarkable views with browser back/forward.
-- **ErrorBoundary**: React error boundary wraps the viewer app, converting any render crash into a visible, recoverable error panel with a "Reset navigation" button that clears deep-link URL params.
 - **Architecture changelog in-viewer**: Changes across runs surfaced as an in-app changelog panel with per-entry read tracking (high-water mark + sparse set) persisted in localStorage.
 - **Incremental re-analysis**: Git-diff-based selective re-analysis of changed components only.
 - **Tree-sitter parsers**: Added tree-sitter parsers for all 6 supported languages with graceful fallback to regex parsers.
@@ -32,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Blank-screen on deep drill**: Added a React error boundary wrapping the viewer root. Any render exception (e.g. a stale URL deep-link referencing a component that no longer exists after re-analysis) now produces a visible, recoverable error panel with "Reset navigation" (strips all query params and hash, then reloads) and "Reload page" actions. Previously, any such crash unmounted the entire app and left users on a blank page.
 - Viewer renders an empty-state instead of a blank view when component filtering hides everything; hero-filter fallback restores visibility if filters remove all components at a drill level.
 - Cloudflare deploy step skips cleanly when no project name is configured (does not fail the workflow).
 - Various `ruff` lint fixes in analyzer tests.

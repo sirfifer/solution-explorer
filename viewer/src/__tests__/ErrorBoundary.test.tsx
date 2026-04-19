@@ -57,21 +57,23 @@ describe("ErrorBoundary", () => {
       },
     });
 
-    render(
-      <ErrorBoundary>
-        <Boom />
-      </ErrorBoundary>
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Reset navigation" }));
+    try {
+      render(
+        <ErrorBoundary>
+          <Boom />
+        </ErrorBoundary>
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Reset navigation" }));
 
-    expect(replaceStateSpy).toHaveBeenCalledWith({}, "", "/solution-explorer/");
-    expect(reloadMock).toHaveBeenCalledTimes(1);
-
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: originalLocation,
-    });
-    replaceStateSpy.mockRestore();
+      expect(replaceStateSpy).toHaveBeenCalledWith({}, "", "/solution-explorer/");
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, "location", {
+        configurable: true,
+        value: originalLocation,
+      });
+      replaceStateSpy.mockRestore();
+    }
   });
 
   it("Reload page button reloads without touching history", () => {
@@ -85,20 +87,22 @@ describe("ErrorBoundary", () => {
       value: { ...originalLocation, reload: reloadMock },
     });
 
-    render(
-      <ErrorBoundary>
-        <Boom />
-      </ErrorBoundary>
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Reload page" }));
+    try {
+      render(
+        <ErrorBoundary>
+          <Boom />
+        </ErrorBoundary>
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Reload page" }));
 
-    expect(reloadMock).toHaveBeenCalledTimes(1);
-    expect(replaceStateSpy).not.toHaveBeenCalled();
-
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: originalLocation,
-    });
-    replaceStateSpy.mockRestore();
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+      expect(replaceStateSpy).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, "location", {
+        configurable: true,
+        value: originalLocation,
+      });
+      replaceStateSpy.mockRestore();
+    }
   });
 });

@@ -36,6 +36,28 @@ export class ErrorBoundary extends Component<Props, State> {
 
     const message = this.state.error.message || "An unexpected error occurred.";
 
+    // Read theme from the document element to avoid any store or hook coupling.
+    // App.tsx toggles `dark`/`light` classes on <html>; default to dark if absent.
+    const isDark =
+      typeof document === "undefined" ||
+      !document.documentElement.classList.contains("light");
+
+    const palette = isDark
+      ? {
+          bg: "#0b0e14",
+          fg: "#e6e6e6",
+          panelBg: "#1a1f2a",
+          border: "#2a3140",
+          secondaryFg: "#e6e6e6",
+        }
+      : {
+          bg: "#f6f7f9",
+          fg: "#1a1f2a",
+          panelBg: "#ffffff",
+          border: "#d5d9e0",
+          secondaryFg: "#1a1f2a",
+        };
+
     return (
       <div
         role="alert"
@@ -45,8 +67,8 @@ export class ErrorBoundary extends Component<Props, State> {
           alignItems: "center",
           justifyContent: "center",
           padding: "24px",
-          backgroundColor: "#0b0e14",
-          color: "#e6e6e6",
+          backgroundColor: palette.bg,
+          color: palette.fg,
           fontFamily: "system-ui, -apple-system, sans-serif",
         }}
       >
@@ -61,8 +83,8 @@ export class ErrorBoundary extends Component<Props, State> {
             style={{
               margin: "0 0 20px",
               padding: "12px",
-              backgroundColor: "#1a1f2a",
-              border: "1px solid #2a3140",
+              backgroundColor: palette.panelBg,
+              border: `1px solid ${palette.border}`,
               borderRadius: "6px",
               fontSize: "13px",
               whiteSpace: "pre-wrap",
@@ -94,8 +116,8 @@ export class ErrorBoundary extends Component<Props, State> {
               style={{
                 padding: "10px 16px",
                 backgroundColor: "transparent",
-                color: "#e6e6e6",
-                border: "1px solid #2a3140",
+                color: palette.secondaryFg,
+                border: `1px solid ${palette.border}`,
                 borderRadius: "6px",
                 fontSize: "14px",
                 fontWeight: 500,
