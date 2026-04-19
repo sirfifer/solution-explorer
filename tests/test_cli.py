@@ -8,7 +8,7 @@ import pytest
 
 # Add project root to path so we can import the analyzer package
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from analyzer.cli import main, write_split
+from analyzer.cli import main, safe_component_id, write_split
 from analyzer.models import Architecture, Component, FileInfo, Symbol, to_dict
 
 # ---------------------------------------------------------------------------
@@ -507,6 +507,66 @@ class TestWriteSplit:
         detail = json.loads(detail_path.read_text())
         assert len(detail["symbols"]) == 1
         assert detail["symbols"][0]["name"] == "Layout"
+
+    def test_colon_ids_are_escaped(self, tmp_path):
+        """Component IDs with colons (e.g. multi-repo 'repo:name') must be escaped.
+
+        GitHub's actions/upload-artifact rejects colons in filenames to stay
+        NTFS-compatible. Regression test for the 2026-04 deploy failure.
+        """
+        comp = Component(
+            id="repo:unamentis",
+            name="UnaMentis",
+            type="repository",
+            path=".",
+            language=None,
+            files=[],
+        )
+        arch = to_dict(Architecture(
+            name="multi-repo",
+            description="",
+            components=[comp],
+            symbols=[],
+            files=[],
+            stats={
+                "total_components": 1,
+                "total_files": 0,
+                "total_lines": 0,
+                "total_symbols": 0,
+                "total_relationships": 0,
+                "languages": {},
+            },
+        ))
+
+        out = tmp_path / "output"
+        write_split(arch, out, indent=2)
+
+        # repo:unamentis -> detail-repo__unamentis.json
+        detail_path = out / "data" / "detail-repo__unamentis.json"
+        assert detail_path.is_file(), \
+            f"expected {detail_path.name} but data dir contains: " \
+            f"{[p.name for p in (out / 'data').iterdir()]}"
+
+        # No file should ever be written with a colon in its name.
+        for p in (out / "data").iterdir():
+            assert ":" not in p.name, f"colon leaked into filename: {p.name}"
+
+
+class TestSafeComponentId:
+    """Unit tests for safe_component_id(). Must stay in sync with the
+    viewer's loadComponentDetail() escape logic in viewer/src/store.ts."""
+
+    def test_slash_becomes_double_dash(self):
+        assert safe_component_id("viewer/src") == "viewer--src"
+
+    def test_colon_becomes_double_underscore(self):
+        assert safe_component_id("repo:unamentis") == "repo__unamentis"
+
+    def test_slashes_and_colons_together(self):
+        assert safe_component_id("repo:unamentis/viewer") == "repo__unamentis--viewer"
+
+    def test_plain_id_unchanged(self):
+        assert safe_component_id("plain-id") == "plain-id"
 
     def test_nested_children_get_detail_files(self, tmp_path, arch_with_children):
         """Nested children components each get their own detail files."""

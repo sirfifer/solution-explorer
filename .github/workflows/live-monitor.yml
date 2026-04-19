@@ -22,6 +22,12 @@ permissions:
 jobs:
   update-and-deploy:
     name: Update Architecture & Deploy Live Data
+    # Opt-in: runs only when a downstream installation enables live monitoring
+    # via the LIVE_MONITOR_ENABLED repo variable, or when manually dispatched
+    # (including via deploy-downstream). Without this guard, upstream pushes
+    # to sirfifer/solution-explorer trigger this workflow against a repo that
+    # has no GitHub Pages configured, and it fails every push to main.
+    if: vars.LIVE_MONITOR_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
