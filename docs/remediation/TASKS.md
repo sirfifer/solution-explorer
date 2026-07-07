@@ -11,7 +11,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 ## Phase 0: Ground truth repairs
 
 ### P0-1: Stop pytest clobbering the AI baseline; restore a real baseline
-- Status: TODO
+- Status: DONE (session remediation/p0-pipeline, 2026-07-06)
 - Model: Opus 4.8
 - Stream: A (pipeline/Python). Branch: remediation/p0-pipeline
 - Findings: F-CRIT-7
@@ -27,6 +27,13 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - [ ] Guard fixture demonstrably fails when a test writes root architecture.json (prove once, then keep)
 - Verify: `pytest tests/ -q && git status --porcelain`; `python3 -c "import json;d=json.load(open('architecture.json'));print(d['root_path'],'ai' if 'ai_enhance' in d else 'NO-AI')"`
 - Evidence:
+  - Re-verified F-CRIT-7. Two leaky tests found in tests/test_cli.py (audit named one): `test_max_symbols_explicit_override` (was line 348) and `test_default_max_symbols_is_5000_single_file_mode` (was line 295). Both called `main()` with no `-o` and no `monkeypatch.chdir`, writing the analyzer default `architecture.json` into cwd (repo root). Audited all 16 `main()` callsites in tests/test_cli.py plus tests/test_incremental.py:971: every other call either passes `-o` or uses `monkeypatch.chdir(temp_repo)`, so those two were the only offenders. Fix: added `-o str(temp_repo / "out.json")` to both.
+  - Added tests/conftest.py with an autouse guard fixture `_guard_repo_root_architecture_baseline` that snapshots (size, mtime_ns) of repo-root `architecture.json` and the presence of a repo-root `architecture/` dir before each test and fails the test if either changes.
+  - Guard fail-then-pass proof: with the fix in place both formerly-leaky tests pass and `git status --porcelain` shows no stray `architecture.json`; baseline stat `619951 1783387058` unchanged across the run. Then temporarily reverted `test_max_symbols_explicit_override` to the leaky argv (removed `-o`) and ran it: guard failed with `Failed: Test modified repo-root architecture.json. A CLI test likely ran main() without -o and clobbered the committed AI baseline (F-CRIT-7)...` (conftest.py:48). Restored the `-o` fix and regenerated the baseline.
+  - Baseline restore: exhaustively searched every `architecture.json` blob across all refs (`git log --all --pretty=%H -- architecture.json`, 14 commits, 14 unique blobs). NONE contain architecture-level or component-level `ai_enhance`; 13 are pytest junk (name `test_max_symbols_explicit_over0`, root_path in /private/var/folders pytest tmp) and the oldest (3dabc4c) is a non-AI scan of the unamentis project. No genuine AI-enhanced baseline of this repo has ever been committed, which corroborates F-CRIT-7's suspected origin of the April "0/253 preserved" symptom. Per the task's fallback instruction, committed the freshly generated non-AI output of `python3 analyze.py . -o architecture.json` (root_path `/Users/ramerman/dev/solution-explorer`, name `solution-explorer`, 23 components). ACTION REQUIRED: `/ai-assist` must be re-run interactively to restore real AI enhancements onto this baseline before the next deploy relies on preservation.
+  - .gitignore: removed the stale `architecture.json` ignore entry (the root file is a tracked deploy baseline) and added an explanatory comment.
+  - Verify results: `pytest tests/ -q` -> `637 passed, 1 xfailed`; `git status --porcelain` shows only the intended changes (.gitignore, architecture.json, tests/test_cli.py, tests/conftest.py), no stray output. `python3 -c ...` -> `/Users/ramerman/dev/solution-explorer NO-AI` (real root_path; AI pending /ai-assist). `ruff check analyzer/ tests/ scripts/` -> All checks passed.
+  - Deviation: acceptance item "architecture.json has ai_enhance on at least three components" is not met because no AI baseline exists to restore and generating one requires the interactive /ai-assist pass (out of scope for this pipeline task). Followed the orchestrator's explicit fallback: committed real non-AI baseline, flagged /ai-assist re-run.
 
 ### P0-2: Make live-monitor.yml parse and run; fix its latent bugs; fix the shipped template
 - Status: TODO

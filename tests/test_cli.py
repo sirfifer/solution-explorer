@@ -304,7 +304,9 @@ class TestCLIArgumentDefaults:
             return original_init(self, *args, **kwargs)
 
         monkeypatch.setattr(ArchitectureScanner, "__init__", capture_init)
-        monkeypatch.setattr("sys.argv", ["analyze", str(temp_repo)])
+        monkeypatch.setattr("sys.argv", [
+            "analyze", str(temp_repo), "-o", str(temp_repo / "out.json"),
+        ])
         main()
         assert captured_kwargs["max_symbols"] == 5000
 
@@ -359,6 +361,7 @@ class TestCLIArgumentDefaults:
         monkeypatch.setattr(ArchitectureScanner, "__init__", capture_init)
         monkeypatch.setattr("sys.argv", [
             "analyze", str(temp_repo), "--max-symbols", "100",
+            "-o", str(temp_repo / "out.json"),
         ])
         main()
         assert captured_kwargs["max_symbols"] == 100
