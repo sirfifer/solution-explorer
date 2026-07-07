@@ -14,7 +14,7 @@
       "path": "",
       "language": "python",
       "framework": null,
-      "description": null,
+      "description": "Solution Explorer is an architecture visualization tool that scans any codebase and renders it as an interactive graph. The repository root bundles the Python analyzer, the React viewer, an npm CLI, and the Cloudflare live-monitoring backend.",
       "port": null,
       "children": [
         {
@@ -24,7 +24,7 @@
           "path": "analyzer",
           "language": "python",
           "framework": null,
-          "description": null,
+          "description": "The core static analysis engine that walks a repository, groups files into components, extracts symbols, and detects relationships.",
           "port": null,
           "children": [
             {
@@ -34,7 +34,7 @@
               "path": "analyzer/parsers",
               "language": "python",
               "framework": null,
-              "description": null,
+              "description": "Per-language source parsers that extract symbols, imports, and exports for the analyzer.",
               "port": null,
               "children": [],
               "files": [
@@ -71,7 +71,7 @@
                 "changelog": null,
                 "api_docs": null,
                 "architecture_notes": null,
-                "purpose": null,
+                "purpose": "Provide language-specific parsing (Swift, Go, Python, TypeScript, Rust, Ruby) behind a common parser interface.",
                 "key_decisions": [],
                 "patterns": [],
                 "tech_stack": [
@@ -92,7 +92,20 @@
                 "coverage_source": null,
                 "has_ci_tests": true
               },
-              "actions": []
+              "actions": [],
+              "ai_enhance": {
+                "help_text": "This module holds the language parsers that the analyzer uses to read source files. Each language, including Swift, Go, Python, TypeScript, Rust, and Ruby, has a regex-based parser and an optional tree-sitter variant that produce symbols, imports, and exports. The parsers register in a shared PARSERS table that the scanner consults by file extension. Without accurate parsing here, symbol and relationship detection across the rest of the analyzer degrades.",
+                "architectural_role": "business-logic",
+                "data_handled": "Raw source file text and the extracted symbols, imports, and exports for each supported language",
+                "criticality": "important",
+                "testing_maturity": "untested",
+                "testing_gaps": [
+                  "No parser tests colocated here; parser behavior is verified from the external tests package"
+                ],
+                "tech_context": "Each language pairs a stdlib regex parser with an optional tree-sitter parser, so scans work with no native dependencies but improve when tree-sitter is available.",
+                "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                "ai_enhance_version": 2
+              }
             }
           ],
           "files": [
@@ -125,7 +138,7 @@
             "changelog": null,
             "api_docs": null,
             "architecture_notes": null,
-            "purpose": null,
+            "purpose": "Discover the component tree, symbols, and relationships of a codebase and serialize them to architecture.json.",
             "key_decisions": [],
             "patterns": [
               "Repository Pattern"
@@ -148,7 +161,22 @@
             "coverage_source": null,
             "has_ci_tests": true
           },
-          "actions": []
+          "actions": [],
+          "ai_enhance": {
+            "help_text": "The analyzer package is the scanning engine at the heart of Solution Explorer. It walks a target repository, groups files into components, extracts symbols through per-language parsers, and infers relationships such as imports and HTTP calls. The ArchitectureScanner assembles the results into the hierarchical architecture.json that the viewer renders. Both the command-line entry point and the test suite depend on this package, so it sits on the critical path of every scan.",
+            "architectural_role": "business-logic",
+            "data_handled": "Repository file trees, parsed symbols and imports, component metrics, detected relationships, and the serialized Architecture model",
+            "criticality": "critical",
+            "testing_maturity": "untested",
+            "testing_assessment": "No test files live inside the analyzer package, but the repo-root tests package covers it heavily with 584 unit tests that import these modules directly.",
+            "testing_gaps": [
+              "No tests colocated with the analyzer package; coverage comes entirely from the external tests package"
+            ],
+            "tech_context": "Pure Python with an optional tree-sitter backend and a pydantic-or-dataclass model layer, keeping the core dependency-free.",
+            "complexity_assessment": "At roughly 7,000 lines across scanner, parsers, action detection, and SwiftUI flow analysis, this is the largest hand-written code module and the main locus of analyzer complexity.",
+            "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+            "ai_enhance_version": 2
+          }
         },
         {
           "id": "docs",
@@ -157,7 +185,7 @@
           "path": "docs",
           "language": "markdown",
           "framework": null,
-          "description": null,
+          "description": "Project documentation covering the analyzer package, architecture, and live monitoring design.",
           "port": null,
           "children": [
             {
@@ -167,7 +195,7 @@
               "path": "docs/archive",
               "language": "markdown",
               "framework": null,
-              "description": null,
+              "description": "Archived design and implementation notes from the live-architecture monitoring effort.",
               "port": null,
               "children": [],
               "files": [
@@ -193,7 +221,7 @@
                 "changelog": null,
                 "api_docs": null,
                 "architecture_notes": null,
-                "purpose": null,
+                "purpose": "Preserve historical planning and implementation documents for reference.",
                 "key_decisions": [],
                 "patterns": [],
                 "tech_stack": [
@@ -214,7 +242,20 @@
                 "coverage_source": null,
                 "has_ci_tests": true
               },
-              "actions": []
+              "actions": [],
+              "ai_enhance": {
+                "help_text": "This folder archives earlier planning and implementation documents for the live architecture monitoring feature. It keeps the original feedback, prompts, and implementation write-ups so the history of that work stays available. These notes are historical and no longer describe the current system exactly. They are useful for tracing why the live-monitoring design evolved the way it did.",
+                "architectural_role": null,
+                "data_handled": "Historical Markdown notes on live-architecture monitoring design and implementation",
+                "criticality": "supporting",
+                "testing_maturity": "untested",
+                "testing_gaps": [
+                  "Archived prose with no automated tests"
+                ],
+                "tech_context": "Static Markdown retained for historical reference only.",
+                "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                "ai_enhance_version": 2
+              }
             },
             {
               "id": "docs/remediation",
@@ -223,7 +264,7 @@
               "path": "docs/remediation",
               "language": "markdown",
               "framework": null,
-              "description": null,
+              "description": "The remediation tracker, audit, and work plan governing the current cleanup effort.",
               "port": null,
               "children": [],
               "files": [
@@ -248,7 +289,7 @@
                 "changelog": null,
                 "api_docs": null,
                 "architecture_notes": null,
-                "purpose": null,
+                "purpose": "Track remediation tasks, audit findings, and the work plan for stabilizing the project.",
                 "key_decisions": [],
                 "patterns": [],
                 "tech_stack": [
@@ -269,7 +310,20 @@
                 "coverage_source": null,
                 "has_ci_tests": true
               },
-              "actions": []
+              "actions": [],
+              "ai_enhance": {
+                "help_text": "This directory holds the active remediation paperwork for the project. AUDIT-2026-07.md records the findings, TASKS.md tracks each fix task with evidence, and WORK-PLAN.md sets the rules of engagement. Contributors working through the current stabilization effort treat these files as the single source of truth. The documents are process artifacts rather than shipped code.",
+                "architectural_role": null,
+                "data_handled": "Audit findings, task status and evidence, and work-plan rules",
+                "criticality": "supporting",
+                "testing_maturity": "untested",
+                "testing_gaps": [
+                  "Process documentation with no automated tests"
+                ],
+                "tech_context": "Markdown tracking documents maintained by hand alongside the code changes they describe.",
+                "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                "ai_enhance_version": 2
+              }
             }
           ],
           "files": [
@@ -297,7 +351,7 @@
             "changelog": null,
             "api_docs": null,
             "architecture_notes": null,
-            "purpose": null,
+            "purpose": "Explain how the analyzer, viewer, and live-monitoring system are designed and used.",
             "key_decisions": [],
             "patterns": [],
             "tech_stack": [
@@ -318,7 +372,20 @@
             "coverage_source": null,
             "has_ci_tests": true
           },
-          "actions": []
+          "actions": [],
+          "ai_enhance": {
+            "help_text": "This directory holds the primary Markdown documentation for the project. It covers the analyzer package, the overall architecture, live architecture status, and research notes such as the scalable AI-enhancement DPEA pattern. Readers use these documents to understand design decisions rather than to run code. The content is reference material and is not part of the runtime.",
+            "architectural_role": null,
+            "data_handled": "Markdown prose describing architecture, design decisions, and research notes",
+            "criticality": "supporting",
+            "testing_maturity": "untested",
+            "testing_gaps": [
+              "Documentation is prose and carries no automated tests"
+            ],
+            "tech_context": "Plain Markdown with no build step, rendered directly on GitHub or inside the viewer.",
+            "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+            "ai_enhance_version": 2
+          }
         },
         {
           "id": "infrastructure/cloudflare",
@@ -327,7 +394,7 @@
           "path": "infrastructure/cloudflare",
           "language": "shell",
           "framework": null,
-          "description": null,
+          "description": "Setup scripts and documentation for provisioning the Cloudflare live-monitoring backend.",
           "port": null,
           "children": [
             {
@@ -337,7 +404,7 @@
               "path": "infrastructure/cloudflare/worker",
               "language": "typescript",
               "framework": null,
-              "description": "",
+              "description": "The Cloudflare Worker package that ingests analyzer output and serves live architecture status.",
               "port": null,
               "children": [
                 {
@@ -347,7 +414,7 @@
                   "path": "infrastructure/cloudflare/worker/src",
                   "language": "typescript",
                   "framework": null,
-                  "description": null,
+                  "description": "The Worker request handlers for ingest, webhook verification, and health checks.",
                   "port": null,
                   "children": [],
                   "files": [
@@ -372,7 +439,7 @@
                     "changelog": null,
                     "api_docs": null,
                     "architecture_notes": null,
-                    "purpose": null,
+                    "purpose": "Route incoming HTTP requests, verify webhook signatures, and manage resource-usage accounting.",
                     "key_decisions": [],
                     "patterns": [],
                     "tech_stack": [
@@ -406,7 +473,20 @@
                     "coverage_source": null,
                     "has_ci_tests": true
                   },
-                  "actions": []
+                  "actions": [],
+                  "ai_enhance": {
+                    "help_text": "This is the source of the Cloudflare Worker. index.ts routes the ingest, webhook, and health endpoints, applies CORS, and tracks daily resource usage against free-tier limits. webhook.ts verifies GitHub webhook signatures before accepting a push, and types.ts defines the shared payload and limit types. This code runs on every request the live-monitoring backend receives.",
+                    "architectural_role": "api-gateway",
+                    "data_handled": "HTTP requests and responses, webhook signatures, ingest payloads, and usage counters",
+                    "criticality": "supporting",
+                    "testing_maturity": "untested",
+                    "testing_gaps": [
+                      "Request routing and signature verification lack unit tests"
+                    ],
+                    "tech_context": "TypeScript modules targeting the Workers fetch handler, with no framework beyond the platform runtime.",
+                    "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                    "ai_enhance_version": 2
+                  }
                 }
               ],
               "files": [
@@ -440,7 +520,7 @@
                 "changelog": null,
                 "api_docs": null,
                 "architecture_notes": null,
-                "purpose": null,
+                "purpose": "Receive pushed architecture updates over HTTP, persist them, and serve live status to the viewer.",
                 "key_decisions": [],
                 "patterns": [],
                 "tech_stack": [
@@ -462,7 +542,20 @@
                 "coverage_source": null,
                 "has_ci_tests": true
               },
-              "actions": []
+              "actions": [],
+              "ai_enhance": {
+                "help_text": "This package is the serverless backend for live monitoring, deployed as a Cloudflare Worker. It exposes ingest, webhook, and health endpoints, persists versions and change patches in a D1 database, and stores payloads in R2. The viewer polls this Worker to overlay live CI status onto the architecture graph. Its schema and wrangler configuration define the database tables and deployment settings.",
+                "architectural_role": "api-gateway",
+                "data_handled": "Ingested architecture payloads, version and patch records, CI status events, and resource-usage counters",
+                "criticality": "important",
+                "testing_maturity": "untested",
+                "testing_gaps": [
+                  "Worker endpoints and D1 access have no automated tests in the repo"
+                ],
+                "tech_context": "TypeScript on the Cloudflare Workers runtime with D1 for relational data and R2 for blob storage.",
+                "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                "ai_enhance_version": 2
+              }
             }
           ],
           "files": [
@@ -487,7 +580,7 @@
             "changelog": null,
             "api_docs": null,
             "architecture_notes": null,
-            "purpose": null,
+            "purpose": "Provision the Cloudflare Worker, D1 database, and related resources for live monitoring.",
             "key_decisions": [],
             "patterns": [],
             "tech_stack": [
@@ -508,7 +601,20 @@
             "coverage_source": null,
             "has_ci_tests": true
           },
-          "actions": []
+          "actions": [],
+          "ai_enhance": {
+            "help_text": "This module bootstraps the Cloudflare side of live monitoring. A setup script provisions the Worker, its D1 database, and supporting configuration, and the README explains the manual steps. It is infrastructure tooling that an operator runs once per deployment rather than application code. The Worker it configures lives in the worker subdirectory.",
+            "architectural_role": null,
+            "data_handled": "Cloudflare account configuration, resource identifiers, and provisioning commands",
+            "criticality": "supporting",
+            "testing_maturity": "untested",
+            "testing_gaps": [
+              "Provisioning shell scripts are not covered by automated tests"
+            ],
+            "tech_context": "Bash setup scripts wrapping the wrangler and Cloudflare APIs.",
+            "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+            "ai_enhance_version": 2
+          }
         },
         {
           "id": "packages/cli",
@@ -527,7 +633,7 @@
               "path": "packages/cli/src/commands",
               "language": "typescript",
               "framework": null,
-              "description": null,
+              "description": "The CLI command implementations for generate, serve, and init.",
               "port": null,
               "children": [],
               "files": [
@@ -552,7 +658,7 @@
                 "changelog": null,
                 "api_docs": null,
                 "architecture_notes": null,
-                "purpose": null,
+                "purpose": "Implement the generate, serve, and init subcommands of the CLI.",
                 "key_decisions": [],
                 "patterns": [],
                 "tech_stack": [
@@ -573,7 +679,20 @@
                 "coverage_source": null,
                 "has_ci_tests": true
               },
-              "actions": []
+              "actions": [],
+              "ai_enhance": {
+                "help_text": "This module implements the three subcommands exposed by the CLI. generate.ts runs the analyzer and exports a static site, serve.ts builds and hosts the viewer locally, and init.ts scaffolds GitHub Actions workflows for continuous updates. Each command composes the Python and viewer helpers from the lib module. These handlers define what the published tool actually does when invoked.",
+                "architectural_role": null,
+                "data_handled": "Command options, temporary build directories, and generated workflow files",
+                "criticality": "supporting",
+                "testing_maturity": "untested",
+                "testing_gaps": [
+                  "Command handlers are not unit tested"
+                ],
+                "tech_context": "TypeScript command modules invoked by the CLI entry point.",
+                "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                "ai_enhance_version": 2
+              }
             },
             {
               "id": "packages/cli/src/lib",
@@ -582,7 +701,7 @@
               "path": "packages/cli/src/lib",
               "language": "typescript",
               "framework": null,
-              "description": null,
+              "description": "Helper library for detecting Python, running the analyzer, and assembling the viewer.",
               "port": null,
               "children": [],
               "files": [
@@ -606,7 +725,7 @@
                 "changelog": null,
                 "api_docs": null,
                 "architecture_notes": null,
-                "purpose": null,
+                "purpose": "Provide reusable helpers for Python detection, analyzer invocation, and static-site assembly.",
                 "key_decisions": [],
                 "patterns": [],
                 "tech_stack": [
@@ -627,7 +746,20 @@
                 "coverage_source": null,
                 "has_ci_tests": true
               },
-              "actions": []
+              "actions": [],
+              "ai_enhance": {
+                "help_text": "This small library holds the shared helpers the CLI commands rely on. python.ts detects an available Python interpreter and runs the analyzer, while viewer.ts assembles the built viewer around the generated architecture data. Keeping this logic separate lets generate and serve reuse the same routines. It is internal plumbing rather than a public surface.",
+                "architectural_role": null,
+                "data_handled": "Python interpreter paths, analyzer invocation results, and viewer build assets",
+                "criticality": "supporting",
+                "testing_maturity": "untested",
+                "testing_gaps": [
+                  "Helper routines lack direct unit tests"
+                ],
+                "tech_context": "Node TypeScript utilities wrapping child-process and filesystem calls.",
+                "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                "ai_enhance_version": 2
+              }
             },
             {
               "id": "packages/cli/src/templates",
@@ -636,7 +768,7 @@
               "path": "packages/cli/src/templates",
               "language": "typescript",
               "framework": null,
-              "description": null,
+              "description": "Templates for the GitHub Actions workflows and config the init command writes.",
               "port": null,
               "children": [],
               "files": [
@@ -661,7 +793,7 @@
                 "changelog": null,
                 "api_docs": null,
                 "architecture_notes": null,
-                "purpose": null,
+                "purpose": "Generate the architecture workflow, live-monitor workflow, and config file for new installations.",
                 "key_decisions": [],
                 "patterns": [],
                 "tech_stack": [
@@ -699,7 +831,20 @@
                 "coverage_source": null,
                 "has_ci_tests": true
               },
-              "actions": []
+              "actions": [],
+              "ai_enhance": {
+                "help_text": "This module contains the templates that the init command writes into a user repository. They produce the Architecture Visualization workflow, the Live Monitor workflow, and the solution-explorer.json configuration file. Rendering these as code keeps the scaffolded files in sync with the current pipeline. The output bootstraps continuous architecture updates in the target project.",
+                "architectural_role": null,
+                "data_handled": "Workflow YAML and JSON configuration rendered from parameters",
+                "criticality": "supporting",
+                "testing_maturity": "untested",
+                "testing_gaps": [
+                  "Template output is not snapshot tested"
+                ],
+                "tech_context": "TypeScript template functions returning workflow and config file contents.",
+                "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                "ai_enhance_version": 2
+              }
             }
           ],
           "files": [
@@ -755,7 +900,20 @@
             "coverage_source": null,
             "has_ci_tests": true
           },
-          "actions": []
+          "actions": [],
+          "ai_enhance": {
+            "help_text": "This package is the npm distribution of Solution Explorer, published so users can run it with npx. It wires together three commands: generate exports a static site, serve runs a local server, and init scaffolds GitHub Actions workflows. Under the hood it detects a Python interpreter, invokes the analyzer, and assembles the built viewer around the resulting data. It is the primary entry point for people who install the tool rather than clone the repository.",
+            "architectural_role": null,
+            "data_handled": "Command-line arguments, analyzer output, and assembled static-site files",
+            "criticality": "important",
+            "testing_maturity": "untested",
+            "testing_gaps": [
+              "CLI commands have no automated tests in the repo"
+            ],
+            "tech_context": "Node TypeScript CLI using picocolors and prompts, shelling out to the Python analyzer.",
+            "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+            "ai_enhance_version": 2
+          }
         },
         {
           "id": "scripts",
@@ -764,7 +922,7 @@
           "path": "scripts",
           "language": "python",
           "framework": null,
-          "description": null,
+          "description": "Python and shell scripts that run the deploy pipeline, CI status collection, and AI-enhancement tooling.",
           "port": null,
           "children": [],
           "files": [
@@ -795,7 +953,7 @@
             "changelog": null,
             "api_docs": null,
             "architecture_notes": null,
-            "purpose": null,
+            "purpose": "Support CI, deployment, and AI-enhancement merging and quality scoring.",
             "key_decisions": [],
             "patterns": [],
             "tech_stack": [
@@ -821,7 +979,21 @@
             "coverage_source": null,
             "has_ci_tests": true
           },
-          "actions": []
+          "actions": [],
+          "ai_enhance": {
+            "help_text": "This directory holds the automation scripts that support deployment and the AI-enhancement pipeline. Highlights include merge-ai-enhancements.py, which restores curated ai_enhance data onto freshly analyzed output, and score-ai-enhancement-quality.py, which validates and scores that data. Other scripts collect CI status, generate admin summaries, and validate the built preview. These run in CI and locally rather than as part of the shipped product.",
+            "architectural_role": null,
+            "data_handled": "Architecture baselines, AI-enhancement blocks, CI status from GitHub, and quality scores",
+            "criticality": "important",
+            "testing_maturity": "untested",
+            "testing_gaps": [
+              "Several scripts run only in CI; merge-ai-enhancements.py has regression tests but the others do not"
+            ],
+            "external_services_assessment": "The scripts read CI status from the GitHub API, which is needed for the live status overlay but not for producing or viewing a static architecture map.",
+            "tech_context": "A mix of Python and Bash automation invoked by GitHub Actions and by the ai-assist and deploy skills.",
+            "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+            "ai_enhance_version": 2
+          }
         },
         {
           "id": "tests",
@@ -830,7 +1002,7 @@
           "path": "tests",
           "language": "python",
           "framework": "pytest",
-          "description": null,
+          "description": "The pytest suite covering the analyzer, parsers, CLI, and supporting scripts.",
           "port": null,
           "children": [],
           "files": [
@@ -865,7 +1037,7 @@
             "changelog": null,
             "api_docs": null,
             "architecture_notes": null,
-            "purpose": null,
+            "purpose": "Verify analyzer behavior, relationship detection, parsing, and pipeline scripts.",
             "key_decisions": [],
             "patterns": [
               "Tests (584)"
@@ -912,7 +1084,23 @@
             "coverage_source": null,
             "has_ci_tests": true
           },
-          "actions": []
+          "actions": [],
+          "ai_enhance": {
+            "help_text": "This package is the project test suite, built on pytest. Its 584 unit tests exercise the analyzer scanner, the language parsers, relationship and action detection, the DPEA pipeline, and the merge script. A conftest guard also fails any test that would clobber the committed architecture.json baseline. The suite runs in CI and is the main safety net for changes to the Python code.",
+            "architectural_role": null,
+            "data_handled": "Fixture repositories, analyzer output under test, and assertion data",
+            "criticality": "supporting",
+            "testing_maturity": "adequate",
+            "testing_assessment": "The suite is substantial at 584 unit tests across 13 files with CI integration, though it is unit-only and records no coverage percentage.",
+            "testing_gaps": [
+              "No integration or end-to-end tests",
+              "Coverage is not measured"
+            ],
+            "tech_context": "pytest with fixtures that build temporary repositories to scan.",
+            "complexity_assessment": "At nearly 8,800 lines it is one of the larger modules, reflecting broad unit coverage of the analyzer.",
+            "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+            "ai_enhance_version": 2
+          }
         },
         {
           "id": "viewer",
@@ -921,7 +1109,7 @@
           "path": "viewer",
           "language": "typescript",
           "framework": null,
-          "description": "",
+          "description": "The architecture viewer application package, including build configuration and static assets.",
           "port": null,
           "children": [
             {
@@ -931,7 +1119,7 @@
               "path": "viewer/public/architecture/data",
               "language": "json",
               "framework": null,
-              "description": null,
+              "description": "Bundled demo architecture data used to showcase the viewer.",
               "port": null,
               "children": [],
               "files": [
@@ -1207,7 +1395,7 @@
                 "changelog": null,
                 "api_docs": null,
                 "architecture_notes": null,
-                "purpose": null,
+                "purpose": "Provide a rich sample dataset for demonstrations of drill-down and live features.",
                 "key_decisions": [],
                 "patterns": [
                   "Repository Pattern",
@@ -1234,7 +1422,21 @@
                 "coverage_source": null,
                 "has_ci_tests": true
               },
-              "actions": []
+              "actions": [],
+              "ai_enhance": {
+                "help_text": "This directory holds a large bundled dataset of per-component detail JSON files. It captures a full scan of a sample project and lets the viewer demonstrate drill-down and live features without a fresh analysis. The files are generated data artifacts rather than source code. They dominate the repository line count but carry no logic of their own.",
+                "architectural_role": null,
+                "data_handled": "Per-component detail records, symbols, files, and relationships for the demo dataset",
+                "criticality": "supporting",
+                "testing_maturity": "untested",
+                "testing_gaps": [
+                  "Generated data with no associated tests"
+                ],
+                "tech_context": "Static JSON detail files produced by the analyzer in split mode.",
+                "complexity_assessment": "With 254 files and over 169,000 lines this directory is by far the largest artifact in the repo, though it is inert generated data.",
+                "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                "ai_enhance_version": 2
+              }
             },
             {
               "id": "viewer/src",
@@ -1243,7 +1445,7 @@
               "path": "viewer/src",
               "language": "typescript",
               "framework": "React",
-              "description": null,
+              "description": "The React application source: entry point, global store, and shared types.",
               "port": null,
               "children": [
                 {
@@ -1253,7 +1455,7 @@
                   "path": "viewer/src/__tests__",
                   "language": "typescript",
                   "framework": null,
-                  "description": null,
+                  "description": "Vitest unit tests for the viewer store, hooks, and utilities.",
                   "port": null,
                   "children": [],
                   "files": [
@@ -1279,7 +1481,7 @@
                     "changelog": null,
                     "api_docs": null,
                     "architecture_notes": null,
-                    "purpose": null,
+                    "purpose": "Verify the Zustand store, live-monitor hook, error boundary, and component-id helpers.",
                     "key_decisions": [],
                     "patterns": [
                       "State Management",
@@ -1303,7 +1505,20 @@
                     "coverage_source": null,
                     "has_ci_tests": true
                   },
-                  "actions": []
+                  "actions": [],
+                  "ai_enhance": {
+                    "help_text": "This module holds the viewer's Vitest unit tests. They cover the Zustand store, the useLiveMonitor hook, the ErrorBoundary component, and the componentId helper. The tests import directly from the source modules they exercise. They are the frontend's automated safety net, though they focus on logic rather than rendering.",
+                    "architectural_role": null,
+                    "data_handled": "Mocked store state, hook inputs, and helper fixtures",
+                    "criticality": "supporting",
+                    "testing_maturity": "adequate",
+                    "testing_gaps": [
+                      "Coverage is concentrated on store and hooks; UI rendering is not tested"
+                    ],
+                    "tech_context": "Vitest tests colocated with the React source.",
+                    "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                    "ai_enhance_version": 2
+                  }
                 },
                 {
                   "id": "viewer/src/components",
@@ -1312,7 +1527,7 @@
                   "path": "viewer/src/components",
                   "language": "typescript",
                   "framework": "React",
-                  "description": null,
+                  "description": "The React components that render the graph, detail panel, search, and dashboards.",
                   "port": null,
                   "children": [
                     {
@@ -1322,7 +1537,7 @@
                       "path": "viewer/src/components/admin",
                       "language": "typescript",
                       "framework": "React",
-                      "description": null,
+                      "description": "The admin dashboard tabs for activity, health, history, resources, and settings.",
                       "port": null,
                       "children": [],
                       "files": [
@@ -1349,7 +1564,7 @@
                         "changelog": null,
                         "api_docs": null,
                         "architecture_notes": null,
-                        "purpose": null,
+                        "purpose": "Render the admin dashboard views for monitoring installations.",
                         "key_decisions": [],
                         "patterns": [],
                         "tech_stack": [
@@ -1371,7 +1586,20 @@
                         "coverage_source": null,
                         "has_ci_tests": true
                       },
-                      "actions": []
+                      "actions": [],
+                      "ai_enhance": {
+                        "help_text": "This module renders the tabs of the viewer's admin dashboard. Each file backs one tab, covering activity, health, history, resources, and settings. They surface data from the useAdminData hook so an operator can monitor installations and their live status. The tabs are an optional operator surface layered on top of the main viewer.",
+                        "architectural_role": "presentation-layer",
+                        "data_handled": "Admin summaries, repository health, activity history, and resource-usage figures",
+                        "criticality": "supporting",
+                        "testing_maturity": "untested",
+                        "testing_gaps": [
+                          "Admin tabs have no render tests"
+                        ],
+                        "tech_context": "React tab components consuming admin data hooks.",
+                        "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                        "ai_enhance_version": 2
+                      }
                     }
                   ],
                   "files": [
@@ -1409,7 +1637,7 @@
                     "changelog": null,
                     "api_docs": null,
                     "architecture_notes": null,
-                    "purpose": null,
+                    "purpose": "Render the architecture graph and all interactive panels of the viewer.",
                     "key_decisions": [],
                     "patterns": [],
                     "tech_stack": [
@@ -1431,7 +1659,21 @@
                     "coverage_source": null,
                     "has_ci_tests": true
                   },
-                  "actions": []
+                  "actions": [],
+                  "ai_enhance": {
+                    "help_text": "This module contains the bulk of the viewer's user interface. It includes the ArchitectureGraph, ComponentNode, DetailPanel, TreeNavigator, SearchOverlay, HelpSystem, and the admin and status dashboards. These components read from the global store and the layout utilities to draw the interactive diagram and its side panels. They are what a user directly clicks and reads when exploring an architecture.",
+                    "architectural_role": "presentation-layer",
+                    "data_handled": "Component and relationship data, AI-enhanced help content, live status, and user interactions",
+                    "criticality": "important",
+                    "testing_maturity": "minimal",
+                    "testing_gaps": [
+                      "Most components have no direct render tests"
+                    ],
+                    "tech_context": "React function components using the xyflow graph library and the Zustand store.",
+                    "complexity_assessment": "At roughly 6,000 lines across 16 files this is the densest UI module, with the graph and detail panel carrying most of the weight.",
+                    "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                    "ai_enhance_version": 2
+                  }
                 },
                 {
                   "id": "viewer/src/hooks",
@@ -1440,7 +1682,7 @@
                   "path": "viewer/src/hooks",
                   "language": "typescript",
                   "framework": "React",
-                  "description": null,
+                  "description": "React hooks for live monitoring, admin data, and the mobile bottom sheet.",
                   "port": null,
                   "children": [],
                   "files": [
@@ -1465,7 +1707,7 @@
                     "changelog": null,
                     "api_docs": null,
                     "architecture_notes": null,
-                    "purpose": null,
+                    "purpose": "Encapsulate live-monitor polling, admin data fetching, and bottom-sheet gestures.",
                     "key_decisions": [],
                     "patterns": [],
                     "tech_stack": [
@@ -1496,7 +1738,20 @@
                     "coverage_source": null,
                     "has_ci_tests": true
                   },
-                  "actions": []
+                  "actions": [],
+                  "ai_enhance": {
+                    "help_text": "This module holds the viewer's custom React hooks. useLiveMonitor polls the live-monitoring backend and feeds status overlays into the store, useAdminData fetches admin summaries, and useBottomSheet manages the mobile detail-panel gesture. The hooks keep data-fetching and interaction logic out of the components. They bridge the store and the network to the presentation layer.",
+                    "architectural_role": null,
+                    "data_handled": "Live status responses, admin summaries, and bottom-sheet gesture state",
+                    "criticality": "important",
+                    "testing_maturity": "untested",
+                    "testing_gaps": [
+                      "Hooks have no colocated tests; useLiveMonitor is covered from the __tests__ module"
+                    ],
+                    "tech_context": "React hooks using fetch and store subscriptions.",
+                    "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                    "ai_enhance_version": 2
+                  }
                 },
                 {
                   "id": "viewer/src/utils",
@@ -1505,7 +1760,7 @@
                   "path": "viewer/src/utils",
                   "language": "typescript",
                   "framework": "Next.js",
-                  "description": null,
+                  "description": "Frontend utilities for layout, search, URL state, source links, and tech docs.",
                   "port": null,
                   "children": [],
                   "files": [
@@ -1535,7 +1790,7 @@
                     "changelog": null,
                     "api_docs": null,
                     "architecture_notes": null,
-                    "purpose": null,
+                    "purpose": "Provide layout metadata, search indexing, URL-state sync, and helper utilities for the viewer.",
                     "key_decisions": [],
                     "patterns": [],
                     "tech_stack": [
@@ -1570,7 +1825,20 @@
                     "coverage_source": null,
                     "has_ci_tests": true
                   },
-                  "actions": []
+                  "actions": [],
+                  "ai_enhance": {
+                    "help_text": "This module holds the viewer's utility functions. layout.ts defines type colors, role metadata, and edge styles, search.ts builds the search index, urlState.ts syncs selection to the URL, and others handle component IDs, source links, status, and tech documentation. Components and hooks import these helpers to stay consistent. The layout metadata in particular drives how nodes and roles are styled across the graph.",
+                    "architectural_role": "presentation-layer",
+                    "data_handled": "Layout and color metadata, search indexes, URL state, and source-link mappings",
+                    "criticality": "important",
+                    "testing_maturity": "untested",
+                    "testing_gaps": [
+                      "Only componentId is directly tested; layout and search helpers are not"
+                    ],
+                    "tech_context": "TypeScript utility modules; the analyzer tags this directory as Next.js, though the viewer is a Vite and React app.",
+                    "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                    "ai_enhance_version": 2
+                  }
                 }
               ],
               "files": [
@@ -1599,7 +1867,7 @@
                 "changelog": null,
                 "api_docs": null,
                 "architecture_notes": null,
-                "purpose": null,
+                "purpose": "Bootstrap the viewer, manage global state, and define the architecture data model.",
                 "key_decisions": [],
                 "patterns": [
                   "State Management",
@@ -1629,7 +1897,21 @@
                 "coverage_source": null,
                 "has_ci_tests": true
               },
-              "actions": []
+              "actions": [],
+              "ai_enhance": {
+                "help_text": "This is the heart of the viewer application. App.tsx composes the graph, tree, detail panel, search, and dashboards, store.ts holds the Zustand state for navigation and annotations, and types.ts defines the data model the whole frontend shares. main.tsx boots the app and index.css provides base styling. Nearly every UI component depends on the store and types defined here.",
+                "architectural_role": "presentation-layer",
+                "data_handled": "Global UI state, the loaded architecture model, breadcrumbs, annotations, and live configuration",
+                "criticality": "critical",
+                "testing_maturity": "minimal",
+                "testing_assessment": "The store and utilities have 54 unit tests, but the rendered components and app composition are largely untested.",
+                "testing_gaps": [
+                  "Component rendering and integration paths are largely untested"
+                ],
+                "tech_context": "React with a Zustand store, bundled by Vite.",
+                "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+                "ai_enhance_version": 2
+              }
             }
           ],
           "files": [
@@ -1668,7 +1950,7 @@
             "changelog": null,
             "api_docs": null,
             "architecture_notes": null,
-            "purpose": null,
+            "purpose": "Host the React viewer, its build tooling, and the bundled demo architecture data.",
             "key_decisions": [],
             "patterns": [],
             "tech_stack": [
@@ -1698,7 +1980,23 @@
             "coverage_source": null,
             "has_ci_tests": true
           },
-          "actions": []
+          "actions": [],
+          "ai_enhance": {
+            "help_text": "This package is the interactive architecture viewer that renders architecture.json in the browser. It contains the Vite build setup, the HTML entry point, ESLint and Vitest configuration, and the React source under src. The viewer is the product surface that end users actually see and interact with. Its public directory also carries a large bundled demo dataset used for showcasing the tool.",
+            "architectural_role": "presentation-layer",
+            "data_handled": "The architecture model, live status overlays, user annotations, and view state",
+            "criticality": "important",
+            "testing_maturity": "minimal",
+            "testing_assessment": "Testing is thin for an app this size, with 54 unit tests in the src package and no end-to-end coverage.",
+            "testing_gaps": [
+              "No end-to-end tests",
+              "Most components are not directly tested"
+            ],
+            "tech_context": "A Vite and React single-page app written in TypeScript, tested with Vitest.",
+            "complexity_assessment": "Around 6,800 lines spanning graph rendering, detail panels, and an admin dashboard make this the largest TypeScript surface in the project.",
+            "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+            "ai_enhance_version": 2
+          }
         }
       ],
       "files": [
@@ -1739,7 +2037,7 @@
         }
       },
       "docs": {
-        "readme": "<p align=\"center\">\n  <img src=\"docs/screenshots/architecture-overview.png\" alt=\"Solution Explorer - Architecture visualization\" width=\"800\">\n</p>\n\n<h1 align=\"center\">Solution Explorer</h1>\n\n<p align=\"center\">\n  <strong>Interactive architecture visualization for any codebase</strong>\n</p>\n\n<p align=\"center\">\n  <a href=\"https://github.com/sirfifer/solution-explorer/actions/workflows/architecture-viz.yml\"><img src=\"https://github.com/sirfifer/solution-explorer/actions/workflows/architecture-viz.yml/badge.svg\" alt=\"CI\"></a>\n  <a href=\"LICENSE\"><img src=\"https://img.shields.io/badge/license-MIT-blue.svg\" alt=\"MIT License\"></a>\n  <a href=\"https://github.com/sirfifer/solution-explorer/releases\"><img src=\"https://img.shields.io/github/v/release/sirfifer/solution-explorer\" alt=\"Release\"></a>\n  <img src=\"https://img.shields.io/badge/python-3.10%2B-blue\" alt=\"Python 3.10+\">\n  <img src=\"https://img.shields.io/badge/node-20%2B-green\" alt=\"Node 20+\">\n</p>\n\n<p align=\"center\">\n  <a href=\"#quick-start\">Quick Start</a> &middot;\n  <a href=\"#screenshots\">Screenshots</a> &middot;\n  <a href=\"#how-it-works\">How It Works</a> &middot;\n  <a href=\"#deployment-options\">Deploy</a> &middot;\n  <a href=\"CONTRIBUTING.md\">Contributing</a>\n</p>\n\n---\n\nSolution Explorer is a static analysis tool that scans codebases to extract components, relationships, and metrics, then renders them as an interactive architecture diagram. It supports solutions that span multiple repositories and works with many languages.\n\n## Screenshots\n\n### Architecture Overview\n\nThe main graph view shows all components in your codebase as interactive cards. Each card displays the component type, framework, language, file count, and key metrics. Arrows between components indicate relationships like imports, HTTP connections, and Docker links.\n\n<p align=\"center\">\n  <img src=\"docs/screenshots/architecture-overview.png\" alt=\"Architecture overview showing components and relationships\" width=\"800\">\n</p>\n\n### Component Detail Panel\n\nClick any component to open the detail panel on the right. It shows files, lines of code, symbols, documented symbols with descriptions, external services, tech stack tags, and a button to drill deeper into the component's internals.\n\n<p align=\"center\">\n  <img src=\"docs/screenshots/detail-panel.png\" alt=\"Detail panel showing component metadata, symbols, and metrics\" width=\"800\">\n</p>\n\n### Drill-Down View\n\nDouble-click a component to drill into it and see its internal structure. Breadcrumbs at the top let you navigate back. Each sub-component is rendered as its own card, showing the hierarchical architecture of your codebase.\n\n<p align=\"center\">\n  <img src=\"docs/screenshots/drill-down.png\" alt=\"Drill-down view showing internal component structure with breadcrumbs\" width=\"800\">\n</p>\n\n## Quick Start\n\n### One command (recommended)\n\n```bash\nnpx solution-explorer /path/to/your/repo\n```\n\nThis analyzes your codebase, builds an interactive architecture visualization, and opens it in your browser. No cloning, no setup.\n\nTo export a static site you can host anywhere:\n\n```bash\nnpx solution-explorer --out ./docs/architecture /path/to/your/repo\n```\n\n### Set up automated updates\n\nRun the interactive setup wizard in your project directory:\n\n```bash\nnpx solution-explorer init\n```\n\nThis creates a GitHub Actions workflow and config file. Every push to main regenerates and deploys your architecture visualization automatically.\n\nFor live monitoring with CI status overlays and version history:\n\n```bash\nnpx solution-explorer init --live\n```\n\n### Using the GitHub Action directly\n\nIf you prefer to write the workflow yourself:\n\n```yaml\nname: Architecture Visualization\non:\n  push:\n    branches: [main]\n\npermissions:\n  contents: read\n\njobs:\n  visualize:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: sirfifer/solution-explorer@main\n```\n\nSee [Deployment Options](#deployment-options) for Cloudflare Pages, GitHub Pages, and other hosting.\n\n### Running from source\n\n```bash\ngit clone https://github.com/sirfifer/solution-explorer.git\ncd solution-explorer\nbash build.sh /path/to/your/repo\n# Output: viewer/dist/ (deploy anywhere)\n```\n\n### Requirements\n\n- **Python 3.10+** (for code analysis, no pip install needed)\n- **Node.js 20+** (for the CLI and viewer)\n\nOptional Python dependencies for advanced features:\n\n```bash\npip install -e \".[treesitter]\"   # AST-based parsing (7 languages)\npip install -e \".[incremental]\"  # Git-based incremental analysis\npip install -e \".[models]\"       # Pydantic validation (--validate)\npip install -e \".[live]\"         # Live monitoring data generation\npip install -e \".[all]\"          # Everything above\n```\n\n## How It Works\n\n```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510     \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510     \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502  Your Codebase  \u2502\u2500\u2500\u2500\u2500>\u2502  analyzer/        \u2502\u2500\u2500\u2500\u2500>\u2502  architecture.json  \u2502\n\u2502                 \u2502     \u2502  (Python)         \u2502     \u2502                     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518     \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518     \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n                                                            \u2502\n                                                            v\n                                                 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n                                                 \u2502  React Viewer       \u2502\n                                                 \u2502  (interactive graph)\u2502\n                                                 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n1. **Python Analyzer** (`analyzer/` package) walks the codebase\n2. Detects components via marker files (package.json, Cargo.toml, Info.plist, Dockerfile, etc.)\n3. Parses source files to extract symbols, imports, and API patterns\n4. Detects inter-component relationships (imports, HTTP/port references, protocols)\n5. Outputs `architecture.json` with the full hierarchical model\n6. **React Viewer** renders the data as an interactive graph using React Flow and ELK layout\n\n### Supported Languages\n\n| Tier | Languages | What's Extracted |\n|------|-----------|-----------------|\n| **Full parsing** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby | Components, symbols, relationships, frameworks, API endpoints |\n| **Detection + metrics** | Java, Kotlin, C/C++, C#, Dart, Vue, Svelte, HTML/CSS, SQL, Shell | File counts, line counts, size, language breakdown |\n\n### What It Detects\n\n| Category | Details |\n|----------|---------|\n| **Components** | Via marker files: package.json, Cargo.toml, pyproject.toml, go.mod, Info.plist, Dockerfile, and more |\n| **Symbols** | Classes, structs, enums, protocols/traits/interfaces, functions, React components |\n| **Relationships** | Import dependencies, port-based HTTP connections, Docker Compose links, URL patterns |\n| **Metrics** | File counts, line counts, size, language breakdown per component |\n| **Frameworks** | SwiftUI, UIKit, React, Next.js, Flask, Django, Axum, Express, Vue, Rails, Sinatra, and more |\n| **Documentation** | README, CLAUDE.md, CHANGELOG, API endpoints, env vars, architectural patterns |\n| **Cloud Services** | AWS, Firebase, Supabase, and other external service references |\n| **UI Actions** | Buttons, tap/long-press gestures, toolbar items, context menus, swipe actions (Swift and TypeScript) |\n| **SwiftUI Flows** | TabView tabs, NavigationLink targets, sheet/fullScreenCover destinations, embedded view composition |\n\n## Viewer Features\n\n- **Hierarchical drill-down**: Click to see details, double-click to drill into sub-components\n- **Breadcrumb navigation**: Always know where you are, click to jump back\n- **Three views**: Graph (interactive diagram), tree (hierarchical list), and list (tabular)\n- **Fuzzy search**: Cmd/Ctrl+K to search across components, files, and symbols\n- **Detail panel**: Tabbed view with overview, files, symbols, relationships, and AI insights\n- **Code preview**: Inline syntax-highlighted code for every symbol\n- **Relationship visualization**: Arrows show dependencies, HTTP connections, and AI-discovered relationships\n- **Tree sidebar**: Collapsible component tree for quick \n\n... (truncated)",
+        "readme": "<p align=\"center\">\n  <img src=\"docs/screenshots/architecture-overview.png\" alt=\"Solution Explorer - Architecture visualization\" width=\"800\">\n</p>\n\n<h1 align=\"center\">Solution Explorer</h1>\n\n<p align=\"center\">\n  <strong>Interactive architecture visualization for any codebase</strong>\n</p>\n\n<p align=\"center\">\n  <a href=\"https://github.com/sirfifer/solution-explorer/actions/workflows/architecture-viz.yml\"><img src=\"https://github.com/sirfifer/solution-explorer/actions/workflows/architecture-viz.yml/badge.svg\" alt=\"CI\"></a>\n  <a href=\"LICENSE\"><img src=\"https://img.shields.io/badge/license-MIT-blue.svg\" alt=\"MIT License\"></a>\n  <a href=\"https://github.com/sirfifer/solution-explorer/releases\"><img src=\"https://img.shields.io/github/v/release/sirfifer/solution-explorer\" alt=\"Release\"></a>\n  <img src=\"https://img.shields.io/badge/python-3.10%2B-blue\" alt=\"Python 3.10+\">\n  <img src=\"https://img.shields.io/badge/node-20%2B-green\" alt=\"Node 20+\">\n</p>\n\n<p align=\"center\">\n  <a href=\"#quick-start\">Quick Start</a> &middot;\n  <a href=\"#screenshots\">Screenshots</a> &middot;\n  <a href=\"#how-it-works\">How It Works</a> &middot;\n  <a href=\"#deployment-options\">Deploy</a> &middot;\n  <a href=\"CONTRIBUTING.md\">Contributing</a>\n</p>\n\n---\n\nSolution Explorer is a static analysis tool that scans codebases to extract components, relationships, and metrics, then renders them as an interactive architecture diagram. It supports solutions that span multiple repositories and works with many languages.\n\n## Screenshots\n\n### Architecture Overview\n\nThe main graph view shows all components in your codebase as interactive cards. Each card displays the component type, framework, language, file count, and key metrics. Arrows between components indicate relationships like imports, HTTP connections, and Docker links.\n\n<p align=\"center\">\n  <img src=\"docs/screenshots/architecture-overview.png\" alt=\"Architecture overview showing components and relationships\" width=\"800\">\n</p>\n\n### Component Detail Panel\n\nClick any component to open the detail panel on the right. It shows files, lines of code, symbols, documented symbols with descriptions, external services, tech stack tags, and a button to drill deeper into the component's internals.\n\n<p align=\"center\">\n  <img src=\"docs/screenshots/detail-panel.png\" alt=\"Detail panel showing component metadata, symbols, and metrics\" width=\"800\">\n</p>\n\n### Drill-Down View\n\nDouble-click a component to drill into it and see its internal structure. Breadcrumbs at the top let you navigate back. Each sub-component is rendered as its own card, showing the hierarchical architecture of your codebase.\n\n<p align=\"center\">\n  <img src=\"docs/screenshots/drill-down.png\" alt=\"Drill-down view showing internal component structure with breadcrumbs\" width=\"800\">\n</p>\n\n## Quick Start\n\n### One command (recommended)\n\n```bash\nnpx solution-explorer /path/to/your/repo\n```\n\nThis analyzes your codebase, builds an interactive architecture visualization, and opens it in your browser. No cloning, no setup.\n\nTo export a static site you can host anywhere:\n\n```bash\nnpx solution-explorer --out ./docs/architecture /path/to/your/repo\n```\n\n### Set up automated updates\n\nRun the interactive setup wizard in your project directory:\n\n```bash\nnpx solution-explorer init\n```\n\nThis creates a GitHub Actions workflow and config file. Every push to main regenerates and deploys your architecture visualization automatically.\n\nFor live monitoring with CI status overlays and version history:\n\n```bash\nnpx solution-explorer init --live\n```\n\n### Using the GitHub Action directly\n\nIf you prefer to write the workflow yourself:\n\n```yaml\nname: Architecture Visualization\non:\n  push:\n    branches: [main]\n\npermissions:\n  contents: read\n\njobs:\n  visualize:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: sirfifer/solution-explorer@main\n```\n\nSee [Deployment Options](#deployment-options) for Cloudflare Pages, GitHub Pages, and other hosting.\n\n### Running from source\n\n```bash\ngit clone https://github.com/sirfifer/solution-explorer.git\ncd solution-explorer\nbash build.sh /path/to/your/repo\n# Output: viewer/dist/ (deploy anywhere)\n```\n\n### Requirements\n\n- **Python 3.10+** (for code analysis, no pip install needed)\n- **Node.js 20+** (for the CLI and viewer)\n\nOptional Python dependencies for advanced features:\n\n```bash\npip install -e \".[treesitter]\"   # AST-based parsing (7 languages)\npip install -e \".[incremental]\"  # Git-based incremental analysis\npip install -e \".[models]\"       # Pydantic validation (--validate)\npip install -e \".[live]\"         # Live monitoring data generation\npip install -e \".[all]\"          # Everything above\n```\n\n## How It Works\n\n```\n┌─────────────────┐     ┌──────────────────┐     ┌─────────────────────┐\n│  Your Codebase  │────>│  analyzer/        │────>│  architecture.json  │\n│                 │     │  (Python)         │     │                     │\n└─────────────────┘     └──────────────────┘     └──────────┬──────────┘\n                                                            │\n                                                            v\n                                                 ┌─────────────────────┐\n                                                 │  React Viewer       │\n                                                 │  (interactive graph)│\n                                                 └─────────────────────┘\n```\n\n1. **Python Analyzer** (`analyzer/` package) walks the codebase\n2. Detects components via marker files (package.json, Cargo.toml, Info.plist, Dockerfile, etc.)\n3. Parses source files to extract symbols, imports, and API patterns\n4. Detects inter-component relationships (imports, HTTP/port references, protocols)\n5. Outputs `architecture.json` with the full hierarchical model\n6. **React Viewer** renders the data as an interactive graph using React Flow and ELK layout\n\n### Supported Languages\n\n| Tier | Languages | What's Extracted |\n|------|-----------|-----------------|\n| **Full parsing** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby | Components, symbols, relationships, frameworks, API endpoints |\n| **Detection + metrics** | Java, Kotlin, C/C++, C#, Dart, Vue, Svelte, HTML/CSS, SQL, Shell | File counts, line counts, size, language breakdown |\n\n### What It Detects\n\n| Category | Details |\n|----------|---------|\n| **Components** | Via marker files: package.json, Cargo.toml, pyproject.toml, go.mod, Info.plist, Dockerfile, and more |\n| **Symbols** | Classes, structs, enums, protocols/traits/interfaces, functions, React components |\n| **Relationships** | Import dependencies, port-based HTTP connections, Docker Compose links, URL patterns |\n| **Metrics** | File counts, line counts, size, language breakdown per component |\n| **Frameworks** | SwiftUI, UIKit, React, Next.js, Flask, Django, Axum, Express, Vue, Rails, Sinatra, and more |\n| **Documentation** | README, CLAUDE.md, CHANGELOG, API endpoints, env vars, architectural patterns |\n| **Cloud Services** | AWS, Firebase, Supabase, and other external service references |\n| **UI Actions** | Buttons, tap/long-press gestures, toolbar items, context menus, swipe actions (Swift and TypeScript) |\n| **SwiftUI Flows** | TabView tabs, NavigationLink targets, sheet/fullScreenCover destinations, embedded view composition |\n\n## Viewer Features\n\n- **Hierarchical drill-down**: Click to see details, double-click to drill into sub-components\n- **Breadcrumb navigation**: Always know where you are, click to jump back\n- **Three views**: Graph (interactive diagram), tree (hierarchical list), and list (tabular)\n- **Fuzzy search**: Cmd/Ctrl+K to search across components, files, and symbols\n- **Detail panel**: Tabbed view with overview, files, symbols, relationships, and AI insights\n- **Code preview**: Inline syntax-highlighted code for every symbol\n- **Relationship visualization**: Arrows show dependencies, HTTP connections, and AI-discovered relationships\n- **Tree sidebar**: Collapsible component tree for quick \n\n... (truncated)",
         "claude_md": null,
         "changelog": "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\nThe format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),\nand this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).\n\n## [Unreleased]\n\n### Added\n\n- **AI enhancement pipeline**: Optional enrichment layer (`/ai-assist` skill) that runs alongside the analyzer to add component descriptions, architectural roles, criticality levels, help text, and richer relationship context. All AI data lives under an optional `ai_enhance` key, so the viewer renders identically against non-enhanced data. Includes `scripts/merge-ai-enhancements.py` so CI can merge enhancements from a committed baseline during redeploy.\n- **Live monitoring**: Opt-in live data channel with CI status overlays, version history, and an admin dashboard. Backed by either GitHub Pages (30s polling) or Cloudflare Workers + D1 + R2 (15s polling). Adaptive polling hook with circuit breaker and visibility control.\n- **UI Actions detection**: `action_detector.py` detects user-triggered actions in Swift and TypeScript (buttons, taps, toolbar items, context menus) and surfaces them in component details with file and line references.\n- **Source linking**: Components, files, and symbols deep-link to source locations where available.\n- **URL deep linking**: Drill level and selected component are encoded in URL query parameters (`?component=`, `?drill=`), supporting shareable and bookmarkable views with browser back/forward.\n- **Architecture changelog in-viewer**: Changes across runs surfaced as an in-app changelog panel with per-entry read tracking (high-water mark + sparse set) persisted in localStorage.\n- **Incremental re-analysis**: Git-diff-based selective re-analysis of changed components only.\n- **Tree-sitter parsers**: Added tree-sitter parsers for all 6 supported languages with graceful fallback to regex parsers.\n- **Three-tier CLI**: `npx solution-explorer` now supports standalone run, `init` for automated setup, and `init --live` for live monitoring.\n- **Mobile UI**: Bottom sheet panel, safe area support, swipe gestures.\n- **Review mode with annotations**: Attach notes to components, files, symbols, and relationships.\n- **Automated downstream deployment**: Push to `sirfifer/solution-explorer@main` automatically dispatches redeploy workflows for all tracked installations (see `DEPLOYMENTS.md`).\n- **Release automation**: PyPI + npm publishing workflow.\n- **Cloudflare Workers backend**: Worker + D1 + R2 infrastructure for enhanced live monitoring, plus a resource usage dashboard.\n\n### Changed\n\n- **Split-mode output (`--split`)** is now the preferred path when emitting to CI. Architecture data is split into `manifest.json` plus per-component `detail-*.json` files; the viewer lazy-loads details on demand.\n- **Analysis output paths** adjusted to support split-mode and AI enhancement merge flow.\n\n### Fixed\n\n- **Blank-screen on deep drill**: Added a React error boundary wrapping the viewer root. Any render exception (e.g. a stale URL deep-link referencing a component that no longer exists after re-analysis) now produces a visible, recoverable error panel with \"Reset navigation\" (strips all query params and hash, then reloads) and \"Reload page\" actions. Previously, any such crash unmounted the entire app and left users on a blank page.\n- Viewer renders an empty-state instead of a blank view when component filtering hides everything; hero-filter fallback restores visibility if filters remove all components at a drill level.\n- Cloudflare deploy step skips cleanly when no project name is configured (does not fail the workflow).\n- Various `ruff` lint fixes in analyzer tests.\n- Incremental analyzer uses `to_dict()` instead of `asdict()` to emit correctly serialized output.\n\n## [1.1.0] - 2025-02-17\n\n### Changed\n\n- **Refactored analyzer into modular package**: Split the monolithic `analyze.py` (4,525 lines) into the `analyzer/` package with 17 modules. `analyze.py` remains as a backward-compatible CLI wrapper. Parsers, models, utilities, and config parsers each have their own module.\n- **Symbol cap now configurable**: Default is 5,000 in single-file mode, unlimited in split mode. Use `--max-symbols` to override.\n\n### Added\n\n- **Split JSON output** (`--split` flag): Produces a `manifest.json` with the component tree, relationships, and stats, plus per-component `detail-{id}.json` files with symbols and file metadata. Reduces initial page load from megabytes to ~20-100 KB.\n- **Lazy loading in viewer**: When using split output, the viewer loads component details on demand. Search indexes progressively as components are explored.\n- **Comprehensive test suite**: 370 tests covering 81% of the analyzer package (up from 43 tests at ~10% coverage). New test files: `test_utils.py`, `test_cli.py`, `test_parsers_extra.py`, `test_scanner_deep.py`.\n- **Module docstrings**: All analyzer modules now have descriptive module-level and class-level docstrings.\n\n### Fixed\n\n- Viewer gracefully handles both split and monolithic JSON formats with automatic detection and fallback.\n\n## [1.0.0] - 2025-01-01\n\n### Added\n\n- Architecture analyzer with support for Swift, Python, Rust, TypeScript/JavaScript, and Go\n- Detection and metrics for Java, Kotlin, Ruby, C/C++, C#, Dart, Vue, Svelte, HTML/CSS, SQL, Shell\n- Interactive React viewer with graph visualization using React Flow and ELK layout\n- Hierarchical drill-down navigation with breadcrumbs\n- Fuzzy search across components, files, and symbols (Cmd/Ctrl+K)\n- Code preview with syntax highlighting\n- Relationship visualization including imports, HTTP connections, and Docker links\n- Dark and light mode support\n- Mobile-friendly responsive layout with touch gestures\n- Multi-repository support with cross-repo relationships\n- GitHub Action for easy CI/CD integration\n- Deployment support for Cloudflare Pages, GitHub Pages, Vercel, and Netlify\n- SwiftUI flow detection for TabView, NavigationLink, sheets, and fullScreenCover\n- Framework and API endpoint detection\n- External cloud service detection\n- Session and localStorage persistence for UI state\n",
         "api_docs": null,
@@ -1769,7 +2067,22 @@
         "coverage_source": null,
         "has_ci_tests": true
       },
-      "actions": []
+      "actions": [],
+      "ai_enhance": {
+        "help_text": "This is the top-level project for Solution Explorer, an architecture visualization tool that turns any codebase into an interactive diagram. It groups the Python static analyzer, the React viewer, the npm distribution CLI, and the Cloudflare live-monitoring worker under one repository. Contributors start here to run the analyzer, build the viewer, and publish the enhanced architecture baseline. Every other component in this map is a child of this root.",
+        "architectural_role": null,
+        "data_handled": "Source code paths, analyzer configuration, the generated architecture.json baseline, and build artifacts for the viewer and CLI",
+        "criticality": "critical",
+        "testing_maturity": "adequate",
+        "testing_assessment": "The repository ships 584 unit tests across 14 files that run in CI and exercise the analyzer, parsers, and viewer utilities. Coverage is not measured and there are no integration or end-to-end suites.",
+        "testing_gaps": [
+          "Test suite is unit-only with no integration or end-to-end coverage",
+          "No measured line coverage is recorded"
+        ],
+        "tech_context": "Python drives the analyzer and packaging while the viewer and CLI are TypeScript, so the project spans two toolchains under one root.",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+        "ai_enhance_version": 2
+      }
     }
   ],
   "relationships": [
@@ -1788,7 +2101,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "The analyze.py wrapper re-exports the analyzer package so existing imports and the CLI entry point keep working. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "tests",
@@ -1805,7 +2123,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "The pytest suite imports the analyzer package directly to exercise the scanner and parsers. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src",
@@ -1822,7 +2145,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "App.tsx imports the React components it composes into the viewer, such as the AdminDashboard. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src",
@@ -1839,7 +2167,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "App.tsx imports viewer hooks such as useBottomSheet for interaction state. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src",
@@ -1856,7 +2189,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "The app source imports layout and other utilities for styling and helpers. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/utils",
@@ -1873,7 +2211,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "The utilities import the shared data-model types defined in the src package. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/components",
@@ -1890,7 +2233,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Components import hooks such as useAdminData to read live and admin data. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/components",
@@ -1907,7 +2255,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Components subscribe to the global Zustand store defined in the src package. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/components",
@@ -1924,7 +2277,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "The dashboard imports the admin tab components such as ActivityTab. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/components",
@@ -1941,7 +2299,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Components import layout metadata and helpers to render nodes and panels. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/components/admin",
@@ -1958,7 +2321,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Admin tabs read from the global Zustand store. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/components/admin",
@@ -1975,7 +2343,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Admin tabs import layout utilities for consistent styling. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/__tests__",
@@ -1992,7 +2365,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Tests import components such as ErrorBoundary to verify behavior. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/__tests__",
@@ -2009,7 +2387,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Tests import the componentId helper to assert its output. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/__tests__",
@@ -2026,7 +2409,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Tests import the Zustand store to verify navigation and state logic. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/__tests__",
@@ -2043,7 +2431,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Tests import the useLiveMonitor hook to verify polling behavior. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/hooks",
@@ -2060,7 +2453,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Hooks import the Zustand store to push status and admin data into global state. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/hooks",
@@ -2077,7 +2475,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Hooks import utilities such as search helpers. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "packages/cli",
@@ -2094,7 +2497,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "The CLI entry point imports its command implementations such as generate. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "packages/cli/src/commands",
@@ -2111,7 +2519,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "Commands import shared helpers for Python detection and viewer assembly. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "packages/cli/src/commands",
@@ -2128,7 +2541,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "The init command imports the workflow and config templates it writes out. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "analyzer",
@@ -2145,7 +2563,12 @@
       "middleware": [],
       "transport": null,
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "The scanner imports the PARSERS registry to select a language parser per file. This is an internal module dependency, not a runtime data path.",
+        "importance": "internal",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00"
+      }
     },
     {
       "source": "viewer/src/utils",
@@ -2160,9 +2583,15 @@
       "api_style": "graphql",
       "endpoints": [],
       "middleware": [],
-      "transport": null,
+      "transport": "http/2",
       "queue_name": null,
-      "connection_pattern": null
+      "connection_pattern": null,
+      "ai_enhance": {
+        "data_flow_description": "The viewer's utility and hook layer issues HTTP GET requests to the Cloudflare live-monitoring backend to fetch architecture status and version data, which is then overlaid onto the graph.",
+        "importance": "secondary",
+        "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+        "security_notes": "Requests are public read-only status fetches over HTTPS; ingest and webhook writes are authenticated separately on the Worker."
+      }
     }
   ],
   "symbols": [
@@ -16612,5 +17041,91 @@
       ]
     }
   ],
-  "changelog_serial": 29
+  "changelog_serial": 29,
+  "ai_enhance": {
+    "summary": "Solution Explorer is a self-contained tool that turns any codebase into an interactive architecture diagram. A Python analyzer scans a repository and emits a hierarchical architecture.json, which a Vite and React viewer renders with drill-down, search, and live status. An npm CLI packages the analyzer and viewer for npx use and scaffolds GitHub Actions workflows, while a Cloudflare Worker backs optional live monitoring. The repository also carries an AI-enhancement pipeline that layers curated descriptions, roles, and criticality onto the analyzer output.",
+    "data_flow_narrative": "A run starts when the analyzer walks a target repository, groups files into components, extracts symbols through language parsers, and writes architecture.json. In CI a merge script restores curated ai_enhance data onto that fresh output so human-authored context survives each scan. The viewer loads the resulting JSON and renders the component tree, relationships, and detail panels in the browser. When live monitoring is enabled, the viewer's hooks poll the Cloudflare Worker, which ingests pushed updates into D1 and R2 and returns status that is overlaid onto the graph.",
+    "component_groups": [
+      {
+        "name": "Analyzer engine",
+        "component_ids": [
+          "root",
+          "analyzer",
+          "analyzer/parsers"
+        ]
+      },
+      {
+        "name": "CLI distribution",
+        "component_ids": [
+          "packages/cli",
+          "packages/cli/src/commands",
+          "packages/cli/src/lib",
+          "packages/cli/src/templates"
+        ]
+      },
+      {
+        "name": "Viewer frontend",
+        "component_ids": [
+          "viewer",
+          "viewer/src",
+          "viewer/src/components",
+          "viewer/src/components/admin",
+          "viewer/src/hooks",
+          "viewer/src/utils"
+        ]
+      },
+      {
+        "name": "Live monitoring backend",
+        "component_ids": [
+          "infrastructure/cloudflare",
+          "infrastructure/cloudflare/worker",
+          "infrastructure/cloudflare/worker/src"
+        ]
+      },
+      {
+        "name": "Pipeline and tooling",
+        "component_ids": [
+          "scripts",
+          "tests"
+        ]
+      },
+      {
+        "name": "Documentation and data",
+        "component_ids": [
+          "docs",
+          "docs/archive",
+          "docs/remediation",
+          "viewer/public/architecture/data",
+          "viewer/src/__tests__"
+        ]
+      }
+    ],
+    "tech_diversity": "The codebase is split between Python for the analyzer and TypeScript for the viewer, CLI, and Cloudflare Worker, with a large volume of generated JSON demo data. Ignoring that generated data, Python and TypeScript are roughly balanced as the two hand-written languages.",
+    "test_health_summary": "Testing is concentrated in the Python analyzer, which has 584 unit tests running in CI, while the TypeScript viewer has only 54 unit tests and no end-to-end coverage. No component records a measured coverage percentage.",
+    "observations": [
+      {
+        "category": "data_quality",
+        "component_id": "viewer/src/utils",
+        "description": "The analyzer tags viewer/src/utils with the Next.js framework, but the viewer is a Vite and React single-page app with no Next.js dependency.",
+        "suggestion": "Refine framework detection so a stray next reference does not override Vite and React.",
+        "confidence": "medium"
+      },
+      {
+        "category": "detection_gap",
+        "component_id": "viewer/src/utils",
+        "description": "The viewer's HTTP call to live monitoring is attributed to the infrastructure/cloudflare shell module rather than the worker package that actually serves the endpoint.",
+        "suggestion": "Attribute detected HTTP calls to the component that owns the served route.",
+        "confidence": "medium"
+      },
+      {
+        "category": "structural_suggestion",
+        "component_id": "viewer/public/architecture/data",
+        "description": "The bundled demo dataset under viewer/public/architecture/data contributes over 169,000 lines and dominates repository metrics despite being inert generated data.",
+        "suggestion": "Consider excluding generated demo data from component metrics or moving it out of the analyzed tree.",
+        "confidence": "high"
+      }
+    ],
+    "ai_enhanced_at": "2026-07-06T12:00:00+00:00",
+    "ai_enhance_version": 2
+  }
 }
