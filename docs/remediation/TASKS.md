@@ -36,7 +36,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - Deviation: acceptance item "architecture.json has ai_enhance on at least three components" is not met because no AI baseline exists to restore and generating one requires the interactive /ai-assist pass (out of scope for this pipeline task). Followed the orchestrator's explicit fallback: committed real non-AI baseline, flagged /ai-assist re-run.
 
 ### P0-2: Make live-monitor.yml parse and run; fix its latent bugs; fix the shipped template
-- Status: TODO
+- Status: DONE (session remediation/p0-pipeline, 2026-07-06)
 - Model: Opus 4.8 (Sonnet 5 acceptable; changes are fully prescribed)
 - Stream: A. Branch: remediation/p0-pipeline
 - Findings: F-CRIT-2
@@ -52,6 +52,12 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - [ ] Template output of `init --live` contains none of the broken patterns (render the template in a unit test or a quick script and grep it)
 - Verify: actionlint; grep as above; `gh run list --workflow=live-monitor.yml --limit 3` after a test push
 - Evidence:
+  - Re-verified F-CRIT-2 at current lines: step-level `if: ${{ secrets.CF_WORKER_URL != '' }}` at live-monitor.yml:202 and :240; exact-key cache restore at :65 vs sha-suffixed save at :188; raw commit-message interpolation at :282; dead `.arch-output/data` detail-upload block at :227-235. Template mirrors at .ts:11, :34, :62, :144.
+  - Fixes in live-monitor.yml: (1) removed both step-level `secrets.` `if:` expressions; moved `CF_WORKER_URL` (and `CF_INGEST_TOKEN`, `CF_R2_ENDPOINT`, `REPO_NAME`, `COMMIT_SHA`) into `env:` and gate each step in shell with `if [ -z "$CF_WORKER_URL" ]; then ... exit 0; fi`. (2) Added `restore-keys: |\n  arch-baseline-${{ github.ref }}-` to the restore step so the sha-suffixed save key is prefix-matched. (3) Commit-message injection fixed: `COMMIT_MESSAGE` now passed via `env:` and read with `os.environ.get('COMMIT_MESSAGE')`; also replaced remaining in-body `${{ secrets.* }}` and `${{ steps.sha.* }}` interpolations in the curl with the env vars. (4) Dead R2 detail-upload path removed. Decision: the analyzer step emits single-file `--compact` (`.arch-output/architecture.json`) and the Pages/worker deploy serves that single file, so `.arch-output/data` is never produced. The former `if [ -d ".arch-output/data" ]` block was dead. Removed it and left a comment pointing at the worker escape-sync requirement if `--split` is ever adopted. Identical fixes applied to the CLI template `packages/cli/src/templates/live-monitor.yml.ts` (the template never had a detail-upload block, so nothing to delete there).
+  - actionlint installed via `brew install actionlint` (v1.7.12). Fail-then-pass proof: `actionlint /tmp/.../live-monitor-PREFIX.yml` (the committed pre-fix file) exits 1 with `context "secrets" is not allowed here` at :202 and :240; `actionlint .github/workflows/live-monitor.yml` (post-fix) exits 0. `grep -rn "if:.*secrets\." .github packages/cli/src/templates` returns nothing.
+  - Template render check: built the CLI package (`npm run build`) and rendered both modes with node. Rendered cloudflare and github outputs both pass `actionlint` (exit 0, only pre-existing shellcheck info notes shared with ci.yml). Grep of rendered cloudflare output: no step-level `if:.*secrets.`; `head_commit.message` appears only inside the `env:` block (safe pattern), not the run body; `restore-keys` present. The committed `packages/cli/dist` is stale build artifact tracked in git; I restored it after rendering so this commit touches only the source template (dist untracking is P2-6's job).
+  - Repo-wide: `pytest tests/ -q` -> 637 passed, 1 xfailed; `ruff check analyzer/ tests/ scripts/` -> All checks passed.
+  - Deviation: could not run a live `gh workflow run`/scratch-branch trigger for the branch's version. live-monitor.yml triggers on `push: [main]`, `workflow_run`, or `workflow_dispatch`, and `gh workflow run` executes the copy on the default branch, not this feature branch, so it cannot exercise my change until merged. actionlint is the parse arbiter used here and it is clean; a post-merge push to main will exercise the real trigger.
 
 ### P0-3: Worker escape parity so ingest stops deleting fresh detail files
 - Status: TODO
