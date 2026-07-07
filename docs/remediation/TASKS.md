@@ -60,7 +60,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - Deviation: could not run a live `gh workflow run`/scratch-branch trigger for the branch's version. live-monitor.yml triggers on `push: [main]`, `workflow_run`, or `workflow_dispatch`, and `gh workflow run` executes the copy on the default branch, not this feature branch, so it cannot exercise my change until merged. actionlint is the parse arbiter used here and it is clean; a post-merge push to main will exercise the real trigger.
 
 ### P0-3: Worker escape parity so ingest stops deleting fresh detail files
-- Status: TODO
+- Status: DONE (session remediation/p0-pipeline, 2026-07-06)
 - Model: Opus 4.8 (Sonnet 5 acceptable)
 - Stream: A. Branch: remediation/p0-pipeline
 - Findings: F-CRIT-5, related F-AN-4
@@ -71,6 +71,12 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - [ ] All three escape implementations produce identical output for the shared fixture ids used in tests/test_cli.py:556-569
 - Verify: worker test run; cross-check fixtures against tests/test_cli.py and viewer componentId.test.ts
 - Evidence:
+  - Re-verified F-CRIT-5: `cleanupOrphanedDetails` at infrastructure/cloudflare/worker/src/index.ts (now :312) computed active keys with `id.replace(/\//g, "--")` only, missing the `:` -> `__` escape that analyzer/cli.py `safe_component_id` and viewer/src/utils/componentId.ts both apply.
+  - Fix: created infrastructure/cloudflare/worker/src/componentId.ts exporting `safeComponentId(id) = id.replace(/\//g,"--").replace(/:/g,"__")`, identical to the viewer, with the "must stay in sync with analyzer/cli.py and viewer componentId.ts" comment naming F-CRIT-5. Imported it in index.ts and replaced the inline escape in `cleanupOrphanedDetails`.
+  - Worker had no test harness; added a minimal vitest setup (vitest ^4.0.18 devDep matching the viewer, `"test": "vitest run"` script) and src/componentId.test.ts. The test asserts the pure function plus the exact active-key derivation, including the audit reproduction: id `repo:unamentis` -> `unamentis/detail-repo__unamentis.json`, and id `repo:unamentis/viewer` -> `unamentis/detail-repo__unamentis--viewer.json`.
+  - Fail-then-pass proof: replaced componentId.ts with the pre-fix slash-only escape and ran `npm test`: 4 failed / 2 passed, with `expected 'unamentis/detail-repo:unamentis--viewer.json' to be 'unamentis/detail-repo__unamentis--viewer.json'` (raw colon leaks, would never match the uploaded key). Restored the fix: 6 passed. `npm run typecheck` (tsc --noEmit) exits 0 with the new import.
+  - Cross-check of all three escape implementations on the shared fixtures: analyzer tests/test_cli.py:558-571 (`viewer/src`->`viewer--src`, `repo:unamentis`->`repo__unamentis`, `repo:unamentis/viewer`->`repo__unamentis--viewer`, `plain-id` unchanged), viewer/src/__tests__/componentId.test.ts (same four), worker src/componentId.test.ts (same four). Identical output confirmed.
+  - Repo-wide: pytest 637 passed / 1 xfailed; ruff clean (worker changes are TS, unaffected).
 
 ### P0-4: Fix merge-ai-enhancements.py crash and write-then-fail ordering
 - Status: TODO
