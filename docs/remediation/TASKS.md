@@ -79,7 +79,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - Repo-wide: pytest 637 passed / 1 xfailed; ruff clean (worker changes are TS, unaffected).
 
 ### P0-4: Fix merge-ai-enhancements.py crash and write-then-fail ordering
-- Status: TODO
+- Status: DONE (session remediation/p0-pipeline, 2026-07-06)
 - Model: Opus 4.8 (Sonnet 5 acceptable)
 - Stream: A. Branch: remediation/p0-pipeline
 - Findings: F-CRIT-6 (root design gap deferred to P3-3)
@@ -93,6 +93,12 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - [ ] No UnboundLocalError possible on any branch (all names assigned on all paths)
 - Verify: new tests; manual rerun of the audit reproduction
 - Evidence:
+  - Re-verified F-CRIT-6: `baseline_index` was assigned only inside `if not has_ai:` (was line 135), but the zero-match diagnostic referenced it unconditionally (was line 168), and the target was written (was line 149) before that diagnostic. A baseline with architecture-level `ai_enhance` (what /ai-assist always writes) skips the assignment, so the drift scenario raised UnboundLocalError after already overwriting the target.
+  - Fix in scripts/merge-ai-enhancements.py: compute `baseline_index` and `baseline_ai_ids` once, immediately after loading the baseline (before the has_ai check), so no name is ever unassigned. Reordered so the drift guard runs BEFORE the target write: when `comp_stats.total > 0 and comp_stats.preserved == 0 and baseline_ai_ids`, print an ERROR diagnostic (counts, sample IDs, likely cause, "Target file left unchanged") and `sys.exit(1)` without writing. Success message moved after the write. No branch can reach an unassigned local now.
+  - New tests: tests/test_merge_ai_enhancements.py (subprocess-driven, real script): `test_normal_merge_preserves_data` (matching IDs preserve component + arch AI, exit 0); `test_drifted_ids_exit_nonzero_and_leave_target_unchanged` (the audit reproduction: arch-level AI baseline, fully drifted target IDs); `test_non_enhanced_baseline_passes_through` (no AI anywhere, exit 0, target untouched); `test_partial_match_still_writes_and_succeeds` (>=1 match writes, exit 0).
+  - Fail-then-pass proof: against pre-fix code `pytest tests/test_merge_ai_enhancements.py` -> `1 failed, 3 passed`; the failing test is the drift reproduction, failing on `assert "Traceback" not in result.stderr` with `UnboundLocalError: cannot access local variable 'baseline_index'` at merge-ai-enhancements.py:168 (and the target had been overwritten before the crash). Post-fix: `4 passed`. The other three pre-fix passes are expected (they never hit the crashing branch); the drift test is the true regression test.
+  - No UnboundLocalError possible on any branch: `baseline_index`/`baseline_ai_ids` assigned before first use on every path; verified by the passing drift test (which exercises the previously-crashing path) and `ruff check scripts/merge-ai-enhancements.py` clean.
+  - Regression safety: existing merge coverage tests/test_dpea.py 51 passed unchanged. Repo-wide `pytest tests/ -q` -> 641 passed, 1 xfailed; `ruff check analyzer/ tests/ scripts/` clean; the conftest guard confirms architecture.json was not re-dirtied.
 
 ### P0-5: Stop GITHUB_TOKEN reaching output JSON and CI logs
 - Status: TODO
