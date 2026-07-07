@@ -123,7 +123,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - Repo-wide: `pytest tests/ -q` -> 644 passed, 1 xfailed; `ruff check analyzer/ tests/ scripts/` clean; architecture.json not re-dirtied (conftest guard).
 
 ### P0-6: Split-mode detail panel renders lazily loaded data, with a visible loading state
-- Status: TODO
+- Status: DONE (session remediation/p0-viewer, branch remediation/p0-viewer)
 - Model: Opus 4.8
 - Stream: B (viewer). Branch: remediation/p0-viewer
 - Findings: F-CRIT-4
@@ -133,10 +133,31 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   2. Render `componentDetailLoading` as a visible loading state on the Files and Symbols tabs.
   3. Component test with a mocked `fetch` and the real store: open a split-mode component, assert loading state appears, resolve the fetch, assert files and symbols render and counts update. This is the regression test for the whole split-mode path; do not mock the store.
 - Accept:
-  - [ ] Test proves empty-then-loading-then-populated sequence against the real store and real DetailPanel
-  - [ ] Manual check in a local `--split` build of this repo: Files and Symbols tabs populate on first click
+  - [x] Test proves empty-then-loading-then-populated sequence against the real store and real DetailPanel
+  - [x] Manual check in a local `--split` build of this repo: Files and Symbols tabs populate on first click
 - Verify: viewer test run; manual: `python3 analyze.py . --split -o viewer/public/architecture && cd viewer && npm run dev`
 - Evidence:
+  - Re-verified the finding against current code before editing. Confirmed mechanism in `viewer/src/components/DetailPanel.tsx` `ComponentDetail`: `files`/`symbols` were memoized on `[component.id, getComponentFiles]` and `[component.id, getComponentSymbols]`. Those deps stay referentially stable when `loadComponentDetail` fills `componentDetailCache`, so the memos never recomputed and the Files/Symbols tabs stayed empty for the open component. `componentDetailLoading` was subscribed at line 127 but never rendered.
+  - Fix (viewer/src/components/DetailPanel.tsx):
+    1. Added a selector subscription to this component's cache entry: `const detailCacheEntry = useArchStore((s) => s.componentDetailCache[component.id]);` and added `detailCacheEntry` to the `files` and `symbols` memo dependency arrays, so the panel re-renders and the memos recompute when the lazy fetch lands.
+    2. Added `const detailLoading = componentDetailLoading === component.id;` and passed it to `FilesTab` and `SymbolsTab`. Added a shared `DetailLoadingState` component (role="status", spinner plus text) that each tab renders when `loading && list.length === 0`. Early returns are placed after all hooks to respect the rules of hooks.
+  - Regression test: `viewer/src/__tests__/DetailPanel.split.test.tsx`. Uses the real Zustand store (no store mock) and the real `DetailPanel`, with a mocked global `fetch` returning a deferred promise. Sets a split-mode architecture (top-level `files`/`symbols` empty), opens a component via `showDetail`, asserts `componentDetailLoading` is set and the Files tab shows the loading state (`role="status"`, "Loading files..."), resolves the fetch with a 2-file/3-symbol payload, then asserts the file names render, the loading state clears, and the Files (2) and Symbols (3) tab counts update; also opens the Symbols tab and asserts symbol names render.
+  - Fails-then-passes proof (per WORK-PLAN principle 2):
+    - Stashed only the fix: `git stash push -- viewer/src/components/DetailPanel.tsx`.
+    - Pre-fix run: `npx vitest run src/__tests__/DetailPanel.split.test.tsx` => 1 failed. Failure at `screen.getByRole("status")` (Unable to find role="status"): with the pre-fix panel neither the loading state nor the populated files ever render, so the empty-then-loading-then-populated sequence is unreachable.
+    - Restored the fix: `git stash pop`.
+    - Post-fix run: same command => 1 passed.
+  - Full verification (from viewer/, after `npm ci`):
+    - `npm test -- --run` => 5 files, 55 tests passed (includes the new test).
+    - `npm run lint` => exit 0. 0 errors, 18 warnings, all pre-existing (F-VW-8), none in the changed code.
+    - `npx tsc -b` => exit 0.
+    - `npm run build` => exit 0 (pre-existing search.ts mixed-import and 500 kB chunk warnings only, both tracked under F-VW-8 / P2-3).
+  - Manual verification with a real browser (playwriter driving Chrome):
+    - `python3 analyze.py . --split -o viewer/public/architecture` produced manifest.json plus 23 detail-*.json files. Built the viewer and served with `vite preview` on port 4321.
+    - Confirmed served detail JSON: `GET /architecture/data/detail-analyzer.json` returned 11 files and 46 symbols.
+    - Opened `http://localhost:4321/?component=analyzer` (first view of that component). The detail panel showed Files 11 and Symbols 46 in the Overview and tab counts (these are 0 pre-fix). Clicked the Files tab: the filter input and real file names (`__init__.py`, `scanner.py`) rendered, no stuck loading state. Clicked the Symbols tab: the symbol filter and real symbol names (`redetect_relationships`, `parse_gemfile`) rendered. This confirms the Files and Symbols tabs populate on first click in a real `--split` build.
+    - Cleaned up: removed the generated data and restored the committed sample dataset under `viewer/public/architecture` via `git checkout`, leaving the tree clean except the two intended changes.
+  - Files changed: `viewer/src/components/DetailPanel.tsx` (fix), `viewer/src/__tests__/DetailPanel.split.test.tsx` (new regression test). No changes to store.ts were needed; the existing `componentDetailCache` and `componentDetailLoading` state was sufficient once the panel subscribed to the cache entry.
 
 ---
 

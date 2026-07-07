@@ -37,6 +37,22 @@ function SourceLink({ filePath, line, endLine }: { filePath: string; line?: numb
   );
 }
 
+function DetailLoadingState({ label }: { label: string }) {
+  const { darkMode } = useArchStore();
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={`p-6 flex flex-col items-center justify-center gap-3 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}
+    >
+      <div
+        className={`w-5 h-5 rounded-full border-2 border-t-transparent animate-spin ${darkMode ? "border-zinc-600" : "border-zinc-300"}`}
+      />
+      <p className="text-sm">{label}</p>
+    </div>
+  );
+}
+
 type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai" | "status" | "testing" | "actions";
 
 export function DetailPanel() {
@@ -125,14 +141,26 @@ function ComponentDetail({
   // Lazy-load component details (split mode)
   const loadComponentDetail = useArchStore((s) => s.loadComponentDetail);
   const componentDetailLoading = useArchStore((s) => s.componentDetailLoading);
+  // Subscribe to this component's cache entry so the panel re-renders when the
+  // lazy fetch lands. Without this dependency the files/symbols memos below stay
+  // referentially stable (their action deps never change) and the tabs render
+  // their pre-fetch empty values forever.
+  const detailCacheEntry = useArchStore((s) => s.componentDetailCache[component.id]);
+  const detailLoading = componentDetailLoading === component.id;
 
   useEffect(() => {
     loadComponentDetail(component.id);
   }, [component.id, loadComponentDetail]);
 
   const colors = getTypeColors(component.type, darkMode);
-  const files = useMemo(() => getComponentFiles(component.id), [component.id, getComponentFiles]);
-  const symbols = useMemo(() => getComponentSymbols(component.id), [component.id, getComponentSymbols]);
+  const files = useMemo(
+    () => getComponentFiles(component.id),
+    [component.id, getComponentFiles, detailCacheEntry],
+  );
+  const symbols = useMemo(
+    () => getComponentSymbols(component.id),
+    [component.id, getComponentSymbols, detailCacheEntry],
+  );
   const relationships = useMemo(
     () =>
       architecture?.relationships.filter(
@@ -331,7 +359,7 @@ function ComponentDetail({
           <DocsTab component={component} />
         )}
         {activeTab === "files" && (
-          <FilesTab files={files} componentId={component.id} />
+          <FilesTab files={files} componentId={component.id} loading={detailLoading} />
         )}
         {activeTab === "symbols" && (
           <SymbolsTab
@@ -339,6 +367,7 @@ function ComponentDetail({
             expandedSymbol={expandedSymbol}
             setExpandedSymbol={setExpandedSymbol}
             componentId={component.id}
+            loading={detailLoading}
           />
         )}
         {activeTab === "ai" && (
@@ -670,7 +699,7 @@ function ChildRow({ component }: { component: Component }) {
   );
 }
 
-function FilesTab({ files, componentId }: { files: FileInfo[]; componentId: string }) {
+function FilesTab({ files, componentId, loading }: { files: FileInfo[]; componentId: string; loading?: boolean }) {
   const { darkMode, showDetail, reviewMode, setAnnotatingTarget, annotations } = useArchStore();
   const [filter, setFilter] = useState("");
 
@@ -689,6 +718,11 @@ function FilesTab({ files, componentId }: { files: FileInfo[]; componentId: stri
     }
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
+
+  // Split-mode detail is still loading and nothing has arrived yet.
+  if (loading && files.length === 0) {
+    return <DetailLoadingState label="Loading files..." />;
+  }
 
   return (
     <div className="p-3">
@@ -769,11 +803,13 @@ function SymbolsTab({
   expandedSymbol,
   setExpandedSymbol,
   componentId,
+  loading,
 }: {
   symbols: ArchSymbol[];
   expandedSymbol: string | null;
   setExpandedSymbol: (s: string | null) => void;
   componentId: string;
+  loading?: boolean;
 }) {
   const { darkMode, reviewMode, setAnnotatingTarget, annotations } = useArchStore();
   const [filter, setFilter] = useState("");
@@ -795,6 +831,11 @@ function SymbolsTab({
     }
     return result;
   }, [symbols, filter, kindFilter]);
+
+  // Split-mode detail is still loading and nothing has arrived yet.
+  if (loading && symbols.length === 0) {
+    return <DetailLoadingState label="Loading symbols..." />;
+  }
 
   const kindIcons: Record<string, string> = {
     class: "C",
