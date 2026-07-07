@@ -10,7 +10,10 @@ __pycache__/
 node_modules/
 
 # Generated
-architecture.json
+# NOTE: the repo-root architecture.json is intentionally tracked. It is the
+# committed AI-enhancement baseline that the deploy pipeline merges from, so it
+# must not be gitignored. Regenerate it with `python3 analyze.py . -o
+# architecture.json` and re-run /ai-assist to restore AI enhancements.
 .arch-baseline/
 
 # Cloudflare Worker

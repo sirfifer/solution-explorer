@@ -103,7 +103,13 @@ class MultiRepoOrchestrator:
         print(f"  Cloning {url} (ref={ref})...")
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            print(f"Error cloning {url}: {result.stderr}", file=sys.stderr)
+            # Git echoes the credentialed clone URL in "unable to access"
+            # messages, so redact the token before printing to CI logs
+            # (F-CRIT-3). Report the original untokenized url, not clone_url.
+            stderr = result.stderr
+            if token:
+                stderr = stderr.replace(token, "***")
+            print(f"Error cloning {url}: {stderr}", file=sys.stderr)
             sys.exit(1)
 
         return clone_path
