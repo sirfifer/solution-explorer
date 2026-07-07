@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from .action_detector import UIActionDetector
 from .config_parsers import (
@@ -67,6 +68,31 @@ from .utils import (
     _name_from_server_script,
     _should_skip_dir,
 )
+
+
+def _strip_url_credentials(url: str) -> str:
+    """Remove embedded userinfo (``user:password@``) from a URL.
+
+    Clone URLs persisted in ``.git/config`` can carry credentials, for example
+    the ``https://x-access-token:<GITHUB_TOKEN>@github.com/...`` form that
+    multi-repo mode writes when cloning private repos. Storing that verbatim in
+    the architecture output (and the viewer-served manifest) would leak the
+    token (F-CRIT-3). Non-URL or unparseable values are returned unchanged.
+    """
+    if not url:
+        return url
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return url
+    # scp-like SSH remotes (git@host:path) and relative paths have no hostname;
+    # they carry no password, so leave them untouched.
+    if not parts.hostname or "@" not in parts.netloc:
+        return url
+    netloc = parts.hostname
+    if parts.port:
+        netloc = f"{netloc}:{parts.port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
 class ArchitectureScanner:
@@ -2556,6 +2582,9 @@ class ArchitectureScanner:
                     # Convert SSH to HTTPS
                     url = re.sub(r'git@github\.com:', 'https://github.com/', url)
                     url = re.sub(r'\.git$', '', url)
+                    # Strip any embedded credentials before storing so a clone
+                    # token never reaches the output JSON (F-CRIT-3).
+                    url = _strip_url_credentials(url)
                     self.architecture.repository = url
             except OSError:
                 pass

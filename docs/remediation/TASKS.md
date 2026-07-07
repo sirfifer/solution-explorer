@@ -101,7 +101,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - Regression safety: existing merge coverage tests/test_dpea.py 51 passed unchanged. Repo-wide `pytest tests/ -q` -> 641 passed, 1 xfailed; `ruff check analyzer/ tests/ scripts/` clean; the conftest guard confirms architecture.json was not re-dirtied.
 
 ### P0-5: Stop GITHUB_TOKEN reaching output JSON and CI logs
-- Status: TODO
+- Status: DONE (session remediation/p0-pipeline, 2026-07-06)
 - Model: Opus 4.8
 - Stream: A. Branch: remediation/p0-pipeline
 - Findings: F-CRIT-3
@@ -115,6 +115,12 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - [ ] Clone-failure path prints a redacted URL (test-asserted)
 - Verify: new tests; `grep -r "x-access-token" <output>` in test
 - Evidence:
+  - Re-verified F-CRIT-3: scanner.py `_detect_project_info` (now :2578-2585) read `url` from `.git/config` and stored it with no credential stripping; multi_repo.py `_resolve_repo` (:104-107) printed `result.stderr` verbatim on clone failure, and the tokenized clone URL persisted in the clone's `.git/config` flows into `arch.repository` and then `merged.repositories[].repository` (:139).
+  - Fix 1 (protects every scan): added module-level `_strip_url_credentials(url)` in scanner.py (urllib urlsplit/urlunsplit, drops userinfo, leaves scp-like SSH and non-URLs untouched) and applied it in `_detect_project_info` before storing `self.architecture.repository`.
+  - Fix 2 (multi-repo clone failure): redact the token from `result.stderr` (`stderr.replace(token, "***")`) before printing; comment notes the original untokenized `url` is what gets reported. The success-path print already used the untokenized url.
+  - New tests tests/test_multi_repo.py: `test_strip_url_credentials_removes_userinfo` (x-access-token and user:pass forms stripped, clean/ssh forms unchanged); `test_token_in_git_config_never_reaches_output` (build a temp repo whose .git/config has `https://x-access-token:FAKE...@github.com/...`, run a full `ArchitectureScanner.scan()`, assert `arch.repository == https://github.com/org/private-repo` and that the fake token and the string `x-access-token` appear nowhere in `json.dumps(to_dict(arch))`); `test_clone_failure_redacts_token_in_stderr` (monkeypatch subprocess.run to fail with git's credentialed "unable to access" stderr, GITHUB_TOKEN=FAKE, assert SystemExit(1), the token appears in neither stdout nor stderr, and `***` is present).
+  - Fail-then-pass proof: `git stash push analyzer/scanner.py analyzer/multi_repo.py` (pre-fix), then ran the two behavioral tests via a scratch copy that drops the new-helper import (which otherwise breaks collection pre-fix): both FAILED. `test_token_in_git_config_never_reaches_output` failed because the tokenized URL reached output; `test_clone_failure_redacts_token_in_stderr` failed on `assert FAKE_TOKEN not in combined` (stderr contained `ess-token:FAKEtoken...@github.com/...`). `git stash pop` (restore fix): tests/test_multi_repo.py -> 3 passed.
+  - Repo-wide: `pytest tests/ -q` -> 644 passed, 1 xfailed; `ruff check analyzer/ tests/ scripts/` clean; architecture.json not re-dirtied (conftest guard).
 
 ### P0-6: Split-mode detail panel renders lazily loaded data, with a visible loading state
 - Status: TODO
