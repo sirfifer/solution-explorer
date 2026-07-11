@@ -129,13 +129,22 @@ def main():
         print(f"Could not read baseline: {exc}", file=sys.stderr)
         sys.exit(1)
 
+    # Build the baseline component index once, up front, so every later code
+    # path (the has_ai check and the drift diagnostic) can reference it. It used
+    # to be assigned only when the baseline lacked architecture-level ai_enhance,
+    # which made the diagnostic raise UnboundLocalError in the exact scenario it
+    # was written to report (F-CRIT-6).
+    baseline_index = _build_component_index(baseline.get("components", []))
+    baseline_ai_ids = sorted(
+        cid for cid, c in baseline_index.items() if "ai_enhance" in c
+    )
+
     # Check if baseline has any ai_enhance data worth merging
-    has_ai = "ai_enhance" in baseline
-    if not has_ai:
-        baseline_index = _build_component_index(baseline.get("components", []))
-        has_ai = any("ai_enhance" in c for c in baseline_index.values())
-    if not has_ai:
-        has_ai = any("ai_enhance" in r for r in baseline.get("relationships", []))
+    has_ai = (
+        "ai_enhance" in baseline
+        or bool(baseline_ai_ids)
+        or any("ai_enhance" in r for r in baseline.get("relationships", []))
+    )
 
     if not has_ai:
         print("No ai_enhance data in baseline, nothing to merge")
@@ -145,6 +154,41 @@ def main():
         target = json.load(f)
 
     comp_stats, rel_stats = merge(baseline, target)
+
+    # Drift guard, checked BEFORE writing the target. If the baseline carries
+    # AI-enhanced components but none matched the freshly analyzed output, the
+    # component IDs drifted (repo-prefix added/removed, path separator change).
+    # Writing now would overwrite curated AI work with AI-stripped output, so
+    # fail loudly and leave the target file untouched. Previously the target was
+    # written before this check ran, corrupting the file even on failure
+    # (F-CRIT-6). The root fix (drift-tolerant matching) is deferred to P3-3.
+    if comp_stats["total"] > 0 and comp_stats["preserved"] == 0 and baseline_ai_ids:
+        target_index = _build_component_index(target.get("components", []))
+        target_ids = sorted(target_index.keys())
+        print(
+            "ERROR: baseline has AI-enhanced components but NONE matched target IDs.",
+            file=sys.stderr,
+        )
+        print(
+            f"  Baseline has {len(baseline_ai_ids)} AI-enhanced component IDs; "
+            f"first 5: {baseline_ai_ids[:5]}",
+            file=sys.stderr,
+        )
+        print(
+            f"  Target has {len(target_ids)} component IDs; "
+            f"first 5: {target_ids[:5]}",
+            file=sys.stderr,
+        )
+        print(
+            "  Likely cause: component ID schema changed "
+            "(e.g. repo-prefix added/removed, path separator change).",
+            file=sys.stderr,
+        )
+        print(
+            f"  Target file left unchanged: {target_path}. No AI data was lost.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     with open(target_path, "w", encoding="utf-8") as f:
         json.dump(target, f, indent=None, ensure_ascii=False)
@@ -158,37 +202,6 @@ def main():
         f"{carried_msg} "
         f"{comp_stats['missing']} components without ai_enhance."
     )
-
-    # If the baseline has AI data but nothing preserved, the component IDs
-    # drifted between baseline and the freshly-analyzed output. Log samples
-    # from both sides so the mismatch shape is visible in CI output; this is
-    # the single most common cause of silently losing AI work on redeploy.
-    if comp_stats["total"] > 0 and comp_stats["preserved"] == 0:
-        baseline_ai_ids = sorted(
-            cid for cid, c in baseline_index.items() if "ai_enhance" in c
-        )
-        target_index = _build_component_index(target.get("components", []))
-        target_ids = sorted(target_index.keys())
-        if baseline_ai_ids:
-            print(
-                "WARNING: baseline has AI-enhanced components but NONE matched target IDs.",
-                file=sys.stderr,
-            )
-            print(
-                f"  Baseline has {len(baseline_ai_ids)} AI-enhanced component IDs; "
-                f"first 5: {baseline_ai_ids[:5]}",
-                file=sys.stderr,
-            )
-            print(
-                f"  Target has {len(target_ids)} component IDs; "
-                f"first 5: {target_ids[:5]}",
-                file=sys.stderr,
-            )
-            print(
-                "  Likely cause: component ID schema changed "
-                "(e.g. repo-prefix added/removed, path separator change).",
-                file=sys.stderr,
-            )
 
 
 if __name__ == "__main__":

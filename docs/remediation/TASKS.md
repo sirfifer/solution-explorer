@@ -11,7 +11,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 ## Phase 0: Ground truth repairs
 
 ### P0-1: Stop pytest clobbering the AI baseline; restore a real baseline
-- Status: TODO
+- Status: DONE (session remediation/p0-pipeline, 2026-07-06)
 - Model: Opus 4.8
 - Stream: A (pipeline/Python). Branch: remediation/p0-pipeline
 - Findings: F-CRIT-7
@@ -27,9 +27,17 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - [ ] Guard fixture demonstrably fails when a test writes root architecture.json (prove once, then keep)
 - Verify: `pytest tests/ -q && git status --porcelain`; `python3 -c "import json;d=json.load(open('architecture.json'));print(d['root_path'],'ai' if 'ai_enhance' in d else 'NO-AI')"`
 - Evidence:
+  - Re-verified F-CRIT-7. Two leaky tests found in tests/test_cli.py (audit named one): `test_max_symbols_explicit_override` (was line 348) and `test_default_max_symbols_is_5000_single_file_mode` (was line 295). Both called `main()` with no `-o` and no `monkeypatch.chdir`, writing the analyzer default `architecture.json` into cwd (repo root). Audited all 16 `main()` callsites in tests/test_cli.py plus tests/test_incremental.py:971: every other call either passes `-o` or uses `monkeypatch.chdir(temp_repo)`, so those two were the only offenders. Fix: added `-o str(temp_repo / "out.json")` to both.
+  - Added tests/conftest.py with an autouse guard fixture `_guard_repo_root_architecture_baseline` that snapshots (size, mtime_ns) of repo-root `architecture.json` and the presence of a repo-root `architecture/` dir before each test and fails the test if either changes.
+  - Guard fail-then-pass proof: with the fix in place both formerly-leaky tests pass and `git status --porcelain` shows no stray `architecture.json`; baseline stat `619951 1783387058` unchanged across the run. Then temporarily reverted `test_max_symbols_explicit_override` to the leaky argv (removed `-o`) and ran it: guard failed with `Failed: Test modified repo-root architecture.json. A CLI test likely ran main() without -o and clobbered the committed AI baseline (F-CRIT-7)...` (conftest.py:48). Restored the `-o` fix and regenerated the baseline.
+  - Baseline restore: exhaustively searched every `architecture.json` blob across all refs (`git log --all --pretty=%H -- architecture.json`, 14 commits, 14 unique blobs). NONE contain architecture-level or component-level `ai_enhance`; 13 are pytest junk (name `test_max_symbols_explicit_over0`, root_path in /private/var/folders pytest tmp) and the oldest (3dabc4c) is a non-AI scan of the unamentis project. No genuine AI-enhanced baseline of this repo has ever been committed, which corroborates F-CRIT-7's suspected origin of the April "0/253 preserved" symptom. Per the task's fallback instruction, committed the freshly generated non-AI output of `python3 analyze.py . -o architecture.json` (root_path `/Users/ramerman/dev/solution-explorer`, name `solution-explorer`, 23 components). ACTION REQUIRED: `/ai-assist` must be re-run interactively to restore real AI enhancements onto this baseline before the next deploy relies on preservation.
+  - .gitignore: removed the stale `architecture.json` ignore entry (the root file is a tracked deploy baseline) and added an explanatory comment.
+  - Verify results: `pytest tests/ -q` -> `637 passed, 1 xfailed`; `git status --porcelain` shows only the intended changes (.gitignore, architecture.json, tests/test_cli.py, tests/conftest.py), no stray output. `python3 -c ...` -> `/Users/ramerman/dev/solution-explorer NO-AI` (real root_path; AI pending /ai-assist). `ruff check analyzer/ tests/ scripts/` -> All checks passed.
+  - Deviation: acceptance item "architecture.json has ai_enhance on at least three components" is not met because no AI baseline exists to restore and generating one requires the interactive /ai-assist pass (out of scope for this pipeline task). Followed the orchestrator's explicit fallback: committed real non-AI baseline, flagged /ai-assist re-run.
+  - AI baseline now real (session remediation/p0-integration, 2026-07-06): ran the ai-assist enhancement over the committed 23-component scan. All 23 components carry `ai_enhance` (help_text, architectural_role, data_handled, criticality, testing and tech context), all 23 relationships carry `ai_enhance` (data_flow_description, importance), and the architecture level carries `summary`, `data_flow_narrative`, component_groups, tech_diversity, test_health_summary, and 3 observations. Content is derived from reading the actual source (analyzer, viewer, CLI, Cloudflare worker, scripts, tests), not invented. `python3 scripts/score-ai-enhancement-quality.py --architecture architecture.json` -> `100.0% coverage, avg 95.6%, 23/23 relationships valid, criticality {critical:3, important:8, supporting:12}, PASS`. Round-trip through `scripts/merge-ai-enhancements.py` restores 23/23 components and 23/23 relationships onto an AI-stripped target, so the baseline survives the deploy-time merge. `pytest tests/ -q` -> `644 passed, 1 xfailed` with the conftest guard intact; `git status --porcelain` shows only architecture.json (plus this evidence note). This closes the earlier ACTION REQUIRED and the "ai_enhance on at least three components" acceptance item.
 
 ### P0-2: Make live-monitor.yml parse and run; fix its latent bugs; fix the shipped template
-- Status: TODO
+- Status: DONE (session remediation/p0-pipeline, 2026-07-06)
 - Model: Opus 4.8 (Sonnet 5 acceptable; changes are fully prescribed)
 - Stream: A. Branch: remediation/p0-pipeline
 - Findings: F-CRIT-2
@@ -45,9 +53,15 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - [ ] Template output of `init --live` contains none of the broken patterns (render the template in a unit test or a quick script and grep it)
 - Verify: actionlint; grep as above; `gh run list --workflow=live-monitor.yml --limit 3` after a test push
 - Evidence:
+  - Re-verified F-CRIT-2 at current lines: step-level `if: ${{ secrets.CF_WORKER_URL != '' }}` at live-monitor.yml:202 and :240; exact-key cache restore at :65 vs sha-suffixed save at :188; raw commit-message interpolation at :282; dead `.arch-output/data` detail-upload block at :227-235. Template mirrors at .ts:11, :34, :62, :144.
+  - Fixes in live-monitor.yml: (1) removed both step-level `secrets.` `if:` expressions; moved `CF_WORKER_URL` (and `CF_INGEST_TOKEN`, `CF_R2_ENDPOINT`, `REPO_NAME`, `COMMIT_SHA`) into `env:` and gate each step in shell with `if [ -z "$CF_WORKER_URL" ]; then ... exit 0; fi`. (2) Added `restore-keys: |\n  arch-baseline-${{ github.ref }}-` to the restore step so the sha-suffixed save key is prefix-matched. (3) Commit-message injection fixed: `COMMIT_MESSAGE` now passed via `env:` and read with `os.environ.get('COMMIT_MESSAGE')`; also replaced remaining in-body `${{ secrets.* }}` and `${{ steps.sha.* }}` interpolations in the curl with the env vars. (4) Dead R2 detail-upload path removed. Decision: the analyzer step emits single-file `--compact` (`.arch-output/architecture.json`) and the Pages/worker deploy serves that single file, so `.arch-output/data` is never produced. The former `if [ -d ".arch-output/data" ]` block was dead. Removed it and left a comment pointing at the worker escape-sync requirement if `--split` is ever adopted. Identical fixes applied to the CLI template `packages/cli/src/templates/live-monitor.yml.ts` (the template never had a detail-upload block, so nothing to delete there).
+  - actionlint installed via `brew install actionlint` (v1.7.12). Fail-then-pass proof: `actionlint /tmp/.../live-monitor-PREFIX.yml` (the committed pre-fix file) exits 1 with `context "secrets" is not allowed here` at :202 and :240; `actionlint .github/workflows/live-monitor.yml` (post-fix) exits 0. `grep -rn "if:.*secrets\." .github packages/cli/src/templates` returns nothing.
+  - Template render check: built the CLI package (`npm run build`) and rendered both modes with node. Rendered cloudflare and github outputs both pass `actionlint` (exit 0, only pre-existing shellcheck info notes shared with ci.yml). Grep of rendered cloudflare output: no step-level `if:.*secrets.`; `head_commit.message` appears only inside the `env:` block (safe pattern), not the run body; `restore-keys` present. The committed `packages/cli/dist` is stale build artifact tracked in git; I restored it after rendering so this commit touches only the source template (dist untracking is P2-6's job).
+  - Repo-wide: `pytest tests/ -q` -> 637 passed, 1 xfailed; `ruff check analyzer/ tests/ scripts/` -> All checks passed.
+  - Deviation: could not run a live `gh workflow run`/scratch-branch trigger for the branch's version. live-monitor.yml triggers on `push: [main]`, `workflow_run`, or `workflow_dispatch`, and `gh workflow run` executes the copy on the default branch, not this feature branch, so it cannot exercise my change until merged. actionlint is the parse arbiter used here and it is clean; a post-merge push to main will exercise the real trigger.
 
 ### P0-3: Worker escape parity so ingest stops deleting fresh detail files
-- Status: TODO
+- Status: DONE (session remediation/p0-pipeline, 2026-07-06)
 - Model: Opus 4.8 (Sonnet 5 acceptable)
 - Stream: A. Branch: remediation/p0-pipeline
 - Findings: F-CRIT-5, related F-AN-4
@@ -58,9 +72,15 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - [ ] All three escape implementations produce identical output for the shared fixture ids used in tests/test_cli.py:556-569
 - Verify: worker test run; cross-check fixtures against tests/test_cli.py and viewer componentId.test.ts
 - Evidence:
+  - Re-verified F-CRIT-5: `cleanupOrphanedDetails` at infrastructure/cloudflare/worker/src/index.ts (now :312) computed active keys with `id.replace(/\//g, "--")` only, missing the `:` -> `__` escape that analyzer/cli.py `safe_component_id` and viewer/src/utils/componentId.ts both apply.
+  - Fix: created infrastructure/cloudflare/worker/src/componentId.ts exporting `safeComponentId(id) = id.replace(/\//g,"--").replace(/:/g,"__")`, identical to the viewer, with the "must stay in sync with analyzer/cli.py and viewer componentId.ts" comment naming F-CRIT-5. Imported it in index.ts and replaced the inline escape in `cleanupOrphanedDetails`.
+  - Worker had no test harness; added a minimal vitest setup (vitest ^4.0.18 devDep matching the viewer, `"test": "vitest run"` script) and src/componentId.test.ts. The test asserts the pure function plus the exact active-key derivation, including the audit reproduction: id `repo:unamentis` -> `unamentis/detail-repo__unamentis.json`, and id `repo:unamentis/viewer` -> `unamentis/detail-repo__unamentis--viewer.json`.
+  - Fail-then-pass proof: replaced componentId.ts with the pre-fix slash-only escape and ran `npm test`: 4 failed / 2 passed, with `expected 'unamentis/detail-repo:unamentis--viewer.json' to be 'unamentis/detail-repo__unamentis--viewer.json'` (raw colon leaks, would never match the uploaded key). Restored the fix: 6 passed. `npm run typecheck` (tsc --noEmit) exits 0 with the new import.
+  - Cross-check of all three escape implementations on the shared fixtures: analyzer tests/test_cli.py:558-571 (`viewer/src`->`viewer--src`, `repo:unamentis`->`repo__unamentis`, `repo:unamentis/viewer`->`repo__unamentis--viewer`, `plain-id` unchanged), viewer/src/__tests__/componentId.test.ts (same four), worker src/componentId.test.ts (same four). Identical output confirmed.
+  - Repo-wide: pytest 637 passed / 1 xfailed; ruff clean (worker changes are TS, unaffected).
 
 ### P0-4: Fix merge-ai-enhancements.py crash and write-then-fail ordering
-- Status: TODO
+- Status: DONE (session remediation/p0-pipeline, 2026-07-06)
 - Model: Opus 4.8 (Sonnet 5 acceptable)
 - Stream: A. Branch: remediation/p0-pipeline
 - Findings: F-CRIT-6 (root design gap deferred to P3-3)
@@ -74,9 +94,15 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - [ ] No UnboundLocalError possible on any branch (all names assigned on all paths)
 - Verify: new tests; manual rerun of the audit reproduction
 - Evidence:
+  - Re-verified F-CRIT-6: `baseline_index` was assigned only inside `if not has_ai:` (was line 135), but the zero-match diagnostic referenced it unconditionally (was line 168), and the target was written (was line 149) before that diagnostic. A baseline with architecture-level `ai_enhance` (what /ai-assist always writes) skips the assignment, so the drift scenario raised UnboundLocalError after already overwriting the target.
+  - Fix in scripts/merge-ai-enhancements.py: compute `baseline_index` and `baseline_ai_ids` once, immediately after loading the baseline (before the has_ai check), so no name is ever unassigned. Reordered so the drift guard runs BEFORE the target write: when `comp_stats.total > 0 and comp_stats.preserved == 0 and baseline_ai_ids`, print an ERROR diagnostic (counts, sample IDs, likely cause, "Target file left unchanged") and `sys.exit(1)` without writing. Success message moved after the write. No branch can reach an unassigned local now.
+  - New tests: tests/test_merge_ai_enhancements.py (subprocess-driven, real script): `test_normal_merge_preserves_data` (matching IDs preserve component + arch AI, exit 0); `test_drifted_ids_exit_nonzero_and_leave_target_unchanged` (the audit reproduction: arch-level AI baseline, fully drifted target IDs); `test_non_enhanced_baseline_passes_through` (no AI anywhere, exit 0, target untouched); `test_partial_match_still_writes_and_succeeds` (>=1 match writes, exit 0).
+  - Fail-then-pass proof: against pre-fix code `pytest tests/test_merge_ai_enhancements.py` -> `1 failed, 3 passed`; the failing test is the drift reproduction, failing on `assert "Traceback" not in result.stderr` with `UnboundLocalError: cannot access local variable 'baseline_index'` at merge-ai-enhancements.py:168 (and the target had been overwritten before the crash). Post-fix: `4 passed`. The other three pre-fix passes are expected (they never hit the crashing branch); the drift test is the true regression test.
+  - No UnboundLocalError possible on any branch: `baseline_index`/`baseline_ai_ids` assigned before first use on every path; verified by the passing drift test (which exercises the previously-crashing path) and `ruff check scripts/merge-ai-enhancements.py` clean.
+  - Regression safety: existing merge coverage tests/test_dpea.py 51 passed unchanged. Repo-wide `pytest tests/ -q` -> 641 passed, 1 xfailed; `ruff check analyzer/ tests/ scripts/` clean; the conftest guard confirms architecture.json was not re-dirtied.
 
 ### P0-5: Stop GITHUB_TOKEN reaching output JSON and CI logs
-- Status: TODO
+- Status: DONE (session remediation/p0-pipeline, 2026-07-06)
 - Model: Opus 4.8
 - Stream: A. Branch: remediation/p0-pipeline
 - Findings: F-CRIT-3
@@ -90,9 +116,15 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - [ ] Clone-failure path prints a redacted URL (test-asserted)
 - Verify: new tests; `grep -r "x-access-token" <output>` in test
 - Evidence:
+  - Re-verified F-CRIT-3: scanner.py `_detect_project_info` (now :2578-2585) read `url` from `.git/config` and stored it with no credential stripping; multi_repo.py `_resolve_repo` (:104-107) printed `result.stderr` verbatim on clone failure, and the tokenized clone URL persisted in the clone's `.git/config` flows into `arch.repository` and then `merged.repositories[].repository` (:139).
+  - Fix 1 (protects every scan): added module-level `_strip_url_credentials(url)` in scanner.py (urllib urlsplit/urlunsplit, drops userinfo, leaves scp-like SSH and non-URLs untouched) and applied it in `_detect_project_info` before storing `self.architecture.repository`.
+  - Fix 2 (multi-repo clone failure): redact the token from `result.stderr` (`stderr.replace(token, "***")`) before printing; comment notes the original untokenized `url` is what gets reported. The success-path print already used the untokenized url.
+  - New tests tests/test_multi_repo.py: `test_strip_url_credentials_removes_userinfo` (x-access-token and user:pass forms stripped, clean/ssh forms unchanged); `test_token_in_git_config_never_reaches_output` (build a temp repo whose .git/config has `https://x-access-token:FAKE...@github.com/...`, run a full `ArchitectureScanner.scan()`, assert `arch.repository == https://github.com/org/private-repo` and that the fake token and the string `x-access-token` appear nowhere in `json.dumps(to_dict(arch))`); `test_clone_failure_redacts_token_in_stderr` (monkeypatch subprocess.run to fail with git's credentialed "unable to access" stderr, GITHUB_TOKEN=FAKE, assert SystemExit(1), the token appears in neither stdout nor stderr, and `***` is present).
+  - Fail-then-pass proof: `git stash push analyzer/scanner.py analyzer/multi_repo.py` (pre-fix), then ran the two behavioral tests via a scratch copy that drops the new-helper import (which otherwise breaks collection pre-fix): both FAILED. `test_token_in_git_config_never_reaches_output` failed because the tokenized URL reached output; `test_clone_failure_redacts_token_in_stderr` failed on `assert FAKE_TOKEN not in combined` (stderr contained `ess-token:FAKEtoken...@github.com/...`). `git stash pop` (restore fix): tests/test_multi_repo.py -> 3 passed.
+  - Repo-wide: `pytest tests/ -q` -> 644 passed, 1 xfailed; `ruff check analyzer/ tests/ scripts/` clean; architecture.json not re-dirtied (conftest guard).
 
 ### P0-6: Split-mode detail panel renders lazily loaded data, with a visible loading state
-- Status: TODO
+- Status: DONE (session remediation/p0-viewer, branch remediation/p0-viewer)
 - Model: Opus 4.8
 - Stream: B (viewer). Branch: remediation/p0-viewer
 - Findings: F-CRIT-4
@@ -102,10 +134,31 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   2. Render `componentDetailLoading` as a visible loading state on the Files and Symbols tabs.
   3. Component test with a mocked `fetch` and the real store: open a split-mode component, assert loading state appears, resolve the fetch, assert files and symbols render and counts update. This is the regression test for the whole split-mode path; do not mock the store.
 - Accept:
-  - [ ] Test proves empty-then-loading-then-populated sequence against the real store and real DetailPanel
-  - [ ] Manual check in a local `--split` build of this repo: Files and Symbols tabs populate on first click
+  - [x] Test proves empty-then-loading-then-populated sequence against the real store and real DetailPanel
+  - [x] Manual check in a local `--split` build of this repo: Files and Symbols tabs populate on first click
 - Verify: viewer test run; manual: `python3 analyze.py . --split -o viewer/public/architecture && cd viewer && npm run dev`
 - Evidence:
+  - Re-verified the finding against current code before editing. Confirmed mechanism in `viewer/src/components/DetailPanel.tsx` `ComponentDetail`: `files`/`symbols` were memoized on `[component.id, getComponentFiles]` and `[component.id, getComponentSymbols]`. Those deps stay referentially stable when `loadComponentDetail` fills `componentDetailCache`, so the memos never recomputed and the Files/Symbols tabs stayed empty for the open component. `componentDetailLoading` was subscribed at line 127 but never rendered.
+  - Fix (viewer/src/components/DetailPanel.tsx):
+    1. Added a selector subscription to this component's cache entry: `const detailCacheEntry = useArchStore((s) => s.componentDetailCache[component.id]);` and added `detailCacheEntry` to the `files` and `symbols` memo dependency arrays, so the panel re-renders and the memos recompute when the lazy fetch lands.
+    2. Added `const detailLoading = componentDetailLoading === component.id;` and passed it to `FilesTab` and `SymbolsTab`. Added a shared `DetailLoadingState` component (role="status", spinner plus text) that each tab renders when `loading && list.length === 0`. Early returns are placed after all hooks to respect the rules of hooks.
+  - Regression test: `viewer/src/__tests__/DetailPanel.split.test.tsx`. Uses the real Zustand store (no store mock) and the real `DetailPanel`, with a mocked global `fetch` returning a deferred promise. Sets a split-mode architecture (top-level `files`/`symbols` empty), opens a component via `showDetail`, asserts `componentDetailLoading` is set and the Files tab shows the loading state (`role="status"`, "Loading files..."), resolves the fetch with a 2-file/3-symbol payload, then asserts the file names render, the loading state clears, and the Files (2) and Symbols (3) tab counts update; also opens the Symbols tab and asserts symbol names render.
+  - Fails-then-passes proof (per WORK-PLAN principle 2):
+    - Stashed only the fix: `git stash push -- viewer/src/components/DetailPanel.tsx`.
+    - Pre-fix run: `npx vitest run src/__tests__/DetailPanel.split.test.tsx` => 1 failed. Failure at `screen.getByRole("status")` (Unable to find role="status"): with the pre-fix panel neither the loading state nor the populated files ever render, so the empty-then-loading-then-populated sequence is unreachable.
+    - Restored the fix: `git stash pop`.
+    - Post-fix run: same command => 1 passed.
+  - Full verification (from viewer/, after `npm ci`):
+    - `npm test -- --run` => 5 files, 55 tests passed (includes the new test).
+    - `npm run lint` => exit 0. 0 errors, 18 warnings, all pre-existing (F-VW-8), none in the changed code.
+    - `npx tsc -b` => exit 0.
+    - `npm run build` => exit 0 (pre-existing search.ts mixed-import and 500 kB chunk warnings only, both tracked under F-VW-8 / P2-3).
+  - Manual verification with a real browser (playwriter driving Chrome):
+    - `python3 analyze.py . --split -o viewer/public/architecture` produced manifest.json plus 23 detail-*.json files. Built the viewer and served with `vite preview` on port 4321.
+    - Confirmed served detail JSON: `GET /architecture/data/detail-analyzer.json` returned 11 files and 46 symbols.
+    - Opened `http://localhost:4321/?component=analyzer` (first view of that component). The detail panel showed Files 11 and Symbols 46 in the Overview and tab counts (these are 0 pre-fix). Clicked the Files tab: the filter input and real file names (`__init__.py`, `scanner.py`) rendered, no stuck loading state. Clicked the Symbols tab: the symbol filter and real symbol names (`redetect_relationships`, `parse_gemfile`) rendered. This confirms the Files and Symbols tabs populate on first click in a real `--split` build.
+    - Cleaned up: removed the generated data and restored the committed sample dataset under `viewer/public/architecture` via `git checkout`, leaving the tree clean except the two intended changes.
+  - Files changed: `viewer/src/components/DetailPanel.tsx` (fix), `viewer/src/__tests__/DetailPanel.split.test.tsx` (new regression test). No changes to store.ts were needed; the existing `componentDetailCache` and `componentDetailLoading` state was sufficient once the panel subscribed to the cache entry.
 
 ---
 
@@ -414,3 +467,4 @@ Filled by the phase-gate review session per WORK-PLAN.md section 6.3.
 
 | Phase | Date | Reviewer session | Result | Notes |
 |---|---|---|---|---|
+| 0 | 2026-07-06 | independent gate review (Opus) | PASS | All seven exit-gate checks reproduced independently. (1) `pytest tests/ -q` -> 644 passed, 1 xfailed, `git status --porcelain` empty. (2) architecture.json has real root_path `/Users/ramerman/dev/solution-explorer`, architecture-level ai_enhance present, and ai_enhance on 23 of 23 components (nested tree; recursive count) plus 23 of 23 relationships; score-ai-enhancement-quality.py reports 100% coverage, 95.6% avg, PASS. (3) actionlint clean on live-monitor.yml (exit 0); grep `if:.*secrets\.` across .github and templates returns nothing (only pre-existing info-level SC2086 notes in ci.yml, out of Phase 0 scope). (4) Manual merge-script drift run: nonzero exit with readable diagnostic, target byte-identical (sha256 unchanged); tests/test_merge_ai_enhancements.py 4 passed. (5) tests/test_multi_repo.py 3 passed; read critically, they run the real scanner and grep the full serialized output for the token and x-access-token, and assert token absence in combined stdout+stderr on clone failure. (6) Worker `npm test` 6 passed, `npm run typecheck` clean; includes the repo:unamentis and repo:unamentis/viewer escape cases. (7) Viewer `npm test -- --run` 55 passed, lint 0 errors/18 warnings, `tsc -b` clean, `npm run build` clean (only pre-existing 500 kB chunk warning). Spot-checks: P0-6 DetailPanel split test FAILS on the pre-fix file (getByRole status not found) and PASSES restored; P0-4 merge drift test FAILS on the pre-fix script (UnboundLocalError) and PASSES restored. Working tree left clean. Minor note: the worker test reimplements the trivial detail-key format string but uses the real safeComponentId, and the format matches index.ts:312. |

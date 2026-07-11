@@ -8,14 +8,23 @@ export function liveMonitorWorkflow(options: LiveMonitorOptions): string {
       ? `
 
       - name: Upload to Cloudflare R2
-        if: \${{ secrets.CF_WORKER_URL != '' }}
+        # The secrets context is not available in step-level if: expressions, so
+        # gate in shell against an env var instead.
         env:
+          CF_WORKER_URL: \${{ secrets.CF_WORKER_URL }}
           AWS_ACCESS_KEY_ID: \${{ secrets.CF_R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: \${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
+          CF_R2_ENDPOINT: \${{ secrets.CF_R2_ENDPOINT }}
+          REPO_NAME: \${{ github.event.repository.name }}
         run: |
-          PROJECT_ID="\${{ github.event.repository.name }}"
-          ENDPOINT="\${{ secrets.CF_R2_ENDPOINT }}"
+          if [ -z "$CF_WORKER_URL" ]; then
+            echo "CF_WORKER_URL not configured, skipping Cloudflare R2 upload"
+            exit 0
+          fi
+
+          PROJECT_ID="$REPO_NAME"
+          ENDPOINT="$CF_R2_ENDPOINT"
           BUCKET="solution-explorer-data"
 
           for file in .arch-output/live/*.json; do
@@ -31,9 +40,21 @@ export function liveMonitorWorkflow(options: LiveMonitorOptions): string {
             --content-type "application/json"
 
       - name: Notify Cloudflare Worker
-        if: \${{ secrets.CF_WORKER_URL != '' }}
+        env:
+          CF_WORKER_URL: \${{ secrets.CF_WORKER_URL }}
+          CF_INGEST_TOKEN: \${{ secrets.CF_INGEST_TOKEN }}
+          # Pass the commit message through the environment, never interpolate it
+          # into the script body, to avoid command injection.
+          COMMIT_MESSAGE: \${{ github.event.head_commit.message }}
+          REPO_NAME: \${{ github.event.repository.name }}
+          COMMIT_SHA: \${{ steps.sha.outputs.sha }}
         run: |
-          PROJECT_ID="\${{ github.event.repository.name }}"
+          if [ -z "$CF_WORKER_URL" ]; then
+            echo "CF_WORKER_URL not configured, skipping worker notification"
+            exit 0
+          fi
+
+          PROJECT_ID="$REPO_NAME"
 
           COMPONENT_COUNT=$(python3 -c "
           import json
@@ -58,19 +79,19 @@ export function liveMonitorWorkflow(options: LiveMonitorOptions): string {
           ")
 
           COMMIT_MSG=$(python3 -c "
-          import json
-          msg = '''\${{ github.event.head_commit.message || 'workflow dispatch' }}'''
+          import json, os
+          msg = os.environ.get('COMMIT_MESSAGE') or 'workflow dispatch'
           print(json.dumps(msg[:200]))
           ")
 
           curl -s -o /dev/null -w '' \\
-            -X POST '\${{ secrets.CF_WORKER_URL }}/ingest' \\
-            -H 'Authorization: Bearer \${{ secrets.CF_INGEST_TOKEN }}' \\
+            -X POST "\${CF_WORKER_URL}/ingest" \\
+            -H "Authorization: Bearer \${CF_INGEST_TOKEN}" \\
             -H 'Content-Type: application/json' \\
             -d "{
               \\"project_id\\": \\"\${PROJECT_ID}\\",
               \\"version\\": \${VERSION},
-              \\"commit_sha\\": \\"\${{ steps.sha.outputs.sha }}\\",
+              \\"commit_sha\\": \\"\${COMMIT_SHA}\\",
               \\"commit_message\\": \${COMMIT_MSG},
               \\"component_count\\": \${COMPONENT_COUNT},
               \\"relationship_count\\": \${RELATIONSHIP_COUNT}
@@ -142,6 +163,10 @@ jobs:
         with:
           path: .arch-baseline
           key: arch-baseline-\${{ github.ref }}
+          # The save key appends the commit sha, so an exact-key restore can
+          # never hit. Prefix-match to restore the most recent baseline.
+          restore-keys: |
+            arch-baseline-\${{ github.ref }}-
 
       - name: Run Architecture Analyzer
         run: |

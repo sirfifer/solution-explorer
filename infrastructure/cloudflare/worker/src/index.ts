@@ -1,6 +1,7 @@
 import type { Env, IngestPayload, HealthResponse, ResourceUsage } from "./types";
 import { FREE_TIER_LIMITS, USAGE_THRESHOLDS } from "./types";
 import { verifyWebhookSignature } from "./webhook";
+import { safeComponentId } from "./componentId";
 
 // --- In-memory resource usage cache ---
 // Reset on cold start; refreshed from D1 every 100 requests.
@@ -308,7 +309,7 @@ async function cleanupOrphanedDetails(
 
   const activeKeys = new Set(
     activeComponentIds.map(
-      (id) => `${projectId}/detail-${id.replace(/\//g, "--")}.json`,
+      (id) => `${projectId}/detail-${safeComponentId(id)}.json`,
     ),
   );
 
