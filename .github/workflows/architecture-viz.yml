@@ -93,11 +93,16 @@ jobs:
       - name: Preserve AI Enhancements
         run: |
           # If a committed architecture.json exists with AI enhancements,
-          # merge them into the freshly analyzed output
+          # merge them into the freshly analyzed output. --strict fails the
+          # build (leaving the output untouched) if the preservation ratio
+          # drops below threshold, so silent AI data loss cannot ship. The
+          # merge tolerates ID drift (repo-prefix add/remove, path-preserving
+          # renames) via fallback matching; genuine removals do not fail it.
           if [ -f "architecture.json" ]; then
             python3 scripts/merge-ai-enhancements.py \
               --baseline architecture.json \
-              --target viewer/public/architecture.json
+              --target viewer/public/architecture.json \
+              --strict
           fi
 
       - name: Install Viewer Dependencies

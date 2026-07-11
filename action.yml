@@ -120,14 +120,16 @@ runs:
             echo "Merging AI enhancements from baseline (split mode)"
             python3 .solution-explorer/scripts/merge-ai-enhancements.py \
               --baseline "$BASELINE_DIR/manifest.json" \
-              --target "$OUTPUT_DIR/manifest.json"
+              --target "$OUTPUT_DIR/manifest.json" \
+              --strict
           elif [ -f "$BASELINE_FILE" ]; then
             echo "Merging AI enhancements from baseline (single file)"
             # For single-file baseline, merge into the split-mode manifest
             if [ -f "$OUTPUT_DIR/manifest.json" ]; then
               python3 .solution-explorer/scripts/merge-ai-enhancements.py \
                 --baseline "$BASELINE_FILE" \
-                --target "$OUTPUT_DIR/manifest.json"
+                --target "$OUTPUT_DIR/manifest.json" \
+                --strict
             fi
           else
             echo "No baseline found, skipping AI enhancement merge"
