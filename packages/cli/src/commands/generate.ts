@@ -23,17 +23,18 @@ export async function generate(options: GenerateOptions): Promise<void> {
   const python = await detectPython();
   console.log(pc.dim(`  Found: ${python}`));
 
-  // Step 2: Run analyzer
+  // Step 2: Run analyzer in split mode (uncapped: no silent symbol truncation).
   console.log(`${pc.green("2.")} Analyzing codebase...`);
   const tmp = mkdtempSync(join(tmpdir(), "solution-explorer-"));
-  const jsonPath = join(tmp, "architecture.json");
+  const archDir = join(tmp, "architecture");
 
   await runAnalyzer(python, {
     repoPath: options.repoPath,
-    outputPath: jsonPath,
+    outputPath: archDir,
     compact: options.compact,
     pretty: options.pretty,
     config: options.config,
+    split: true,
   });
 
   console.log(pc.dim("  Analysis complete."));
@@ -41,7 +42,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
   // Step 3: Assemble static site
   console.log(`${pc.green("3.")} Building static site...`);
   mkdirSync(options.outputDir, { recursive: true });
-  assembleStaticSite(options.outputDir, jsonPath);
+  assembleStaticSite(options.outputDir, archDir, { split: true });
 
   console.log();
   console.log(

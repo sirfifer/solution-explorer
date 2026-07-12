@@ -16,7 +16,8 @@
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "bash scripts/prepare-bundle.sh && npm run build",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "vitest run"
   },
   "keywords": [
     "architecture",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/prompts": "^2.4.9",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
   }
 }

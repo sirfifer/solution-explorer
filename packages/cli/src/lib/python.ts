@@ -66,16 +66,24 @@ export interface AnalyzeOptions {
   compact?: boolean;
   pretty?: boolean;
   config?: string;
+  /**
+   * Emit split output (manifest.json + per-component detail files) instead of a
+   * single architecture.json. Split mode runs uncapped, so no symbols are
+   * silently truncated (F-AN-3). The viewer auto-detects the manifest.
+   */
+  split?: boolean;
 }
 
-/** Run the Python analyzer against a repository. */
-export async function runAnalyzer(
-  python: string,
+/**
+ * Build the argument vector passed to analyze.py.
+ *
+ * Extracted so the command can be asserted in a unit test without spawning
+ * Python. The default CLI paths pass `split: true` for uncapped output.
+ */
+export function buildAnalyzerArgs(
+  analyzeScript: string,
   options: AnalyzeOptions
-): Promise<void> {
-  const analyzerRoot = getAnalyzerPath();
-  const analyzeScript = join(analyzerRoot, "analyze.py");
-
+): string[] {
   const args: string[] = [analyzeScript];
 
   if (options.config) {
@@ -86,12 +94,25 @@ export async function runAnalyzer(
 
   args.push("-o", options.outputPath);
 
-  if (options.compact) {
-    args.push("--compact");
-  } else {
-    // Default to compact for CLI output (smaller files)
-    args.push("--compact");
+  if (options.split) {
+    args.push("--split");
   }
+
+  // Always compact: smaller JSON for hosted static sites, in both modes.
+  args.push("--compact");
+
+  return args;
+}
+
+/** Run the Python analyzer against a repository. */
+export async function runAnalyzer(
+  python: string,
+  options: AnalyzeOptions
+): Promise<void> {
+  const analyzerRoot = getAnalyzerPath();
+  const analyzeScript = join(analyzerRoot, "analyze.py");
+
+  const args = buildAnalyzerArgs(analyzeScript, options);
 
   console.log(
     pc.dim(`  Running analyzer on ${options.config || options.repoPath}...`)

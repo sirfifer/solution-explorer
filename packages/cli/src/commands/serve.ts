@@ -38,24 +38,25 @@ export async function serve(options: ServeOptions): Promise<void> {
   const python = await detectPython();
   console.log(pc.dim(`  Found: ${python}`));
 
-  // Step 2: Run analyzer
+  // Step 2: Run analyzer in split mode (uncapped: no silent symbol truncation).
   console.log(`${pc.green("2.")} Analyzing codebase...`);
   const siteDir = mkdtempSync(join(tmpdir(), "solution-explorer-"));
-  const jsonPath = join(siteDir, "architecture.json");
+  const archDir = join(siteDir, "arch-output");
 
   await runAnalyzer(python, {
     repoPath: options.repoPath,
-    outputPath: jsonPath,
+    outputPath: archDir,
     compact: options.compact,
     pretty: options.pretty,
     config: options.config,
+    split: true,
   });
 
   console.log(pc.dim("  Analysis complete."));
 
   // Step 3: Assemble site
   console.log(`${pc.green("3.")} Assembling viewer...`);
-  assembleStaticSite(siteDir, jsonPath);
+  assembleStaticSite(siteDir, archDir, { split: true });
 
   // Step 4: Serve
   const server = createServer((req, res) => {
