@@ -247,7 +247,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - `npx tsc -b` clean after the App refactor; full viewer suite `npx vitest run` -> 7 files, 63 tests passed.
 
 ### P1-5: Live refresh must not wipe search or serve stale details
-- Status: TODO
+- Status: DONE (session remediation/p1-viewer, 2026-07-11)
 - Model: Opus 4.8
 - Stream: B. Branch: remediation/p1-viewer
 - Findings: F-VW-3, plus the stale `componentDetailCache` item in F-VW-7
@@ -257,10 +257,15 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   2. Invalidate (or version-check) `componentDetailCache` when the architecture updates, so panels do not show stale symbols; the next open refetches.
   3. Tests: index a detail-loaded symbol, apply a live refresh, assert the symbol is still searchable; assert cache invalidation triggers a refetch.
 - Accept:
-  - [ ] Post-refresh search still finds previously loaded symbols (test-asserted)
-  - [ ] Detail panel shows post-refresh data after an update (test-asserted)
+  - [x] Post-refresh search still finds previously loaded symbols (test-asserted)
+  - [x] Detail panel shows post-refresh data after an update (test-asserted)
 - Verify: viewer tests
 - Evidence:
+  - Re-verified both findings. F-VW-3: `useLiveMonitor` calls `initializeSearch(data)` on every manifest refresh (was :165); `initializeSearch` reset `allResults = []` (search.ts:19), dropping every entry that `addToSearchIndex` had added from split-mode detail loads, and `loadComponentDetail` early-returns on a cache hit so they were never re-added. F-VW-7 stale-cache item: neither the live refresh nor `setArchitecture` invalidated `componentDetailCache`, so panels served stale symbols/files after an update. Both reproduce.
+  - Fix 1 (search preservation), search.ts: split the index into `baseResults` (rebuilt wholesale by `initializeSearch`) and `detailResultsByComponent` (a `Map<componentId, SearchResult[]>` fed by `addToSearchIndex`). A shared `rebuildFuse()` concatenates both. `initializeSearch` now rebuilds only the base entries and preserves the detail map, so a live refresh keeps previously loaded symbols/files searchable. `addToSearchIndex` gained an optional `componentId` so re-loading a component replaces its entries rather than duplicating. Added `resetDetailSearchEntries()` for a genuine full reset (not wired to live refresh). `loadComponentDetail` now passes `componentId` when indexing.
+  - Fix 2 (cache invalidation), store.ts + useLiveMonitor.ts: `setArchitecture` clears `componentDetailCache: {}` on every architecture update (single canonical entry point). `useLiveMonitor` now applies the refreshed manifest through `store().setArchitecture(data)` instead of a raw `setState`, so a live refresh invalidates the cache (panels refetch fresh data) and also re-applies persisted annotations. `initializeSearch(data)` still runs afterward and preserves the detail-derived search entries.
+  - Regression tests `viewer/src/__tests__/liveRefresh.test.ts` (2 tests, real store + real search module, only fetch mocked): (1) load a detail file adding symbol `uniqueSymbolXYZ`, assert it is searchable, run `initializeSearch` for the refreshed manifest, assert it is STILL searchable; (2) load detail v1 (fetch called once, `getComponentSymbols` returns v1sym), call `setArchitecture` for a new scan, assert `componentDetailCache["comp-a"]` is now undefined, re-open the component, assert fetch was called a second time and v2sym is returned and served by `getComponentSymbols`.
+  - Fail-then-pass proof: reproduced both pre-fix behaviors surgically (made `initializeSearch` clear the detail map; removed `componentDetailCache: {}` from `setArchitecture`) and ran `npx vitest run src/__tests__/liveRefresh.test.ts` -> `2 failed`: test 1 fails because the lazily indexed symbol is no longer searchable after refresh; test 2 fails on `componentDetailCache["comp-a"]` still being defined (stale) so no refetch occurs. Restored both fixes -> `2 passed`.
 
 ---
 

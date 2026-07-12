@@ -630,9 +630,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
           componentDetailCache: { ...state.componentDetailCache, [componentId]: detail },
           componentDetailLoading: null,
         }));
-        // Add to search index
+        // Add to search index, keyed by component so a live refresh preserves
+        // these entries and a re-load replaces them (F-VW-3).
         const { addToSearchIndex } = await import("./utils/search");
-        addToSearchIndex(detail.symbols || [], detail.files || []);
+        addToSearchIndex(detail.symbols || [], detail.files || [], componentId);
         return detail;
       }
     } catch {
