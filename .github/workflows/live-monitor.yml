@@ -98,7 +98,8 @@ jobs:
           if [ -f ".arch-baseline/architecture.json" ]; then
             python3 scripts/merge-ai-enhancements.py \
               --baseline .arch-baseline/architecture.json \
-              --target .arch-output/architecture.json
+              --target .arch-output/architecture.json \
+              --strict
           else
             echo "No baseline found, skipping AI enhancement merge"
           fi
