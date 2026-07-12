@@ -204,7 +204,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 - Evidence:
 
 ### P1-3: Persist review annotations across reloads
-- Status: TODO
+- Status: DONE (session remediation/p1-viewer, 2026-07-11)
 - Model: Opus 4.8
 - Stream: B. Branch: remediation/p1-viewer
 - Findings: F-VW-4, F-DC rows 3 and 11
@@ -214,11 +214,19 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   2. Restore on load; reconcile annotations whose target component no longer exists (keep them, flag as orphaned in ReviewSummary, so re-analysis does not silently destroy feedback).
   3. Tests against the real store: add annotations, simulate reload (fresh store, same storage), assert restoration; orphan case; storage-quota failure does not crash.
 - Accept:
-  - [ ] Hard reload preserves annotations (test plus manual check)
-  - [ ] Orphaned annotations visible, not silently dropped, after loading a changed architecture
+  - [x] Hard reload preserves annotations (test plus manual check)
+  - [x] Orphaned annotations visible, not silently dropped, after loading a changed architecture
   - [ ] PROJECT-OVERVIEW/README wording about persistence updated to the now-true claim (or noted for P2-5)
 - Verify: viewer tests; manual annotate-reload check
 - Evidence:
+  - Re-verified F-VW-4 against current code: `annotations: []` initial state (store.ts:300) and the four mutations (addAnnotation, updateAnnotation, deleteAnnotation, clearAllAnnotations) touched only in-memory state, never localStorage, while dark-mode/changelog/enhanced-frames all persist. A reload or a re-analysis wiped all review work. Finding reproduces.
+  - New persistence util `viewer/src/utils/annotationStorage.ts`: single `arch-annotations` localStorage key holding `{ version: 1, byArch: Record<identity, Annotation[]> }`. `architectureIdentity(arch)` derives a stable key from `name` plus `repository` and deliberately excludes `generated_at` so re-analysis keeps annotations. Schema `version` is checked on read (mismatched or corrupt payloads are dropped, not misread). Size guard refuses to persist a serialized payload over 2 MB. All writes are wrapped so a quota/unavailable failure is swallowed, matching the existing localStorage writers.
+  - store.ts: `setArchitecture` now restores annotations for the loaded architecture's identity via `loadAnnotations` (single canonical entry point for both initial load and live refresh). Added module-level `persistCurrentAnnotations(get)`, called after each of the four annotation mutations so every add/edit/delete/clear is written through immediately.
+  - ReviewSummary.tsx: added an `orphaned` memo (annotations whose `getComponentById` returns null) and a dedicated "Orphaned feedback" section (data-testid `orphaned-annotations`) that lists each orphan with its stored target label and text plus a delete button. Previously the component grouping silently dropped these (the group builder returned null for missing components).
+  - Regression tests `viewer/src/__tests__/annotationPersistence.test.tsx` (6 tests, real store, real ReviewSummary, jsdom localStorage, no store mock): restore-after-reload; identity-not-generated_at (re-analysis preserves); orphaned annotations kept in store after a changed architecture; orphaned section rendered in ReviewSummary; quota write failure does not crash; removal persists across reload. "Reload" is simulated by wiping in-memory store state while localStorage survives, exactly as a browser reload does.
+  - Fail-then-pass proof: `git stash push -- viewer/src/store.ts viewer/src/components/ReviewSummary.tsx` then `npx vitest run src/__tests__/annotationPersistence.test.tsx` -> `4 failed, 2 passed` (the 4 persistence/orphan-visibility tests fail on the pre-fix code; the 2 that pass pre-fix are quota-safety and the removal case, which pass trivially when nothing persists). `git stash pop`, same command -> `6 passed`.
+  - Full viewer suite after the change: `npx vitest run` -> 6 files, 61 tests passed (no existing test regressed).
+  - Deviation: PROJECT-OVERVIEW/README persistence wording is P2-5 (docs) territory and Stream C, out of this session's file territory. Left the acceptance item for P2-5, as the task text allows ("or noted for P2-5").
 
 ### P1-4: Fix popstate history corruption
 - Status: TODO
