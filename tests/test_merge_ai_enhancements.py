@@ -461,3 +461,34 @@ def test_strict_threshold_failure_exits_nonzero_target_untouched(tmp_path):
     result_plain = _run_merge(baseline_path, target_path)
     assert result_plain.returncode == 0, result_plain.stderr
     assert target_path.read_bytes() != target_bytes_reset
+
+
+def test_strict_threshold_rejects_out_of_range_values(tmp_path):
+    """--strict-threshold outside [0.0, 1.0] fails argument parsing loudly.
+
+    An out-of-range ratio would silently disable the guard (negative) or make
+    it always fail (above 1.0), so argparse must reject it before any work.
+    """
+    baseline = {"components": [_component("a", ai=True)]}
+    target = {"components": [_component("a")]}
+    baseline_path = tmp_path / "baseline.json"
+    target_path = tmp_path / "target.json"
+    _write(baseline_path, baseline)
+    _write(target_path, target)
+    target_bytes_before = target_path.read_bytes()
+
+    for bad in ("-1", "2.0", "1.5", "not-a-number"):
+        result = _run_merge(
+            baseline_path, target_path, "--strict", "--strict-threshold", bad
+        )
+        assert result.returncode == 2, f"threshold {bad}: {result.stderr}"
+        assert "strict-threshold" in result.stderr
+        assert target_path.read_bytes() == target_bytes_before
+
+    # Boundary values are valid.
+    for good in ("0.0", "1.0"):
+        _write(target_path, target)
+        result = _run_merge(
+            baseline_path, target_path, "--strict", "--strict-threshold", good
+        )
+        assert result.returncode == 0, f"threshold {good}: {result.stderr}"

@@ -338,6 +338,19 @@ def _print_report(comp_counts, rel_stats):
         )
 
 
+def _threshold_ratio(value):
+    """argparse type for --strict-threshold: a float within [0.0, 1.0]."""
+    try:
+        ratio = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid float value: {value!r}") from exc
+    if not 0.0 <= ratio <= 1.0:
+        raise argparse.ArgumentTypeError(
+            f"must be a ratio between 0.0 and 1.0, got {value}"
+        )
+    return ratio
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Merge AI enhancements from baseline into freshly analyzed architecture JSON."
@@ -360,7 +373,7 @@ def main():
     )
     parser.add_argument(
         "--strict-threshold",
-        type=float,
+        type=_threshold_ratio,
         default=DEFAULT_STRICT_THRESHOLD,
         help=f"Minimum fraction of still-present enhancements that must survive "
         f"under --strict (default {DEFAULT_STRICT_THRESHOLD}).",

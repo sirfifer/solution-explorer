@@ -433,7 +433,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 - Do:
   1. Add fallback matching when exact ID fails: match by component `path`, then by (name, type) as a last resort; same idea for relationships via (source-path, target-path, type). Report per-strategy match counts in the output.
   2. Add a `--strict` flag (exit nonzero below a preservation threshold) and use it in CI workflows so silent data loss becomes impossible.
-  3. Wire scripts/validate-ai-preservation.py (already exists) into architecture-viz.yml as a post-merge check.
+  3. Wire scripts/validate-ai-preservation.py (already exists) into architecture-viz.yml as a post-merge check. Decided against during execution: that script matches by exact ID only and hard-errors on legitimate adds and removals, so it would reintroduce the very fragility this task removes; the `--strict` merge guard covers the loud-failure need. See Evidence for the full rationale.
   4. Tests: exact match, renamed-ID-same-path drift (preserved), true component removal (not preserved, not counted as failure), threshold failure exits nonzero.
 - Accept:
   - [x] Drift scenario preserves enhancements (test-asserted, fails on the pre-fix exact-only matcher)
