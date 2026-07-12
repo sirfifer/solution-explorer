@@ -187,6 +187,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 
 ### P1-2: Uncapped analysis on the default paths; loud truncation everywhere else
 - Status: TODO
+- Program 2 note: still required as the interim fix on the current engine. The structural replacement is the coverage ledger (P4-4, TARGET-ARCHITECTURE.md I2).
 - Model: Opus 4.8
 - Stream: A. Branch: remediation/p1-analyzer
 - Findings: F-AN-3, F-DC row 2
@@ -267,7 +268,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 - Evidence:
 
 ### P2-2: Scanner file-content cache, path index, and root-bounded CI check
-- Status: TODO
+- Status: DROPPED (superseded 2026-07-11 by Program 2 Phase 4; see WORK-PLAN-2.md section 2). The engine these optimizations target is replaced by Tiers 1 to 3. Item 1 (fixture-snapshot output guard) moves into P4-1. Item 3 (root-bounded `_check_ci_tests`) carries into the Tier 3 derivation port, noted in P4-3.
 - Model: Opus 4.8 (behavior-preserving refactor, needs care)
 - Stream: A. Branch: remediation/p2-analyzer
 - Findings: F-AN-1, F-AN-2
@@ -425,7 +426,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 - Evidence:
 
 ### P3-3: Drift-tolerant AI enhancement preservation
-- Status: DONE. Pulled forward from Phase 3 on 2026-07-11 by owner decision: it was the last blocker for the live demo redeploy after the production ID-drift failure that day. Branch: remediation/p3-merge-drift.
+- Status: DONE. Pulled forward from Phase 3 on 2026-07-11 by owner decision: it was the last blocker for the live demo redeploy after the production ID-drift failure that day. Branch: remediation/p3-merge-drift. Reconciliation note: Program 2 planning briefly marked this card DROPPED as superseded by P7-1 enrichment provenance, but the work shipped the same day (PR #6), so it stands as the interim protection until P7-1 lands and P7-1 builds on it rather than replacing it.
 - Model: Opus 4.8
 - Stream: A. Branch: remediation/p3-merge-drift (pulled forward; original plan slot was remediation/p3-analyzer)
 - Findings: F-CRIT-6 root cause, F-PL-3 (dispatch path relies on this merge)
@@ -451,7 +452,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - Verification: `ruff check analyze.py analyzer/ scripts/ tests/` clean; `pytest tests/ -q` 649 passed, 1 xfailed (pre-existing test_detect_ports xfail), `git status --porcelain` shows only the intended files (no architecture.json clobber); `actionlint .github/workflows/architecture-viz.yml .github/workflows/live-monitor.yml` exit 0; action.yml (a composite action, not lintable by actionlint) validated as well-formed YAML.
 
 ### P3-4 (optional, stretch): Decompose scanner.py
-- Status: TODO
+- Status: DROPPED (superseded 2026-07-11 by Program 2 Phase 4, which replaces scanner.py orchestration entirely; see TARGET-ARCHITECTURE.md section 9).
 - Model: Opus 4.8
 - Stream: solo, only after P2-2's identical-output guard exists
 - Findings: F-AN-12 (size), enabled by P2-2
@@ -459,6 +460,244 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 - Accept:
   - [ ] Identical-output test green; no module over ~800 lines; public imports unchanged (analyze.py and action.yml paths still work)
 - Verify: pytest; self-analysis smoke run
+- Evidence:
+
+---
+
+# Program 2: target architecture
+
+Design authority: [TARGET-ARCHITECTURE.md](TARGET-ARCHITECTURE.md) (invariants I1 to I10 bind every task below). Plan: [WORK-PLAN-2.md](WORK-PLAN-2.md). WORK-PLAN.md section 2 principles and section 6 handoff apply, with the executor template's reading list swapping the audit for TARGET-ARCHITECTURE.md.
+
+Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentionally lighter; per WORK-PLAN-2.md section 6, the phase-gate session elaborates them to full fidelity before their phase starts, without changing scope.
+
+## Phase 4: The index engine
+
+### P4-1: Fact store schema, symbol identity, and the parity guard
+- Status: TODO
+- Model: Opus 4.8 (no substitution)
+- Stream: A. Branch: program2/p4-store
+- Design: TARGET-ARCHITECTURE.md sections 4.2, 6, and 12; invariants I4, I7
+- Files: new package analyzer/store/ (schema.py, db.py, ids.py), tests/test_store.py, tests/fixtures/ (new fixture repos), tests/test_engine_parity.py
+- Do:
+  1. Implement the SQLite schema from TARGET-ARCHITECTURE 4.2 with schema_version in meta, WAL mode, and deterministic ordering helpers for all reads used by projections. Stdlib sqlite3 only.
+  2. Define and document the symbol ID grammar (SCIP-style, human-readable, escaping table) in ids.py with exhaustive round-trip tests, including multi-repo prefixing and the existing component escape rules. This grammar freezes at the end of this task; record the frozen grammar in this card's Evidence.
+  3. Build two small fixture repos under tests/fixtures/ (one polyglot single-repo, one multi-repo config) sized for fast CI, exercising every component type and relationship type the current engine emits.
+  4. Port P2-2 item 1 here: a snapshot test running the CURRENT engine on the fixtures and freezing normalized output (strip timestamps and machine paths). This is the parity baseline for P4-7.
+  5. Write FTS5 virtual tables and a thin query module (by name, by path, by kind, bounded-depth edge traversal via recursive CTE) with tests.
+- Accept:
+  - [ ] Schema creates, migrates from empty, round-trips every entity type with deterministic read order
+  - [ ] Symbol ID grammar documented, frozen, round-trip tested including collision and escaping edge cases
+  - [ ] Parity snapshot of the current engine on both fixtures committed and green
+  - [ ] FTS and traversal queries tested
+- Verify: pytest tests/test_store.py tests/test_engine_parity.py; ruff
+- Evidence:
+
+### P4-2: Parallel extraction tier with content-hash cache and nested symbols
+- Status: TODO
+- Model: Opus 4.8
+- Stream: A. Branch: program2/p4-extract
+- Design: TARGET-ARCHITECTURE.md section 4.1; invariants I2, I6
+- Files: new package analyzer/extract/ (runner.py, facts.py, signals.py), analyzer/parsers/* (extend), analyzer/store/, tests
+- Do:
+  1. Build the worker-pool runner: enumerate files under root, hash contents, skip files whose (hash, parser_version) is in extraction_cache, parse the rest in parallel, write fact records and ledger rows.
+  2. Extend every tree-sitter parser to emit nested symbols (methods, inner types) with parent set, and exact ranges (drop the 500-line block-end bound on the tree-sitter path). Regex fallbacks keep current behavior and mark their facts confidence-appropriately.
+  3. Move signal extraction here from scanner.py: ports, URL/service references, db/queue/ws/grpc driver usage, endpoint declarations, CLI command declarations, UI actions with target_view, env vars, framework markers. Each file is read exactly once. Signals carry file and line.
+  4. Ledger dispositions per I2: parsed, excluded:<rule>, failed:<error>, binary. No silent size skip; --max-file-size becomes explicit opt-in whose effect lands in the ledger.
+  5. Determinism: two consecutive cold runs produce identical store contents (ordering-independent comparison test).
+- Accept:
+  - [ ] Fixture run: methods appear with parent references for all seven tree-sitter languages
+  - [ ] Warm re-run with no changes parses zero files (cache-hit assertion); touching one file parses exactly one
+  - [ ] Ledger row count equals file count under root on fixtures and on this repo
+  - [ ] Parallel speedup on this repo recorded in Evidence (cores, cold and warm wall time)
+- Verify: pytest; a timed self-analysis run recorded in Evidence
+- Evidence:
+
+### P4-3: Derivation passes over the store
+- Status: TODO
+- Model: Opus 4.8 (no substitution)
+- Stream: A. Branch: program2/p4-derive
+- Design: TARGET-ARCHITECTURE.md section 4.3; invariant I3
+- Files: new package analyzer/derive/ (components.py, roles.py, relationships.py, testing.py, docs.py), tests
+- Do:
+  1. Re-express component discovery, role classification, docs, and testing extraction as passes reading only the store (cached content for doc extraction, never the disk). Port the root-bounded _check_ci_tests fix noted in P2-2.
+  2. Relationship inference as joins over signals: port bindings join URL references for http; driver signals join infrastructure components for database/queue; websocket/grpc/nav likewise. Every edge carries evidence rows (file, line) and confidence (certain/inferred per I3).
+  3. Preserve the SwiftUI flow pipeline by feeding it from stored signals and symbols; navigation/tab/modal/embed edges gain evidence.
+  4. Instrumentation hook counting source-file opens during derivation; assert zero in tests.
+  5. Run derivation on the parity fixtures; diff against the P4-1 snapshot; enumerate every intended difference (nested symbols, evidence fields, corrected false positives) in Evidence for the P4-7 gate.
+- Accept:
+  - [ ] Zero source-file reads during derivation (test-asserted)
+  - [ ] Every edge in fixture output has at least one evidence location and a confidence tier
+  - [ ] Fixture diff vs P4-1 snapshot contains only enumerated, justified differences
+- Verify: pytest; the diff report in Evidence
+- Evidence:
+
+### P4-4: Coverage ledger end to end
+- Status: TODO
+- Model: Opus 4.8 (Sonnet 5 acceptable for the viewer display half once the projection shape exists)
+- Stream: A (analyzer half), B (viewer half). Branch: program2/p4-ledger
+- Design: TARGET-ARCHITECTURE.md section 7; invariant I2
+- Files: analyzer/extract/, analyzer/project/ (with P4-5), viewer/src (coverage badge and panel), tests both sides
+- Do:
+  1. Ledger summary and full ledger in projections (manifest carries the summary; a coverage.json shard carries rows).
+  2. Viewer: a coverage badge near the AI banner (percent parsed, counts per disposition) opening a panel listing exclusions by rule and failures with reasons. Degrades silently for old projections without the key.
+  3. Wire the invariant checks as tests: ledger completeness on fixtures; a deliberately unreadable file lands as failed:<error>; an excluded rule lands with its rule name.
+- Accept:
+  - [ ] Ledger completeness test green on fixtures and this repo
+  - [ ] Viewer displays summary and drill-in on the demo dataset; old datasets unaffected (test both)
+- Verify: pytest; viewer test run; manual check on a local build
+- Evidence:
+
+### P4-5: Projection tier
+- Status: TODO
+- Model: Opus 4.8 (Sonnet 5 acceptable for the search-shard emitter once shapes are fixed)
+- Stream: A. Branch: program2/p4-project
+- Design: TARGET-ARCHITECTURE.md section 4.4; invariant I7
+- Files: new package analyzer/project/ (manifest.py, details.py, search_shards.py, changelog.py, monolith.py), analyzer/cli.py, tests
+- Do:
+  1. Generate manifest + detail shards from the store, schema-compatible with viewer/src/types.ts; new keys (evidence, confidence, coverage, nested symbols) optional. Existing safe_component_id escaping preserved for shard filenames.
+  2. Monolithic architecture.json projection for small repos and backward compatibility.
+  3. Search shards covering names, paths, descriptions, docstrings, and enrichment help text; viewer loads them lazily (viewer half lands in P6-4, but emit and unit-test the shards now).
+  4. Changelog as a store-vs-previous-store (or previous projection) diff, replacing the file-diff changelog for the new path; serials preserved.
+  5. Deterministic output: identical store produces byte-identical projections.
+- Accept:
+  - [ ] Existing viewer renders fixture projections with no code changes and no console errors (integration test)
+  - [ ] Determinism test green; shard filenames match the current escape convention (cross-check the three-implementation fixtures from P0-3)
+  - [ ] Changelog entries equivalent to current behavior on a scripted change sequence
+- Verify: pytest; viewer against generated fixtures
+- Evidence:
+
+### P4-6: Incremental v2
+- Status: TODO
+- Model: Opus 4.8
+- Stream: A. Branch: program2/p4-incremental
+- Design: TARGET-ARCHITECTURE.md sections 4.1, 4.3; invariant I6
+- Files: analyzer/extract/runner.py, analyzer/derive/ (scoped re-derivation), analyzer/cli.py (flag compatibility), tests
+- Do:
+  1. Incremental is the default: hash comparison decides what re-parses; derivation re-runs for affected scopes (component membership changes, signal changes) plus architecture-level passes.
+  2. Keep --incremental/--base-sha CLI flags as accepted no-ops or thin wrappers so existing workflows keep working; document the semantics change.
+  3. Parity: full-rescan output byte-identical to incremental output after any scripted change sequence on fixtures (add, modify, delete, rename, new directory, marker-file change). This absorbs P2-1's scenarios; the new-root-file and new-directory cases are mandatory tests.
+  4. The .arch-baseline/file-index/import-graph cache files are retired on the new path; the store is the baseline.
+- Accept:
+  - [ ] Full-vs-incremental byte-identical across the scripted sequence, including P2-1's two scenarios
+  - [ ] Touch-one-file re-derives only affected scopes (instrumentation assertion), architecture passes excepted
+  - [ ] Existing CI workflow invocations run unmodified against the new CLI
+- Verify: pytest tests/test_incremental_v2.py; workflow dry parse
+- Evidence:
+
+### P4-7: Parity, benchmarks, and cutover
+- Status: TODO
+- Model: Opus 4.8 (no substitution); gate review per WORK-PLAN.md 6.3, Fable review optional per WORK-PLAN-2.md section 4
+- Stream: solo after P4-1 to P4-6 merge. Branch: program2/p4-cutover
+- Design: TARGET-ARCHITECTURE.md section 11
+- Files: analyzer/ (deletions), analyze.py, action.yml, workflows, DEPLOYMENTS.md, benchmark script under scripts/
+- Do:
+  1. Run the Phase 4 exit-gate checklist from WORK-PLAN-2.md section 3 in full; record every result here.
+  2. Benchmarks: this repo, unamentis, and one 1M+ line OSS repo (suggestion: microsoft/vscode); cold and warm wall time, peak memory, store size. Record the machine.
+  3. Switch analyze.py, action.yml, and workflows to the new engine. Delete scanner.py orchestration, incremental.py, and their dead tests, or gate them behind --legacy with a recorded deletion date. Fold in P2-7's dead-code items.
+  4. Redeploy downstream installations; verify at DEPLOYMENTS.md URLs with enrichment preserved (the merge's --strict guard passes with healthy per-strategy counts in the run log; see also the 2026-07-11 stale-SHA-pin discovery, verify downstream pins actually track the intended ref).
+- Accept:
+  - [ ] Exit-gate checklist fully recorded with results
+  - [ ] Benchmark table in Evidence; the large repo completes with a complete ledger
+  - [ ] Downstream green, enrichment intact
+- Verify: the checklist itself
+- Evidence:
+
+## Phase 5: Capabilities and data entities
+
+### P5-1: Capability extraction (api, cli, event, job)
+- Status: TODO (elaborate at Phase 4 gate)
+- Model: Opus 4.8
+- Design: TARGET-ARCHITECTURE.md section 5
+- Scope: per-framework endpoint extraction with tests per framework (Flask, FastAPI, Express, Next.js routes, gin/echo/fiber, Rails/Sinatra, actix/axum, Vapor), eliminating the header-name false-positive class; CLI command and flag extraction for click/typer/clap/commander; event and job declarations where signals allow; capabilities land in the store with evidence and confidence, owned by components, linked to defining symbols where resolvable.
+- Evidence:
+
+### P5-2: Data entities and access edges
+- Status: TODO (elaborate at Phase 4 gate)
+- Model: Opus 4.8
+- Design: TARGET-ARCHITECTURE.md section 5
+- Scope: parse ORM models (SQLAlchemy, Django, ActiveRecord, Prisma schema, SwiftData/CoreData where feasible), migrations, and standalone schemas into data_entities with fields; entity_access edges (read/write) from driver-usage and import signals; remove models/schemas/migrations from the content-exclusion list; ledger and confidence rules apply.
+- Evidence:
+
+### P5-3: Projection and type extensions for capabilities and entities
+- Status: TODO (elaborate at Phase 4 gate)
+- Model: Opus 4.8 (Sonnet 5 acceptable for the types/plumbing half)
+- Scope: optional keys in manifest and detail shards; viewer/src/types.ts additions; DetailPanel gains Capabilities and Data tabs (list-level, lens views come in Phase 6); backward-compatibility test that old datasets render unchanged.
+- Evidence:
+
+## Phase 6: Perspectives
+
+### P6-1: Lens framework
+- Status: TODO (elaborate at Phase 5 gate; 6a items may elaborate at Phase 4 gate)
+- Model: Opus 4.8
+- Scope: a lens abstraction in store.ts and App (Structure, Flow, Capability, Data), URL state (?lens=), per-lens node/edge selection feeding the existing graph pipeline; Structure remains the default and pixel-identical for old data.
+- Evidence:
+
+### P6-2: Flow lens
+- Status: TODO (elaborate at Phase 5 gate)
+- Model: Opus 4.8
+- Scope: render navigation/tab/modal/embed edges and UIAction target_view links as a screen-flow diagram grouped by tab container; reachable from a screen node's context; works on the unamentis dataset today (the data already exists).
+- Evidence:
+
+### P6-3: Capability and Data lenses
+- Status: TODO (elaborate at Phase 5 gate)
+- Model: Opus 4.8
+- Scope: Capability lens groups capabilities by component with contract detail and AI business meaning; Data lens shows entities with read/write edges from components; both integrate search, selection, detail panel, and deep links.
+- Evidence:
+
+### P6-4: Scale UX: aggregation, shard search, prefetch
+- Status: TODO (elaborate at Phase 4 gate; independent of Phase 5)
+- Model: Opus 4.8
+- Scope: replace hero-filter hiding with expandable aggregation nodes so every child is visible or visibly aggregated (closes the silent-hiding gap per I2 spirit); consume search shards so search covers descriptions, docstrings, and AI help text without visiting components; predictive prefetch of children and breadcrumb ancestors of the selection; virtualized long lists in panels.
+- Evidence:
+
+## Phase 7: AI enrichment industrialization
+
+### P7-1: Enrichment provenance and staleness
+- Status: TODO (elaborate at Phase 4 gate)
+- Model: Opus 4.8 (no substitution)
+- Design: TARGET-ARCHITECTURE.md section 6; invariant I5
+- Scope: define the component-files digest; enrichment rows carry derived_from_hash and commit_sha; staleness computed and surfaced in projections, viewer (marker on AI content), and later MCP; migration for the existing ai_enhance baseline. Builds on P3-3's shipped drift-tolerant matcher (DONE, PR #6): provenance makes matching unnecessary because identity plus digest travel with the enrichment; retire the merge-script path from CI only after a parallel-run validation period shows parity with the P3-3 matcher on real deploys.
+- Evidence:
+
+### P7-2: Headless enrichment CLI
+- Status: TODO (elaborate at Phase 4 gate)
+- Model: Opus 4.8
+- Scope: `solution-explorer enhance` running DPEA over the store via the Claude Agent SDK, no hardcoded paths, partition/parallel limits honored, quality scorer enforced as a gate, --update mode re-enhancing only stale/new scopes plus architectural neighbors; the /ai-assist skill becomes a thin wrapper; CI-callable with cost controls (documented flags for partition caps).
+- Evidence:
+
+### P7-3: AI verification of inferred edges
+- Status: TODO (elaborate at Phase 7 start)
+- Model: Opus 4.8
+- Scope: an enrichment pass that examines inferred-confidence edges against source evidence and records a verdict (confirmed, refuted, uncertain) with provenance; refuted edges are marked and de-emphasized, never silently deleted; verdicts surface in viewer and MCP.
+- Evidence:
+
+## Phase 8: The query surface
+
+### P8-1: MCP server
+- Status: TODO (elaborate at Phase 7 gate; Fable design review optional)
+- Model: Opus 4.8 (no substitution)
+- Design: TARGET-ARCHITECTURE.md section 8; invariants I3, I5, I9
+- Scope: the seven tools (se_overview, se_search, se_component, se_symbol, se_refs, se_impact, se_coverage) over the store, in-process reads only, evidence and confidence and staleness in every response; packaging decision recorded; registered and documented for Claude Code; integration-tested against the fixture stores and this repo.
+- Evidence:
+
+### P8-2: Token-efficiency benchmark
+- Status: TODO (elaborate at Phase 8 start)
+- Model: Opus 4.8 (Sonnet 5 acceptable for harness runs)
+- Scope: define a question battery (architecture, impact, capability, data questions) over two repos; measure a grep-only agent baseline vs MCP-assisted on identical questions; publish methodology, transcripts, and token counts under docs/benchmarks/; target 50 percent reduction, misses analyzed honestly.
+- Evidence:
+
+## Phase 9: Scale proof and release
+
+### P9-1: Large-repo public demos
+- Status: TODO (elaborate at Phase 8 gate)
+- Model: Opus 4.8 plus the human for deployment credentials
+- Scope: full pipeline including enrichment on one or two 1M+ line public OSS repos; deploy as public living demos with visible coverage ledger; record analysis and enrichment cost and wall time; add to DEPLOYMENTS.md.
+- Evidence:
+
+### P9-2: v2 release and claims re-audit
+- Status: TODO (elaborate at Phase 8 gate)
+- Model: Opus 4.8 plus the human for publishes
+- Scope: version, changelog, npm and PyPI release via the P1-1 machinery; README and PROJECT-OVERVIEW updated to the new reality (lenses, ledger, MCP, benchmarks); a claims re-audit in the AUDIT-2026-07 section 7 style over all new claims; DEPLOYMENTS refreshed.
 - Evidence:
 
 ---
