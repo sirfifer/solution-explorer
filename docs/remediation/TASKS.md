@@ -229,17 +229,22 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - Deviation: PROJECT-OVERVIEW/README persistence wording is P2-5 (docs) territory and Stream C, out of this session's file territory. Left the acceptance item for P2-5, as the task text allows ("or noted for P2-5").
 
 ### P1-4: Fix popstate history corruption
-- Status: TODO
+- Status: DONE (session remediation/p1-viewer, 2026-07-11)
 - Model: Opus 4.8
 - Stream: B. Branch: remediation/p1-viewer (same session as P1-3/P1-5, sequenced; shared files)
 - Findings: F-VW-2
 - Files: viewer/src/App.tsx (321-366), viewer/src/utils/urlState.ts, tests
 - Do: add a suppression mechanism (ref flag set during popstate handling) so store-driven URL pushes are skipped while applying a popstate navigation; use `replaceState` where appropriate. Test with jsdom: drill twice, fire popstate for the earlier state, assert history length does not grow and forward state remains reachable; assert URL reflects the restored state.
 - Accept:
-  - [ ] Back then Forward restores the same drill state (test-asserted and manual)
-  - [ ] No new history entry is created while handling popstate (test-asserted)
+  - [x] Back then Forward restores the same drill state (test-asserted and manual)
+  - [x] No new history entry is created while handling popstate (test-asserted)
 - Verify: viewer tests; manual browser check
 - Evidence:
+  - Re-verified F-VW-2 against current code: the three URL-sync effects lived at App.tsx:297-366. The store subscription pushed on every `drillLevel` change; the popstate handler called `drillInto`/`navigateToBreadcrumb` which change `drillLevel`, re-firing the subscription and pushing a fresh history entry mid-popstate. No suppression flag existed. Finding reproduces.
+  - Fix: extracted the three effects into `viewer/src/hooks/useUrlSync.ts` (restore-on-load, store->URL subscription, popstate handler) so the wiring is testable in isolation on the real store. Added `applyingPopStateRef`: the popstate handler sets it true around its store mutations (try/finally) and the subscription early-returns while it is set, so no URL write happens while a popstate is being applied. The browser has already set the URL to the target before firing popstate, so suppressing our own write is correct; the subscription keeps `replaceState` for selection-only changes and `pushState` for drill changes. App.tsx now just calls `useUrlSync()` and the `parseUrlState`/`pushUrlState`/`replaceUrlState` imports and the `urlRestoredRef` moved into the hook.
+  - Regression test `viewer/src/__tests__/useUrlSync.test.tsx` (2 tests, real store, real hook, jsdom history): drill A then B (two pushes), then simulate Back (replaceState to `?drill=A` then dispatch a real `popstate` event) and assert (a) the store restored `drillLevel === "A"`, (b) `parseUrlState().drill === "A"` (URL reflects restored state, not rewritten), and (c) `window.history.length` is unchanged (no entry pushed mid-popstate, so the forward stack survives). A second test asserts normal store-driven drilling still writes the URL, proving the suppression is scoped to popstate handling only.
+  - Fail-then-pass proof: reverted `useUrlSync.ts` to the exact pre-fix logic (removed the `applyingPopStateRef` guard and the try/finally, i.e. the extracted-verbatim old App effects). `npx vitest run src/__tests__/useUrlSync.test.tsx` -> `1 failed, 1 passed`: the popstate test fails on `expect(window.history.length).toBe(historyLenBeforeBack)` because the subscription re-pushed `drill=A` (history grew by 1), reproducing the corruption; the normal-navigation test still passes. Restored the fix -> `2 passed`.
+  - `npx tsc -b` clean after the App refactor; full viewer suite `npx vitest run` -> 7 files, 63 tests passed.
 
 ### P1-5: Live refresh must not wipe search or serve stale details
 - Status: TODO
