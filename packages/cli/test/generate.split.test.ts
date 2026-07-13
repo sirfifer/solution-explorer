@@ -45,6 +45,29 @@ describe("buildAnalyzerArgs", () => {
     expect(args).not.toContain("--split");
   });
 
+  it("honors --pretty instead of forcing --compact (Copilot review on PR #9)", () => {
+    const args = buildAnalyzerArgs("/a/analyze.py", {
+      repoPath: "/repo",
+      outputPath: "/out/architecture",
+      split: true,
+      pretty: true,
+    });
+    expect(args).toContain("--pretty");
+    // The analyzer treats --compact as an override, so passing both would
+    // silently defeat the user's --pretty flag.
+    expect(args).not.toContain("--compact");
+  });
+
+  it("defaults to --compact when pretty is not requested", () => {
+    const args = buildAnalyzerArgs("/a/analyze.py", {
+      repoPath: "/repo",
+      outputPath: "/out/architecture",
+      split: true,
+    });
+    expect(args).toContain("--compact");
+    expect(args).not.toContain("--pretty");
+  });
+
   it("uses --config instead of a positional path in multi-repo mode", () => {
     const args = buildAnalyzerArgs("/a/analyze.py", {
       config: "/repo/solution-explorer.json",

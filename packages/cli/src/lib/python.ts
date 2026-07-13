@@ -98,8 +98,14 @@ export function buildAnalyzerArgs(
     args.push("--split");
   }
 
-  // Always compact: smaller JSON for hosted static sites, in both modes.
-  args.push("--compact");
+  // Compact by default: smaller JSON for hosted static sites, in both modes.
+  // An explicit --pretty wins, since the analyzer treats --compact as an
+  // override that would otherwise make the user's flag a silent no-op.
+  if (options.pretty) {
+    args.push("--pretty");
+  } else {
+    args.push("--compact");
+  }
 
   return args;
 }
