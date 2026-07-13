@@ -1372,3 +1372,151 @@ class TestScopedScanner:
             assert any(
                 "redetect_relationships" in str(x.message) for x in w
             )
+
+
+# ---------------------------------------------------------------------------
+# TestUnmappedChangedFileFallback (F-CRIT-8)
+# ---------------------------------------------------------------------------
+
+
+def _git(repo, *args):
+    subprocess.run(
+        ["git", *args], cwd=str(repo), capture_output=True, check=True,
+    )
+
+
+def _head_sha(repo):
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=str(repo), capture_output=True, text=True, check=True,
+    )
+    return result.stdout.strip()
+
+
+def _flatten_output_files(output):
+    """Collect every file path referenced by the analysis output."""
+    paths = {f.get("path") for f in output.get("files", [])}
+
+    def _walk(components):
+        for comp in components:
+            paths.update(comp.get("files", []))
+            _walk(comp.get("children", []))
+
+    _walk(output.get("components", []))
+    return paths
+
+
+class TestUnmappedChangedFileFallback:
+    """A changed file that maps to no component must not be silently dropped.
+
+    Regression tests for F-CRIT-8. The incremental path only rescans components
+    reachable from the change set, so a new root-level file or a file in a
+    brand-new directory maps to zero components and used to vanish from output.
+    The fix falls back to a full rescan when any changed file is unmapped.
+    """
+
+    # A baseline whose file count is high enough that a single changed file is
+    # well under the 50% full-rescan threshold, so the ONLY thing that can
+    # trigger a full rescan in these tests is the unmapped-file fallback.
+    def _baseline(self):
+        return {
+            "name": "test-project",
+            "analyzer_version": __version__,
+            "components": [{
+                "id": "root", "name": "test-project", "type": "project",
+                "path": "", "files": ["src/index.ts"],
+                "children": [
+                    {"id": "src", "name": "src", "type": "module", "path": "src",
+                     "files": ["src/index.ts"], "children": [],
+                     "metrics": {"files": 1, "lines": 3}},
+                ],
+                "metrics": {"files": 1, "lines": 3},
+            }],
+            "relationships": [],
+            "files": [
+                {"path": "src/index.ts", "language": "typescript", "lines": 3},
+                {"path": "src/a.ts", "language": "typescript", "lines": 3},
+                {"path": "src/b.ts", "language": "typescript", "lines": 3},
+                {"path": "src/c.ts", "language": "typescript", "lines": 3},
+            ],
+            "symbols": [],
+            "stats": {"total_files": 4, "total_components": 2},
+        }
+
+    def _write_baseline(self, repo):
+        # Ignore the baseline cache and commit that first, so it never appears
+        # in the diff (mirrors real usage where .arch-baseline/ is gitignored).
+        (repo / ".gitignore").write_text(".arch-baseline/\n")
+        _git(repo, "add", ".gitignore")
+        _git(repo, "commit", "-m", "Ignore baseline cache")
+        baseline_path = repo / ".arch-baseline" / "architecture.json"
+        baseline_path.parent.mkdir(parents=True, exist_ok=True)
+        baseline_path.write_text(json.dumps(self._baseline()))
+        return baseline_path
+
+    def test_new_root_level_file_included_via_full_rescan(self, temp_git_repo):
+        baseline_path = self._write_baseline(temp_git_repo)
+        base_sha = _head_sha(temp_git_repo)
+
+        # A new file at the repository root maps to no component under the
+        # incremental directory walk (it has no parent directory to match).
+        (temp_git_repo / "config.ts").write_text("export const flag = true;\n")
+        _git(temp_git_repo, "add", "-A")
+        _git(temp_git_repo, "commit", "-m", "Add root-level config")
+
+        analyzer = IncrementalAnalyzer(
+            temp_git_repo, base_sha=base_sha, head_sha="HEAD",
+            baseline_path=baseline_path,
+        )
+        output = analyzer.run()
+
+        incr = output["incremental"]
+        # Falls back to a full rescan with a stated reason.
+        assert incr["full_rescan"] is True
+        assert "no known component" in incr["rescan_reason"]
+        # The new root-level file appears in the merged output.
+        assert "config.ts" in _flatten_output_files(output)
+
+    def test_new_directory_included_via_full_rescan(self, temp_git_repo):
+        baseline_path = self._write_baseline(temp_git_repo)
+        base_sha = _head_sha(temp_git_repo)
+
+        # A file in a brand-new directory has no matching component path.
+        widgets = temp_git_repo / "widgets"
+        widgets.mkdir()
+        (widgets / "button.ts").write_text("export const Button = 1;\n")
+        _git(temp_git_repo, "add", "-A")
+        _git(temp_git_repo, "commit", "-m", "Add widgets directory")
+
+        analyzer = IncrementalAnalyzer(
+            temp_git_repo, base_sha=base_sha, head_sha="HEAD",
+            baseline_path=baseline_path,
+        )
+        output = analyzer.run()
+
+        incr = output["incremental"]
+        assert incr["full_rescan"] is True
+        assert "no known component" in incr["rescan_reason"]
+        assert "widgets/button.ts" in _flatten_output_files(output)
+
+    def test_change_to_known_component_stays_incremental(self, temp_git_repo):
+        """A change under an existing component must NOT force a full rescan."""
+        baseline_path = self._write_baseline(temp_git_repo)
+        base_sha = _head_sha(temp_git_repo)
+
+        # Modify a file inside the existing src/ component.
+        (temp_git_repo / "src" / "index.ts").write_text(
+            "export function main(): void {\n"
+            '  console.log("changed");\n'
+            "}\n"
+        )
+        _git(temp_git_repo, "add", "-A")
+        _git(temp_git_repo, "commit", "-m", "Edit src/index.ts")
+
+        analyzer = IncrementalAnalyzer(
+            temp_git_repo, base_sha=base_sha, head_sha="HEAD",
+            baseline_path=baseline_path,
+        )
+        output = analyzer.run()
+
+        assert output["incremental"]["full_rescan"] is False

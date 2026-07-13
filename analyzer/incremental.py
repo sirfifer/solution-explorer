@@ -959,6 +959,8 @@ class IncrementalAnalyzer:
         - No changed files (git diff failed or empty range)
         - A marker file (package.json, Cargo.toml, etc.) changed
         - More than 50% of known files changed
+        - A changed file maps to no known component (new root-level file or
+          new directory), which the incremental path would silently drop
         """
         if not self.base_sha:
             return True
@@ -981,7 +983,59 @@ class IncrementalAnalyzer:
         if baseline_file_count > 0 and len(changed_files) / baseline_file_count > 0.5:
             return True
 
+        # A changed file that maps to no baseline component (a new root-level
+        # file or a file in a brand-new directory) would be silently dropped by
+        # the incremental path, which only rescans components reachable from the
+        # change set. Fall back to a full rescan so the new file is included
+        # (F-CRIT-8).
+        if self._unmapped_changed_files(changed_files, baseline):
+            return True
+
         return False
+
+    def _unmapped_changed_files(
+        self,
+        changed_files: list[tuple[str, str]],
+        baseline: Optional[dict],
+    ) -> list[str]:
+        """Return changed file paths that map to no baseline component.
+
+        Mirrors the per-file matching in ``map_files_to_components``: a path is
+        mapped if it is a known baseline file or if one of its parent
+        directories is a component path. Anything else (a new root-level file,
+        or a file under a directory that has no component) is unmapped and would
+        be dropped by the incremental path.
+        """
+        if baseline is None:
+            return []
+
+        file_to_component: dict[str, str] = {}
+
+        def _index_components(components):
+            for comp in components:
+                comp_id = comp.get("id", "")
+                for fpath in comp.get("files", []):
+                    file_to_component[fpath] = comp_id
+                _index_components(comp.get("children", []))
+
+        _index_components(baseline.get("components", []))
+        comp_paths = self._all_component_paths(baseline)
+
+        unmapped = []
+        for _status, path in changed_files:
+            normalized = path.replace(os.sep, "/")
+            if normalized in file_to_component:
+                continue
+            parts = normalized.split("/")
+            matched = False
+            for i in range(len(parts) - 1, 0, -1):
+                parent = "/".join(parts[:i])
+                if any(comp_path == parent for _cid, comp_path in comp_paths):
+                    matched = True
+                    break
+            if not matched:
+                unmapped.append(normalized)
+        return unmapped
 
     def _rescan_reason(
         self,
@@ -1008,6 +1062,14 @@ class IncrementalAnalyzer:
         if baseline_file_count > 0 and len(changed_files) / baseline_file_count > 0.5:
             return (
                 f"too many files changed ({len(changed_files)}/{baseline_file_count})"
+            )
+        unmapped = self._unmapped_changed_files(changed_files, baseline)
+        if unmapped:
+            preview = ", ".join(sorted(unmapped)[:5])
+            suffix = ", ..." if len(unmapped) > 5 else ""
+            return (
+                f"{len(unmapped)} changed file(s) map to no known component "
+                f"(new root-level file or new directory): {preview}{suffix}"
             )
         return "unknown"
 

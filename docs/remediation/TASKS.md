@@ -306,17 +306,22 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 ## Phase 2: Robustness and honesty
 
 ### P2-1: Incremental mode falls back to full rescan on unmapped changes
-- Status: TODO
+- Status: DONE
 - Model: Opus 4.8
 - Stream: A. Branch: remediation/p2-analyzer
 - Findings: F-CRIT-8
 - Files: analyzer/incremental.py (map_files_to_components 911-929, should_full_rescan 948-984), tests/test_incremental.py
 - Do: track changed files that map to zero components; if any exist, trigger the existing full-rescan path (and log why). Regression tests on a real temp git repo: add a new root-level file, and separately a new directory with files; assert both appear in the merged output. Prove the tests fail pre-fix.
 - Accept:
-  - [ ] Both regression scenarios pass, and the pre-fix failure is recorded in Evidence
-  - [ ] A log line states the fallback reason when it fires
+  - [x] Both regression scenarios pass, and the pre-fix failure is recorded in Evidence
+  - [x] A log line states the fallback reason when it fires
 - Verify: pytest tests/test_incremental.py
 - Evidence:
+  - Re-verification: F-CRIT-8 still reproduced. `map_files_to_components` (incremental.py ~886-929) walks `range(len(parts)-1, 0, -1)`, so a root-level file (`parts == ["config.ts"]`) does no parent walk and matches nothing, and a file in a new directory finds no component with that parent path. `should_full_rescan` did not consult the mapping, so `_run_incremental` produced "1 files changed, 0 directly affected, 0 total" and dropped the file. Confirmed live by the pre-fix test run below (see stdout).
+  - **Fix (minimal, per card; incremental.py is slated for P4-6 replacement).** Added `IncrementalAnalyzer._unmapped_changed_files(changed_files, baseline)` which mirrors the per-file matching in `map_files_to_components` and returns changed paths that map to no component. `should_full_rescan` now returns True when that list is non-empty; `_rescan_reason` returns a message naming the count and up to five offending paths ("N changed file(s) map to no known component (new root-level file or new directory): ..."). This routes through the existing full-rescan path in `_run_full_rescan`, which prints `Full rescan: {reason}` (the required log line) and rescans the whole tree so the new files are included. No new branch in `_run_incremental`; the fallback happens before it.
+  - **Regression tests** (tests/test_incremental.py::TestUnmappedChangedFileFallback, real temp git repos, running the actual `IncrementalAnalyzer.run()` path): `test_new_root_level_file_included_via_full_rescan` (adds root `config.ts`), `test_new_directory_included_via_full_rescan` (adds `widgets/button.ts`). Each asserts `incremental.full_rescan is True`, the reason contains "no known component", and the new path appears in the flattened output (`files` plus every component's `files`). A control test `test_change_to_known_component_stays_incremental` asserts a `src/index.ts` edit stays incremental (`full_rescan is False`), proving the fallback is not over-broad. The baseline is sized so a single changed file is 1/4 (well under the 50% threshold), so the unmapped-file fallback is the only thing that can trigger a full rescan in these tests. `.arch-baseline/` is gitignored in the fixture so it never contaminates the diff.
+  - **Fails-before / passes-after.** After fix: `pytest tests/test_incremental.py::TestUnmappedChangedFileFallback -q` -> 3 passed. Pre-fix (`git stash push -- analyzer/incremental.py`): the two drop-detection tests FAILED with `assert False is True` on `full_rescan`, and stdout showed `Incremental: 1 files changed, 0 directly affected, 0 total (with importers)` (the silent drop); the control test still passed. Restored the fix (`git stash pop`), file byte-identical, 3 passed.
+  - Repo-wide: `pytest tests/ -q` 660 passed / 1 xfailed (+3 new), `pytest tests/test_incremental.py` 90 passed, `ruff check analyzer/ tests/ scripts/` clean. `git status` shows only the two intended files; architecture.json untouched.
 
 ### P2-2: Scanner file-content cache, path index, and root-bounded CI check
 - Status: DROPPED (superseded 2026-07-11 by Program 2 Phase 4; see WORK-PLAN-2.md section 2). The engine these optimizations target is replaced by Tiers 1 to 3. Item 1 (fixture-snapshot output guard) moves into P4-1. Item 3 (root-bounded `_check_ci_tests`) carries into the Tier 3 derivation port, noted in P4-3.
