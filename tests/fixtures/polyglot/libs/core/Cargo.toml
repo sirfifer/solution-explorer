@@ -1,0 +1,5 @@
+[package]
+name = "polyglot-core"
+version = "0.1.0"
+edition = "2021"
+description = "Shared core library for the polyglot fixture"

@@ -1,0 +1,4 @@
+[project]
+name = "multi-backend"
+version = "0.1.0"
+description = "Backend repo of the multi-repo fixture"

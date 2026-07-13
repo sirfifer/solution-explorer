@@ -524,7 +524,7 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 ## Phase 4: The index engine
 
 ### P4-1: Fact store schema, symbol identity, and the parity guard
-- Status: TODO
+- Status: DONE (branch program2/p4-store; Opus 4.8 executor session, 2026-07-13)
 - Model: Opus 4.8 (no substitution)
 - Stream: A. Branch: program2/p4-store
 - Design: TARGET-ARCHITECTURE.md sections 4.2, 6, and 12; invariants I4, I7
@@ -536,12 +536,41 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
   4. Port P2-2 item 1 here: a snapshot test running the CURRENT engine on the fixtures and freezing normalized output (strip timestamps and machine paths). This is the parity baseline for P4-7.
   5. Write FTS5 virtual tables and a thin query module (by name, by path, by kind, bounded-depth edge traversal via recursive CTE) with tests.
 - Accept:
-  - [ ] Schema creates, migrates from empty, round-trips every entity type with deterministic read order
-  - [ ] Symbol ID grammar documented, frozen, round-trip tested including collision and escaping edge cases
-  - [ ] Parity snapshot of the current engine on both fixtures committed and green
-  - [ ] FTS and traversal queries tested
+  - [x] Schema creates, migrates from empty, round-trips every entity type with deterministic read order
+  - [x] Symbol ID grammar documented, frozen, round-trip tested including collision and escaping edge cases
+  - [x] Parity snapshot of the current engine on both fixtures committed and green
+  - [x] FTS and traversal queries tested
 - Verify: pytest tests/test_store.py tests/test_engine_parity.py; ruff
 - Evidence:
+  - Package: `analyzer/store/` (ids.py, schema.py, db.py, __init__.py). Verified dependency-free from the old engine: an AST scan for imports of `scanner`/`incremental` across `analyzer/store/*.py` returns NONE. Stdlib `sqlite3` only, no ORM.
+
+  - FROZEN SYMBOL ID GRAMMAR (this freezes now; changes require a recorded decision + migration). Full spec and escaping table live as the module docstring in `analyzer/store/ids.py`. Summary:
+    - Four space-separated segments: `<repo> <component> <file> <symbol-path>`.
+    - `<symbol-path>` is `descriptor ( "/" descriptor )* ( "#" <digits> )?`; nesting `/` joins class then method then inner symbol; trailing `#<n>` is the collision disambiguator (absent for the common unique case).
+    - Field = bareword or backtick-quoted. A token is quoted iff empty or containing a reserved char or a backtick; internal backticks are doubled (reversible).
+    - Reserved chars: repo/component/file segments reserve space + backtick (`/` is a legal path char there, so paths render verbatim); descriptors additionally reserve `/` and `#`.
+    - Escaping table: `Foo`->`Foo`; ``->`` `` ``(two backticks); `a b`->`` `a b` ``; `a/b`(descriptor)->`` `a/b` ``; `a#b`(descriptor)->`` `a#b` ``; `` a`b ``->`` `a``b` ``; `` ` ``->four backticks.
+    - Multi-repo: single-repo uses repo `.` (SCIP "local"); multi-repo sets the repo segment to the repo name so per-repo stores merge without collision. Replaces the old in-place `repo_name/` string-prefix hack.
+    - Projection escapes stay out: `safe_component_id`'s `/`->`--`, `:`->`__` are projection-layer filename escapes and never appear in store IDs.
+    - Collision policy (`assign_symbol_ids`): source order in, order out; first occurrence of a colliding path is bare (stable), later ones get `#2`, `#3`, ... No line numbers in IDs, so IDs survive line shifts (the old `file:name:line` scheme did not).
+    - Example: `. . src/app/main.py Foo/bar` (method bar in class Foo); `api svc app/server.py UserRepo/get`.
+
+  - SCHEMA (schema_version = 1, WAL on disk). Tables: `meta, files, symbols, signals, components, component_files, edges, capabilities, data_entities, entity_access, enrichment, coverage, extraction_cache` plus the `fts_docs` FTS5 virtual table (unified index over symbol names+docstrings, component names+descriptions, enrichment help text). Every projection-facing reader in db.py sorts by a stable natural key (id/path) so reads are deterministic. WAL asserted via `PRAGMA journal_mode` = wal on an on-disk store.
+
+  - FIXTURES (committed as real files, tiny for CI):
+    - `tests/fixtures/polyglot/`: single solution exercising all seven tree-sitter languages (python api service, typescript + javascript web client, go worker, rust core lib, ruby lib, swift ios app) plus a root `docker-compose.yml` (infra). Current engine emits component types application/api-server/package/module/content/infrastructure and http relationships; 25 symbols across 7 languages, 13 files.
+    - `tests/fixtures/multi/`: `solution.json` multi-repo config pointing at two tiny local repos (backend python, frontend typescript). Exercises `repo:<name>` containers and per-repo id prefixing.
+
+  - PARITY SNAPSHOTS committed at `tests/fixtures/parity/{polyglot,multi}.snapshot.json`. Normalizer strips generated_at, root_path, analyzer_version, changelog; and deep-sorts every list to remove PYTHONHASHSEED-driven set-ordering nondeterminism (imports lists were order-unstable across processes). Verified stable across `PYTHONHASHSEED=1`, `2`, and `random` (fresh processes, all green). This is the P4-7 diff baseline.
+
+  - REGRESSION PROOF (WORK-PLAN.md 2.2): perturbed the committed `polyglot.snapshot.json` on disk (changed one component name) and ran `pytest tests/test_engine_parity.py::test_current_engine_matches_snapshot[polyglot]` -> FAILED; restored the file -> PASSED. The in-suite `test_guard_detects_a_perturbed_snapshot` encodes the same proof.
+
+  - COMMANDS / RESULTS:
+    - `python3 -m pytest tests/test_store.py -q` -> 36 passed.
+    - `python3 -m pytest tests/test_engine_parity.py -q` -> 6 passed (2 skipped only under SE_REGEN_PARITY=1).
+    - `python3 -m pytest tests/ -q` (repo-wide) -> 699 passed, 1 xfailed.
+    - `ruff check analyzer/ tests/ scripts/` -> All checks passed.
+    - `git status --porcelain architecture.json` -> empty (baseline untouched).
 
 ### P4-2: Parallel extraction tier with content-hash cache and nested symbols
 - Status: TODO
@@ -767,6 +796,8 @@ Add new findings here with a date and the task you were on; do not expand task s
 | 2026-07-11 | P1-2 | README stats-schema block (README.md:510) documents `total_symbols` but not the new optional `total_symbols_detected`. README is outside P1-2's file territory. | For P2-5 (docs reconciliation): add `total_symbols_detected` to the documented stats schema. |
 | 2026-07-11 | P1-2 (build.sh to --split) | `write_split` (cli.py) does not prune stale `detail-*.json` files already present in the output `data/` dir. Now that build.sh writes into a persistent split directory, a data/ dir that held a prior dataset keeps unreferenced detail files (cosmetic bloat; manifest is authoritative so the viewer ignores them). | Reinforces P2-7 item 6 (remove stale detail-*.json not in the current manifest when writing split output). |
 | 2026-07-13 | P1-2 Copilot review | Truncation and oversized-file warnings only fire on the single-repo, non-incremental CLI path; `--config` (multi-repo) and `--incremental` runs use ArchitectureScanner internally but do not surface `dropped_symbols`/`skipped_large_files`, so truncation can stay silent there. | Intentional P1-2 scope (the card names single-file mode; the default multi-repo path in build.sh is now --split and uncapped). The Program 2 coverage ledger (P4-4, invariant I2) eliminates this class everywhere; if Phase 4 slips, extend `_warn_dropped_data` to the orchestrator and incremental paths as a small follow-up. |
+| 2026-07-13 | P4-1 parity guard | The current engine's JSON output is not byte-stable across processes: some lists (per-component `imports`, and likely `tech_stack`/`external_services`) are built from Python sets, so their order follows PYTHONHASHSEED. Within one process it is stable; across processes it is not. | Worked around in the P4-1 normalizer (deep-sort every list before snapshotting). The v2 engine must sort these deterministically to satisfy invariant I4; ensure P4-2/P4-3 emit ordered lists rather than set iteration so projections are byte-stable without a normalization crutch. |
+| 2026-07-13 | P4-1 CI (PR #12) | The two CI lanes run different parser tiers: ci.yml installs `.[all,dev]` (tree-sitter active) while architecture-viz.yml's Test & Lint installs only `pytest ruff` (regex fallback). Tier-dependent output made the parity snapshots fail in the regex lane while passing in the tree-sitter lane. | Parity tests now carry a tier guard: they run in the tree-sitter lane and skip with a named reason in the regex lane. Consider aligning architecture-viz.yml's install with `.[all,dev]` so both lanes exercise the shipping tier; workflow files are Stream C (P2-8) territory right now, so this is deferred to that stream or a follow-up rather than edited here. |
 
 ## Phase gate records
 

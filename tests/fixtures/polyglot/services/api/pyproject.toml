@@ -1,0 +1,5 @@
+[project]
+name = "polyglot-api"
+version = "0.1.0"
+description = "HTTP API service for the polyglot fixture"
+dependencies = ["fastapi", "psycopg2"]
