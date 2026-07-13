@@ -37,8 +37,13 @@ SNAPSHOTS = FIXTURES / "parity"
 # installs only pytest+ruff), so the guard executes in the tree-sitter lane
 # and skips loudly in the regex lane instead of failing on tier drift.
 _PARITY_LANGS = ("python", "swift", "rust", "typescript", "javascript", "go", "ruby")
+# The *TreeSitterParser wrappers import cleanly even without the native
+# grammar wheels and fall back to regex per call, so the class name lies
+# about the tier (proven on PR #12 CI). The `_ts_available` flag is the
+# runtime truth that TreeSitterParser.extract_symbols itself consults;
+# regex baseline parsers lack the attribute, so getattr defaults to False.
 _TREE_SITTER_ACTIVE = all(
-    "TreeSitter" in type(PARSERS[lang]).__name__ for lang in _PARITY_LANGS
+    getattr(PARSERS[lang], "_ts_available", False) for lang in _PARITY_LANGS
 )
 requires_tree_sitter_tier = pytest.mark.skipif(
     not _TREE_SITTER_ACTIVE,
