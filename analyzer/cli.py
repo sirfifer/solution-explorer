@@ -65,6 +65,13 @@ def main():
         help="Path to solution-explorer.json for multi-repo analysis",
     )
     parser.add_argument(
+        "--engine",
+        choices=("v1", "v2"),
+        default="v1",
+        help="Analysis engine: v1 (default, current) or v2 (EXPERIMENTAL: "
+             "extract/derive/project tiers). v2 does not change any v1 default.",
+    )
+    parser.add_argument(
         "--validate",
         action="store_true",
         help="Validate architecture data and report issues (requires pydantic)",
@@ -105,6 +112,17 @@ def main():
             "--config (multi-repo) cannot be combined with --incremental; "
             "run one mode at a time"
         )
+
+    # Opt-in v2 engine (EXPERIMENTAL). Routed before any v1 setup so it cannot
+    # change a v1 default. Incremental v2 is P4-6; until then --engine v2 runs
+    # the full extract/derive/project pipeline (no incremental path).
+    if args.engine == "v2":
+        if args.incremental:
+            parser.error("--engine v2 does not support --incremental yet (P4-6)")
+        from .project.run import run_v2
+
+        run_v2(args)
+        return
 
     # Determine max_symbols default based on mode
     if args.max_symbols is None:
