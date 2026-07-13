@@ -24,10 +24,29 @@ import pytest
 
 from analyzer.models import to_dict
 from analyzer.multi_repo import MultiRepoOrchestrator
+from analyzer.parsers import PARSERS
 from analyzer.scanner import ArchitectureScanner
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SNAPSHOTS = FIXTURES / "parity"
+
+# The snapshots are pinned to the tree-sitter parser tier: regex-fallback
+# parsers legitimately emit different symbols (visibility, docstrings, exact
+# ranges), so comparing them against a tree-sitter baseline is meaningless.
+# CI runs both tiers (ci.yml installs .[all,dev]; architecture-viz.yml
+# installs only pytest+ruff), so the guard executes in the tree-sitter lane
+# and skips loudly in the regex lane instead of failing on tier drift.
+_PARITY_LANGS = ("python", "swift", "rust", "typescript", "javascript", "go", "ruby")
+_TREE_SITTER_ACTIVE = all(
+    "TreeSitter" in type(PARSERS[lang]).__name__ for lang in _PARITY_LANGS
+)
+requires_tree_sitter_tier = pytest.mark.skipif(
+    not _TREE_SITTER_ACTIVE,
+    reason=(
+        "parity snapshots are pinned to the tree-sitter parser tier; this "
+        "environment resolved at least one language to the regex fallback"
+    ),
+)
 
 # Top-level keys stripped before comparison: timestamps, absolute machine
 # paths, the analyzer version, and the changelog (which embeds timestamps and
@@ -97,6 +116,7 @@ def _regen_requested() -> bool:
     return os.environ.get("SE_REGEN_PARITY") == "1"
 
 
+@requires_tree_sitter_tier
 @pytest.mark.parametrize("name", sorted(PARITY_TARGETS))
 def test_current_engine_matches_snapshot(name):
     produced = canonical(PARITY_TARGETS[name]())
@@ -119,6 +139,7 @@ def test_current_engine_matches_snapshot(name):
     )
 
 
+@requires_tree_sitter_tier
 @pytest.mark.parametrize("name", sorted(PARITY_TARGETS))
 def test_engine_output_is_deterministic(name):
     # Two runs of the current engine on the same fixture must be identical,
@@ -137,6 +158,7 @@ def test_snapshots_are_committed_and_nonempty():
         assert data["symbols"], f"{name} snapshot has no symbols"
 
 
+@requires_tree_sitter_tier
 def test_guard_detects_a_perturbed_snapshot():
     """Regression-proof: the guard must FAIL when the frozen output changes.
 
