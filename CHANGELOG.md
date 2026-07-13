@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-11
+
 ### Added
 
 - **AI enhancement pipeline**: Optional enrichment layer (`/ai-assist` skill) that runs alongside the analyzer to add component descriptions, architectural roles, criticality levels, help text, and richer relationship context. All AI data lives under an optional `ai_enhance` key, so the viewer renders identically against non-enhanced data. Includes `scripts/merge-ai-enhancements.py` so CI can merge enhancements from a committed baseline during redeploy.
