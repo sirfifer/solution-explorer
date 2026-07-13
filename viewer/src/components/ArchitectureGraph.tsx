@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Controls,
@@ -45,6 +45,15 @@ export function ArchitectureGraph() {
   const layoutTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobileRef = useRef(false);
+  // Monotonic layout generation. Each layout run captures the current value;
+  // when its async ELK promise resolves it applies results only if it is still
+  // the latest run, so a slow older layout cannot overwrite a newer one after
+  // rapid drill navigation (F-VW-7).
+  const layoutGenRef = useRef(0);
+  // Bumped whenever a layout is actually applied. The selection-centering effect
+  // depends on it so it re-runs after ELK resolves instead of centering on
+  // pre-layout grid positions during a URL deep-link restore (F-VW-7).
+  const [layoutVersion, setLayoutVersion] = useState(0);
 
   // Track if we're on a mobile viewport
   useEffect(() => {
@@ -230,7 +239,14 @@ export function ArchitectureGraph() {
       clearTimeout(layoutTimeout.current);
     }
 
+    // Stamp this layout run so a stale resolution can be discarded below.
+    const myGen = ++layoutGenRef.current;
+
     getLayoutedElements(rawNodes, rawEdges, "DOWN").then(({ nodes: ln, edges: le }) => {
+      // Discard a stale layout: a newer run superseded this one while ELK was
+      // computing (rapid drill navigation), so its positions are obsolete.
+      if (myGen !== layoutGenRef.current) return;
+
       // Build a position map for optimal handle computation
       const nodeMap = new Map(ln.map((n) => [n.id, n]));
 
@@ -252,6 +268,9 @@ export function ArchitectureGraph() {
 
       setNodes(ln);
       setEdges(edgesWithHandles);
+      // Signal that a fresh layout landed so the selection-centering effect can
+      // re-run against real positions.
+      setLayoutVersion((v) => v + 1);
       // Delay fitView to allow rendering
       layoutTimeout.current = setTimeout(() => {
         fitView({ padding: 0.15, duration: 300 });
@@ -325,7 +344,9 @@ export function ArchitectureGraph() {
       },
       animated: connectedEdgeIds.has(e.id) ? true : false,
     })));
-  }, [selectedComponentId, getNodes, getEdges, setCenter, setNodes, setEdges]);
+    // layoutVersion: re-run once ELK has applied real positions so a deep-link
+    // restore centers on the laid-out node, not its pre-layout grid slot (F-VW-7).
+  }, [selectedComponentId, layoutVersion, getNodes, getEdges, setCenter, setNodes, setEdges]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {

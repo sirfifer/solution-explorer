@@ -132,14 +132,15 @@ describe("DetailPanel split-mode lazy detail (F-CRIT-4)", () => {
       detailItem: { type: "component", data: component },
       activePanel: "detail",
       componentDetailCache: {},
-      componentDetailLoading: null,
+      componentDetailLoading: {},
+      componentDetailErrors: {},
     });
   });
 
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
-    useArchStore.setState({ componentDetailCache: {}, componentDetailLoading: null, detailItem: null });
+    useArchStore.setState({ componentDetailCache: {}, componentDetailLoading: {}, componentDetailErrors: {}, detailItem: null });
   });
 
   it("shows a loading state then renders fetched files and symbols with updated counts", async () => {
@@ -147,7 +148,7 @@ describe("DetailPanel split-mode lazy detail (F-CRIT-4)", () => {
 
     // The mount effect triggers the lazy fetch and marks this component loading.
     await waitFor(() => {
-      expect(useArchStore.getState().componentDetailLoading).toBe(component.id);
+      expect(useArchStore.getState().componentDetailLoading[component.id]).toBe(true);
     });
     expect(fetch).toHaveBeenCalledWith("./architecture/data/detail-repo__demo--api.json");
 

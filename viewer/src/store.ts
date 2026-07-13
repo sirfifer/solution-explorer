@@ -200,8 +200,15 @@ interface ArchStore {
 
   // Component detail cache (for split mode)
   componentDetailCache: Record<string, { symbols: Symbol[]; files: FileInfo[] }>;
-  componentDetailLoading: string | null;
+  // Per-component loading keys (componentId -> true while in flight) so two
+  // simultaneous loads for different components do not clobber each other's
+  // loading state (F-VW-7).
+  componentDetailLoading: Record<string, boolean>;
+  // Per-component detail fetch errors, surfaced in the panel and used as a
+  // negative cache so a failed fetch does not refire on every re-open (F-VW-7).
+  componentDetailErrors: Record<string, string>;
   loadComponentDetail: (componentId: string) => Promise<{ symbols: Symbol[]; files: FileInfo[] } | null>;
+  retryComponentDetail: (componentId: string) => Promise<{ symbols: Symbol[]; files: FileInfo[] } | null>;
 
   // Precomputed per-component connection counts, derived from relationships and
   // refreshed only when the architecture's relationships change. Held stable
@@ -349,7 +356,8 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   enhancedFrames: getStoredEnhancedFrames(),
 
   componentDetailCache: {},
-  componentDetailLoading: null,
+  componentDetailLoading: {},
+  componentDetailErrors: {},
   connectionCounts: {},
 
   reviewMode: false,
@@ -380,9 +388,11 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       loading: false,
       annotations: restored,
       componentDetailCache: {},
-      // Clear any in-flight loading marker too: a live refresh mid-detail-load
-      // must not leave the panel stuck in a loading state keyed to the old scan.
-      componentDetailLoading: null,
+      // Clear any in-flight loading markers and prior fetch errors too: a live
+      // refresh mid-detail-load must not leave the panel stuck in a loading or
+      // error state keyed to the old scan.
+      componentDetailLoading: {},
+      componentDetailErrors: {},
       // Refresh precomputed connection counts for the new relationship set
       // (F-VW-6). Status overlays reuse this map since they never touch
       // relationships.
@@ -430,7 +440,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   },
 
   drillUp: () => {
-    const { breadcrumbs, architecture } = get();
+    const { breadcrumbs } = get();
     if (breadcrumbs.length <= 1) {
       set({ drillLevel: null, breadcrumbs: [], selectedComponentId: null });
       return;
@@ -671,36 +681,86 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     const arch = get().architecture;
     if (arch && arch.files.length > 0) return null;
 
-    set({ componentDetailLoading: componentId });
+    // Negative cache: a prior fetch for this component already failed. Do not
+    // refire on every panel re-open; the panel shows a retry affordance that
+    // clears this error and calls again (F-VW-7).
+    if (get().componentDetailErrors[componentId]) return null;
+
+    // Already loading (per-component key): let the in-flight request settle
+    // instead of starting a duplicate that races its sibling (F-VW-7).
+    if (get().componentDetailLoading[componentId]) return null;
+
+    // Per-component loading key so a sibling component's load does not clobber
+    // this one's loading state (F-VW-7).
+    set((state) => ({
+      componentDetailLoading: { ...state.componentDetailLoading, [componentId]: true },
+    }));
     const safeId = safeComponentId(componentId);
     // Capture the architecture this request belongs to. If a live refresh
     // swaps the architecture (and invalidates the cache) while the fetch is in
     // flight, the stale response must not repopulate the fresh cache.
     const requestArch = arch;
+
+    // Clear only this component's loading key, leaving other in-flight loads
+    // untouched. No-op if the architecture was swapped mid-flight (setArchitecture
+    // already reset the loading map).
+    const clearLoading = () => {
+      if (get().architecture !== requestArch) return;
+      set((state) => {
+        const next = { ...state.componentDetailLoading };
+        delete next[componentId];
+        return { componentDetailLoading: next };
+      });
+    };
+
+    // Record a surfaced, negatively-cached error for this component (F-VW-7),
+    // unless the architecture was swapped mid-flight (then it is not our error).
+    const recordError = (message: string) => {
+      if (get().architecture !== requestArch) return;
+      set((state) => ({
+        componentDetailErrors: { ...state.componentDetailErrors, [componentId]: message },
+      }));
+    };
+
     try {
       const res = await fetch(`./architecture/data/detail-${safeId}.json`);
+      if (get().architecture !== requestArch) {
+        // Architecture changed mid-flight: discard, the next open refetches.
+        return null;
+      }
       if (res.ok) {
         const detail = await res.json();
         if (get().architecture !== requestArch) {
-          // Architecture changed mid-flight: discard, the next open refetches.
           return null;
         }
         set((state) => ({
           componentDetailCache: { ...state.componentDetailCache, [componentId]: detail },
-          componentDetailLoading: null,
         }));
         // Add to search index, keyed by component so a live refresh preserves
         // these entries and a re-load replaces them (F-VW-3).
         addToSearchIndex(detail.symbols || [], detail.files || [], componentId);
         return detail;
       }
-    } catch {
-      // Fetch failed, leave as null
+      recordError(`HTTP ${res.status}`);
+      return null;
+    } catch (err) {
+      recordError(err instanceof Error ? err.message : "Fetch failed");
+      return null;
+    } finally {
+      clearLoading();
     }
-    if (get().architecture === requestArch) {
-      set({ componentDetailLoading: null });
-    }
-    return null;
+  },
+
+  retryComponentDetail: (componentId) => {
+    // Clear the negative cache and loading marker so the next load refetches.
+    set((state) => {
+      const errors = { ...state.componentDetailErrors };
+      delete errors[componentId];
+      const loading = { ...state.componentDetailLoading };
+      delete loading[componentId];
+      return { componentDetailErrors: errors, componentDetailLoading: loading };
+    });
+    return get().loadComponentDetail(componentId);
   },
 
   getComponentById: (id) => {
@@ -753,7 +813,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   },
 
   getComponentRelationships: () => {
-    const { architecture, drillLevel } = get();
+    const { architecture } = get();
     if (!architecture) return [];
 
     const visible = get().getVisibleComponents();

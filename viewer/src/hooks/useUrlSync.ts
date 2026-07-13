@@ -60,6 +60,9 @@ export function useUrlSync(): void {
         const update = {
           component: state.selectedComponentId || undefined,
           drill: state.drillLevel || undefined,
+          // Preserve the active-tab param that DetailPanel manages; rebuilding
+          // the URL from component/drill alone would erase it (F-VW-7).
+          tab: parseUrlState().tab,
         };
         // pushState for drill navigation (supports browser back), replaceState
         // for selection (a minor change that should not add a history entry).

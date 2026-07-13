@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import type { ChangelogEntry, ChangelogChange } from "../types";
 import { useArchStore } from "../store";
 import { formatRelativeTime, getTypeColors, TYPE_META } from "../utils/layout";

@@ -308,7 +308,7 @@ function ServiceFrame({ darkMode, colors, children }: FrameProps) {
   );
 }
 
-function ScreenFrame({ darkMode, colors, children }: FrameProps) {
+function ScreenFrame({ darkMode, children }: FrameProps) {
   return (
     <div className={`
       relative rounded-[20px] border-[3px] min-w-[240px] max-w-[300px]
@@ -421,7 +421,7 @@ function ReviewTarget({
   children: ReactNode;
   className?: string;
 }) {
-  const { reviewMode, setAnnotatingTarget, annotations, darkMode } = useArchStore();
+  const { reviewMode, setAnnotatingTarget, annotations } = useArchStore();
   if (!reviewMode) return <>{children}</>;
 
   const hasAnnotation = annotations.some(

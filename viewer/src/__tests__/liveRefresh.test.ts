@@ -84,7 +84,8 @@ describe("live refresh: search preservation and cache invalidation (F-VW-3, F-VW
       architecture: null,
       annotations: [],
       componentDetailCache: {},
-      componentDetailLoading: null,
+      componentDetailLoading: {},
+      componentDetailErrors: {},
     });
   });
 
@@ -166,14 +167,14 @@ describe("live refresh: search preservation and cache invalidation (F-VW-3, F-VW
     vi.stubGlobal("fetch", vi.fn().mockReturnValue(deferred));
 
     const inFlight = useArchStore.getState().loadComponentDetail("comp-a");
-    expect(useArchStore.getState().componentDetailLoading).toBe("comp-a");
+    expect(useArchStore.getState().componentDetailLoading["comp-a"]).toBe(true);
 
     // Live refresh swaps the architecture and invalidates the cache while the
-    // request is still pending. It must also clear the loading marker.
+    // request is still pending. It must also clear the loading markers.
     useArchStore.getState().setArchitecture(
       makeSplitArchitecture({ generated_at: "2026-07-12T00:00:00Z" }),
     );
-    expect(useArchStore.getState().componentDetailLoading).toBeNull();
+    expect(useArchStore.getState().componentDetailLoading).toEqual({});
 
     // The stale response arrives after the swap and must be discarded.
     resolveFetch!(detailResponse([staleSymbol], []));
@@ -181,6 +182,103 @@ describe("live refresh: search preservation and cache invalidation (F-VW-3, F-VW
 
     expect(result).toBeNull();
     expect(useArchStore.getState().componentDetailCache["comp-a"]).toBeUndefined();
-    expect(useArchStore.getState().componentDetailLoading).toBeNull();
+    expect(useArchStore.getState().componentDetailLoading).toEqual({});
+  });
+});
+
+// Regression tests for the detail-fetch error handling item of F-VW-7 (P2-4):
+// surfaced error state, negative caching (no refire), per-component loading keys
+// (no cross-component clobber), and retry.
+describe("component detail fetch: errors, negative cache, per-component loading (F-VW-7)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetDetailSearchEntries();
+    useArchStore.setState({
+      architecture: null,
+      annotations: [],
+      componentDetailCache: {},
+      componentDetailLoading: {},
+      componentDetailErrors: {},
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  function errorResponse(status = 404) {
+    return {
+      ok: false,
+      status,
+      headers: { get: () => "application/json" },
+      json: async () => ({}),
+    } as unknown as Response;
+  }
+
+  it("surfaces an error, clears loading, and negatively caches so it does not refire", async () => {
+    useArchStore.setState({ architecture: makeSplitArchitecture() });
+    const fetchMock = vi.fn().mockResolvedValue(errorResponse(404));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = await useArchStore.getState().loadComponentDetail("comp-a");
+    expect(first).toBeNull();
+    expect(useArchStore.getState().componentDetailErrors["comp-a"]).toBe("HTTP 404");
+    expect(useArchStore.getState().componentDetailLoading).toEqual({});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Re-opening the panel calls loadComponentDetail again; the negative cache
+    // must suppress a second network request. Pre-fix this refired the 404.
+    const second = await useArchStore.getState().loadComponentDetail("comp-a");
+    expect(second).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retryComponentDetail clears the error and refetches successfully", async () => {
+    useArchStore.setState({ architecture: makeSplitArchitecture() });
+    const okSymbol: ArchSymbol = { id: "s", name: "afterRetry", kind: "function", file: "src/a/index.ts" } as ArchSymbol;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(errorResponse(500))
+      .mockResolvedValueOnce(detailResponse([okSymbol], []));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await useArchStore.getState().loadComponentDetail("comp-a");
+    expect(useArchStore.getState().componentDetailErrors["comp-a"]).toBe("HTTP 500");
+
+    const retried = await useArchStore.getState().retryComponentDetail("comp-a");
+    expect(retried?.symbols.map((s) => s.name)).toContain("afterRetry");
+    expect(useArchStore.getState().componentDetailErrors["comp-a"]).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("tracks per-component loading keys so concurrent loads do not clobber each other", async () => {
+    const compA = makeComponent({ id: "comp-a", files: ["src/a/index.ts"] });
+    const compB = makeComponent({ id: "comp-b", name: "Component B", path: "src/b", files: ["src/b/index.ts"] });
+    useArchStore.setState({ architecture: makeSplitArchitecture({ components: [compA, compB] }) });
+
+    // comp-a's fetch is deferred; comp-b's resolves immediately.
+    let resolveA: (r: Response) => void;
+    const deferredA = new Promise<Response>((resolve) => { resolveA = resolve; });
+    const fetchMock = vi.fn((url: string) => {
+      if (typeof url === "string" && url.includes("comp-b")) {
+        return Promise.resolve(detailResponse([], []));
+      }
+      return deferredA;
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const inFlightA = useArchStore.getState().loadComponentDetail("comp-a");
+    // Both keys can be set independently; comp-b settling must not wipe comp-a's.
+    expect(useArchStore.getState().componentDetailLoading["comp-a"]).toBe(true);
+
+    await useArchStore.getState().loadComponentDetail("comp-b");
+    // comp-b done, its key cleared, but comp-a still loading.
+    expect(useArchStore.getState().componentDetailLoading["comp-b"]).toBeUndefined();
+    expect(useArchStore.getState().componentDetailLoading["comp-a"]).toBe(true);
+
+    resolveA!(detailResponse([], []));
+    await inFlightA;
+    expect(useArchStore.getState().componentDetailLoading["comp-a"]).toBeUndefined();
   });
 });

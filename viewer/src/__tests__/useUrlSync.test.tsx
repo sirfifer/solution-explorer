@@ -139,4 +139,21 @@ describe("useUrlSync popstate suppression (F-VW-2 / P1-4)", () => {
     // Outside of popstate handling, the subscription must still sync to the URL.
     expect(parseUrlState().drill).toBe("A");
   });
+
+  it("preserves an existing ?tab= param when a selection change rewrites the URL (F-VW-7)", () => {
+    useArchStore.setState({ architecture: makeArchitecture() });
+    renderHook(() => useUrlSync());
+
+    // DetailPanel owns the tab param. Simulate it having written one.
+    window.history.replaceState({}, "", "/?tab=symbols");
+    expect(parseUrlState().tab).toBe("symbols");
+
+    // A selection change fires the URL-sync subscription (replaceState path).
+    act(() => { useArchStore.getState().selectComponent("A"); });
+
+    // The rewritten URL keeps the tab param instead of erasing it. Pre-fix the
+    // writer rebuilt the URL from component/drill only and dropped ?tab.
+    expect(parseUrlState().component).toBe("A");
+    expect(parseUrlState().tab).toBe("symbols");
+  });
 });

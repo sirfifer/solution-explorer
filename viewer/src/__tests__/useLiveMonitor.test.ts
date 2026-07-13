@@ -117,6 +117,10 @@ describe("useLiveMonitor integration", () => {
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
+    // Reset visibility so a prior test that hid the tab does not leak into the
+    // next one (the poll/scheduleNext hidden guards make this observable).
+    Object.defineProperty(document, "hidden", { value: false, writable: true, configurable: true });
+
     // Clear localStorage
     localStorage.clear();
 
@@ -393,5 +397,87 @@ describe("useLiveMonitor integration", () => {
     // Verify fetch was called for the resume poll
     // live-config.json + first poll + resume poll = at least 3 fetch calls
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not re-arm the poll timer when an in-flight poll completes while hidden (F-VW-7)", async () => {
+    fetchMock.mockResolvedValueOnce(makeJsonResponse(testConfig)); // live-config
+    // The version fetch is deferred: it stays in flight while we hide the tab.
+    let resolveVersion: (r: unknown) => void;
+    const deferred = new Promise((res) => { resolveVersion = res; });
+    fetchMock.mockReturnValueOnce(deferred);
+
+    renderHook(() => useLiveMonitor());
+    await vi.advanceTimersByTimeAsync(0); // init runs, poll starts, version fetch in flight
+
+    const callsBefore = fetchMock.mock.calls.length; // live-config + version
+
+    // Hide the tab while the poll is in flight.
+    Object.defineProperty(document, "hidden", { value: true, writable: true, configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    // The in-flight poll now resolves with a 304 AFTER hiding. Its scheduleNext
+    // must not arm a fresh timer while hidden (pre-fix it armed unconditionally).
+    resolveVersion!(makeJsonResponse(null, 304));
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Advancing well past any poll interval must not trigger another fetch.
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    expect(fetchMock.mock.calls.length).toBe(callsBefore);
+  });
+
+  it("drops an unversioned localStorage cache instead of rendering it (F-VW-7)", async () => {
+    // Old-schema cache entry: the raw Architecture with no { v, data } wrapper.
+    const staleArch = {
+      name: "StaleCached",
+      description: "",
+      repository: null,
+      generated_at: "2020-01-01T00:00:00Z",
+      analyzer_version: "0.1",
+      root_path: "/",
+      components: [],
+      relationships: [],
+      symbols: [],
+      files: [],
+      stats: { total_files: 0, total_lines: 0, total_size_bytes: 0, languages: {}, total_symbols: 0, total_components: 0, total_relationships: 0 },
+    };
+    localStorage.setItem("arch-live-cache-test-project", JSON.stringify(staleArch));
+
+    fetchMock.mockResolvedValueOnce(makeJsonResponse(testConfig)); // live-config
+    fetchMock.mockRejectedValue(new Error("network")); // version fetch fails, nothing else applies
+
+    renderHook(() => useLiveMonitor());
+    await vi.advanceTimersByTimeAsync(0);
+
+    // The stale cache must NOT be applied (pre-fix it rendered instantly), and it
+    // is dropped from storage so it cannot resurface.
+    expect(useArchStore.getState().architecture).toBeNull();
+    expect(localStorage.getItem("arch-live-cache-test-project")).toBeNull();
+  });
+
+  it("applies a version-tagged localStorage cache for instant first render (F-VW-7)", async () => {
+    const cachedArch = {
+      name: "CachedV1",
+      description: "",
+      repository: null,
+      generated_at: "2025-06-01T00:00:00Z",
+      analyzer_version: "1.2.0",
+      root_path: "/",
+      components: [],
+      relationships: [],
+      symbols: [],
+      files: [],
+      stats: { total_files: 0, total_lines: 0, total_size_bytes: 0, languages: {}, total_symbols: 0, total_components: 0, total_relationships: 0 },
+    };
+    localStorage.setItem("arch-live-cache-test-project", JSON.stringify({ v: 1, data: cachedArch }));
+
+    fetchMock.mockResolvedValueOnce(makeJsonResponse(testConfig)); // live-config
+    fetchMock.mockRejectedValue(new Error("network")); // version fetch fails, cache stays
+
+    renderHook(() => useLiveMonitor());
+    await vi.advanceTimersByTimeAsync(0);
+
+    // The versioned cache is unwrapped and applied. Pre-fix parsing { v, data }
+    // as the Architecture directly left name undefined.
+    expect(useArchStore.getState().architecture?.name).toBe("CachedV1");
   });
 });
