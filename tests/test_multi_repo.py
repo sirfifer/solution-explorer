@@ -113,3 +113,63 @@ def test_clone_failure_redacts_token_in_stderr(tmp_path, monkeypatch, capsys):
     combined = captured.out + captured.err
     assert FAKE_TOKEN not in combined
     assert "***" in captured.err  # token replaced with redaction marker
+
+
+# ---------------------------------------------------------------------------
+# F-AN-5: malformed config and clone timeout
+# ---------------------------------------------------------------------------
+
+
+def test_missing_name_exits_with_friendly_error(tmp_path, capsys):
+    """A repo entry without 'name' exits cleanly, not with a raw KeyError."""
+    config_path = tmp_path / "solution-explorer.json"
+    config_path.write_text(json.dumps({
+        "solution": "Test",
+        "repositories": [
+            {"path": "."},  # no "name"
+        ],
+    }))
+    orch = MultiRepoOrchestrator(config_path)
+
+    with pytest.raises(SystemExit) as exc:
+        orch.run()
+    assert exc.value.code == 1
+
+    err = capsys.readouterr().err
+    assert "name" in err
+    assert "KeyError" not in err
+
+
+def test_clone_timeout_exits_without_leaking_token(tmp_path, monkeypatch, capsys):
+    """A hung clone is bounded by a timeout and reports without the token."""
+    import subprocess
+
+    config_path = tmp_path / "solution-explorer.json"
+    config_path.write_text(json.dumps({
+        "solution": "Test",
+        "repositories": [
+            {"name": "priv", "url": "https://github.com/org/private-repo.git"},
+        ],
+    }))
+    orch = MultiRepoOrchestrator(config_path)
+    monkeypatch.setenv("GITHUB_TOKEN", FAKE_TOKEN)
+
+    def _fake_run(*args, **kwargs):
+        # The real subprocess.run raises TimeoutExpired when timeout elapses;
+        # assert the call actually passes a timeout, then simulate the raise.
+        assert kwargs.get("timeout") is not None
+        raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs["timeout"])
+
+    monkeypatch.setattr("analyzer.multi_repo.subprocess.run", _fake_run)
+
+    with pytest.raises(SystemExit) as exc:
+        orch._resolve_repo(
+            {"name": "priv", "url": "https://github.com/org/private-repo.git"},
+            [],
+        )
+    assert exc.value.code == 1
+
+    combined = capsys.readouterr()
+    text = combined.out + combined.err
+    assert FAKE_TOKEN not in text
+    assert "timed out" in combined.err

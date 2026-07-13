@@ -16,12 +16,6 @@ class UIActionDetector:
     # Button("Label") { ... } or Button("Label", action: { ... })
     SWIFTUI_BUTTON_LABEL_RE = re.compile(r'Button\s*\(\s*"([^"]+)"')
 
-    # Button(action: { handler() }) { Text("Label") }
-    SWIFTUI_BUTTON_ACTION_RE = re.compile(
-        r"Button\s*\(\s*action:\s*\{[^}]*?(\w+)\s*\(",
-        re.DOTALL,
-    )
-
     # .onTapGesture { handler() }
     ONTAP_RE = re.compile(r"\.onTapGesture\s*\{")
 

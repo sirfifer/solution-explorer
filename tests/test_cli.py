@@ -398,6 +398,36 @@ class TestCLIArgumentDefaults:
         data = json.loads(out.read_text())
         assert "components" in data
 
+    def test_incremental_with_split_is_argparse_error(
+        self, monkeypatch, temp_repo, capsys
+    ):
+        """--incremental --split is rejected, not silently downgraded (F-AN-9)."""
+        monkeypatch.setattr("sys.argv", [
+            "analyze", str(temp_repo), "--incremental", "--split",
+            "-o", str(temp_repo / "out"),
+        ])
+        with pytest.raises(SystemExit) as exc:
+            main()
+        # argparse.error exits with code 2.
+        assert exc.value.code == 2
+        err = capsys.readouterr().err
+        assert "--incremental" in err and "--split" in err
+
+    def test_config_with_incremental_is_argparse_error(
+        self, monkeypatch, tmp_path, capsys
+    ):
+        """--config --incremental is rejected, not silently one-wins (F-AN-9)."""
+        cfg = tmp_path / "solution-explorer.json"
+        cfg.write_text(json.dumps({"solution": "S", "repositories": []}))
+        monkeypatch.setattr("sys.argv", [
+            "analyze", "--config", str(cfg), "--incremental",
+        ])
+        with pytest.raises(SystemExit) as exc:
+            main()
+        assert exc.value.code == 2
+        err = capsys.readouterr().err
+        assert "--config" in err and "--incremental" in err
+
 
 # ---------------------------------------------------------------------------
 # write_split() Unit Tests
@@ -726,6 +756,41 @@ class TestSafeComponentId:
 
         assert out.is_dir()
         assert (out / "manifest.json").is_file()
+
+    def test_stale_detail_files_are_pruned(self, tmp_path, minimal_arch):
+        """A detail file from a prior dataset not in the new manifest is removed (F-AN-10)."""
+        out = tmp_path / "output"
+        data_dir = out / "data"
+        data_dir.mkdir(parents=True)
+
+        # Simulate a previous run that wrote a component since removed.
+        stale = data_dir / "detail-removed-comp.json"
+        stale.write_text('{"symbols": [], "files": []}')
+
+        write_split(minimal_arch, out, indent=2)
+
+        # Current components survive; the stale one is gone.
+        assert (data_dir / "detail-comp-a.json").is_file()
+        assert (data_dir / "detail-comp-b.json").is_file()
+        assert not stale.exists()
+
+    def test_pruning_only_touches_detail_pattern_in_data_dir(self, tmp_path, minimal_arch):
+        """Pruning never deletes non-detail files or files outside data/."""
+        out = tmp_path / "output"
+        data_dir = out / "data"
+        data_dir.mkdir(parents=True)
+
+        # A non-detail file inside data/ and an unrelated file beside it.
+        keep_in_data = data_dir / "index.json"
+        keep_in_data.write_text("{}")
+        keep_outside = out / "detail-shouldstay.json"  # not in data/
+        keep_outside.write_text("{}")
+
+        write_split(minimal_arch, out, indent=2)
+
+        # Neither the non-detail file nor the file outside data/ is touched.
+        assert keep_in_data.exists()
+        assert keep_outside.exists()
 
 
 # ---------------------------------------------------------------------------

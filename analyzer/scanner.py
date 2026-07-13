@@ -95,6 +95,18 @@ def _strip_url_credentials(url: str) -> str:
     return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
+def _safe_iterdir(path: Path) -> list[Path]:
+    """List a directory's entries, returning [] instead of raising on OSError.
+
+    An unreadable directory (for example one with permissions stripped) must
+    not abort the whole scan (F-AN-6).
+    """
+    try:
+        return list(path.iterdir())
+    except OSError:
+        return []
+
+
 class ArchitectureScanner:
     """Scan a project directory to build a complete architecture model.
 
@@ -717,7 +729,7 @@ class ArchitectureScanner:
         # Gather marker file signals
         has_info_plist = (comp_dir / "Info.plist").exists()
         has_xcodeproj = any(
-            p.suffix == ".xcodeproj" for p in comp_dir.iterdir() if p.is_dir()
+            p.suffix == ".xcodeproj" for p in _safe_iterdir(comp_dir) if p.is_dir()
         ) if comp_dir.is_dir() else False
         # Also check parent for .xcodeproj (common iOS layout where code
         # dir sits beside the xcodeproj). Only check direct parent, not root,
@@ -728,7 +740,7 @@ class ArchitectureScanner:
             parent_dir = comp_dir.parent
             if parent_dir.is_dir() and parent_dir != self.root:
                 has_xcodeproj = any(
-                    p.suffix == ".xcodeproj" for p in parent_dir.iterdir()
+                    p.suffix == ".xcodeproj" for p in _safe_iterdir(parent_dir)
                     if p.is_dir()
                 )
         has_android_manifest = (

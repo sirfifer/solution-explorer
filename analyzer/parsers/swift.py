@@ -11,13 +11,6 @@ from .base import BaseParser
 class SwiftParser(BaseParser):
     """Parser for Swift source files."""
 
-    SYMBOL_PATTERNS = [
-        (r'^\s*(public|open|internal|private|fileprivate)?\s*(final\s+)?(class|struct|enum|protocol|actor)\s+(\w+)', "type"),
-        (r'^\s*(public|open|internal|private|fileprivate)?\s*(static\s+|class\s+)?(func)\s+(\w+)', "function"),
-        (r'^\s*(public|open|internal|private|fileprivate)?\s*(static\s+|class\s+)?(var|let)\s+(\w+)\s*[=:]', "property"),
-        (r'^\s*extension\s+(\w+)', "extension"),
-    ]
-
     IMPORT_PATTERN = re.compile(r'^\s*import\s+(\w+(?:\.\w+)*)', re.MULTILINE)
 
     def extract_symbols(self, content: str, file_path: str) -> list[Symbol]:

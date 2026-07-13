@@ -92,6 +92,20 @@ def main():
 
     args = parser.parse_args()
 
+    # Reject silently-ignored flag combinations. Previously the --incremental
+    # branch returned before split handling (so --split was dropped) and
+    # --config took precedence over --incremental with no warning (F-AN-9).
+    if args.incremental and args.split:
+        parser.error(
+            "--incremental cannot be combined with --split; incremental mode "
+            "writes a single architecture.json with diff metadata"
+        )
+    if args.config and args.incremental:
+        parser.error(
+            "--config (multi-repo) cannot be combined with --incremental; "
+            "run one mode at a time"
+        )
+
     # Determine max_symbols default based on mode
     if args.max_symbols is None:
         args.max_symbols = 0 if args.split else 5000
@@ -332,6 +346,7 @@ def write_split(arch_dict: dict, output_dir: Path, indent):
     all_symbol_ids = {s["id"]: s for s in arch_dict.get("symbols", [])}
 
     detail_index = {}
+    written_detail_files: set[str] = set()
 
     def process_components(components):
         for comp in components:
@@ -358,6 +373,7 @@ def write_split(arch_dict: dict, output_dir: Path, indent):
                 "files": comp_files,
             }
             detail_path = data_dir / f"detail-{safe_id}.json"
+            written_detail_files.add(detail_path.name)
             with open(detail_path, "w", encoding="utf-8") as f:
                 json.dump(detail, f, indent=indent, default=str)
 
@@ -365,6 +381,20 @@ def write_split(arch_dict: dict, output_dir: Path, indent):
             process_components(comp.get("children", []))
 
     process_components(arch_dict["components"])
+
+    # Prune stale detail files left by a previous, different dataset in this
+    # directory. The guard is strict: only files matching the detail-*.json
+    # pattern directly inside data/ are considered, and only those absent from
+    # the current manifest are removed. Nothing else in the output tree is
+    # touched (F-AN-10).
+    pruned = 0
+    for stale in data_dir.glob("detail-*.json"):
+        if stale.name not in written_detail_files:
+            try:
+                stale.unlink()
+                pruned += 1
+            except OSError:
+                pass
 
     # Build manifest (everything except symbols and files arrays)
     manifest = {k: v for k, v in arch_dict.items() if k not in ("symbols", "files")}
@@ -376,6 +406,8 @@ def write_split(arch_dict: dict, output_dir: Path, indent):
 
     print(f"  Manifest: {manifest_path}")
     print(f"  Detail files: {len(detail_index)}")
+    if pruned:
+        print(f"  Pruned stale detail files: {pruned}")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,9 @@ from typing import Optional
 from .models import Architecture, to_dict
 from .scanner import ArchitectureScanner
 
+# Bound the clone so a hung or very large remote cannot stall the pipeline.
+CLONE_TIMEOUT_SECONDS = 300
+
 
 class MultiRepoOrchestrator:
     """Orchestrates analysis across multiple repositories defined in a config file."""
@@ -43,7 +46,14 @@ class MultiRepoOrchestrator:
 
         try:
             for repo_def in repos:
-                name = repo_def["name"]
+                name = repo_def.get("name")
+                if not name:
+                    print(
+                        "Error: Repository entry is missing the required 'name' "
+                        f"field: {json.dumps(repo_def)}",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
                 repo_path = self._resolve_repo(repo_def, temp_dirs)
                 print(f"\nAnalyzing repository: {name} ({repo_path})")
 
@@ -101,7 +111,20 @@ class MultiRepoOrchestrator:
         cmd.extend([clone_url, str(clone_path)])
 
         print(f"  Cloning {url} (ref={ref})...")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True,
+                timeout=CLONE_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            # Do not print captured stderr here: it may contain the credentialed
+            # clone URL. Report only the original untokenized url (F-CRIT-3).
+            print(
+                f"Error cloning {url}: timed out after "
+                f"{CLONE_TIMEOUT_SECONDS}s",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         if result.returncode != 0:
             # Git echoes the credentialed clone URL in "unable to access"
             # messages, so redact the token before printing to CI logs
