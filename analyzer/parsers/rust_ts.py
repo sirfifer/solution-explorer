@@ -83,6 +83,49 @@ class RustTreeSitterParser(TreeSitterParser):
 
         return symbols
 
+    def _extract_nested_ts(self, node, content, file_path, out, parent_index, path) -> None:
+        """Emit Rust types, functions, and impl-block methods with parents."""
+        for child in node.children:
+            if child.type in _TYPE_ITEMS:
+                name = self._get_type_name(child)
+                if not name:
+                    continue
+                self._emit_nested(
+                    child, content, out, parent_index, path, name,
+                    _TYPE_ITEMS[child.type],
+                    visibility=self._get_rust_visibility(child),
+                )
+
+            elif child.type == "impl_item":
+                name = self._get_type_name(child)
+                if not name:
+                    continue
+                idx = self._emit_nested(
+                    child, content, out, parent_index, path,
+                    f"impl {name}", "impl",
+                )
+                body = self._find_child_by_type(child, "declaration_list")
+                if body is not None:
+                    for member in body.children:
+                        if member.type == "function_item":
+                            mname = self._get_func_name(member)
+                            if not mname:
+                                continue
+                            self._emit_nested(
+                                member, content, out, idx,
+                                tuple(path) + (f"impl {name}",), mname, "method",
+                                visibility=self._get_rust_visibility(member),
+                            )
+
+            elif child.type == "function_item":
+                name = self._get_func_name(child)
+                if not name:
+                    continue
+                self._emit_nested(
+                    child, content, out, parent_index, path, name, "function",
+                    visibility=self._get_rust_visibility(child),
+                )
+
     def _extract_imports_ts(self, content: str) -> list[str]:
         root = self._parse(content)
         imports = set()

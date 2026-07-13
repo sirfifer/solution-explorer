@@ -136,6 +136,63 @@ class SwiftTreeSitterParser(TreeSitterParser):
                             docstring=self._get_preceding_comment(member, content),
                         ))
 
+    def _extract_nested_ts(self, node, content, file_path, out, parent_index, path) -> None:
+        """Emit Swift types, protocols, extensions, and their methods."""
+        for child in node.children:
+            if child.type == "class_declaration":
+                kind = self._get_class_decl_kind(child)
+                if kind == "extension":
+                    name = self._get_extension_name(child)
+                    if not name:
+                        continue
+                    disp = f"extension {name}"
+                    idx = self._emit_nested(
+                        child, content, out, parent_index, path, disp, "extension",
+                    )
+                    self._emit_swift_methods(child, content, out, idx, tuple(path) + (disp,))
+                elif kind:
+                    name = self._get_type_name(child)
+                    if not name:
+                        continue
+                    idx = self._emit_nested(
+                        child, content, out, parent_index, path, name, kind,
+                        visibility=self._get_visibility(child),
+                    )
+                    self._emit_swift_methods(child, content, out, idx, tuple(path) + (name,))
+
+            elif child.type == "protocol_declaration":
+                name = self._get_type_name(child)
+                if not name:
+                    continue
+                idx = self._emit_nested(
+                    child, content, out, parent_index, path, name, "protocol",
+                    visibility=self._get_visibility(child),
+                )
+                self._emit_swift_methods(child, content, out, idx, tuple(path) + (name,))
+
+            elif child.type == "function_declaration":
+                name = self._get_func_name(child)
+                if not name:
+                    continue
+                self._emit_nested(
+                    child, content, out, parent_index, path, name, "function",
+                    visibility=self._get_visibility(child),
+                )
+
+    def _emit_swift_methods(self, parent_node, content, out, parent_index, path) -> None:
+        """Emit function declarations nested inside a Swift type body."""
+        for child in parent_node.children:
+            if child.type in ("class_body", "enum_class_body", "protocol_body"):
+                for member in child.children:
+                    if member.type == "function_declaration":
+                        name = self._get_func_name(member)
+                        if not name:
+                            continue
+                        self._emit_nested(
+                            member, content, out, parent_index, path, name, "method",
+                            visibility=self._get_visibility(member),
+                        )
+
     def _extract_imports_ts(self, content: str) -> list[str]:
         root = self._parse(content)
         imports = []

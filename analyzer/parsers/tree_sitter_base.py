@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 from ..models import Symbol
-from .base import BaseParser
+from .base import BaseParser, NestedSymbol
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,59 @@ class TreeSitterParser(BaseParser):
                     type(self._regex_parser).__name__,
                 )
         return self._regex_parser.extract_imports(content)
+
+    def extract_nested_symbols(self, content: str, file_path: str) -> list[NestedSymbol]:
+        """Emit nested symbols (methods, inner types) with parent references.
+
+        Tree-sitter gives exact node ranges, so the 500-line block-end bound of
+        the regex path is dropped here (TARGET-ARCHITECTURE.md 4.1). When
+        tree-sitter is unavailable or errors, fall back to the regex tier's
+        top-level symbols, marked ``via_regex`` so the runner records the
+        confidence tier and keeps tier-tagged cache entries separate.
+        """
+        if self._ts_available:
+            try:
+                out: list[NestedSymbol] = []
+                root = self._parse(content)
+                self._extract_nested_ts(
+                    root, content, file_path, out, parent_index=None, path=()
+                )
+                return out
+            except Exception as exc:
+                logger.debug(
+                    "tree-sitter nested extraction failed for %s (%s: %s); "
+                    "falling back to regex parser %s",
+                    file_path, type(exc).__name__, exc,
+                    type(self._regex_parser).__name__,
+                )
+        return self._regex_parser.extract_nested_symbols(content, file_path)
+
+    def _extract_nested_ts(self, root, content, file_path, out, parent_index, path) -> None:
+        """Walk the tree-sitter tree appending NestedSymbol records.
+
+        Subclasses override this. ``out`` is the flat per-file list; a symbol's
+        ``parent_index`` points at its parent's position in ``out`` (or None at
+        top level) and ``path`` is the enclosing descriptor chain.
+        """
+        raise NotImplementedError
+
+    def _emit_nested(self, node, content, out, parent_index, path, name, kind,
+                     visibility="internal", docstring=None) -> int:
+        """Append one NestedSymbol built from a node and return its index."""
+        idx = len(out)
+        out.append(NestedSymbol(
+            name=name,
+            kind=kind,
+            line=node.start_point[0] + 1,
+            end_line=node.end_point[0] + 1,
+            visibility=visibility,
+            docstring=docstring if docstring is not None
+            else self._get_preceding_comment(node, content),
+            code_preview=self._node_code_preview(node, content),
+            parent_index=parent_index,
+            path=tuple(path) + (name,),
+        ))
+        return idx
 
     # Delegate all regex-based methods to the underlying regex parser
     def detect_framework(self, content: str) -> Optional[str]:

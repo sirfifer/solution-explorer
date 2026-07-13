@@ -529,6 +529,25 @@ class FactStore:
         rows = self._conn.execute(sql, (start_id, max_depth, start_id)).fetchall()
         return [{"id": r["node"], "depth": r["depth"]} for r in rows]
 
+    # -- extraction reset (additive helper for the Tier 1 runner) ----------
+
+    def clear_extraction_facts(self) -> None:
+        """Delete the rows Tier 1 owns, keeping the extraction cache.
+
+        Extraction is content-addressed and idempotent: a re-run rebuilds
+        ``files``, ``symbols``, ``signals``, and ``coverage`` from the cache
+        (no re-parse for unchanged files, invariant I6) rather than appending
+        duplicates. The extraction_cache and any derivation tables are left
+        intact. Symbols are deleted before files to respect the FK.
+        """
+        self._conn.execute("DELETE FROM symbols")
+        self._conn.execute("DELETE FROM signals")
+        self._conn.execute("DELETE FROM coverage")
+        self._conn.execute("DELETE FROM files")
+        if self.with_fts:
+            self._conn.execute("DELETE FROM fts_docs WHERE ref_kind = 'symbol'")
+        self._conn.commit()
+
     # -- bulk load helper --------------------------------------------------
 
     def executescript(self, script: str) -> None:

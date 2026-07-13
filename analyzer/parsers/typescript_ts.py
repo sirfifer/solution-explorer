@@ -97,6 +97,68 @@ class TypeScriptTreeSitterParser(TreeSitterParser):
                         docstring=self._get_preceding_comment(child, content),
                     ))
 
+    def _extract_nested_ts(self, node, content, file_path, out, parent_index, path,
+                           exported=False) -> None:
+        """Emit types, functions, and class methods with parent references."""
+        for child in node.children:
+            if child.type == "export_statement":
+                self._extract_nested_ts(
+                    child, content, file_path, out, parent_index, path, exported=True
+                )
+                continue
+
+            vis = "public" if exported else "internal"
+
+            if child.type in _TYPE_NODES:
+                name = self._get_name(child)
+                if not name:
+                    continue
+                idx = self._emit_nested(
+                    child, content, out, parent_index, path, name,
+                    _TYPE_NODES[child.type], visibility=vis,
+                )
+                body = self._find_child_by_type(child, "class_body")
+                if body is not None:
+                    self._extract_nested_class_body(
+                        body, content, out, idx, tuple(path) + (name,)
+                    )
+
+            elif child.type == "function_declaration":
+                name = self._get_name(child)
+                if not name:
+                    continue
+                self._emit_nested(
+                    child, content, out, parent_index, path, name,
+                    self._classify_function(name, content, file_path), visibility=vis,
+                )
+
+            elif child.type == "lexical_declaration":
+                for declarator in self._find_children_by_type(child, "variable_declarator"):
+                    name_node = self._find_child_by_type(declarator, "identifier")
+                    if not name_node:
+                        continue
+                    name = self._node_text(name_node)
+                    self._emit_nested(
+                        child, content, out, parent_index, path, name,
+                        self._classify_function(name, content, file_path), visibility=vis,
+                    )
+
+    def _extract_nested_class_body(self, body, content, out, parent_index, path) -> None:
+        """Emit method definitions inside a class body with the class as parent."""
+        for member in body.children:
+            if member.type == "method_definition":
+                name_node = self._find_child_by_type(member, "property_identifier")
+                if name_node is None:
+                    name_node = self._find_child_by_type(member, "identifier")
+                if name_node is None:
+                    continue
+                name = self._node_text(name_node)
+                vis = "private" if name.startswith("_") or name.startswith("#") else "public"
+                self._emit_nested(
+                    member, content, out, parent_index, path, name,
+                    "method", visibility=vis,
+                )
+
     def _extract_imports_ts(self, content: str) -> list[str]:
         root = self._parse(content)
         imports = set()

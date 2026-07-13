@@ -80,6 +80,72 @@ class GoTreeSitterParser(TreeSitterParser):
 
         return symbols
 
+    def _extract_nested_ts(self, node, content, file_path, out, parent_index, path) -> None:
+        """Emit Go types, functions, and methods.
+
+        Go has no lexical nesting of declarations, so types are emitted at the
+        file's top level. A method is linked to its receiver type (its parent),
+        so it reads as ``Type/Method`` in the symbol path with a real parent
+        reference when the receiver type is declared in the same file.
+        """
+        type_index: dict[str, int] = {}
+        for child in node.children:
+            if child.type == "type_declaration":
+                for spec in self._find_children_by_type(child, "type_spec"):
+                    name_node = self._find_child_by_type(spec, "type_identifier")
+                    if not name_node:
+                        continue
+                    name = self._node_text(name_node)
+                    kind = "interface" if self._find_child_by_type(
+                        spec, "interface_type") else "struct"
+                    idx = self._emit_nested(
+                        child, content, out, parent_index, path, name, kind,
+                        visibility="public" if name[0].isupper() else "private",
+                    )
+                    type_index[name] = idx
+
+            elif child.type == "function_declaration":
+                name_node = self._find_child_by_type(child, "identifier")
+                if not name_node:
+                    continue
+                name = self._node_text(name_node)
+                self._emit_nested(
+                    child, content, out, parent_index, path, name, "function",
+                    visibility="public" if name[0].isupper() else "private",
+                )
+
+            elif child.type == "method_declaration":
+                name_node = self._find_child_by_type(child, "field_identifier")
+                if not name_node:
+                    continue
+                name = self._node_text(name_node)
+                recv = self._method_receiver_type(child)
+                if recv is not None and recv in type_index:
+                    m_parent = type_index[recv]
+                    m_path = tuple(out[m_parent].path)
+                else:
+                    m_parent = parent_index
+                    m_path = tuple(path) + ((recv,) if recv else ())
+                self._emit_nested(
+                    child, content, out, m_parent, m_path, name, "method",
+                    visibility="public" if name[0].isupper() else "private",
+                )
+
+    def _method_receiver_type(self, node):
+        """Return the receiver type name of a Go method, or None."""
+        recv = self._find_child_by_type(node, "parameter_list")
+        if recv is None:
+            return None
+        for pd in self._find_children_by_type(recv, "parameter_declaration"):
+            for c in pd.children:
+                if c.type == "type_identifier":
+                    return self._node_text(c)
+                if c.type == "pointer_type":
+                    ti = self._find_child_by_type(c, "type_identifier")
+                    if ti:
+                        return self._node_text(ti)
+        return None
+
     def _extract_imports_ts(self, content: str) -> list[str]:
         root = self._parse(content)
         imports = set()
