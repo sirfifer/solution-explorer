@@ -78,6 +78,12 @@ class FileFacts:
     imports: list[str] = field(default_factory=list)
     module_doc: Optional[str] = None
     signals: list[SignalRecord] = field(default_factory=list)
+    # Raw decoded file text, cached so Tier 3 derivation (config parsing, docs,
+    # testing, SwiftUI flow) reads content from the store instead of the disk
+    # (TARGET-ARCHITECTURE.md 4.3: "reading cached content, not the disk").
+    # Content is content-addressed, so identical-content files share it safely;
+    # only ``path`` is per-file and is overridden by the runner on a cache hit.
+    content: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -92,6 +98,7 @@ class FileFacts:
             "imports": list(self.imports),
             "module_doc": self.module_doc,
             "signals": [s.to_dict() for s in self.signals],
+            "content": self.content,
         }
 
     @classmethod
@@ -108,4 +115,5 @@ class FileFacts:
             imports=list(d.get("imports", [])),
             module_doc=d.get("module_doc"),
             signals=[SignalRecord.from_dict(s) for s in d.get("signals", [])],
+            content=d.get("content"),
         )
