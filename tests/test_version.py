@@ -8,6 +8,7 @@ stay aligned.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -74,5 +75,12 @@ def test_no_hardcoded_analyzer_version_literal_in_models():
     F-AN-12 drift cannot recur.
     """
     models_src = (REPO_ROOT / "analyzer" / "models.py").read_text()
-    assert "analyzer_version: str = __version__" in models_src
-    assert 'analyzer_version: str = "' not in models_src
+    version_defaults = re.findall(
+        r"^\s*analyzer_version\s*:\s*str\s*=\s*(.+?)\s*$", models_src, re.MULTILINE
+    )
+    assert version_defaults, "models.py must declare analyzer_version defaults"
+    for default in version_defaults:
+        assert default == "__version__", (
+            f"analyzer_version default must be __version__, found {default!r}. "
+            "A literal here reintroduces the F-AN-12 drift."
+        )
