@@ -103,6 +103,7 @@ def _parse_worker(task: tuple[str, str, str, str]) -> tuple[str, str, object]:
             imports=imports,
             module_doc=module_doc,
             signals=signals,
+            content=content,
         )
         return (rel, "ok", facts.to_dict())
     except Exception as exc:  # noqa: BLE001 - report, never crash the pool
@@ -123,6 +124,36 @@ class _Candidate:
     pversion: str
 
 
+CI_TIER = f"{EXTRACT_TIER}:ci:raw"
+
+# Extension-less filenames cached as ci_config rows; the extension rule would
+# otherwise drop their content, which Tier 3's CI check needs (P4-3).
+_CI_BARE_FILENAMES = {"Jenkinsfile"}
+
+
+def _ci_files_in_pruned_dir(dirpath: str, name: str) -> list[str]:
+    """CI config files rescued from a pruned dot-directory.
+
+    Tier 3's root-bounded CI-test detection (P4-3, porting the P2-2 item-3
+    fix) reads only the store, so `.github/workflows/*.yml` and
+    `.circleci/config.yml` content must be cached at extraction time even
+    though their parent directories are pruned. Returns absolute paths.
+    """
+    out: list[str] = []
+    base = os.path.join(dirpath, name)
+    if name == ".github":
+        wf = os.path.join(base, "workflows")
+        if os.path.isdir(wf):
+            for f in sorted(os.listdir(wf)):
+                if f.endswith((".yml", ".yaml")):
+                    out.append(os.path.join(wf, f))
+    elif name == ".circleci":
+        cfg = os.path.join(base, "config.yml")
+        if os.path.isfile(cfg):
+            out.append(cfg)
+    return out
+
+
 def _enumerate(
     root: Path, max_file_size: Optional[int]
 ) -> tuple[list[_Candidate], list[tuple[str, str, str]], set[str]]:
@@ -132,12 +163,29 @@ def _enumerate(
     to parse-or-load, ledger_rows are (path, disposition, reason) for every
     file and every pruned directory, and marker_dirs holds directories that
     carry a component-marker file (for lightweight component resolution).
+    Candidates whose ``pversion`` is ``CI_TIER`` are CI configs: cached and
+    written as ``ci_config`` file rows for Tier 3's root-bounded CI check,
+    but excluded from the architecture's file output (old-engine parity).
     """
     from ..constants import COMPONENT_MARKERS
 
     candidates: list[_Candidate] = []
     ledger: list[tuple[str, str, str]] = []
     marker_dirs: set[str] = set()
+
+    def add_ci_candidate(abs_path: str) -> None:
+        rel = os.path.relpath(abs_path, root)
+        try:
+            raw = Path(abs_path).read_bytes()
+        except OSError as exc:
+            ledger.append((rel, "failed", f"read_error: {exc}"))
+            return
+        candidates.append(_Candidate(
+            rel=rel, language=LANGUAGE_MAP.get(Path(abs_path).suffix.lower(), ""),
+            content=raw.decode("utf-8", errors="replace"),
+            content_hash=_hash_bytes(raw), size_bytes=len(raw),
+            pversion=CI_TIER,
+        ))
 
     for dirpath, dirnames, filenames in os.walk(root):
         # Record and prune skipped directories so the ledger is honest without
@@ -147,6 +195,8 @@ def _enumerate(
             child = os.path.relpath(os.path.join(dirpath, d), root)
             if _should_skip_dir(d):
                 ledger.append((child, "excluded:skipped_directory", d))
+                for ci_path in _ci_files_in_pruned_dir(dirpath, d):
+                    add_ci_candidate(ci_path)
             elif _is_vendored_repo(os.path.join(dirpath, d)):
                 ledger.append((child, "excluded:vendored_repo", d))
             else:
@@ -160,6 +210,9 @@ def _enumerate(
                 marker_dirs.add(os.path.relpath(dirpath, root))
 
             ext = fpath.suffix.lower()
+            if not ext and fname in _CI_BARE_FILENAMES:
+                add_ci_candidate(str(fpath))
+                continue
             if ext in SKIP_EXTENSIONS:
                 ledger.append((rel, "binary", f"skip_extension:{ext}"))
                 continue
@@ -295,7 +348,8 @@ def extract_repo(
 
     candidates, ledger_rows, marker_dirs = _enumerate(root, max_file_size)
 
-    # Split candidates into cache hits and a parse queue.
+    # Split candidates into cache hits and a parse queue. CI configs never
+    # enter the pool: they are stored verbatim (no parser) as ci_config rows.
     cached: dict[str, FileFacts] = {}
     queue: list[_Candidate] = []
     for c in candidates:
@@ -308,6 +362,15 @@ def extract_repo(
             # current candidate, not from whichever file was cached first.
             facts.path = c.rel
             facts.content_hash = c.content_hash
+            cached[c.rel] = facts
+        elif c.pversion == CI_TIER:
+            facts = FileFacts(
+                path=c.rel, language=c.language, content_hash=c.content_hash,
+                parser_version=CI_TIER, lines=c.content.count("\n") + 1,
+                size_bytes=c.size_bytes, parse_status="ci_config",
+                content=c.content,
+            )
+            store.cache_facts(c.content_hash, CI_TIER, facts.to_dict())
             cached[c.rel] = facts
         else:
             queue.append(c)
@@ -347,7 +410,9 @@ def extract_repo(
             result.files_cached += 1
             result.symbols += n_sym
             result.signals += n_sig
-            ledger_rows.append((rel, "parsed", ""))
+            ledger_rows.append(
+                (rel, "parsed", "ci_config" if c.pversion == CI_TIER else "")
+            )
             result.parser_tiers.setdefault(c.language, c.pversion.rsplit(":", 1)[-1])
         elif rel in parsed:
             n_sym, n_sig = _write_facts(store, parsed[rel], repo, marker_dirs)

@@ -315,6 +315,26 @@ class FactStore:
         ).fetchone()
         return _loads(row["facts_json"]) if row else None
 
+    def cached_facts_by_hash(self) -> dict[str, Any]:
+        """Map content_hash -> cached facts dict, for Tier 3 derivation reads.
+
+        Facts are content-addressed, so one entry per content hash within a
+        single analysis (only one parser tier is active per run). Derivation
+        joins this to the ``files`` table on ``content_hash`` to recover a
+        file's imports, module doc, and raw content without touching the disk
+        (TARGET-ARCHITECTURE.md 4.3). Deterministic: rows are read in
+        (content_hash, parser_version) order so a later duplicate never wins
+        nondeterministically. Additive read helper only; schema is FROZEN.
+        """
+        rows = self._conn.execute(
+            "SELECT content_hash, parser_version, facts_json FROM extraction_cache "
+            "ORDER BY content_hash, parser_version"
+        ).fetchall()
+        out: dict[str, Any] = {}
+        for r in rows:
+            out.setdefault(r["content_hash"], _loads(r["facts_json"]))
+        return out
+
     # -- deterministic readers --------------------------------------------
     #
     # Every read that a projection depends on sorts by a stable natural key so
