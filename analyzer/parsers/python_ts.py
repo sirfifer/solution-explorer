@@ -71,6 +71,42 @@ class PythonTreeSitterParser(TreeSitterParser):
                 docstring=self._get_python_docstring(target),
             ))
 
+    def _extract_nested_ts(self, node, content, file_path, out, parent_index, path) -> None:
+        """Emit classes, functions, and their nested members with parents."""
+        for child in node.children:
+            target = child
+            if child.type == "decorated_definition":
+                target = None
+                for sub in child.children:
+                    if sub.type in ("class_definition", "function_definition"):
+                        target = sub
+                        break
+                if target is None:
+                    continue
+
+            if target.type == "class_definition":
+                kind = "class"
+            elif target.type == "function_definition":
+                kind = "function"
+            else:
+                continue
+
+            name = self._get_py_name(target)
+            if not name:
+                continue
+            # Use the decorated node (child) for range/preview so decorators
+            # are included in the exact span.
+            idx = self._emit_nested(
+                child, content, out, parent_index, path, name, kind,
+                visibility="private" if name.startswith("_") else "public",
+                docstring=self._get_python_docstring(target),
+            )
+            body = self._find_child_by_type(target, "block")
+            if body is not None:
+                self._extract_nested_ts(
+                    body, content, file_path, out, idx, tuple(path) + (name,)
+                )
+
     def _extract_imports_ts(self, content: str) -> list[str]:
         root = self._parse(content)
         imports = set()

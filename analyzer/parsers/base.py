@@ -1,9 +1,38 @@
 """Base parser class for language-specific parsers."""
 
 import re
+from dataclasses import dataclass, field
 from typing import Optional
 
 from ..models import Symbol
+
+
+@dataclass
+class NestedSymbol:
+    """A raw, component-agnostic symbol emitted by the v2 extraction tier.
+
+    This is deliberately separate from ``models.Symbol``: it carries the
+    nesting information the frozen symbol-ID grammar needs (``path`` and
+    ``parent_index``) but never a resolved store ID, because the owning
+    component is not known at extraction time (TARGET-ARCHITECTURE.md 4.1;
+    IDs are assigned in the runner via analyzer/store/ids.py). ``path`` is the
+    descriptor chain outermost first, for example ``("Foo", "bar")`` for method
+    ``bar`` inside class ``Foo``. ``parent_index`` indexes the parent within
+    the same file's flat symbol list, or is None for a top-level symbol.
+    ``via_regex`` marks a fact produced by the regex fallback tier so the
+    runner can record confidence and keep tier-tagged cache entries separate.
+    """
+
+    name: str
+    kind: str
+    line: int
+    end_line: int
+    visibility: str = "internal"
+    docstring: Optional[str] = None
+    code_preview: str = ""
+    parent_index: Optional[int] = None
+    path: tuple = field(default_factory=tuple)
+    via_regex: bool = False
 
 
 class BaseParser:
@@ -11,6 +40,24 @@ class BaseParser:
 
     def extract_symbols(self, content: str, file_path: str) -> list[Symbol]:
         return []
+
+    def extract_nested_symbols(self, content: str, file_path: str) -> list[NestedSymbol]:
+        """Emit nested symbols for the v2 extraction tier.
+
+        The base (regex) implementation has no reliable nesting information, so
+        it flattens :meth:`extract_symbols` to top-level records marked
+        ``via_regex``. Tree-sitter parsers override this to emit true nesting
+        with parent references and exact ranges (analyzer/extract).
+        """
+        out: list[NestedSymbol] = []
+        for s in self.extract_symbols(content, file_path):
+            out.append(NestedSymbol(
+                name=s.name, kind=s.kind, line=s.line, end_line=s.end_line,
+                visibility=s.visibility, docstring=s.docstring,
+                code_preview=s.code_preview, parent_index=None,
+                path=(s.name,), via_regex=True,
+            ))
+        return out
 
     def extract_imports(self, content: str) -> list[str]:
         return []

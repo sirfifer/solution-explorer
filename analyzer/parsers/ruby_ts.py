@@ -94,6 +94,44 @@ class RubyTreeSitterParser(TreeSitterParser):
                         docstring=self._get_preceding_comment(child, content),
                     ))
 
+    def _extract_nested_ts(self, node, content, file_path, out, parent_index, path) -> None:
+        """Emit Ruby classes, modules, and their nested methods with parents."""
+        for child in node.children:
+            if child.type in ("class", "module"):
+                name = self._get_ruby_name(child)
+                if not name:
+                    continue
+                kind = "class" if child.type == "class" else "module"
+                idx = self._emit_nested(
+                    child, content, out, parent_index, path, name, kind,
+                    visibility="public",
+                )
+                body = self._find_child_by_type(child, "body_statement")
+                if body is not None:
+                    self._extract_nested_ts(
+                        body, content, file_path, out, idx, tuple(path) + (name,)
+                    )
+
+            elif child.type == "method":
+                name_node = self._find_child_by_type(child, "identifier")
+                if not name_node:
+                    continue
+                name = self._node_text(name_node)
+                self._emit_nested(
+                    child, content, out, parent_index, path, name, "method",
+                    visibility="private" if name.startswith("_") else "public",
+                )
+
+            elif child.type == "singleton_method":
+                name_node = self._find_child_by_type(child, "identifier")
+                if not name_node:
+                    continue
+                name = f"self.{self._node_text(name_node)}"
+                self._emit_nested(
+                    child, content, out, parent_index, path, name, "method",
+                    visibility="public",
+                )
+
     def _extract_imports_ts(self, content: str) -> list[str]:
         # Ruby imports (require/require_relative) are function calls,
         # not syntactic imports. Regex handles them just as well.
