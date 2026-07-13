@@ -759,12 +759,33 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 - Scope: optional keys in manifest and detail shards; viewer/src/types.ts additions; DetailPanel gains Capabilities and Data tabs (list-level, lens views come in Phase 6); backward-compatibility test that old datasets render unchanged.
 - Evidence:
 
+### P5-4: Git activity extraction (Activity lens data)
+- Status: TODO (elaborate at Phase 4 gate)
+- Model: Opus 4.8
+- Design: LENS-DESIGN.md sections 4 (L5) and 6
+- Scope: per-file churn series, author contribution shares, and co-change pairs from git log into the store (additive schema_version migration); cached by commit range; ledger-accounted; wholly language-agnostic. No dependency on Phase 5 semantics; may be scheduled immediately after the Phase 4 gate as the first NEW lens data source.
+- Evidence:
+
+### P5-5: Rule extraction (Rules lens data)
+- Status: TODO (elaborate at Phase 4 gate)
+- Model: Opus 4.8
+- Design: LENS-DESIGN.md sections 4 (L6) and 6; TARGET-ARCHITECTURE.md invariant I1
+- Scope: deterministic detection of rule-bearing code (validation clusters, domain conditionals, calculations with domain constants, decision-shaped branching) into typed rule entities (validation, calculation, policy, io) with inputs/outputs, trigger context, evidence, and confidence. Plain-language statements are Phase 7 enrichment work, never extraction.
+- Evidence:
+
+### P5-6: Correlation extraction (clones, orphans, concerns)
+- Status: TODO (elaborate at Phase 4 gate)
+- Model: Opus 4.8
+- Design: LENS-DESIGN.md section 9
+- Scope: near-duplicate clone clusters via token-stream fingerprinting over tree-sitter tokens; orphan detection (components and concern members unreachable from entry points); concern membership from signals (imports, API usage, naming) and clone clusters. Findings land as typed store entities with members, evidence, confidence, and verification status. Concern naming and intent conformance are P7-4.
+- Evidence:
+
 ## Phase 6: Perspectives
 
 ### P6-1: Lens framework
 - Status: TODO (elaborate at Phase 5 gate; 6a items may elaborate at Phase 4 gate)
 - Model: Opus 4.8
-- Scope: a lens abstraction in store.ts and App (Structure, Flow, Capability, Data), URL state (?lens=), per-lens node/edge selection feeding the existing graph pipeline; Structure remains the default and pixel-identical for old data.
+- Scope: a lens abstraction in store.ts and App (Structure, Flow, Capability, Data, and the LENS-DESIGN additions), URL state (?lens=), per-lens node/edge selection feeding the existing graph pipeline; Structure remains the default and pixel-identical for old data. Implements invariants I11 (ranked landing views), I12 (same element every lens), I13 (rationale strip), and I14 (each lens ships its question list with the gesture that answers each, tested).
 - Evidence:
 
 ### P6-2: Flow lens
@@ -783,6 +804,41 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 - Status: TODO (elaborate at Phase 4 gate; independent of Phase 5)
 - Model: Opus 4.8
 - Scope: replace hero-filter hiding with expandable aggregation nodes so every child is visible or visibly aggregated (closes the silent-hiding gap per I2 spirit); consume search shards so search covers descriptions, docstrings, and AI help text without visiting components; predictive prefetch of children and breadcrumb ancestors of the selection; virtualized long lists in panels.
+- Evidence:
+
+### P6-5: Activity lens
+- Status: TODO (elaborate at Phase 4 gate; needs P5-4 data)
+- Model: Opus 4.8
+- Design: LENS-DESIGN.md sections 4 (L5), 3 (I11, I12, I13)
+- Scope: hotspot map (change frequency times complexity or health) as the ranked landing view; knowledge map (authorship distribution, knowledge islands, bus factor at component granularity); change coupling reached from hotspots, never standalone. Every element cross-links per I12 and carries the rationale strip per I13.
+- Evidence:
+
+### P6-6: Rules lens
+- Status: TODO (elaborate at Phase 5 gate; needs P5-5 and P7 statements)
+- Model: Opus 4.8
+- Design: LENS-DESIGN.md section 4 (L6)
+- Scope: typed rule browser ranked per I11; decision-table rendering where branching warrants; links into Data (rule inputs/outputs) and Capability (rules behind a contract) lenses; every rule drills to its lines; stale statements marked per I5.
+- Evidence:
+
+### P6-7: Tours
+- Status: TODO (elaborate at Phase 5 gate)
+- Model: Opus 4.8
+- Design: LENS-DESIGN.md section 4 (L7)
+- Scope: tour player in the viewer (ordered steps, highlighted locations, narration, progress); tour artifacts stored as first-class store entities keyed to stable IDs; staleness markers per I5. Tour authoring/generation is Phase 7 enrichment work.
+- Evidence:
+
+### P6-8: Concerns and Findings surfaces
+- Status: TODO (elaborate at Phase 5 gate; needs P5-6 and P7-4)
+- Model: Opus 4.8
+- Design: LENS-DESIGN.md sections 8, 9 (I14, I15)
+- Scope: the ranked findings surface (duplication clusters, convergence violations, orphans, inconsistencies) with verification status; concern browser with membership drill-in; contextual finding badges on affected elements in every lens; every finding actionable per I15 (open members, annotate the set, export directive).
+- Evidence:
+
+### P6-9: Set-level review actions and directives
+- Status: TODO (elaborate at Phase 5 gate)
+- Model: Opus 4.8
+- Design: LENS-DESIGN.md section 10
+- Scope: selection sets over any commonality (concern members, clone clusters, finding members, search results, manual multi-select), nameable and persisted on stable identity; set-level annotations with shared intent plus per-member notes; directive export as a structured work order (intent, member list with file/lines/evidence, exemptions, acceptance criteria) replacing the prose prompt as the primary artifact.
 - Evidence:
 
 ## Phase 7: AI enrichment industrialization
@@ -806,13 +862,20 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 - Scope: an enrichment pass that examines inferred-confidence edges against source evidence and records a verdict (confirmed, refuted, uncertain) with provenance; refuted edges are marked and de-emphasized, never silently deleted; verdicts surface in viewer and MCP.
 - Evidence:
 
+### P7-4: Concern naming, intent conformance, finding verification
+- Status: TODO (elaborate at Phase 7 start)
+- Model: Opus 4.8 (no substitution)
+- Design: LENS-DESIGN.md sections 9 and 8 (I15); TARGET-ARCHITECTURE.md invariants I1, I5
+- Scope: enrichment names concerns in domain language; declared intents (human-authored or enrichment-proposed from docs and observed architecture) are evaluated against the model with violations emitted as findings (the reflexion-model pattern); every finding is adversarially verified against its own evidence before surfacing, with unverified findings marked and never presented as fact. All outputs carry provenance per I5.
+- Evidence:
+
 ## Phase 8: The query surface
 
 ### P8-1: MCP server
 - Status: TODO (elaborate at Phase 7 gate; Fable design review optional)
 - Model: Opus 4.8 (no substitution)
 - Design: TARGET-ARCHITECTURE.md section 8; invariants I3, I5, I9
-- Scope: the seven tools (se_overview, se_search, se_component, se_symbol, se_refs, se_impact, se_coverage) over the store, in-process reads only, evidence and confidence and staleness in every response; packaging decision recorded; registered and documented for Claude Code; integration-tested against the fixture stores and this repo.
+- Scope: the nine tools (se_overview, se_search, se_component, se_symbol, se_refs, se_impact, se_coverage, plus se_rules and se_findings per LENS-DESIGN.md section 6) over the store, in-process reads only, evidence and confidence and staleness in every response; packaging decision recorded; registered and documented for Claude Code; integration-tested against the fixture stores and this repo.
 - Evidence:
 
 ### P8-2: Token-efficiency benchmark
