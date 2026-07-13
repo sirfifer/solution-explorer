@@ -275,12 +275,22 @@ class FactStore:
             (target_kind, target_id, _dumps(payload), derived_from_hash,
              commit_sha, created_at),
         )
-        if self.with_fts and help_text:
+        if self.with_fts:
+            # The enrichment row is an upsert, so the FTS entry must be
+            # replaced, not appended: re-enriching the same target would
+            # otherwise accumulate duplicate and outdated search hits. The
+            # delete also covers a re-enrichment that drops help_text.
+            ref = f"{target_kind}:{target_id}"
             self._conn.execute(
-                "INSERT INTO fts_docs(ref_kind, ref_id, name, path, body) "
-                "VALUES ('enrichment', ?, ?, '', ?)",
-                (f"{target_kind}:{target_id}", "", help_text),
+                "DELETE FROM fts_docs WHERE ref_kind = 'enrichment' AND ref_id = ?",
+                (ref,),
             )
+            if help_text:
+                self._conn.execute(
+                    "INSERT INTO fts_docs(ref_kind, ref_id, name, path, body) "
+                    "VALUES ('enrichment', ?, ?, '', ?)",
+                    (ref, "", help_text),
+                )
 
     def add_coverage(self, path: str, disposition: str, reason: Optional[str] = None) -> None:
         self._conn.execute(

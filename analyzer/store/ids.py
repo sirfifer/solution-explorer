@@ -130,17 +130,50 @@ def encode_token(token: str, reserved: str = _SEGMENT_RESERVED) -> str:
 
 
 def decode_token(token: str) -> str:
-    """Reverse :func:`encode_token` for one already-isolated token."""
-    if len(token) >= 2 and token[0] == _BACKTICK and token[-1] == _BACKTICK:
-        return token[1:-1].replace(_BACKTICK + _BACKTICK, _BACKTICK)
-    return token
+    """Reverse :func:`encode_token` for one already-isolated token.
+
+    The grammar is frozen, so decoding is strict: a token is either a
+    non-empty bareword containing no backtick, or a fully quoted token whose
+    inner backticks all come in doubled pairs with the closing backtick last.
+    Anything else (unbalanced quotes, a stray backtick in a bareword, trailing
+    characters after the closing quote, an empty bareword) raises ValueError
+    rather than decoding to something a re-encode would not reproduce.
+    """
+    if _BACKTICK not in token:
+        if token == "":
+            raise ValueError("empty token: the empty string must be encoded as ``")
+        return token
+    if len(token) < 2 or token[0] != _BACKTICK:
+        raise ValueError(f"malformed token (stray backtick in bareword): {token!r}")
+    # Scan the interior: doubled backticks are literals; a lone backtick must
+    # be the closing quote and must sit at the very end.
+    out: list[str] = []
+    i = 1
+    n = len(token)
+    while i < n:
+        c = token[i]
+        if c == _BACKTICK:
+            if i + 1 < n and token[i + 1] == _BACKTICK:
+                out.append(_BACKTICK)
+                i += 2
+                continue
+            if i != n - 1:
+                raise ValueError(
+                    f"malformed token (characters after closing quote): {token!r}"
+                )
+            return "".join(out)
+        out.append(c)
+        i += 1
+    raise ValueError(f"malformed token (unterminated quote): {token!r}")
 
 
 def _split_unquoted(s: str, sep: str) -> list[str]:
     """Split ``s`` on single-char ``sep`` outside backtick-quoted regions.
 
     Doubled backticks inside a quote are literal and do not toggle the quote
-    state, so separators inside quoted tokens are preserved.
+    state, so separators inside quoted tokens are preserved. Raises ValueError
+    when the string ends inside an open quote (unbalanced backticks), since a
+    frozen grammar must reject inputs it could not itself have produced.
     """
     parts: list[str] = []
     buf: list[str] = []
@@ -165,6 +198,8 @@ def _split_unquoted(s: str, sep: str) -> list[str]:
             continue
         buf.append(c)
         i += 1
+    if in_quote:
+        raise ValueError(f"unbalanced backtick quoting in {s!r}")
     parts.append("".join(buf))
     return parts
 

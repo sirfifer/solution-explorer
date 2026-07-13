@@ -377,3 +377,58 @@ def test_traversal_terminates_on_cycles():
     # 'b' is reachable; 'a' is the start and excluded; no infinite loop.
     assert [r["id"] for r in reached] == ["b"]
     store.close()
+
+
+# ---------------------------------------------------------------------------
+# Copilot review round on PR #12: strict grammar parsing and FTS upsert
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        ". . src/a.py `Foo",            # unterminated quote
+        ". . src/a.py `Foo`bar",        # characters after closing quote
+        ". . src/a.py Fo`o",            # stray backtick in bareword
+        ".  . src/a.py Foo",            # empty segment (double space)
+        "`x . src/a.py Foo",            # unbalanced quote opens the string
+    ],
+)
+def test_parse_rejects_malformed_symbol_ids(malformed):
+    """The grammar is frozen, so parsing is strict (PR #12 Copilot finding 1).
+
+    A malformed encoding must raise, never decode to a value that re-encoding
+    would not reproduce.
+    """
+    from analyzer.store.ids import parse_symbol_id
+
+    with pytest.raises(ValueError):
+        parse_symbol_id(malformed)
+
+
+def test_decode_token_rejects_malformed_tokens():
+    for bad in ["", "`abc", "a`b", "`a`b`"]:
+        with pytest.raises(ValueError):
+            decode_token(bad)
+    # The legitimate forms still round-trip.
+    assert decode_token("``") == ""
+    assert decode_token("````") == "`"
+    assert decode_token("`a ``b`") == "a `b"
+
+
+@pytest.mark.skipif(not fts5_available(), reason="fts5 not available")
+def test_reenrichment_does_not_duplicate_search_hits():
+    """Upserting enrichment must replace its FTS row (PR #12 Copilot finding 2)."""
+    store = FactStore(":memory:")
+    store.add_enrichment("component", "comp-a", {"v": 1}, help_text="original alpha help")
+    store.add_enrichment("component", "comp-a", {"v": 2}, help_text="updated alpha help")
+    store.commit()
+
+    hits = store.search("alpha")
+    refs = [(h["ref_kind"], h["ref_id"]) for h in hits]
+    assert refs.count(("enrichment", "component:comp-a")) == 1
+
+    # Dropping help_text on a later upsert removes the stale entry entirely.
+    store.add_enrichment("component", "comp-a", {"v": 3}, help_text=None)
+    store.commit()
+    assert store.search("alpha") == []
+    store.close()
