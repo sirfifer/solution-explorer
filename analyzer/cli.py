@@ -96,6 +96,7 @@ def main():
     if args.max_symbols is None:
         args.max_symbols = 0 if args.split else 5000
 
+    scanner = None
     if args.config:
         config_path = Path(args.config).resolve()
         if not config_path.exists():
@@ -240,6 +241,40 @@ def main():
     print(f"  Relationships: {stats['total_relationships']}")
     print(f"  Languages: {', '.join(f'{k} ({v:,} lines)' for k, v in sorted(stats['languages'].items(), key=lambda x: -x[1]))}")
     print(f"\nOutput: {output_label}")
+
+    if scanner is not None:
+        _warn_dropped_data(scanner)
+
+
+def _warn_dropped_data(scanner: ArchitectureScanner) -> None:
+    """Print a prominent stderr warning when the scan silently dropped data.
+
+    Covers the two single-file-mode truncation paths from F-AN-3: the symbol cap
+    (`--max-symbols`) and files skipped for exceeding `--max-file-size`. Each
+    warning names the count dropped and the flag that lifts the cap. Split mode
+    runs uncapped by default, so `dropped_symbols` is 0 there and this stays quiet.
+    """
+    if scanner.dropped_symbols > 0:
+        detected = scanner.dropped_symbols + scanner.max_symbols
+        print(
+            f"\nWARNING: symbol cap dropped {scanner.dropped_symbols:,} of "
+            f"{detected:,} detected symbols from the output "
+            f"(kept {scanner.max_symbols:,}).\n"
+            f"         The viewer will not show the dropped symbols. "
+            f"Re-run with --max-symbols 0 (unlimited) or --split for full coverage.",
+            file=sys.stderr,
+        )
+
+    if scanner.skipped_large_files:
+        count = len(scanner.skipped_large_files)
+        largest = max(scanner.skipped_large_files, key=lambda f: f[1])
+        print(
+            f"\nWARNING: skipped {count:,} file(s) larger than "
+            f"{scanner.max_file_size:,} bytes; their symbols are missing from the output.\n"
+            f"         Largest skipped: {largest[0]} ({largest[1]:,} bytes).\n"
+            f"         Re-run with a higher --max-file-size to include them.",
+            file=sys.stderr,
+        )
 
 
 def _apply_changelog(arch_dict: dict, output_path: Path) -> None:

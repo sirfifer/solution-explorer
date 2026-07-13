@@ -129,6 +129,12 @@ class ArchitectureScanner:
         self._vendored_paths: set[str] = set()
         self._total_lines = 0
         self._total_size = 0
+        # Files skipped because they exceed max_file_size (rel path, size_bytes).
+        # Surfaced as a loud warning so oversized-file skips are never silent (F-AN-3).
+        self.skipped_large_files: list[tuple[str, int]] = []
+        # Symbols dropped by the max_symbols cap in single-file mode (F-AN-3).
+        # Set in scan(); 0 when nothing was truncated.
+        self.dropped_symbols: int = 0
 
     def scan(self) -> Architecture:
         """Run the full scan pipeline."""
@@ -190,12 +196,19 @@ class ArchitectureScanner:
                 s.file,
             ))[:self.max_symbols]
         self.architecture.symbols = [to_dict(s) for s in symbols]
+        # total_symbols must equal the emitted array length so the viewer's stats
+        # never disagree with its own data. total_symbols_detected exposes the
+        # pre-truncation count for anyone who needs it (F-AN-3).
+        total_detected = len(self._all_symbols)
+        total_emitted = len(symbols)
+        self.dropped_symbols = total_detected - total_emitted
         self.architecture.stats = {
             "total_files": len(self._all_files),
             "total_lines": self._total_lines,
             "total_size_bytes": self._total_size,
             "languages": dict(self._language_counts),
-            "total_symbols": len(self._all_symbols),
+            "total_symbols": total_emitted,
+            "total_symbols_detected": total_detected,
             "total_components": len(self._component_map),
             "total_relationships": len(self.architecture.relationships),
         }
@@ -529,6 +542,9 @@ class ArchitectureScanner:
                     try:
                         stat = fpath.stat()
                         if stat.st_size > self.max_file_size:
+                            self.skipped_large_files.append(
+                                (os.path.relpath(fpath, self.root), stat.st_size)
+                            )
                             continue
                         if stat.st_size == 0:
                             continue

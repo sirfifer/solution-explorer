@@ -1,0 +1,92 @@
+/**
+ * Persistence for review annotations.
+ *
+ * Annotations are the product's review output. They must survive a hard reload
+ * and re-analysis, so they are stored in localStorage keyed by a STABLE
+ * architecture identity (name plus repository). The identity deliberately
+ * excludes `generated_at`, which changes on every scan and would otherwise make
+ * annotations vanish on each re-analysis (F-VW-4).
+ */
+import type { Annotation, Architecture } from "../types";
+
+// Single localStorage key holding annotations for every architecture identity.
+const STORAGE_KEY = "arch-annotations";
+// Schema version. Bump when the stored shape changes; mismatched payloads are
+// dropped rather than misread.
+const SCHEMA_VERSION = 1;
+// Size guard, consistent with the other localStorage writers in the store: do
+// not attempt to persist an unreasonably large payload.
+const MAX_BYTES = 2_000_000;
+
+interface AnnotationStoreShape {
+  version: number;
+  byArch: Record<string, Annotation[]>;
+}
+
+/**
+ * Stable identity for an architecture: name plus repository.
+ *
+ * Excludes `generated_at` on purpose. Re-analysis produces a new timestamp but
+ * the same project, so annotations must key on identity, not on the snapshot.
+ */
+export function architectureIdentity(
+  arch: Pick<Architecture, "name" | "repository">,
+): string {
+  const name = arch.name || "unnamed";
+  const repository = arch.repository || "";
+  return `${name}\u0000${repository}`;
+}
+
+function readStore(): AnnotationStoreShape {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { version: SCHEMA_VERSION, byArch: {} };
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      parsed.version === SCHEMA_VERSION &&
+      parsed.byArch &&
+      typeof parsed.byArch === "object"
+    ) {
+      return parsed as AnnotationStoreShape;
+    }
+    // Unknown or older schema: drop it rather than render stale/incompatible data.
+    return { version: SCHEMA_VERSION, byArch: {} };
+  } catch {
+    // Corrupt JSON or storage unavailable.
+    return { version: SCHEMA_VERSION, byArch: {} };
+  }
+}
+
+/** Load persisted annotations for the given architecture identity. */
+export function loadAnnotations(identity: string): Annotation[] {
+  const store = readStore();
+  const list = store.byArch[identity];
+  return Array.isArray(list) ? list : [];
+}
+
+/**
+ * Persist annotations for the given architecture identity. A quota failure or
+ * missing storage is swallowed so the app never crashes on a write, matching
+ * the existing dark-mode/changelog persistence behavior.
+ */
+export function saveAnnotations(identity: string, annotations: Annotation[]): void {
+  try {
+    const store = readStore();
+    if (annotations.length === 0) {
+      delete store.byArch[identity];
+    } else {
+      store.byArch[identity] = annotations;
+    }
+    const serialized = JSON.stringify(store);
+    if (serialized.length > MAX_BYTES) {
+      console.warn(
+        `[annotations] Not persisting: payload ${serialized.length} bytes exceeds ${MAX_BYTES} byte limit.`,
+      );
+      return;
+    }
+    localStorage.setItem(STORAGE_KEY, serialized);
+  } catch {
+    // Quota exceeded or storage unavailable: keep annotations in memory only.
+  }
+}

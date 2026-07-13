@@ -18,6 +18,11 @@ import type {
 } from "./types";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
+import {
+  architectureIdentity,
+  loadAnnotations,
+  saveAnnotations,
+} from "./utils/annotationStorage";
 
 // Storage key for dark mode preference (localStorage for persistence across sessions)
 const DARK_MODE_KEY = "arch-dark-mode";
@@ -274,6 +279,15 @@ function buildBreadcrumbs(components: Component[], targetId: string): Breadcrumb
   return trail;
 }
 
+// Persist the current in-memory annotations for the loaded architecture's
+// stable identity. Called after every annotation mutation so a hard reload or
+// re-analysis restores review work (F-VW-4).
+function persistCurrentAnnotations(get: () => ArchStore): void {
+  const arch = get().architecture;
+  if (!arch) return;
+  saveAnnotations(architectureIdentity(arch), get().annotations);
+}
+
 export const useArchStore = create<ArchStore>((set, get) => ({
   architecture: null,
   loading: true,
@@ -311,7 +325,24 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   statusOverlay: null,
   changelogReadState: getStoredChangelogRead(),
 
-  setArchitecture: (arch) => set({ architecture: arch, loading: false }),
+  setArchitecture: (arch) => {
+    // Restore persisted annotations for this architecture's stable identity so
+    // a hard reload or re-analysis does not destroy review work (F-VW-4).
+    const restored = loadAnnotations(architectureIdentity(arch));
+    // Invalidate the split-mode detail cache on every architecture update so
+    // panels refetch fresh files/symbols instead of showing stale data from a
+    // previous scan (F-VW-3 / F-VW-7). The next open refetches. This is the
+    // single entry point both the initial load and the live monitor use.
+    set({
+      architecture: arch,
+      loading: false,
+      annotations: restored,
+      componentDetailCache: {},
+      // Clear any in-flight loading marker too: a live refresh mid-detail-load
+      // must not leave the panel stuck in a loading state keyed to the old scan.
+      componentDetailLoading: null,
+    });
+  },
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
 
@@ -417,41 +448,53 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     annotatingTarget: target ? { type: target.type, id: target.id, name: target.name, targetContext: target.targetContext } : null,
   }),
 
-  addAnnotation: (componentId, text, targetType = "component", targetId, targetName, targetContext) => set((s) => {
-    const finalTargetId = targetId ?? componentId;
-    const finalTargetName = targetName ?? "";
-    // For component-level annotations, replace existing; for others, replace by (targetType, targetId)
-    const filtered = targetType === "component"
-      ? s.annotations.filter((a) => !(a.componentId === componentId && a.targetType === "component"))
-      : s.annotations.filter((a) => !(a.targetType === targetType && a.targetId === finalTargetId));
-    return {
-      annotations: [
-        ...filtered,
-        {
-          id: crypto.randomUUID(),
-          componentId,
-          targetType,
-          targetId: finalTargetId,
-          targetName: finalTargetName,
-          text,
-          createdAt: new Date().toISOString(),
-          targetContext,
-        },
-      ],
-      annotatingComponentId: null,
-      annotatingTarget: null,
-    };
-  }),
+  addAnnotation: (componentId, text, targetType = "component", targetId, targetName, targetContext) => {
+    set((s) => {
+      const finalTargetId = targetId ?? componentId;
+      const finalTargetName = targetName ?? "";
+      // For component-level annotations, replace existing; for others, replace by (targetType, targetId)
+      const filtered = targetType === "component"
+        ? s.annotations.filter((a) => !(a.componentId === componentId && a.targetType === "component"))
+        : s.annotations.filter((a) => !(a.targetType === targetType && a.targetId === finalTargetId));
+      return {
+        annotations: [
+          ...filtered,
+          {
+            id: crypto.randomUUID(),
+            componentId,
+            targetType,
+            targetId: finalTargetId,
+            targetName: finalTargetName,
+            text,
+            createdAt: new Date().toISOString(),
+            targetContext,
+          },
+        ],
+        annotatingComponentId: null,
+        annotatingTarget: null,
+      };
+    });
+    persistCurrentAnnotations(get);
+  },
 
-  updateAnnotation: (id, text) => set((s) => ({
-    annotations: s.annotations.map((a) => a.id === id ? { ...a, text } : a),
-  })),
+  updateAnnotation: (id, text) => {
+    set((s) => ({
+      annotations: s.annotations.map((a) => a.id === id ? { ...a, text } : a),
+    }));
+    persistCurrentAnnotations(get);
+  },
 
-  deleteAnnotation: (id) => set((s) => ({
-    annotations: s.annotations.filter((a) => a.id !== id),
-  })),
+  deleteAnnotation: (id) => {
+    set((s) => ({
+      annotations: s.annotations.filter((a) => a.id !== id),
+    }));
+    persistCurrentAnnotations(get);
+  },
 
-  clearAllAnnotations: () => set({ annotations: [], annotatingComponentId: null, annotatingTarget: null }),
+  clearAllAnnotations: () => {
+    set({ annotations: [], annotatingComponentId: null, annotatingTarget: null });
+    persistCurrentAnnotations(get);
+  },
 
   setAdminOpen: (open) => set({ adminOpen: open }),
   setLiveConfig: (config) => set({ liveConfig: config }),
@@ -582,23 +625,34 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
     set({ componentDetailLoading: componentId });
     const safeId = safeComponentId(componentId);
+    // Capture the architecture this request belongs to. If a live refresh
+    // swaps the architecture (and invalidates the cache) while the fetch is in
+    // flight, the stale response must not repopulate the fresh cache.
+    const requestArch = arch;
     try {
       const res = await fetch(`./architecture/data/detail-${safeId}.json`);
       if (res.ok) {
         const detail = await res.json();
+        if (get().architecture !== requestArch) {
+          // Architecture changed mid-flight: discard, the next open refetches.
+          return null;
+        }
         set((state) => ({
           componentDetailCache: { ...state.componentDetailCache, [componentId]: detail },
           componentDetailLoading: null,
         }));
-        // Add to search index
+        // Add to search index, keyed by component so a live refresh preserves
+        // these entries and a re-load replaces them (F-VW-3).
         const { addToSearchIndex } = await import("./utils/search");
-        addToSearchIndex(detail.symbols || [], detail.files || []);
+        addToSearchIndex(detail.symbols || [], detail.files || [], componentId);
         return detail;
       }
     } catch {
       // Fetch failed, leave as null
     }
-    set({ componentDetailLoading: null });
+    if (get().architecture === requestArch) {
+      set({ componentDetailLoading: null });
+    }
     return null;
   },
 

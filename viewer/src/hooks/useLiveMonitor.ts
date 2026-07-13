@@ -161,7 +161,12 @@ export function useLiveMonitor(): void {
               symbols: manifest.symbols || [],
               files: manifest.files || [],
             };
-            setState({ architecture: data, loading: false });
+            // Route through setArchitecture so the split-mode detail cache is
+            // invalidated on refresh (panels refetch instead of showing stale
+            // symbols) and persisted annotations are re-applied (F-VW-3, F-VW-7).
+            store().setArchitecture(data);
+            // Rebuild the search index; detail-derived entries are preserved by
+            // the search module so previously loaded symbols stay searchable.
             initializeSearch(data);
 
             // Cache to localStorage
