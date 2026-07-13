@@ -236,7 +236,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   - Deviations / notes: (1) Did not edit README. No user-facing npx flags changed; README:376 already documents the `--max-symbols` default and README:529 documents `--split`. The only README nit is the stats schema block (README:510) lacking the new optional `total_symbols_detected`; README is outside this task's file territory and is owned by P2-5, so it is recorded in Discovered During Execution. (2) `packages/cli/dist` is a tracked stale build artifact (F-VW-10 / P2-6). Rebuilding it during verification was reverted (`git checkout -- packages/cli/dist`) to keep this commit source-only, following the P0-2 precedent; the publish flow rebuilds dist via prepublishOnly. (3) build.sh now writes into a persistent split directory, so the pre-existing lack of stale-detail-file pruning in `write_split` (already P2-7 item 6) becomes visible: a data/ dir that previously held a different dataset keeps its unreferenced detail-*.json files. The manifest is authoritative (the viewer only fetches referenced components), so this is cosmetic bloat, not a correctness bug. Recorded in Discovered During Execution.
 
 ### P1-3: Persist review annotations across reloads
-- Status: TODO
+- Status: DONE (session remediation/p1-viewer, 2026-07-11)
 - Model: Opus 4.8
 - Stream: B. Branch: remediation/p1-viewer
 - Findings: F-VW-4, F-DC rows 3 and 11
@@ -246,27 +246,40 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   2. Restore on load; reconcile annotations whose target component no longer exists (keep them, flag as orphaned in ReviewSummary, so re-analysis does not silently destroy feedback).
   3. Tests against the real store: add annotations, simulate reload (fresh store, same storage), assert restoration; orphan case; storage-quota failure does not crash.
 - Accept:
-  - [ ] Hard reload preserves annotations (test plus manual check)
-  - [ ] Orphaned annotations visible, not silently dropped, after loading a changed architecture
+  - [x] Hard reload preserves annotations (test plus manual check)
+  - [x] Orphaned annotations visible, not silently dropped, after loading a changed architecture
   - [ ] PROJECT-OVERVIEW/README wording about persistence updated to the now-true claim (or noted for P2-5)
 - Verify: viewer tests; manual annotate-reload check
 - Evidence:
+  - Re-verified F-VW-4 against current code: `annotations: []` initial state (store.ts:300) and the four mutations (addAnnotation, updateAnnotation, deleteAnnotation, clearAllAnnotations) touched only in-memory state, never localStorage, while dark-mode/changelog/enhanced-frames all persist. A reload or a re-analysis wiped all review work. Finding reproduces.
+  - New persistence util `viewer/src/utils/annotationStorage.ts`: single `arch-annotations` localStorage key holding `{ version: 1, byArch: Record<identity, Annotation[]> }`. `architectureIdentity(arch)` derives a stable key from `name` plus `repository` and deliberately excludes `generated_at` so re-analysis keeps annotations. Schema `version` is checked on read (mismatched or corrupt payloads are dropped, not misread). Size guard refuses to persist a serialized payload over 2 MB. All writes are wrapped so a quota/unavailable failure is swallowed, matching the existing localStorage writers.
+  - store.ts: `setArchitecture` now restores annotations for the loaded architecture's identity via `loadAnnotations` (single canonical entry point for both initial load and live refresh). Added module-level `persistCurrentAnnotations(get)`, called after each of the four annotation mutations so every add/edit/delete/clear is written through immediately.
+  - ReviewSummary.tsx: added an `orphaned` memo (annotations whose `getComponentById` returns null) and a dedicated "Orphaned feedback" section (data-testid `orphaned-annotations`) that lists each orphan with its stored target label and text plus a delete button. Previously the component grouping silently dropped these (the group builder returned null for missing components).
+  - Regression tests `viewer/src/__tests__/annotationPersistence.test.tsx` (6 tests, real store, real ReviewSummary, jsdom localStorage, no store mock): restore-after-reload; identity-not-generated_at (re-analysis preserves); orphaned annotations kept in store after a changed architecture; orphaned section rendered in ReviewSummary; quota write failure does not crash; removal persists across reload. "Reload" is simulated by wiping in-memory store state while localStorage survives, exactly as a browser reload does.
+  - Fail-then-pass proof: `git stash push -- viewer/src/store.ts viewer/src/components/ReviewSummary.tsx` then `npx vitest run src/__tests__/annotationPersistence.test.tsx` -> `4 failed, 2 passed` (the 4 persistence/orphan-visibility tests fail on the pre-fix code; the 2 that pass pre-fix are quota-safety and the removal case, which pass trivially when nothing persists). `git stash pop`, same command -> `6 passed`.
+  - Full viewer suite after the change: `npx vitest run` -> 6 files, 61 tests passed (no existing test regressed).
+  - Deviation: PROJECT-OVERVIEW/README persistence wording is P2-5 (docs) territory and Stream C, out of this session's file territory. Left the acceptance item for P2-5, as the task text allows ("or noted for P2-5").
 
 ### P1-4: Fix popstate history corruption
-- Status: TODO
+- Status: DONE (session remediation/p1-viewer, 2026-07-11)
 - Model: Opus 4.8
 - Stream: B. Branch: remediation/p1-viewer (same session as P1-3/P1-5, sequenced; shared files)
 - Findings: F-VW-2
 - Files: viewer/src/App.tsx (321-366), viewer/src/utils/urlState.ts, tests
 - Do: add a suppression mechanism (ref flag set during popstate handling) so store-driven URL pushes are skipped while applying a popstate navigation; use `replaceState` where appropriate. Test with jsdom: drill twice, fire popstate for the earlier state, assert history length does not grow and forward state remains reachable; assert URL reflects the restored state.
 - Accept:
-  - [ ] Back then Forward restores the same drill state (test-asserted and manual)
-  - [ ] No new history entry is created while handling popstate (test-asserted)
+  - [x] Back then Forward restores the same drill state (test-asserted and manual)
+  - [x] No new history entry is created while handling popstate (test-asserted)
 - Verify: viewer tests; manual browser check
 - Evidence:
+  - Re-verified F-VW-2 against current code: the three URL-sync effects lived at App.tsx:297-366. The store subscription pushed on every `drillLevel` change; the popstate handler called `drillInto`/`navigateToBreadcrumb` which change `drillLevel`, re-firing the subscription and pushing a fresh history entry mid-popstate. No suppression flag existed. Finding reproduces.
+  - Fix: extracted the three effects into `viewer/src/hooks/useUrlSync.ts` (restore-on-load, store->URL subscription, popstate handler) so the wiring is testable in isolation on the real store. Added `applyingPopStateRef`: the popstate handler sets it true around its store mutations (try/finally) and the subscription early-returns while it is set, so no URL write happens while a popstate is being applied. The browser has already set the URL to the target before firing popstate, so suppressing our own write is correct; the subscription keeps `replaceState` for selection-only changes and `pushState` for drill changes. App.tsx now just calls `useUrlSync()` and the `parseUrlState`/`pushUrlState`/`replaceUrlState` imports and the `urlRestoredRef` moved into the hook.
+  - Regression test `viewer/src/__tests__/useUrlSync.test.tsx` (2 tests, real store, real hook, jsdom history): drill A then B (two pushes), then simulate Back (replaceState to `?drill=A` then dispatch a real `popstate` event) and assert (a) the store restored `drillLevel === "A"`, (b) `parseUrlState().drill === "A"` (URL reflects restored state, not rewritten), and (c) `window.history.length` is unchanged (no entry pushed mid-popstate, so the forward stack survives). A second test asserts normal store-driven drilling still writes the URL, proving the suppression is scoped to popstate handling only.
+  - Fail-then-pass proof: reverted `useUrlSync.ts` to the exact pre-fix logic (removed the `applyingPopStateRef` guard and the try/finally, i.e. the extracted-verbatim old App effects). `npx vitest run src/__tests__/useUrlSync.test.tsx` -> `1 failed, 1 passed`: the popstate test fails on `expect(window.history.length).toBe(historyLenBeforeBack)` because the subscription re-pushed `drill=A` (history grew by 1), reproducing the corruption; the normal-navigation test still passes. Restored the fix -> `2 passed`.
+  - `npx tsc -b` clean after the App refactor; full viewer suite `npx vitest run` -> 7 files, 63 tests passed.
 
 ### P1-5: Live refresh must not wipe search or serve stale details
-- Status: TODO
+- Status: DONE (session remediation/p1-viewer, 2026-07-11)
 - Model: Opus 4.8
 - Stream: B. Branch: remediation/p1-viewer
 - Findings: F-VW-3, plus the stale `componentDetailCache` item in F-VW-7
@@ -276,10 +289,16 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   2. Invalidate (or version-check) `componentDetailCache` when the architecture updates, so panels do not show stale symbols; the next open refetches.
   3. Tests: index a detail-loaded symbol, apply a live refresh, assert the symbol is still searchable; assert cache invalidation triggers a refetch.
 - Accept:
-  - [ ] Post-refresh search still finds previously loaded symbols (test-asserted)
-  - [ ] Detail panel shows post-refresh data after an update (test-asserted)
+  - [x] Post-refresh search still finds previously loaded symbols (test-asserted)
+  - [x] Detail panel shows post-refresh data after an update (test-asserted)
 - Verify: viewer tests
 - Evidence:
+  - Re-verified both findings. F-VW-3: `useLiveMonitor` calls `initializeSearch(data)` on every manifest refresh (was :165); `initializeSearch` reset `allResults = []` (search.ts:19), dropping every entry that `addToSearchIndex` had added from split-mode detail loads, and `loadComponentDetail` early-returns on a cache hit so they were never re-added. F-VW-7 stale-cache item: neither the live refresh nor `setArchitecture` invalidated `componentDetailCache`, so panels served stale symbols/files after an update. Both reproduce.
+  - Fix 1 (search preservation), search.ts: split the index into `baseResults` (rebuilt wholesale by `initializeSearch`) and `detailResultsByComponent` (a `Map<componentId, SearchResult[]>` fed by `addToSearchIndex`). A shared `rebuildFuse()` concatenates both. `initializeSearch` now rebuilds only the base entries and preserves the detail map, so a live refresh keeps previously loaded symbols/files searchable. `addToSearchIndex` gained an optional `componentId` so re-loading a component replaces its entries rather than duplicating. Added `resetDetailSearchEntries()` for a genuine full reset (not wired to live refresh). `loadComponentDetail` now passes `componentId` when indexing.
+  - Fix 2 (cache invalidation), store.ts + useLiveMonitor.ts: `setArchitecture` clears `componentDetailCache: {}` on every architecture update (single canonical entry point). `useLiveMonitor` now applies the refreshed manifest through `store().setArchitecture(data)` instead of a raw `setState`, so a live refresh invalidates the cache (panels refetch fresh data) and also re-applies persisted annotations. `initializeSearch(data)` still runs afterward and preserves the detail-derived search entries.
+  - Regression tests `viewer/src/__tests__/liveRefresh.test.ts` (2 tests, real store + real search module, only fetch mocked): (1) load a detail file adding symbol `uniqueSymbolXYZ`, assert it is searchable, run `initializeSearch` for the refreshed manifest, assert it is STILL searchable; (2) load detail v1 (fetch called once, `getComponentSymbols` returns v1sym), call `setArchitecture` for a new scan, assert `componentDetailCache["comp-a"]` is now undefined, re-open the component, assert fetch was called a second time and v2sym is returned and served by `getComponentSymbols`.
+  - Fail-then-pass proof: reproduced both pre-fix behaviors surgically (made `initializeSearch` clear the detail map; removed `componentDetailCache: {}` from `setArchitecture`) and ran `npx vitest run src/__tests__/liveRefresh.test.ts` -> `2 failed`: test 1 fails because the lazily indexed symbol is no longer searchable after refresh; test 2 fails on `componentDetailCache["comp-a"]` still being defined (stale) so no refetch occurs. Restored both fixes -> `2 passed`.
+  - Copilot review round (2026-07-13, PR #10): three findings, all fixed. (1) `setArchitecture` now also clears `componentDetailLoading` so a live refresh mid-detail-load cannot leave the panel stuck in a loading state. (2) `loadComponentDetail` captures the architecture it was called against and discards a response that resolves after a live refresh swapped the architecture, so a stale in-flight fetch can no longer repopulate the freshly invalidated cache; new regression test (deferred fetch resolved after `setArchitecture`) fails pre-fix (1 failed via `git stash` of store.ts) and passes post-fix. (3) `annotationStorage.ts` contained a literal NUL (0x00) byte in the identity separator, which made git treat the file as binary; replaced with the escaped backslash-u0000 form (identical runtime value, no stored-key migration needed since nothing shipped). Verified byte-clean with perl. Full viewer suite after the round: 66 tests passed, lint 0 errors/18 pre-existing warnings, tsc clean, build clean.
 
 ---
 

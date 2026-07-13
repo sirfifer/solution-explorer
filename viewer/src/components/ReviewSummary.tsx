@@ -72,6 +72,14 @@ export function ReviewSummary() {
       .filter((g): g is ComponentGroup => g !== null);
   }, [annotations, getComponentById]);
 
+  // Orphaned annotations: their target component no longer exists in the current
+  // architecture (for example after re-analysis renamed or removed it). Persisted
+  // annotations must never be silently dropped, so surface them explicitly for
+  // review instead of hiding them the way the component grouping does (F-VW-4).
+  const orphaned: Annotation[] = useMemo(() => {
+    return annotations.filter((a) => getComponentById(a.componentId) === null);
+  }, [annotations, getComponentById]);
+
   const handleCopyAll = async () => {
     const prompt = generateReviewPrompt(annotations, architecture, getComponentById);
     try {
@@ -198,6 +206,44 @@ export function ReviewSummary() {
     );
   };
 
+  // Render an annotation whose target component no longer exists. It cannot be
+  // rendered by renderAnnotation (which resolves the live component), so show the
+  // stored target label and text with a delete affordance.
+  const renderOrphanedAnnotation = (annotation: Annotation) => {
+    const label = annotation.targetName || annotation.componentId;
+    return (
+      <div
+        key={annotation.id}
+        className={`mx-2 mb-2 rounded-lg border ${darkMode ? "border-amber-900/40 bg-amber-950/20" : "border-amber-100 bg-amber-50/50"}`}
+      >
+        <div className={`px-3 py-2 border-b ${darkMode ? "border-amber-900/30" : "border-amber-100"}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className={`text-xs font-medium truncate ${darkMode ? "text-amber-200" : "text-amber-800"}`}>
+                {label}
+              </span>
+              <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${darkMode ? "bg-amber-900/40 text-amber-300" : "bg-amber-100 text-amber-700"}`}>
+                {annotation.targetType}
+              </span>
+            </div>
+            <button
+              onClick={() => deleteAnnotation(annotation.id)}
+              className={`p-1 rounded text-[10px] shrink-0 ${darkMode ? "hover:bg-zinc-800 text-zinc-500" : "hover:bg-zinc-200 text-zinc-400"}`}
+              title="Delete"
+            >
+              &#x1F5D1;&#xFE0F;
+            </button>
+          </div>
+        </div>
+        <div className="px-3 py-2">
+          <p className={`text-xs leading-relaxed whitespace-pre-wrap ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
+            {annotation.text}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -244,6 +290,24 @@ export function ReviewSummary() {
                 renderAnnotation={renderAnnotation}
               />
             ))}
+            {orphaned.length > 0 && (
+              <div className="mt-2" data-testid="orphaned-annotations">
+                <div className={`px-4 pt-3 pb-2 flex items-center gap-1.5 ${darkMode ? "text-amber-400" : "text-amber-600"}`}>
+                  <span className="text-xs">{"⚠"}</span>
+                  <span className="text-xs font-semibold truncate">
+                    Orphaned feedback
+                  </span>
+                  <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${darkMode ? "bg-amber-900/40 text-amber-300" : "bg-amber-100 text-amber-700"}`}>
+                    {orphaned.length}
+                  </span>
+                </div>
+                <p className={`px-4 pb-2 text-[11px] leading-relaxed ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                  These annotations target components no longer in the architecture.
+                  They are kept so re-analysis does not destroy your feedback.
+                </p>
+                {orphaned.map(renderOrphanedAnnotation)}
+              </div>
+            )}
           </div>
         )}
       </div>
