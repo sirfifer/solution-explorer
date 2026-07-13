@@ -13,6 +13,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     strategy:
+      # Attempt and report every downstream deploy independently. One failing
+      # leg must not cancel the others, so "green" reflects the full fan-out.
+      fail-fast: false
       matrix:
         include:
           - repo: UnaMentis/unamentis
@@ -22,11 +25,67 @@ jobs:
           - repo: UnaMentis/unamentis
             workflow: "Live Monitor"
     steps:
-      - name: Trigger ${{ matrix.workflow }}
+      - name: Trigger and verify ${{ matrix.workflow }}
         env:
           GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          REPO: ${{ matrix.repo }}
+          WORKFLOW: ${{ matrix.workflow }}
         run: |
-          gh workflow run "${{ matrix.workflow }}" \
-            -R "${{ matrix.repo }}" \
-            --ref main
-          echo "Triggered: ${{ matrix.workflow }} in ${{ matrix.repo }}"
+          set -euo pipefail
+
+          # Lower bound for the run we are about to create, so we can tell it
+          # apart from earlier runs of the same workflow.
+          DISPATCH_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          gh workflow run "$WORKFLOW" -R "$REPO" --ref main
+          echo "Dispatched: $WORKFLOW in $REPO at $DISPATCH_TS"
+
+          # The dispatched run can take a few seconds to register. Poll for it.
+          RUN_ID=""
+          for _ in $(seq 1 12); do
+            sleep 5
+            RUN_ID="$(gh run list -R "$REPO" \
+              --workflow "$WORKFLOW" \
+              --event workflow_dispatch \
+              --created ">=$DISPATCH_TS" \
+              --limit 1 \
+              --json databaseId \
+              --jq '.[0].databaseId // empty')"
+            if [ -n "$RUN_ID" ]; then
+              break
+            fi
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Could not locate the dispatched run for '$WORKFLOW' in $REPO"
+            exit 1
+          fi
+
+          echo "Watching run $RUN_ID: https://github.com/$REPO/actions/runs/$RUN_ID"
+
+          # Bounded wait for completion: up to 60 * 20s = 20 minutes.
+          STATUS=""
+          CONCLUSION=""
+          for _ in $(seq 1 60); do
+            INFO="$(gh run view "$RUN_ID" -R "$REPO" \
+              --json status,conclusion \
+              --jq '.status + "|" + (.conclusion // "")')"
+            STATUS="${INFO%%|*}"
+            CONCLUSION="${INFO##*|}"
+            if [ "$STATUS" = "completed" ]; then
+              break
+            fi
+            sleep 20
+          done
+
+          if [ "$STATUS" != "completed" ]; then
+            echo "::error::Downstream run $RUN_ID ('$WORKFLOW' in $REPO) did not complete within the wait window"
+            exit 1
+          fi
+
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::error::Downstream run $RUN_ID ('$WORKFLOW' in $REPO) concluded '$CONCLUSION'"
+            exit 1
+          fi
+
+          echo "Downstream run $RUN_ID ('$WORKFLOW' in $REPO) succeeded"
