@@ -1,9 +1,12 @@
 """Base class for tree-sitter-based parsers with regex fallback."""
 
+import logging
 from typing import Optional
 
 from ..models import Symbol
 from .base import BaseParser
+
+logger = logging.getLogger(__name__)
 
 
 class TreeSitterParser(BaseParser):
@@ -22,16 +25,28 @@ class TreeSitterParser(BaseParser):
         if self._ts_available:
             try:
                 return self._extract_symbols_ts(content, file_path)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Fall back to regex extraction, but leave a trail so
+                # tree-sitter/regex parity drift is diagnosable (F-AN-7).
+                logger.debug(
+                    "tree-sitter symbol extraction failed for %s (%s: %s); "
+                    "falling back to regex parser %s",
+                    file_path, type(exc).__name__, exc,
+                    type(self._regex_parser).__name__,
+                )
         return self._regex_parser.extract_symbols(content, file_path)
 
     def extract_imports(self, content: str) -> list[str]:
         if self._ts_available:
             try:
                 return self._extract_imports_ts(content)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(
+                    "tree-sitter import extraction failed (%s: %s); "
+                    "falling back to regex parser %s",
+                    type(exc).__name__, exc,
+                    type(self._regex_parser).__name__,
+                )
         return self._regex_parser.extract_imports(content)
 
     # Delegate all regex-based methods to the underlying regex parser

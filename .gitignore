@@ -9,6 +9,12 @@ __pycache__/
 # Node
 node_modules/
 
+# Build artifacts (rebuilt at publish time by release.yml / prepublishOnly)
+packages/cli/dist/
+
+# OS junk
+.DS_Store
+
 # Generated
 # NOTE: the repo-root architecture.json is intentionally tracked. It is the
 # committed AI-enhancement baseline that the deploy pipeline merges from, so it

@@ -15,20 +15,15 @@ import hashlib
 import json
 import logging
 import os
-import re
 import subprocess
-import warnings
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from . import __version__
-from .constants import CODE_LANGUAGES, LANGUAGE_MAP, SKIP_EXTENSIONS
 from .models import to_dict
-from .parsers import PARSERS
 from .scanner import ArchitectureScanner
-from .utils import _should_skip_dir
 
 logger = logging.getLogger(__name__)
 
@@ -99,519 +94,6 @@ def build_architectural_neighbor_graph(baseline: dict) -> dict[str, set[str]]:
             graph[source].add(target)
             graph[target].add(source)
     return dict(graph)
-
-
-# ------------------------------------------------------------------
-# K.2: Selective file re-scanning
-# ------------------------------------------------------------------
-
-def _find_component_in_tree(components: list[dict], component_id: str) -> Optional[dict]:
-    """Find a component dict by ID in a nested component tree."""
-    for comp in components:
-        if comp.get("id") == component_id:
-            return comp
-        found = _find_component_in_tree(comp.get("children", []), component_id)
-        if found is not None:
-            return found
-    return None
-
-
-def _all_component_paths_flat(baseline: dict) -> list[tuple[str, str]]:
-    """Extract (path, component_id) pairs from the baseline tree, sorted deepest first."""
-    result = []
-
-    def _walk(components):
-        for comp in components:
-            result.append((comp.get("path", ""), comp.get("id", "")))
-            _walk(comp.get("children", []))
-
-    _walk(baseline.get("components", []))
-    result.sort(key=lambda x: len(x[0]), reverse=True)
-    return result
-
-
-def _find_component_for_file_from_baseline(
-    file_path: str,
-    comp_paths: list[tuple[str, str]],
-) -> Optional[str]:
-    """Find the deepest component that contains a file path.
-
-    comp_paths should be sorted deepest-first (by path depth).
-    Returns the component_id of the deepest matching component.
-    """
-    file_dir = os.path.dirname(file_path).replace(os.sep, "/")
-    root_id = None
-    for comp_path, comp_id in comp_paths:
-        if not comp_path:
-            root_id = comp_id
-            continue
-        if file_dir == comp_path or file_dir.startswith(comp_path + "/"):
-            return comp_id
-    return root_id
-
-
-def _should_skip_file(fpath: Path) -> bool:
-    """Check if a file should be skipped during scanning."""
-    if fpath.name.startswith("."):
-        return True
-    if fpath.suffix.lower() in SKIP_EXTENSIONS:
-        return True
-    return False
-
-
-def rescan_component(
-    component_id: str,
-    baseline: dict,
-    root: Path,
-    max_file_size: int = 500_000,
-    preview_lines: int = 5,  # noqa: ARG001 - kept for API consistency with ArchitectureScanner
-) -> Optional[dict]:
-    """Re-scan a single component's files and return updated data.
-
-    .. deprecated::
-        Use ``ArchitectureScanner(scope_paths=..., baseline=...)`` instead.
-        This function duplicates scanner logic and misses several phases.
-
-    Walks the component's directory, re-parses all code files using the
-    standard parsers, and returns a dict with updated file lists, symbols,
-    metrics, framework, and port info.
-
-    Returns None if the component is not found in the baseline.
-    """
-    warnings.warn(
-        "rescan_component() is deprecated. Use ArchitectureScanner with "
-        "scope_paths and baseline parameters instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    comp = _find_component_in_tree(
-        baseline.get("components", []), component_id
-    )
-    if comp is None:
-        return None
-
-    comp_path = comp.get("path", "")
-    comp_dir = root / comp_path if comp_path else root
-
-    if not comp_dir.is_dir():
-        return {
-            "files": [],
-            "metrics": {"files": 0, "lines": 0, "size_bytes": 0},
-            "language": None,
-            "framework": None,
-            "port": None,
-            "_file_infos": [],
-            "_symbols": [],
-        }
-
-    # Build component path index from baseline so we can assign files
-    # to the correct component (this component, not its children)
-    comp_paths = _all_component_paths_flat(baseline)
-
-    files = []
-    file_infos = []
-    symbols = []
-    total_lines = 0
-    total_size = 0
-    language_counts: dict[str, int] = defaultdict(int)
-    detected_framework = None
-    detected_port = None
-
-    for dirpath, dirnames, filenames in os.walk(comp_dir):
-        dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
-
-        for fname in sorted(filenames):
-            fpath = Path(dirpath) / fname
-            if _should_skip_file(fpath):
-                continue
-
-            ext = fpath.suffix.lower()
-            lang = LANGUAGE_MAP.get(ext)
-            if not lang:
-                continue
-
-            try:
-                stat = fpath.stat()
-                if stat.st_size > max_file_size or stat.st_size == 0:
-                    continue
-            except OSError:
-                continue
-
-            rel = os.path.relpath(fpath, root).replace(os.sep, "/")
-
-            # Only include files that belong to THIS component, not children
-            owning_comp = _find_component_for_file_from_baseline(rel, comp_paths)
-            if owning_comp != component_id:
-                continue
-
-            try:
-                content = fpath.read_text(encoding="utf-8", errors="replace")
-            except OSError:
-                continue
-
-            lines = content.count("\n") + 1
-            total_lines += lines
-            total_size += stat.st_size
-            language_counts[lang] += lines
-
-            # Parse symbols and imports
-            parser = PARSERS.get(lang)
-            file_symbols = []
-            file_imports = []
-            module_doc = None
-            if parser:
-                file_symbols = parser.extract_symbols(content, rel)
-                file_imports = parser.extract_imports(content)
-                module_doc = parser.extract_file_doc(content)
-
-                # Detect framework
-                fw = parser.detect_framework(content)
-                if fw:
-                    if detected_framework is None:
-                        detected_framework = fw
-
-                # Detect ports (only in code files for server-type components)
-                if lang in CODE_LANGUAGES:
-                    ports = parser.detect_ports(content)
-                    if ports and detected_port is None:
-                        detected_port = ports[0]
-
-            files.append(rel)
-            file_infos.append({
-                "path": rel,
-                "language": lang,
-                "lines": lines,
-                "size_bytes": stat.st_size,
-                "symbols": [s.id if hasattr(s, "id") else s for s in file_symbols],
-                "imports": file_imports,
-                "module_doc": module_doc,
-            })
-            for sym in file_symbols:
-                symbols.append(to_dict(sym) if hasattr(sym, "id") else sym)
-
-    # Determine primary language
-    primary_language = None
-    if language_counts:
-        primary_language = max(language_counts, key=language_counts.get)
-
-    metrics = {
-        "files": len(files),
-        "lines": total_lines,
-        "size_bytes": total_size,
-        "languages": dict(language_counts),
-    }
-
-    return {
-        "files": files,
-        "metrics": metrics,
-        "language": primary_language,
-        "framework": detected_framework,
-        "port": detected_port,
-        "_file_infos": file_infos,
-        "_symbols": symbols,
-    }
-
-
-def merge_component_into_baseline(
-    baseline: dict,
-    component_id: str,
-    new_data: dict,
-) -> dict:
-    """Merge rescanned component data back into the baseline.
-
-    .. deprecated::
-        Use ``ArchitectureScanner(scope_paths=..., baseline=...)`` instead.
-
-    Replaces the component's files and metrics in the baseline tree.
-    Updates the architecture-level files and symbols lists.
-    Preserves structural fields (children, type, name, path, docs, config_files).
-    """
-    warnings.warn(
-        "merge_component_into_baseline() is deprecated. Use "
-        "ArchitectureScanner with scope_paths and baseline parameters instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    comp = _find_component_in_tree(
-        baseline.get("components", []), component_id
-    )
-    if comp is None:
-        return baseline
-
-    old_files = set(comp.get("files", []))
-
-    # Update component fields
-    comp["files"] = new_data["files"]
-    comp["metrics"] = new_data["metrics"]
-    if new_data.get("language"):
-        comp["language"] = new_data["language"]
-    if new_data.get("framework"):
-        comp["framework"] = new_data["framework"]
-    if new_data.get("port") is not None:
-        comp["port"] = new_data["port"]
-
-    # Update architecture-level files list
-    baseline["files"] = [
-        f for f in baseline.get("files", [])
-        if f.get("path") not in old_files
-    ]
-    baseline["files"].extend(new_data.get("_file_infos", []))
-
-    # Update architecture-level symbols list
-    baseline["symbols"] = [
-        s for s in baseline.get("symbols", [])
-        if s.get("file") not in old_files
-    ]
-    baseline["symbols"].extend(new_data.get("_symbols", []))
-
-    return baseline
-
-
-# ------------------------------------------------------------------
-# K.3: Incremental relationship detection
-# ------------------------------------------------------------------
-
-def _resolve_import_from_baseline(
-    import_name: str,
-    source_file: str,
-    comp_paths: list[tuple[str, str]],
-    comp_names: dict[str, str],
-) -> Optional[str]:
-    """Resolve an import to a component ID using baseline data.
-
-    Mirrors ArchitectureScanner._resolve_import_to_component but works
-    against flat lists instead of the scanner's internal _component_map.
-
-    comp_paths: [(path, component_id), ...] sorted deepest first
-    comp_names: {normalized_name: component_id}
-    """
-    if import_name.startswith("."):
-        # Relative import: resolve path
-        source_dir = os.path.dirname(source_file)
-        parts = import_name.split("/")
-        current = source_dir
-        for part in parts:
-            if part == ".":
-                continue
-            elif part == "..":
-                current = os.path.dirname(current)
-            else:
-                current = os.path.join(current, part) if current else part
-        return _find_component_for_file_from_baseline(current, comp_paths)
-
-    # Absolute import: match against component names/paths
-    import_lower = import_name.lower().replace("-", "").replace("_", "")
-    if import_lower in comp_names:
-        return comp_names[import_lower]
-
-    # Check directory basenames
-    for comp_path, comp_id in comp_paths:
-        if comp_path and os.path.basename(comp_path).lower() == import_name.lower():
-            return comp_id
-
-    return None
-
-
-def _build_comp_name_index(baseline: dict) -> dict[str, str]:
-    """Build a normalized component name -> ID index."""
-    result = {}
-
-    def _walk(components):
-        for comp in components:
-            name = comp.get("name", "").lower().replace("-", "").replace("_", "")
-            if name:
-                result[name] = comp.get("id", "")
-            _walk(comp.get("children", []))
-
-    _walk(baseline.get("components", []))
-    return result
-
-
-def redetect_relationships(
-    baseline: dict,
-    affected_ids: set[str],
-    root: Path,
-) -> list[dict]:
-    """Re-detect relationships for affected components.
-
-    .. deprecated::
-        Use ``ArchitectureScanner(scope_paths=..., baseline=...)`` instead.
-        This function only runs 2 of 11 relationship strategies.
-
-    Preserves relationships between unaffected components. Removes all
-    relationships where source OR target is affected, then re-detects
-    import-based and port-based relationships for those components.
-    """
-    warnings.warn(
-        "redetect_relationships() is deprecated. Use ArchitectureScanner "
-        "with scope_paths and baseline parameters instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    # Preserve unaffected relationships
-    preserved = [
-        rel for rel in baseline.get("relationships", [])
-        if rel.get("source") not in affected_ids
-        and rel.get("target") not in affected_ids
-    ]
-
-    # Build indexes for import resolution
-    comp_paths = _all_component_paths_flat(baseline)
-    comp_names = _build_comp_name_index(baseline)
-
-    # Build file-to-imports index from baseline files
-    file_imports: dict[str, list[str]] = {}
-    for f in baseline.get("files", []):
-        file_imports[f.get("path", "")] = f.get("imports", [])
-
-    # Build component -> files index
-    comp_files: dict[str, list[str]] = {}
-
-    def _index_files(components):
-        for comp in components:
-            comp_files[comp.get("id", "")] = comp.get("files", [])
-            _index_files(comp.get("children", []))
-
-    _index_files(baseline.get("components", []))
-
-    # Content component IDs (should not participate in relationships)
-    content_ids = set()
-
-    def _find_content(components):
-        for comp in components:
-            if comp.get("type") == "content":
-                content_ids.add(comp.get("id", ""))
-            _find_content(comp.get("children", []))
-
-    _find_content(baseline.get("components", []))
-
-    # Re-detect import-based relationships for affected components
-    new_rels = []
-    seen = {(r.get("source"), r.get("target"), r.get("type")) for r in preserved}
-
-    for comp_id in affected_ids:
-        if comp_id in content_ids:
-            continue
-        for fpath in comp_files.get(comp_id, []):
-            for imp in file_imports.get(fpath, []):
-                target_id = _resolve_import_from_baseline(
-                    imp, fpath, comp_paths, comp_names
-                )
-                if (target_id and target_id != comp_id
-                        and target_id not in content_ids):
-                    key = (comp_id, target_id, "import")
-                    if key not in seen:
-                        seen.add(key)
-                        new_rels.append({
-                            "source": comp_id,
-                            "target": target_id,
-                            "type": "import",
-                            "label": imp,
-                        })
-
-    # Re-detect port-based relationships involving affected components
-    # Build port map: port -> component
-    port_map: dict[int, str] = {}
-
-    def _collect_ports(components):
-        for comp in components:
-            port = comp.get("port")
-            cid = comp.get("id", "")
-            if port and cid not in content_ids:
-                port_map[port] = cid
-            _collect_ports(comp.get("children", []))
-
-    _collect_ports(baseline.get("components", []))
-
-    # For affected components that have ports, scan other components' files
-    # for references to those ports
-    for comp_id in affected_ids:
-        comp = _find_component_in_tree(
-            baseline.get("components", []), comp_id
-        )
-        if not comp:
-            continue
-        comp_port = comp.get("port")
-        if not comp_port:
-            continue
-
-        # Scan non-affected components' files for references to this port
-        for other_id, other_files in comp_files.items():
-            if other_id == comp_id or other_id in content_ids:
-                continue
-            for fpath in other_files:
-                full_path = root / fpath
-                try:
-                    content = full_path.read_text(encoding="utf-8", errors="replace")
-                except OSError:
-                    continue
-                port_str = str(comp_port)
-                if port_str not in content:
-                    continue
-                patterns = [
-                    rf"localhost:{port_str}\b",
-                    rf"127\.0\.0\.1:{port_str}\b",
-                    rf"0\.0\.0\.0:{port_str}\b",
-                    rf"""[\"']https?://[^\"']*:{port_str}\b""",
-                    rf"(?:PORT|port)\s*[=:]\s*{port_str}\b",
-                ]
-                for pat in patterns:
-                    if re.search(pat, content):
-                        key = (other_id, comp_id, "http")
-                        if key not in seen:
-                            seen.add(key)
-                            new_rels.append({
-                                "source": other_id,
-                                "target": comp_id,
-                                "type": "http",
-                                "port": comp_port,
-                                "protocol": "HTTP",
-                                "label": f"port {comp_port}",
-                                "bidirectional": True,
-                            })
-                        break
-
-    # For affected components' files, scan for references to other components' ports
-    for comp_id in affected_ids:
-        if comp_id in content_ids:
-            continue
-        for fpath in comp_files.get(comp_id, []):
-            full_path = root / fpath
-            try:
-                content = full_path.read_text(encoding="utf-8", errors="replace")
-            except OSError:
-                continue
-
-            for port, target_id in port_map.items():
-                if target_id == comp_id:
-                    continue
-                port_str = str(port)
-                if port_str not in content:
-                    continue
-                patterns = [
-                    rf"localhost:{port_str}\b",
-                    rf"127\.0\.0\.1:{port_str}\b",
-                    rf"0\.0\.0\.0:{port_str}\b",
-                    rf"""[\"']https?://[^\"']*:{port_str}\b""",
-                    rf"(?:PORT|port)\s*[=:]\s*{port_str}\b",
-                ]
-                for pat in patterns:
-                    if re.search(pat, content):
-                        key = (comp_id, target_id, "http")
-                        if key not in seen:
-                            seen.add(key)
-                            new_rels.append({
-                                "source": comp_id,
-                                "target": target_id,
-                                "type": "http",
-                                "port": port,
-                                "protocol": "HTTP",
-                                "label": f"port {port}",
-                                "bidirectional": True,
-                            })
-                        break
-
-    return preserved + new_rels
 
 
 # ------------------------------------------------------------------
@@ -959,6 +441,8 @@ class IncrementalAnalyzer:
         - No changed files (git diff failed or empty range)
         - A marker file (package.json, Cargo.toml, etc.) changed
         - More than 50% of known files changed
+        - A changed file maps to no known component (new root-level file or
+          new directory), which the incremental path would silently drop
         """
         if not self.base_sha:
             return True
@@ -981,7 +465,59 @@ class IncrementalAnalyzer:
         if baseline_file_count > 0 and len(changed_files) / baseline_file_count > 0.5:
             return True
 
+        # A changed file that maps to no baseline component (a new root-level
+        # file or a file in a brand-new directory) would be silently dropped by
+        # the incremental path, which only rescans components reachable from the
+        # change set. Fall back to a full rescan so the new file is included
+        # (F-CRIT-8).
+        if self._unmapped_changed_files(changed_files, baseline):
+            return True
+
         return False
+
+    def _unmapped_changed_files(
+        self,
+        changed_files: list[tuple[str, str]],
+        baseline: Optional[dict],
+    ) -> list[str]:
+        """Return changed file paths that map to no baseline component.
+
+        Mirrors the per-file matching in ``map_files_to_components``: a path is
+        mapped if it is a known baseline file or if one of its parent
+        directories is a component path. Anything else (a new root-level file,
+        or a file under a directory that has no component) is unmapped and would
+        be dropped by the incremental path.
+        """
+        if baseline is None:
+            return []
+
+        file_to_component: dict[str, str] = {}
+
+        def _index_components(components):
+            for comp in components:
+                comp_id = comp.get("id", "")
+                for fpath in comp.get("files", []):
+                    file_to_component[fpath] = comp_id
+                _index_components(comp.get("children", []))
+
+        _index_components(baseline.get("components", []))
+        comp_paths = self._all_component_paths(baseline)
+
+        unmapped = []
+        for _status, path in changed_files:
+            normalized = path.replace(os.sep, "/")
+            if normalized in file_to_component:
+                continue
+            parts = normalized.split("/")
+            matched = False
+            for i in range(len(parts) - 1, 0, -1):
+                parent = "/".join(parts[:i])
+                if any(comp_path == parent for _cid, comp_path in comp_paths):
+                    matched = True
+                    break
+            if not matched:
+                unmapped.append(normalized)
+        return unmapped
 
     def _rescan_reason(
         self,
@@ -1008,6 +544,14 @@ class IncrementalAnalyzer:
         if baseline_file_count > 0 and len(changed_files) / baseline_file_count > 0.5:
             return (
                 f"too many files changed ({len(changed_files)}/{baseline_file_count})"
+            )
+        unmapped = self._unmapped_changed_files(changed_files, baseline)
+        if unmapped:
+            preview = ", ".join(sorted(unmapped)[:5])
+            suffix = ", ..." if len(unmapped) > 5 else ""
+            return (
+                f"{len(unmapped)} changed file(s) map to no known component "
+                f"(new root-level file or new directory): {preview}{suffix}"
             )
         return "unknown"
 
