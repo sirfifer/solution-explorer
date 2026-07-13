@@ -2,3 +2,7 @@ node_modules/
 dist/
 public/architecture.json
 *.tsbuildinfo
+
+# Test tooling output
+coverage/
+test-results/
