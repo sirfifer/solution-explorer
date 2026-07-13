@@ -80,9 +80,54 @@ Phase and task deltas (cards to be added to TASKS.md when the current execution 
 - **P6-7 (NEW): Tours** (player in the viewer; tour artifacts in the store; authoring is enrichment work).
 - **P7 (extend).** Enrichment generates rule statements and candidate tours; staleness (I5) applies to both. The verification pass (P7-3) covers rule statements: a stated rule that does not match its cited code is marked, never silently served.
 - **P8 (extend by one tool).** `se_rules` joins the MCP surface (query rules by component, entity, or concept), bringing it to eight tools; the curated-surface principle holds.
+- **P5-6 (NEW): correlation extraction.** Clone clusters, orphans, and concern membership into the store (section 9). Deterministic tier only; naming and judgment are Phase 7 work.
+- **P6-8 (NEW): Concerns and Findings.** The concern browser and the ranked findings surface (section 9), wired into every lens per I15.
+- **P6-9 (NEW): set-level review actions.** Selection sets and directives (section 10), extending review mode.
+- **P7-4 (NEW): concern naming, intent conformance, finding verification.** Enrichment names concerns in domain language, evaluates declared intents against the model, and adversarially verifies findings before they surface (I15).
+- **P8 (extend by one more tool).** `se_findings` (query findings and concern membership), bringing the surface to nine tools.
 
 Sequencing note: L5 (Activity) is the highest value-per-cost addition and has no dependency on Phase 5 semantics; it needs only the store (Phase 4) and git. It should be the first NEW lens built, and it is demo-strong: pointing it at any repo produces an immediately legible "here is where the action is" map that no static view can.
 
-## 7. Why this wins
+## 8. The question grammar: answers as UI affordances, not chat
+
+The owner's directive, and the Sillito finding, converge: exploration IS asking questions, and the deterministic UI must answer them through built interactions (expand, follow, compare), with conversational AI as a complement, never the primary path. Two invariants follow:
+
+- **I14. Every question has a gesture.** Each lens ships with a documented question list: the specific questions it answers and the exact interaction that answers each. A question without a gesture is a named backlog item, not an implicit hope. Lens acceptance criteria in Phase 6 cards enumerate the question list and test the gestures.
+- **I15. Findings are ranked, evidenced, and actionable.** Every automatically surfaced correlation (section 9) carries evidence, confidence, a verification status, and at least one action affordance (open members, annotate the set, export a directive). A finding the user cannot act on from where they see it is a defect.
+
+The core question-to-gesture grammar, spanning Sillito's four scopes:
+
+| Question | Gesture |
+|---|---|
+| What is this, what does it do? | Select: the identity card leads with the plain-language statement (existing help text), rationale strip per I13 |
+| Why does this connect to that? | Click the edge: evidence locations, confidence, data-flow narration; "open the lines" jumps to proof |
+| What does this provide, what does it need? | Expand the node's two-sided contract: capabilities offered above, dependencies and consumed contracts below |
+| What happens from here? | Follow: walk the outgoing path step by step (flow following, not manual call-graph hopping), breadcrumbing each hop |
+| What reaches or uses this? | Invert: same walk inbound (who calls, who imports, who navigates here) |
+| What breaks if this changes? | Impact: the blast-radius set, rendered as a ranked list first (I11), graph second |
+| Where else does this pattern appear? | Similar: the clone or concern membership of the selected element (section 9) |
+| How sure are we it works? | Proof: the tests exercising this element, with coverage and last-run status |
+| Why is it this way, who touched it? | History: the rationale strip expanded: commits, PRs, authors, churn trend |
+
+## 9. Built-in correlations: the system volunteers what it noticed
+
+Understanding at the "informed decision" level (including "this is a mess, rebuild it") requires the system to surface cross-cutting facts nobody thought to ask about. These are deterministic derivations over the store, AI-verified before surfacing, never AI-invented (I1):
+
+- **Clone clusters.** Near-duplicate code detection (token-stream fingerprinting over tree-sitter tokens; the established type-1/2/3 clone families) producing ranked duplicate sets with member evidence. Answers "is there duplicate code" without being asked.
+- **Concerns (strata).** First-class sets orthogonal to the containment hierarchy: every member touching a shared cross-cutting concern (logging, auth, error handling, caching, configuration, audio, persistence access), detected from signals (imports, API usage, naming) and clone clusters, named in domain language by enrichment. Concerns are the answer to "the ten logging implementations" and the addressable unit for section 10.
+- **Convergence findings.** The five-audio-pipelines case. Mechanism: **declared intents** (a small set of statements like "single audio pipeline", "all persistence goes through the repository layer"), authored by the human or proposed by enrichment from docs and observed architecture, checked continuously against the model; violations surface as findings with the members and the evidence. This is the software reflexion model pattern (intended versus as-built architecture), which has decades of validation, applied at concern granularity.
+- **Orphans and inconsistencies.** Components or concern members unreachable from any entry point; members of one concern following visibly different patterns (same concern, divergent shape) ranked for reconciliation.
+
+Findings land in the store as typed entities (kind, members, evidence, confidence, verification status), flow through projections to a ranked findings surface in the viewer (I11), appear contextually on affected elements in every lens, and are queryable via `se_findings`. The Phase 7 verification pass gates surfacing: a finding that does not survive adversarial checking against its own evidence is marked unverified, never presented as fact (the DeepWiki lesson).
+
+## 10. From understanding to action: sets and directives
+
+Review mode already attaches feedback to single elements with full context. The missing power is sweeping, non-hierarchical action:
+
+- **Selection sets.** Any collection becomes an addressable set: a concern's members, a clone cluster, a finding's members, search results, or manual multi-select. Sets are first-class, nameable, and persisted with the same stable-identity keying as annotations.
+- **Set-level annotations.** Feedback attaches to the set with the shared intent stated once ("all logging goes through the structured logger, level from config") plus optional per-member notes.
+- **Directives.** The export is not a prompt paragraph, it is a structured work order for an AI executor: the intent, the member list with each member's file, lines, and relevant evidence, the constraints (which members are exempt and why), and acceptance criteria. Directives ride the existing prompt-generator pipeline but become the primary artifact; the MCP surface makes them consumable by agents directly. This closes the product's loop as stated in PROJECT-OVERVIEW: AI builds, human reviews and directs at any grain from one line to a stratum of fifty sites, AI refines.
+
+## 11. Why this wins
 
 Every incumbent owns at most one or two of these lenses: CodeScene owns L5, Swimm owns L7, Sourcegraph owns L8, EA tools gesture at L2 without reaching code. Nobody ships them unified over one evidence-bearing model where the same element is visible through every lens and every claim, human or AI, drills to the line. That unification is not a feature of any competitor's roadmap because none of them owns the full stack of deterministic skeleton, provenance-stamped AI overlay, and viewer. We do.
