@@ -9,6 +9,8 @@ from dataclasses import asdict, dataclass, field, is_dataclass
 from enum import Enum
 from typing import Optional
 
+from . import __version__
+
 # ---------------------------------------------------------------------------
 # Enums (always available, no pydantic dependency)
 # Using (str, Enum) for Python 3.10 compatibility (StrEnum requires 3.11)
@@ -305,7 +307,7 @@ if _PYDANTIC:
         repository: Optional[str] = None
         default_branch: Optional[str] = None
         generated_at: str = ""
-        analyzer_version: str = "1.0.0"
+        analyzer_version: str = __version__
         root_path: str = ""
         components: list = Field(default_factory=list)
         relationships: list = Field(default_factory=list)
@@ -419,7 +421,7 @@ else:
         repository: Optional[str] = None
         default_branch: Optional[str] = None
         generated_at: str = ""
-        analyzer_version: str = "1.0.0"
+        analyzer_version: str = __version__
         root_path: str = ""
         components: list = field(default_factory=list)
         relationships: list = field(default_factory=list)

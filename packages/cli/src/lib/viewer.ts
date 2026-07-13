@@ -1,4 +1,4 @@
-import { existsSync, cpSync, copyFileSync, mkdirSync } from "node:fs";
+import { existsSync, cpSync, copyFileSync, mkdirSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,10 +25,25 @@ export function getViewerDistPath(): string {
   );
 }
 
-/** Copy the pre-built viewer and architecture.json to an output directory. */
+export interface AssembleOptions {
+  /**
+   * When true, `architectureSource` is a split-output directory (manifest.json +
+   * data/) and is copied to `<outputDir>/architecture`, which the viewer
+   * auto-detects. When false, it is a single architecture.json file.
+   */
+  split?: boolean;
+}
+
+/**
+ * Copy the pre-built viewer and the analyzer output to an output directory.
+ *
+ * In split mode `architectureSource` is a directory; in single-file mode it is
+ * the path to architecture.json.
+ */
 export function assembleStaticSite(
   outputDir: string,
-  architectureJsonPath: string
+  architectureSource: string,
+  options: AssembleOptions = {}
 ): void {
   const viewerDist = getViewerDistPath();
 
@@ -38,6 +53,15 @@ export function assembleStaticSite(
   // Copy the entire viewer dist
   cpSync(viewerDist, outputDir, { recursive: true });
 
-  // Copy the architecture JSON into the output
-  copyFileSync(architectureJsonPath, join(outputDir, "architecture.json"));
+  if (options.split) {
+    // Split output: replace any bundled sample dataset with the fresh scan.
+    // Removing the stale monolith too keeps the manifest authoritative.
+    const archDir = join(outputDir, "architecture");
+    rmSync(archDir, { recursive: true, force: true });
+    rmSync(join(outputDir, "architecture.json"), { force: true });
+    cpSync(architectureSource, archDir, { recursive: true });
+  } else {
+    // Single-file output: copy the architecture JSON into the output
+    copyFileSync(architectureSource, join(outputDir, "architecture.json"));
+  }
 }
