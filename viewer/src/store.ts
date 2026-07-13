@@ -16,6 +16,7 @@ import type {
   StatusOverlay,
   ChangelogEntry,
 } from "./types";
+import { addToSearchIndex } from "./utils/search";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
 import {
@@ -197,10 +198,32 @@ interface ArchStore {
   applyStatusOverlay: (overlay: StatusOverlay) => void;
   navigateToComponent: (componentId: string) => void;
 
+  // Inbound file/line deep links (P3-2). fileDeepLink records the resolved
+  // target so the Files tab can highlight the file and (when the line resolves a
+  // symbol) mark it. fileDeepLinkNotice carries a non-blocking "file not found"
+  // message for the missing case.
+  fileDeepLink: { componentId: string; filePath: string; line: number | null; symbolId: string | null } | null;
+  fileDeepLinkNotice: string | null;
+  openFileDeepLink: (filePath: string, line: number | null) => Promise<"found" | "missing">;
+  clearFileDeepLinkNotice: () => void;
+
   // Component detail cache (for split mode)
   componentDetailCache: Record<string, { symbols: Symbol[]; files: FileInfo[] }>;
-  componentDetailLoading: string | null;
+  // Per-component loading keys (componentId -> true while in flight) so two
+  // simultaneous loads for different components do not clobber each other's
+  // loading state (F-VW-7).
+  componentDetailLoading: Record<string, boolean>;
+  // Per-component detail fetch errors, surfaced in the panel and used as a
+  // negative cache so a failed fetch does not refire on every re-open (F-VW-7).
+  componentDetailErrors: Record<string, string>;
   loadComponentDetail: (componentId: string) => Promise<{ symbols: Symbol[]; files: FileInfo[] } | null>;
+  retryComponentDetail: (componentId: string) => Promise<{ symbols: Symbol[]; files: FileInfo[] } | null>;
+
+  // Precomputed per-component connection counts, derived from relationships and
+  // refreshed only when the architecture's relationships change. Held stable
+  // across status-overlay polls so ComponentNode selectors do not fire on every
+  // poll (F-VW-6).
+  connectionCounts: Record<string, { incoming: number; outgoing: number }>;
 
   // Changelog
   changelogReadState: ChangelogReadState;
@@ -237,16 +260,76 @@ function findComponentByFile(components: Component[], filePath: string): Compone
   return null;
 }
 
-function buildComponentIndex(components: Component[]): Map<string, Component> {
-  const index = new Map<string, Component>();
-  function walk(comps: Component[]) {
+// Resolve the component that owns a file for a `?file=` deep link (P3-2).
+// Ownership is read from the manifest `files` arrays alone, so no detail-file
+// fetch is needed to locate the owner. When more than one component lists the
+// same path (a parent that aggregates a descendant's files), the DEEPEST
+// component wins: it is the most specific owner. Depth is distance from the
+// root; ties at equal depth are broken by depth-first pre-order (first
+// encountered), which is deterministic for a given manifest.
+function findDeepestComponentByFile(
+  components: Component[],
+  filePath: string,
+): Component | null {
+  let best: Component | null = null;
+  let bestDepth = -1;
+  function walk(comps: Component[], depth: number) {
     for (const comp of comps) {
-      index.set(comp.id, comp);
-      walk(comp.children);
+      if (comp.files.includes(filePath) && depth > bestDepth) {
+        best = comp;
+        bestDepth = depth;
+      }
+      walk(comp.children, depth + 1);
     }
   }
-  walk(components);
-  return index;
+  walk(components, 0);
+  return best;
+}
+
+// Count incoming and outgoing relationships per component id in a single pass.
+// Used to precompute connection counts once per architecture change so
+// ComponentNode does not re-filter the relationship list on every store update
+// (F-VW-6).
+function computeConnectionCounts(
+  relationships: Relationship[],
+): Record<string, { incoming: number; outgoing: number }> {
+  const counts: Record<string, { incoming: number; outgoing: number }> = {};
+  for (const rel of relationships) {
+    (counts[rel.source] ??= { incoming: 0, outgoing: 0 }).outgoing++;
+    (counts[rel.target] ??= { incoming: 0, outgoing: 0 }).incoming++;
+  }
+  return counts;
+}
+
+// Apply a status overlay to a component tree with structural sharing: only the
+// components whose status changed (and the ancestors on their path) get new
+// object identities. Every untouched subtree keeps referential identity, so
+// React Flow re-renders only the nodes that actually changed instead of the
+// whole graph on every poll (F-VW-5).
+function applyStatusToComponents(
+  components: Component[],
+  statusMap: StatusOverlay["components"],
+  updatedAt: string,
+): { components: Component[]; changed: boolean } {
+  let changed = false;
+  const next = components.map((comp) => {
+    const childResult = applyStatusToComponents(comp.children, statusMap, updatedAt);
+    const statuses = statusMap[comp.id];
+    if (statuses) {
+      changed = true;
+      return {
+        ...comp,
+        children: childResult.components,
+        live_status: { statuses, last_updated: updatedAt },
+      };
+    }
+    if (childResult.changed) {
+      changed = true;
+      return { ...comp, children: childResult.components };
+    }
+    return comp;
+  });
+  return changed ? { components: next, changed: true } : { components, changed: false };
 }
 
 function findParentId(components: Component[], targetId: string): string | null {
@@ -308,7 +391,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   enhancedFrames: getStoredEnhancedFrames(),
 
   componentDetailCache: {},
-  componentDetailLoading: null,
+  componentDetailLoading: {},
+  componentDetailErrors: {},
+  connectionCounts: {},
 
   reviewMode: false,
   annotations: [],
@@ -325,6 +410,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   statusOverlay: null,
   changelogReadState: getStoredChangelogRead(),
 
+  fileDeepLink: null,
+  fileDeepLinkNotice: null,
+
   setArchitecture: (arch) => {
     // Restore persisted annotations for this architecture's stable identity so
     // a hard reload or re-analysis does not destroy review work (F-VW-4).
@@ -338,9 +426,15 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       loading: false,
       annotations: restored,
       componentDetailCache: {},
-      // Clear any in-flight loading marker too: a live refresh mid-detail-load
-      // must not leave the panel stuck in a loading state keyed to the old scan.
-      componentDetailLoading: null,
+      // Clear any in-flight loading markers and prior fetch errors too: a live
+      // refresh mid-detail-load must not leave the panel stuck in a loading or
+      // error state keyed to the old scan.
+      componentDetailLoading: {},
+      componentDetailErrors: {},
+      // Refresh precomputed connection counts for the new relationship set
+      // (F-VW-6). Status overlays reuse this map since they never touch
+      // relationships.
+      connectionCounts: computeConnectionCounts(arch.relationships),
     });
   },
   setLoading: (loading) => set({ loading }),
@@ -384,7 +478,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   },
 
   drillUp: () => {
-    const { breadcrumbs, architecture } = get();
+    const { breadcrumbs } = get();
     if (breadcrumbs.length <= 1) {
       set({ drillLevel: null, breadcrumbs: [], selectedComponentId: null });
       return;
@@ -502,31 +596,23 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   setLiveMonitorStatus: (status) => set({ liveMonitorStatus: status }),
 
   applyStatusOverlay: (overlay) => {
-    const arch = get().architecture;
+    const state = get();
+    const arch = state.architecture;
     if (!arch) {
       set({ statusOverlay: overlay });
       return;
     }
 
-    // Build flat index for O(1) lookups
-    const index = buildComponentIndex(arch.components);
+    // Targeted immutable update: only components whose status changed get new
+    // identities; the rest of the tree is shared by reference (F-VW-5). No
+    // full-tree JSON clone, no dead index build. Relationships are untouched, so
+    // the precomputed connectionCounts map stays valid and is not recomputed.
+    const { components: updatedComponents } = applyStatusToComponents(
+      arch.components,
+      overlay.components,
+      overlay.updated_at,
+    );
 
-    // Deep clone components to avoid mutating the existing tree
-    const updatedComponents = JSON.parse(JSON.stringify(arch.components)) as Component[];
-    const updatedIndex = buildComponentIndex(updatedComponents);
-
-    // Merge component statuses
-    for (const [componentId, statuses] of Object.entries(overlay.components)) {
-      const comp = updatedIndex.get(componentId);
-      if (comp) {
-        comp.live_status = {
-          statuses,
-          last_updated: overlay.updated_at,
-        };
-      }
-    }
-
-    // Set architecture-level live_status
     const updatedArch: Architecture = {
       ...arch,
       components: updatedComponents,
@@ -538,7 +624,17 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       },
     };
 
-    set({ architecture: updatedArch, statusOverlay: overlay });
+    // Keep an open component detail panel coherent with the refreshed tree so it
+    // shows post-overlay status instead of a stranded pre-overlay object (F-VW-5).
+    let detailItem = state.detailItem;
+    if (detailItem && detailItem.type === "component") {
+      const refreshed = findComponent(updatedComponents, (detailItem.data as Component).id);
+      if (refreshed) {
+        detailItem = { type: "component", data: refreshed };
+      }
+    }
+
+    set({ architecture: updatedArch, statusOverlay: overlay, detailItem });
   },
 
   navigateToComponent: (componentId) => {
@@ -575,6 +671,52 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       });
     }
   },
+
+  openFileDeepLink: async (filePath, line) => {
+    const arch = get().architecture;
+    if (!arch) return "missing";
+
+    // Resolve the owning component from the manifest file lists (deepest wins).
+    const owner = findDeepestComponentByFile(arch.components, filePath);
+    if (!owner) {
+      // Missing: non-blocking notice, stay on the overview (no navigation).
+      set({
+        fileDeepLink: null,
+        fileDeepLinkNotice: `No component in this architecture owns "${filePath}".`,
+      });
+      return "missing";
+    }
+
+    // Navigate: drill to the owner and open its detail panel. navigateToComponent
+    // handles both nested (drill to parent + select) and top-level cases.
+    get().navigateToComponent(owner.id);
+    set({
+      fileDeepLink: { componentId: owner.id, filePath, line, symbolId: null },
+      fileDeepLinkNotice: null,
+    });
+
+    if (line == null) return "found";
+
+    // Symbol resolution needs the per-component symbols. In split mode these
+    // arrive via the detail fetch (loading state handled by the panel); in
+    // monolithic mode they are already present. Resolve the symbol whose range
+    // contains the line and record it so the Files tab can mark it.
+    await get().loadComponentDetail(owner.id);
+    const symbols = get().getComponentSymbols(owner.id);
+    const match = symbols.find(
+      (s) => s.file === filePath && line >= s.line && line <= s.end_line,
+    );
+    if (match) {
+      set((state) =>
+        state.fileDeepLink && state.fileDeepLink.filePath === filePath
+          ? { fileDeepLink: { ...state.fileDeepLink, symbolId: match.id } }
+          : {},
+      );
+    }
+    return "found";
+  },
+
+  clearFileDeepLinkNotice: () => set({ fileDeepLinkNotice: null }),
 
   isChangelogEntryRead: (serial) => {
     return isSerialRead(get().changelogReadState, serial);
@@ -623,37 +765,86 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     const arch = get().architecture;
     if (arch && arch.files.length > 0) return null;
 
-    set({ componentDetailLoading: componentId });
+    // Negative cache: a prior fetch for this component already failed. Do not
+    // refire on every panel re-open; the panel shows a retry affordance that
+    // clears this error and calls again (F-VW-7).
+    if (get().componentDetailErrors[componentId]) return null;
+
+    // Already loading (per-component key): let the in-flight request settle
+    // instead of starting a duplicate that races its sibling (F-VW-7).
+    if (get().componentDetailLoading[componentId]) return null;
+
+    // Per-component loading key so a sibling component's load does not clobber
+    // this one's loading state (F-VW-7).
+    set((state) => ({
+      componentDetailLoading: { ...state.componentDetailLoading, [componentId]: true },
+    }));
     const safeId = safeComponentId(componentId);
     // Capture the architecture this request belongs to. If a live refresh
     // swaps the architecture (and invalidates the cache) while the fetch is in
     // flight, the stale response must not repopulate the fresh cache.
     const requestArch = arch;
+
+    // Clear only this component's loading key, leaving other in-flight loads
+    // untouched. No-op if the architecture was swapped mid-flight (setArchitecture
+    // already reset the loading map).
+    const clearLoading = () => {
+      if (get().architecture !== requestArch) return;
+      set((state) => {
+        const next = { ...state.componentDetailLoading };
+        delete next[componentId];
+        return { componentDetailLoading: next };
+      });
+    };
+
+    // Record a surfaced, negatively-cached error for this component (F-VW-7),
+    // unless the architecture was swapped mid-flight (then it is not our error).
+    const recordError = (message: string) => {
+      if (get().architecture !== requestArch) return;
+      set((state) => ({
+        componentDetailErrors: { ...state.componentDetailErrors, [componentId]: message },
+      }));
+    };
+
     try {
       const res = await fetch(`./architecture/data/detail-${safeId}.json`);
+      if (get().architecture !== requestArch) {
+        // Architecture changed mid-flight: discard, the next open refetches.
+        return null;
+      }
       if (res.ok) {
         const detail = await res.json();
         if (get().architecture !== requestArch) {
-          // Architecture changed mid-flight: discard, the next open refetches.
           return null;
         }
         set((state) => ({
           componentDetailCache: { ...state.componentDetailCache, [componentId]: detail },
-          componentDetailLoading: null,
         }));
         // Add to search index, keyed by component so a live refresh preserves
         // these entries and a re-load replaces them (F-VW-3).
-        const { addToSearchIndex } = await import("./utils/search");
         addToSearchIndex(detail.symbols || [], detail.files || [], componentId);
         return detail;
       }
-    } catch {
-      // Fetch failed, leave as null
+      recordError(`HTTP ${res.status}`);
+      return null;
+    } catch (err) {
+      recordError(err instanceof Error ? err.message : "Fetch failed");
+      return null;
+    } finally {
+      clearLoading();
     }
-    if (get().architecture === requestArch) {
-      set({ componentDetailLoading: null });
-    }
-    return null;
+  },
+
+  retryComponentDetail: (componentId) => {
+    // Clear the negative cache and loading marker so the next load refetches.
+    set((state) => {
+      const errors = { ...state.componentDetailErrors };
+      delete errors[componentId];
+      const loading = { ...state.componentDetailLoading };
+      delete loading[componentId];
+      return { componentDetailErrors: errors, componentDetailLoading: loading };
+    });
+    return get().loadComponentDetail(componentId);
   },
 
   getComponentById: (id) => {
@@ -706,7 +897,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   },
 
   getComponentRelationships: () => {
-    const { architecture, drillLevel } = get();
+    const { architecture } = get();
     if (!architecture) return [];
 
     const visible = get().getVisibleComponents();

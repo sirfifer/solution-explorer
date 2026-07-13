@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useArchStore } from "../store";
-import type { Component, ComponentStatus } from "../types";
-import { getWorstStatusLevel, type StatusLevel } from "../utils/status";
+import type { Component } from "../types";
+import type { StatusLevel } from "../utils/status";
 
 const CATEGORY_ICONS: Record<string, string> = {
   ci: "\u2699\uFE0F",

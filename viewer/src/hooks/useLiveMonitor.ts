@@ -58,6 +58,16 @@ function getCacheKey(config: LiveConfig): string {
   return `arch-live-cache-${id}`;
 }
 
+// Bump when the cached Architecture shape changes so a stale cache written by an
+// older schema is dropped instead of rendered before the fresh fetch corrects it
+// (F-VW-7). The cache entry is wrapped as { v, data }.
+const CACHE_SCHEMA_VERSION = 1;
+
+interface CachedArchitecture {
+  v: number;
+  data: Architecture;
+}
+
 // 30 minutes in ms
 const FULL_REFRESH_INTERVAL = 30 * 60 * 1000;
 // 5 minutes in ms
@@ -90,9 +100,20 @@ export function useLiveMonitor(): void {
       }
     }
 
+    // True when polling should stand down because the tab is hidden and the
+    // config asked us to pause while hidden (F-VW-7).
+    function pausedForHidden(): boolean {
+      const config = configRef.current;
+      return !!config?.polling.pause_when_hidden && document.hidden;
+    }
+
     function scheduleNext(delayMs: number) {
       clearTimer();
       if (!mountedRef.current) return;
+      // Do not re-arm the timer while hidden: an in-flight poll that resolves
+      // after the tab was hidden would otherwise schedule a wake-up behind the
+      // visibility handler's back. The visibility handler resumes on show (F-VW-7).
+      if (pausedForHidden()) return;
       timerRef.current = setTimeout(poll, delayMs);
     }
 
@@ -105,6 +126,9 @@ export function useLiveMonitor(): void {
     async function poll() {
       const config = configRef.current;
       if (!config || !mountedRef.current) return;
+      // Do not fetch while hidden (F-VW-7). The visibility handler owns resuming
+      // when the tab becomes visible again.
+      if (pausedForHidden()) return;
 
       setState({ liveMonitorStatus: "polling" });
 
@@ -169,9 +193,10 @@ export function useLiveMonitor(): void {
             // the search module so previously loaded symbols stay searchable.
             initializeSearch(data);
 
-            // Cache to localStorage
+            // Cache to localStorage, tagged with the schema version.
             try {
-              localStorage.setItem(getCacheKey(config), JSON.stringify(data));
+              const entry: CachedArchitecture = { v: CACHE_SCHEMA_VERSION, data };
+              localStorage.setItem(getCacheKey(config), JSON.stringify(entry));
             } catch {
               // Quota exceeded or unavailable
             }
@@ -281,13 +306,22 @@ export function useLiveMonitor(): void {
 
         // Try to load cached data for instant first render
         try {
-          const cached = localStorage.getItem(getCacheKey(config));
+          const cacheKey = getCacheKey(config);
+          const cached = localStorage.getItem(cacheKey);
           if (cached) {
-            const data: Architecture = JSON.parse(cached);
-            // Only apply cache if no architecture data is loaded yet
-            if (!store().architecture) {
-              setState({ architecture: data, loading: false });
-              initializeSearch(data);
+            const parsed = JSON.parse(cached) as Partial<CachedArchitecture>;
+            if (parsed && parsed.v === CACHE_SCHEMA_VERSION && parsed.data) {
+              // Only apply cache if no architecture data is loaded yet. Route
+              // through setArchitecture so precomputed connection counts and the
+              // detail cache are initialized consistently (F-VW-6).
+              if (!store().architecture) {
+                store().setArchitecture(parsed.data);
+                initializeSearch(parsed.data);
+              }
+            } else {
+              // Stale or unversioned cache from an older schema: drop it so it
+              // cannot render before the fresh fetch corrects it (F-VW-7).
+              localStorage.removeItem(cacheKey);
             }
           }
         } catch {

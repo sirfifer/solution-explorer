@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import type { Component, FileInfo, Symbol as ArchSymbol, Relationship, ComponentStatus, UIAction } from "../types";
 import { useArchStore } from "../store";
 import {
@@ -53,6 +53,29 @@ function DetailLoadingState({ label }: { label: string }) {
   );
 }
 
+function DetailErrorState({ label, detail, onRetry }: { label: string; detail?: string; onRetry: () => void }) {
+  const { darkMode } = useArchStore();
+  return (
+    <div
+      role="alert"
+      className={`p-6 flex flex-col items-center justify-center gap-3 text-center ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
+    >
+      <div className="text-2xl">&#x26A0;&#xFE0F;</div>
+      <p className="text-sm font-medium">{label}</p>
+      {detail && <p className={`text-xs font-mono ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>{detail}</p>}
+      <button
+        onClick={onRetry}
+        className={`
+          mt-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
+          ${darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-200" : "bg-zinc-100 hover:bg-zinc-200 text-zinc-700"}
+        `}
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
 type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai" | "status" | "testing" | "actions";
 
 export function DetailPanel() {
@@ -60,11 +83,6 @@ export function DetailPanel() {
     detailItem,
     architecture,
     darkMode,
-    closeDetail,
-    drillInto,
-    getComponentFiles,
-    getComponentSymbols,
-    showDetail,
   } = useArchStore();
   const [activeTab, setActiveTabRaw] = useState<Tab>(() => {
     const urlTab = parseUrlState().tab;
@@ -134,19 +152,23 @@ function ComponentDetail({
     drillInto,
     getComponentFiles,
     getComponentSymbols,
-    showDetail,
   } = useArchStore();
   const [linkCopied, setLinkCopied] = useState(false);
 
   // Lazy-load component details (split mode)
   const loadComponentDetail = useArchStore((s) => s.loadComponentDetail);
-  const componentDetailLoading = useArchStore((s) => s.componentDetailLoading);
+  const retryComponentDetail = useArchStore((s) => s.retryComponentDetail);
+  // Per-component loading key so a sibling component's load does not flip this
+  // panel's spinner on or off (F-VW-7).
+  const detailLoading = useArchStore((s) => !!s.componentDetailLoading[component.id]);
+  // Surfaced fetch error for this component, if its detail fetch failed (F-VW-7).
+  const detailError = useArchStore((s) => s.componentDetailErrors[component.id]);
   // Subscribe to this component's cache entry so the panel re-renders when the
   // lazy fetch lands. Without this dependency the files/symbols memos below stay
   // referentially stable (their action deps never change) and the tabs render
   // their pre-fetch empty values forever.
   const detailCacheEntry = useArchStore((s) => s.componentDetailCache[component.id]);
-  const detailLoading = componentDetailLoading === component.id;
+  const retryDetail = () => { retryComponentDetail(component.id); };
 
   useEffect(() => {
     loadComponentDetail(component.id);
@@ -353,13 +375,13 @@ function ComponentDetail({
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === "overview" && (
-          <OverviewTab component={component} files={files} symbols={symbols} />
+          <OverviewTab component={component} symbols={symbols} />
         )}
         {activeTab === "docs" && (
           <DocsTab component={component} />
         )}
         {activeTab === "files" && (
-          <FilesTab files={files} componentId={component.id} loading={detailLoading} />
+          <FilesTab files={files} componentId={component.id} loading={detailLoading} error={detailError} onRetry={retryDetail} />
         )}
         {activeTab === "symbols" && (
           <SymbolsTab
@@ -368,6 +390,8 @@ function ComponentDetail({
             setExpandedSymbol={setExpandedSymbol}
             componentId={component.id}
             loading={detailLoading}
+            error={detailError}
+            onRetry={retryDetail}
           />
         )}
         {activeTab === "ai" && (
@@ -410,11 +434,9 @@ function ComponentDetail({
 
 function OverviewTab({
   component,
-  files,
   symbols,
 }: {
   component: Component;
-  files: FileInfo[];
   symbols: ArchSymbol[];
 }) {
   const { darkMode } = useArchStore();
@@ -699,9 +721,20 @@ function ChildRow({ component }: { component: Component }) {
   );
 }
 
-function FilesTab({ files, componentId, loading }: { files: FileInfo[]; componentId: string; loading?: boolean }) {
+function FilesTab({ files, componentId, loading, error, onRetry }: { files: FileInfo[]; componentId: string; loading?: boolean; error?: string; onRetry?: () => void }) {
   const { darkMode, showDetail, reviewMode, setAnnotatingTarget, annotations } = useArchStore();
   const [filter, setFilter] = useState("");
+  // Inbound file deep link: highlight and scroll to the target file for this
+  // component (P3-2). Only active while this component is the deep-link owner.
+  const fileDeepLink = useArchStore((s) => s.fileDeepLink);
+  const deepLinkPath = fileDeepLink?.componentId === componentId ? fileDeepLink.filePath : null;
+  const deepLinkLine = fileDeepLink?.componentId === componentId ? fileDeepLink.line : null;
+  const highlightRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (deepLinkPath && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [deepLinkPath, files]);
 
   const filtered = useMemo(() => {
     if (!filter) return files;
@@ -719,6 +752,11 @@ function FilesTab({ files, componentId, loading }: { files: FileInfo[]; componen
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
 
+  // Split-mode detail fetch failed and nothing arrived: surface the error with a
+  // retry affordance instead of a permanently empty tab (F-VW-7).
+  if (error && files.length === 0 && !loading) {
+    return <DetailErrorState label="Could not load files" detail={error} onRetry={onRetry ?? (() => {})} />;
+  }
   // Split-mode detail is still loading and nothing has arrived yet.
   if (loading && files.length === 0) {
     return <DetailLoadingState label="Loading files..." />;
@@ -747,12 +785,15 @@ function FilesTab({ files, componentId, loading }: { files: FileInfo[]; componen
             </div>
             {dirFiles.map((f) => {
               const name = f.path.split("/").pop() || f.path;
+              const isDeepLinkTarget = f.path === deepLinkPath;
               return (
                 <button
                   key={f.path}
+                  ref={isDeepLinkTarget ? highlightRef : undefined}
                   className={`
                     w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-sm
                     ${darkMode ? "hover:bg-zinc-800/50" : "hover:bg-zinc-100"}
+                    ${isDeepLinkTarget ? (darkMode ? "ring-1 ring-blue-500 bg-blue-500/10" : "ring-1 ring-blue-500 bg-blue-50") : ""}
                   `}
                   onClick={() => showDetail("file", f)}
                 >
@@ -763,6 +804,11 @@ function FilesTab({ files, componentId, loading }: { files: FileInfo[]; componen
                   <span className={`truncate flex-1 ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
                     {name}
                   </span>
+                  {isDeepLinkTarget && deepLinkLine != null && (
+                    <span className={`text-[9px] px-1 rounded ${darkMode ? "bg-blue-500/20 text-blue-300" : "bg-blue-100 text-blue-600"}`}>
+                      line {deepLinkLine}
+                    </span>
+                  )}
                   {f.module_doc && (
                     <span className={`text-[9px] ${darkMode ? "text-green-600" : "text-green-500"}`} title={f.module_doc.split("\n")[0]}>
                       doc
@@ -804,12 +850,16 @@ function SymbolsTab({
   setExpandedSymbol,
   componentId,
   loading,
+  error,
+  onRetry,
 }: {
   symbols: ArchSymbol[];
   expandedSymbol: string | null;
   setExpandedSymbol: (s: string | null) => void;
   componentId: string;
   loading?: boolean;
+  error?: string;
+  onRetry?: () => void;
 }) {
   const { darkMode, reviewMode, setAnnotatingTarget, annotations } = useArchStore();
   const [filter, setFilter] = useState("");
@@ -832,6 +882,11 @@ function SymbolsTab({
     return result;
   }, [symbols, filter, kindFilter]);
 
+  // Split-mode detail fetch failed and nothing arrived: surface the error with a
+  // retry affordance instead of a permanently empty tab (F-VW-7).
+  if (error && symbols.length === 0 && !loading) {
+    return <DetailErrorState label="Could not load symbols" detail={error} onRetry={onRetry ?? (() => {})} />;
+  }
   // Split-mode detail is still loading and nothing has arrived yet.
   if (loading && symbols.length === 0) {
     return <DetailLoadingState label="Loading symbols..." />;
@@ -960,7 +1015,7 @@ function SymbolsTab({
 }
 
 function ActionsTab({ actions }: { actions: UIAction[] }) {
-  const { darkMode, architecture } = useArchStore();
+  const { darkMode } = useArchStore();
   const [filter, setFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
 

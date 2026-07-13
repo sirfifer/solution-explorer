@@ -149,12 +149,13 @@ export function App() {
     liveConfig,
     liveMonitorStatus,
     mobileChromeHidden,
+    fileDeepLinkNotice,
+    clearFileDeepLinkNotice,
   } = useArchStore();
 
   useLiveMonitor();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<"graph" | "tree" | "detail">("graph");
   const [summaryDismissed, setSummaryDismissed] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -256,6 +257,18 @@ export function App() {
       return res.ok && (res.headers.get("content-type")?.includes("json") ?? false);
     }
 
+    // Apply loaded static data only if the live monitor has not already loaded
+    // an architecture (from its cache or an authoritative poll). The static file
+    // is the deployed baseline; if live data arrived first it is at least as
+    // fresh, so this loader must not clobber it. Mirrors the live monitor's own
+    // `if (!store().architecture)` guard and ensures initializeSearch runs once
+    // per source instead of racing a double init (F-VW-7).
+    function applyIfUnset(data: Architecture) {
+      if (useArchStore.getState().architecture) return;
+      setArchitecture(data);
+      initializeSearch(data);
+    }
+
     async function load() {
       try {
         setLoading(true);
@@ -266,8 +279,7 @@ export function App() {
           const manifest = await manifestRes.json();
           // Split mode: manifest has components/relationships but no symbols/files
           const data: Architecture = { ...manifest, symbols: manifest.symbols || [], files: manifest.files || [] };
-          setArchitecture(data);
-          initializeSearch(data);
+          applyIfUnset(data);
           return;
         }
 
@@ -275,8 +287,7 @@ export function App() {
         const monoRes = await fetch("./architecture.json");
         if (isJsonResponse(monoRes)) {
           const data: Architecture = await monoRes.json();
-          setArchitecture(data);
-          initializeSearch(data);
+          applyIfUnset(data);
           return;
         }
 
@@ -288,6 +299,9 @@ export function App() {
           `Could not load architecture data. ${status}. Run the analyzer to generate the data file.`
         );
       } catch (err) {
+        // If the live monitor already loaded an architecture, a static-file miss
+        // is not a failure; do not clobber a working view with an error screen.
+        if (useArchStore.getState().architecture) return;
         setError(err instanceof Error ? err.message : "Failed to load architecture data");
       }
     }
@@ -578,7 +592,7 @@ export function App() {
                   className={`p-0.5 rounded ${darkMode ? "hover:bg-indigo-900/40 text-indigo-500" : "hover:bg-indigo-100 text-indigo-400"}`}
                   title={summaryExpanded ? "Show less" : "Show more"}
                 >
-                  {summaryExpanded ? "&#x25B2;" : "&#x25BC;"}
+                  {summaryExpanded ? "▲" : "▼"}
                 </button>
               )}
               <button
@@ -814,6 +828,28 @@ export function App() {
           <span className="text-[10px]">Search</span>
         </button>
       </nav>
+
+      {/* File deep-link "not found" notice (non-blocking, dismissible) */}
+      {fileDeepLinkNotice && (
+        <div
+          role="status"
+          className={`
+            fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3
+            px-4 py-2.5 rounded-xl shadow-xl text-sm max-w-[90vw]
+            ${darkMode ? "bg-zinc-800 text-zinc-200 border border-zinc-700" : "bg-white text-zinc-800 border border-zinc-200"}
+          `}
+        >
+          <span>&#x26A0;&#xFE0F;</span>
+          <span className="truncate">{fileDeepLinkNotice}</span>
+          <button
+            onClick={clearFileDeepLinkNotice}
+            className={`shrink-0 p-1 rounded ${darkMode ? "hover:bg-zinc-700 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"}`}
+            title="Dismiss"
+          >
+            &#x2715;
+          </button>
+        </div>
+      )}
 
       {/* Annotation input modal */}
       {annotatingComponentId && <AnnotationInput />}
