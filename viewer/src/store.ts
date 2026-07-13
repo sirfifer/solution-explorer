@@ -16,6 +16,7 @@ import type {
   StatusOverlay,
   ChangelogEntry,
 } from "./types";
+import { addToSearchIndex } from "./utils/search";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
 import {
@@ -202,6 +203,12 @@ interface ArchStore {
   componentDetailLoading: string | null;
   loadComponentDetail: (componentId: string) => Promise<{ symbols: Symbol[]; files: FileInfo[] } | null>;
 
+  // Precomputed per-component connection counts, derived from relationships and
+  // refreshed only when the architecture's relationships change. Held stable
+  // across status-overlay polls so ComponentNode selectors do not fire on every
+  // poll (F-VW-6).
+  connectionCounts: Record<string, { incoming: number; outgoing: number }>;
+
   // Changelog
   changelogReadState: ChangelogReadState;
   isChangelogEntryRead: (serial: number) => boolean;
@@ -237,16 +244,50 @@ function findComponentByFile(components: Component[], filePath: string): Compone
   return null;
 }
 
-function buildComponentIndex(components: Component[]): Map<string, Component> {
-  const index = new Map<string, Component>();
-  function walk(comps: Component[]) {
-    for (const comp of comps) {
-      index.set(comp.id, comp);
-      walk(comp.children);
-    }
+// Count incoming and outgoing relationships per component id in a single pass.
+// Used to precompute connection counts once per architecture change so
+// ComponentNode does not re-filter the relationship list on every store update
+// (F-VW-6).
+function computeConnectionCounts(
+  relationships: Relationship[],
+): Record<string, { incoming: number; outgoing: number }> {
+  const counts: Record<string, { incoming: number; outgoing: number }> = {};
+  for (const rel of relationships) {
+    (counts[rel.source] ??= { incoming: 0, outgoing: 0 }).outgoing++;
+    (counts[rel.target] ??= { incoming: 0, outgoing: 0 }).incoming++;
   }
-  walk(components);
-  return index;
+  return counts;
+}
+
+// Apply a status overlay to a component tree with structural sharing: only the
+// components whose status changed (and the ancestors on their path) get new
+// object identities. Every untouched subtree keeps referential identity, so
+// React Flow re-renders only the nodes that actually changed instead of the
+// whole graph on every poll (F-VW-5).
+function applyStatusToComponents(
+  components: Component[],
+  statusMap: StatusOverlay["components"],
+  updatedAt: string,
+): { components: Component[]; changed: boolean } {
+  let changed = false;
+  const next = components.map((comp) => {
+    const childResult = applyStatusToComponents(comp.children, statusMap, updatedAt);
+    const statuses = statusMap[comp.id];
+    if (statuses) {
+      changed = true;
+      return {
+        ...comp,
+        children: childResult.components,
+        live_status: { statuses, last_updated: updatedAt },
+      };
+    }
+    if (childResult.changed) {
+      changed = true;
+      return { ...comp, children: childResult.components };
+    }
+    return comp;
+  });
+  return changed ? { components: next, changed: true } : { components, changed: false };
 }
 
 function findParentId(components: Component[], targetId: string): string | null {
@@ -309,6 +350,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   componentDetailCache: {},
   componentDetailLoading: null,
+  connectionCounts: {},
 
   reviewMode: false,
   annotations: [],
@@ -341,6 +383,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       // Clear any in-flight loading marker too: a live refresh mid-detail-load
       // must not leave the panel stuck in a loading state keyed to the old scan.
       componentDetailLoading: null,
+      // Refresh precomputed connection counts for the new relationship set
+      // (F-VW-6). Status overlays reuse this map since they never touch
+      // relationships.
+      connectionCounts: computeConnectionCounts(arch.relationships),
     });
   },
   setLoading: (loading) => set({ loading }),
@@ -502,31 +548,23 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   setLiveMonitorStatus: (status) => set({ liveMonitorStatus: status }),
 
   applyStatusOverlay: (overlay) => {
-    const arch = get().architecture;
+    const state = get();
+    const arch = state.architecture;
     if (!arch) {
       set({ statusOverlay: overlay });
       return;
     }
 
-    // Build flat index for O(1) lookups
-    const index = buildComponentIndex(arch.components);
+    // Targeted immutable update: only components whose status changed get new
+    // identities; the rest of the tree is shared by reference (F-VW-5). No
+    // full-tree JSON clone, no dead index build. Relationships are untouched, so
+    // the precomputed connectionCounts map stays valid and is not recomputed.
+    const { components: updatedComponents } = applyStatusToComponents(
+      arch.components,
+      overlay.components,
+      overlay.updated_at,
+    );
 
-    // Deep clone components to avoid mutating the existing tree
-    const updatedComponents = JSON.parse(JSON.stringify(arch.components)) as Component[];
-    const updatedIndex = buildComponentIndex(updatedComponents);
-
-    // Merge component statuses
-    for (const [componentId, statuses] of Object.entries(overlay.components)) {
-      const comp = updatedIndex.get(componentId);
-      if (comp) {
-        comp.live_status = {
-          statuses,
-          last_updated: overlay.updated_at,
-        };
-      }
-    }
-
-    // Set architecture-level live_status
     const updatedArch: Architecture = {
       ...arch,
       components: updatedComponents,
@@ -538,7 +576,17 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       },
     };
 
-    set({ architecture: updatedArch, statusOverlay: overlay });
+    // Keep an open component detail panel coherent with the refreshed tree so it
+    // shows post-overlay status instead of a stranded pre-overlay object (F-VW-5).
+    let detailItem = state.detailItem;
+    if (detailItem && detailItem.type === "component") {
+      const refreshed = findComponent(updatedComponents, (detailItem.data as Component).id);
+      if (refreshed) {
+        detailItem = { type: "component", data: refreshed };
+      }
+    }
+
+    set({ architecture: updatedArch, statusOverlay: overlay, detailItem });
   },
 
   navigateToComponent: (componentId) => {
@@ -643,7 +691,6 @@ export const useArchStore = create<ArchStore>((set, get) => ({
         }));
         // Add to search index, keyed by component so a live refresh preserves
         // these entries and a re-load replaces them (F-VW-3).
-        const { addToSearchIndex } = await import("./utils/search");
         addToSearchIndex(detail.symbols || [], detail.files || [], componentId);
         return detail;
       }

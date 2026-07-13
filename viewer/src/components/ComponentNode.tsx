@@ -743,11 +743,23 @@ export const ComponentNode = memo(function ComponentNode({
   selected,
 }: NodeProps) {
   const { component } = data as ComponentNodeData;
-  const { selectComponent, drillInto, darkMode, enhancedFrames, reviewMode, annotations, architecture } = useArchStore();
+  // Selector-based subscriptions so a node re-renders only when the slice it
+  // actually reads changes, instead of on every store mutation (F-VW-6). Actions
+  // are stable references; the primitives below only fire a re-render when their
+  // value changes for THIS component.
+  const selectComponent = useArchStore((s) => s.selectComponent);
+  const drillInto = useArchStore((s) => s.drillInto);
+  const darkMode = useArchStore((s) => s.darkMode);
+  const enhancedFrames = useArchStore((s) => s.enhancedFrames);
+  const reviewMode = useArchStore((s) => s.reviewMode);
+  const annotationCount = useArchStore(
+    (s) => s.annotations.filter((a) => a.componentId === component.id).length,
+  );
+  // Connection counts come from the store's precomputed map, refreshed only on
+  // relationship changes, so status-overlay polls do not re-filter per node.
+  const incomingCount = useArchStore((s) => s.connectionCounts[component.id]?.incoming ?? 0);
+  const outgoingCount = useArchStore((s) => s.connectionCounts[component.id]?.outgoing ?? 0);
   const colors = getTypeColors(component.type, darkMode);
-  const annotationCount = annotations.filter((a) => a.componentId === component.id).length;
-  const incomingCount = architecture?.relationships.filter((r) => r.target === component.id).length ?? 0;
-  const outgoingCount = architecture?.relationships.filter((r) => r.source === component.id).length ?? 0;
   const connectionCount = incomingCount + outgoingCount;
   const hasChildren = component.children.length > 0 || component.files.length > 0;
   const langColor = component.language ? getLanguageColor(component.language) : null;

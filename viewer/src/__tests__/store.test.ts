@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useArchStore } from "../store";
-import type { Architecture, Component, StatusOverlay } from "../types";
+import type { Architecture, Component, StatusOverlay, Relationship } from "../types";
 
 function makeComponent(overrides: Partial<Component> = {}): Component {
   return {
@@ -498,6 +498,114 @@ describe("ArchStore", () => {
       const state = useArchStore.getState();
       const nestedComp = state.architecture!.components[0].children[0];
       expect(nestedComp.live_status?.statuses["security:scan"].level).toBe("warning");
+    });
+
+    it("preserves referential identity for components whose status did not change (F-VW-5)", () => {
+      const grandchild = makeComponent({ id: "gc-1", name: "Grandchild" });
+      const unchangedChild = makeComponent({ id: "child-untouched", name: "Untouched", children: [grandchild] });
+      const changed = makeComponent({ id: "comp-changed", name: "Changes" });
+      const unchangedParent = makeComponent({ id: "parent-untouched", name: "Untouched parent", children: [unchangedChild] });
+      const arch = makeArchitecture({ components: [changed, unchangedParent] });
+      useArchStore.getState().setArchitecture(arch);
+
+      const before = useArchStore.getState().architecture!;
+      const beforeChanged = before.components.find((c) => c.id === "comp-changed")!;
+      const beforeUntouchedParent = before.components.find((c) => c.id === "parent-untouched")!;
+
+      const overlay: StatusOverlay = {
+        components: {
+          "comp-changed": {
+            "ci:build": { level: "error", title: "Build failed", category: "ci", updated_at: "2025-01-01T00:00:00Z" },
+          },
+        },
+        architecture: {},
+        updated_at: "2025-02-02T00:00:00Z",
+        commit_sha: "sha-overlay",
+      };
+      useArchStore.getState().applyStatusOverlay(overlay);
+
+      const after = useArchStore.getState().architecture!;
+      const afterChanged = after.components.find((c) => c.id === "comp-changed")!;
+      const afterUntouchedParent = after.components.find((c) => c.id === "parent-untouched")!;
+
+      // The changed component becomes a new object carrying the overlaid status.
+      expect(afterChanged).not.toBe(beforeChanged);
+      expect(afterChanged.live_status?.statuses["ci:build"].level).toBe("error");
+
+      // The untouched subtree keeps referential identity end to end. The pre-fix
+      // JSON deep clone replaced every node object, so these identity checks
+      // failed. React Flow now re-renders only the changed node.
+      expect(afterUntouchedParent).toBe(beforeUntouchedParent);
+      expect(afterUntouchedParent.children[0]).toBe(beforeUntouchedParent.children[0]);
+      expect(afterUntouchedParent.children[0].children[0]).toBe(grandchild);
+    });
+
+    it("keeps an open component detail panel coherent with the overlaid tree (F-VW-5)", () => {
+      const comp = makeComponent({ id: "comp-detail", name: "Detailed" });
+      const arch = makeArchitecture({ components: [comp] });
+      useArchStore.getState().setArchitecture(arch);
+      useArchStore.getState().selectComponent("comp-detail");
+
+      useArchStore.getState().applyStatusOverlay({
+        components: {
+          "comp-detail": {
+            "ci:build": { level: "error", title: "Build failed", category: "ci", updated_at: "2025-01-01T00:00:00Z" },
+          },
+        },
+        architecture: {},
+        updated_at: "2025-02-02T00:00:00Z",
+        commit_sha: "sha",
+      });
+
+      const state = useArchStore.getState();
+      const detailComp = state.detailItem!.data as Component;
+      const treeComp = state.architecture!.components.find((c) => c.id === "comp-detail")!;
+      // The detail panel points at the refreshed component, not the stranded
+      // pre-overlay object, so it shows the new status.
+      expect(detailComp).toBe(treeComp);
+      expect(detailComp.live_status?.statuses["ci:build"].level).toBe("error");
+    });
+  });
+
+  describe("connectionCounts (F-VW-6)", () => {
+    function makeRel(source: string, target: string, type = "depends_on"): Relationship {
+      return { source, target, type, label: null, protocol: null, port: null, bidirectional: false };
+    }
+
+    it("precomputes per-component connection counts on setArchitecture", () => {
+      const a = makeComponent({ id: "a" });
+      const b = makeComponent({ id: "b" });
+      const c = makeComponent({ id: "c" });
+      const arch = makeArchitecture({
+        components: [a, b, c],
+        relationships: [makeRel("a", "b"), makeRel("a", "b", "http"), makeRel("c", "a")],
+      });
+      useArchStore.getState().setArchitecture(arch);
+
+      const counts = useArchStore.getState().connectionCounts;
+      expect(counts["a"]).toEqual({ incoming: 1, outgoing: 2 });
+      expect(counts["b"]).toEqual({ incoming: 2, outgoing: 0 });
+      expect(counts["c"]).toEqual({ incoming: 0, outgoing: 1 });
+    });
+
+    it("reuses the same connectionCounts map across a status overlay (relationships unchanged)", () => {
+      const a = makeComponent({ id: "a" });
+      const b = makeComponent({ id: "b" });
+      const arch = makeArchitecture({ components: [a, b], relationships: [makeRel("a", "b")] });
+      useArchStore.getState().setArchitecture(arch);
+
+      const before = useArchStore.getState().connectionCounts;
+      useArchStore.getState().applyStatusOverlay({
+        components: {
+          a: { "ci:build": { level: "ok", title: "ok", category: "ci", updated_at: "t" } },
+        },
+        architecture: {},
+        updated_at: "t",
+        commit_sha: "s",
+      });
+      // No recompute, same object reference, so ComponentNode selectors that read
+      // connectionCounts do not fire on a status poll.
+      expect(useArchStore.getState().connectionCounts).toBe(before);
     });
   });
 

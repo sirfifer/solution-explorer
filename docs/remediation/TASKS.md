@@ -336,7 +336,7 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 - Evidence:
 
 ### P2-3: Viewer performance cliffs and bundle splitting
-- Status: TODO
+- Status: DONE (remediation/p2-viewer)
 - Model: Opus 4.8
 - Stream: B. Branch: remediation/p2-viewer
 - Findings: F-VW-5, F-VW-6, F-VW-8
@@ -346,11 +346,19 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   2. Give ComponentNode selector-based subscriptions (or precompute per-node connection counts once per architecture change in the store) so nodes stop re-rendering on unrelated store changes.
   3. Fix the mixed static/dynamic import of search.ts (pick one), and split elkjs into its own async chunk (dynamic import or manualChunks).
 - Accept:
-  - [ ] Referential-identity store test green
-  - [ ] `npm run build` no longer warns about the mixed import; main chunk shrinks meaningfully (record before/after sizes in Evidence; target at least 500 kB raw reduction via the elk split, or document why not)
-  - [ ] Brief manual profile note: node re-render behavior on a status poll before/after
+  - [x] Referential-identity store test green
+  - [x] `npm run build` no longer warns about the mixed import; main chunk shrinks meaningfully (record before/after sizes in Evidence; target at least 500 kB raw reduction via the elk split, or document why not)
+  - [x] Brief manual profile note: node re-render behavior on a status poll before/after
 - Verify: build output; tests; React DevTools profile note
 - Evidence:
+  - Re-verification. Findings still reproduced on current code before editing: `applyStatusOverlay` deep-cloned the whole tree via `JSON.parse(JSON.stringify(...))` and built an unused `buildComponentIndex` (store.ts); ComponentNode destructured the entire store with no selector and re-filtered `architecture.relationships` twice per node; search.ts was statically imported in App/SearchOverlay/useLiveMonitor and dynamically imported in store.ts (Vite mixed-import warning); elkjs was a top-level static import in layout.ts, bundled into the single main chunk.
+  - Item 1 (applyStatusOverlay). Replaced the deep clone with `applyStatusToComponents`, a structural-sharing recursive update: only components whose status changed (and the ancestors on their path) get new object identities; untouched subtrees are returned by reference. Deleted the dead index build entirely. `detailItem.data` is re-pointed at the refreshed component so an open panel shows post-overlay status. `connectionCounts` is NOT recomputed here because relationships are untouched.
+  - Item 2 (ComponentNode). Converted to selector subscriptions: actions (stable refs), `darkMode`/`enhancedFrames`/`reviewMode` (global, infrequent), an `annotationCount` primitive selector, and `incoming`/`outgoing` primitive selectors reading a new precomputed `connectionCounts` map. The map is computed once per architecture change in `setArchitecture` (`computeConnectionCounts`, single pass over relationships) and reused across status overlays. Net effect on a status poll: none of the slices a node reads change, so no ComponentNode re-renders from the store; React Flow re-renders only nodes whose `data.component` identity changed, which after item 1 is just the status-changed nodes.
+  - Item 3 (bundle). store.ts now imports `addToSearchIndex` statically (single import mode), removing the mixed-import warning. layout.ts lazy-loads elkjs via `import("elkjs/lib/elk.bundled.js")` memoized on first layout, so elk lands in its own async chunk fetched only when the graph first needs layout.
+  - Bundle sizes (npm run build). Before: single `index-*.js` 2,101.81 kB raw / 631.79 kB gzip, plus the mixed-import warning. After: main `index-*.js` 644.49 kB raw / 187.48 kB gzip and a separate async `elk.bundled-*.js` 1,439.07 kB raw / 438.50 kB gzip. Main chunk raw reduction 1,457.32 kB (gzip 444.31 kB), far above the 500 kB target; mixed-import warning gone. The residual >500 kB warning now refers only to the elk async chunk, which is expected for that library and is no longer on the initial load path.
+  - Node re-render profile note (reasoned, method: static analysis of subscriptions plus the referential-identity test rather than a live DevTools capture, which this headless environment cannot run). Before: every status poll swapped the whole architecture object AND every component object (deep clone), and ComponentNode had no selector, so all N nodes re-rendered and each re-filtered the M relationships (O(N*M) per poll). After: the poll produces new identities only for status-changed components; ComponentNode subscribes only to slices that do not change on a poll; connection counts are read from a stable precomputed map. So per poll, re-renders drop from all N nodes to just the changed ones, and the per-node relationship filtering is gone entirely. The `preserves referential identity` store test encodes this: it asserts untouched subtree objects keep identity across an overlay.
+  - Tests. Added to src/__tests__/store.test.ts: `preserves referential identity for components whose status did not change (F-VW-5)`, `keeps an open component detail panel coherent with the overlaid tree (F-VW-5)`, and a `connectionCounts (F-VW-6)` describe (precompute correctness + map reuse across overlay). Suite: 70 passed (was 66).
+  - Fail-before/pass-after. Copied the working store.ts aside, restored `git show origin/main:viewer/src/store.ts`, ran the new tests: `3 failed | 1 passed | 29 skipped` (referential-identity, detail-coherence, and connection-count-precompute all fail against the pre-fix deep-clone store; the map-reuse test trivially passes because both sides are undefined). Restored the fix: `33 passed` in store.test.ts, `70 passed` full suite. `npx tsc -b` clean. Lint 17 warnings (down from 18; the dead index-build unused-var is gone), remaining warnings owned by P2-4 item 8.
 
 ### P2-4: Viewer confirmed-bug sweep
 - Status: TODO

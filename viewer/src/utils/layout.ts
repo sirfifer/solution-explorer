@@ -1,7 +1,17 @@
-import ELK from "elkjs/lib/elk.bundled.js";
+import type { ELK as ELKInstance } from "elkjs/lib/elk-api";
 import type { Node, Edge } from "@xyflow/react";
 
-const elk = new ELK();
+// Lazy-load elkjs so the ~1.5 MB layout engine lands in its own async chunk and
+// is fetched only when the graph first needs a layout, instead of bloating the
+// main bundle on initial page load (F-VW-8). The instance is memoized after the
+// first import.
+let elkPromise: Promise<ELKInstance> | null = null;
+function getElk(): Promise<ELKInstance> {
+  if (!elkPromise) {
+    elkPromise = import("elkjs/lib/elk.bundled.js").then((mod) => new mod.default());
+  }
+  return elkPromise;
+}
 
 // Default sizes based on actual measured node dimensions
 // Largest nodes are ~360x230, so use that plus margin
@@ -81,6 +91,7 @@ export async function getLayoutedElements(
     })),
   };
 
+  const elk = await getElk();
   const layout = await elk.layout(elkGraph);
 
   const layoutedNodes = nodes.map((node) => {
