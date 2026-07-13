@@ -10,11 +10,6 @@ from .base import BaseParser
 class RubyParser(BaseParser):
     """Parser for Ruby source files."""
 
-    SYMBOL_PATTERNS = [
-        (r'^\s*(class|module)\s+([A-Z]\w*(?:::[A-Z]\w*)*)', "type"),
-        (r'^\s*def\s+(self\.)?(\w+[?!=]?)', "function"),
-    ]
-
     def extract_symbols(self, content: str, file_path: str) -> list[Symbol]:
         symbols = []
         lines = content.split("\n")

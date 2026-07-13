@@ -1,0 +1,14 @@
+{
+  "solution": "Polyglot Multi-Repo Fixture",
+  "description": "Two small repos analyzed together to exercise multi-repo prefixing",
+  "repositories": [
+    {
+      "name": "backend",
+      "path": "repos/backend"
+    },
+    {
+      "name": "frontend",
+      "path": "repos/frontend"
+    }
+  ]
+}

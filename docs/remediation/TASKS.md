@@ -306,17 +306,22 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 ## Phase 2: Robustness and honesty
 
 ### P2-1: Incremental mode falls back to full rescan on unmapped changes
-- Status: TODO
+- Status: DONE
 - Model: Opus 4.8
 - Stream: A. Branch: remediation/p2-analyzer
 - Findings: F-CRIT-8
 - Files: analyzer/incremental.py (map_files_to_components 911-929, should_full_rescan 948-984), tests/test_incremental.py
 - Do: track changed files that map to zero components; if any exist, trigger the existing full-rescan path (and log why). Regression tests on a real temp git repo: add a new root-level file, and separately a new directory with files; assert both appear in the merged output. Prove the tests fail pre-fix.
 - Accept:
-  - [ ] Both regression scenarios pass, and the pre-fix failure is recorded in Evidence
-  - [ ] A log line states the fallback reason when it fires
+  - [x] Both regression scenarios pass, and the pre-fix failure is recorded in Evidence
+  - [x] A log line states the fallback reason when it fires
 - Verify: pytest tests/test_incremental.py
 - Evidence:
+  - Re-verification: F-CRIT-8 still reproduced. `map_files_to_components` (incremental.py ~886-929) walks `range(len(parts)-1, 0, -1)`, so a root-level file (`parts == ["config.ts"]`) does no parent walk and matches nothing, and a file in a new directory finds no component with that parent path. `should_full_rescan` did not consult the mapping, so `_run_incremental` produced "1 files changed, 0 directly affected, 0 total" and dropped the file. Confirmed live by the pre-fix test run below (see stdout).
+  - **Fix (minimal, per card; incremental.py is slated for P4-6 replacement).** Added `IncrementalAnalyzer._unmapped_changed_files(changed_files, baseline)` which mirrors the per-file matching in `map_files_to_components` and returns changed paths that map to no component. `should_full_rescan` now returns True when that list is non-empty; `_rescan_reason` returns a message naming the count and up to five offending paths ("N changed file(s) map to no known component (new root-level file or new directory): ..."). This routes through the existing full-rescan path in `_run_full_rescan`, which prints `Full rescan: {reason}` (the required log line) and rescans the whole tree so the new files are included. No new branch in `_run_incremental`; the fallback happens before it.
+  - **Regression tests** (tests/test_incremental.py::TestUnmappedChangedFileFallback, real temp git repos, running the actual `IncrementalAnalyzer.run()` path): `test_new_root_level_file_included_via_full_rescan` (adds root `config.ts`), `test_new_directory_included_via_full_rescan` (adds `widgets/button.ts`). Each asserts `incremental.full_rescan is True`, the reason contains "no known component", and the new path appears in the flattened output (`files` plus every component's `files`). A control test `test_change_to_known_component_stays_incremental` asserts a `src/index.ts` edit stays incremental (`full_rescan is False`), proving the fallback is not over-broad. The baseline is sized so a single changed file is 1/4 (well under the 50% threshold), so the unmapped-file fallback is the only thing that can trigger a full rescan in these tests. `.arch-baseline/` is gitignored in the fixture so it never contaminates the diff.
+  - **Fails-before / passes-after.** After fix: `pytest tests/test_incremental.py::TestUnmappedChangedFileFallback -q` -> 3 passed. Pre-fix (`git stash push -- analyzer/incremental.py`): the two drop-detection tests FAILED with `assert False is True` on `full_rescan`, and stdout showed `Incremental: 1 files changed, 0 directly affected, 0 total (with importers)` (the silent drop); the control test still passed. Restored the fix (`git stash pop`), file byte-identical, 3 passed.
+  - Repo-wide: `pytest tests/ -q` 660 passed / 1 xfailed (+3 new), `pytest tests/test_incremental.py` 90 passed, `ruff check analyzer/ tests/ scripts/` clean. `git status` shows only the two intended files; architecture.json untouched.
 
 ### P2-2: Scanner file-content cache, path index, and root-bounded CI check
 - Status: DROPPED (superseded 2026-07-11 by Program 2 Phase 4; see WORK-PLAN-2.md section 2). The engine these optimizations target is replaced by Tiers 1 to 3. Item 1 (fixture-snapshot output guard) moves into P4-1. Item 3 (root-bounded `_check_ci_tests`) carries into the Tier 3 derivation port, noted in P4-3.
@@ -415,20 +420,25 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
 - Evidence:
 
 ### P2-6: Repo hygiene
-- Status: TODO
+- Status: DONE
 - Model: Sonnet 5
 - Stream: C. Branch: remediation/p2-docs
 - Findings: F-VW-10
 - Files: viewer/.gitignore, .gitignore, git index
 - Do: `git rm -r --cached viewer/coverage packages/cli/dist`, ignore both plus `viewer/test-results/`; confirm release.yml/prepare-bundle.sh builds `packages/cli/dist` at publish time so untracking is safe (read the workflow before removing); sweep for other committed artifacts (.DS_Store, __pycache__ in tracked paths).
 - Accept:
-  - [ ] `git ls-files | grep -E "coverage/|packages/cli/dist/"` empty
-  - [ ] release.yml dry-run reasoning recorded in Evidence (where dist gets built)
+  - [x] `git ls-files | grep -E "coverage/|packages/cli/dist/"` empty
+  - [x] release.yml dry-run reasoning recorded in Evidence (where dist gets built)
 - Verify: git ls-files greps; CI green
 - Evidence:
+  - Re-verification: `git ls-files` before edits tracked 61 files under `viewer/coverage/` + `packages/cli/dist/`, plus `viewer/test-results/.last-run.json` and a root `.DS_Store` (F-VW-10 still reproduced). Root `architecture.json` is intentionally tracked (see .gitignore note, F-CRIT-7 / P0-1) and was left alone.
+  - **Safe-to-untrack proof (dist is rebuilt at publish time).** Read `.github/workflows/release.yml`: the `publish-npm` job runs `working-directory: packages/cli` -> `bash scripts/prepare-bundle.sh && npm run build` (release.yml publish-npm "Build CLI bundle" step) before `npm publish`. `packages/cli/package.json` also declares `"prepublishOnly": "bash scripts/prepare-bundle.sh && npm run build"` and `"build": "tsc"`, and `"files": ["dist", ...]`, so `dist/` is regenerated by `tsc` on every publish regardless of what is committed. This matches the P1-1 Evidence (dist rebuilt at publish) and the P1-2 note (verification rebuilds of dist were reverted to keep commits source-only). Untracking is therefore safe: no published artifact depends on the committed `dist/`.
+  - **Actions taken.** `git rm -r --cached viewer/coverage packages/cli/dist viewer/test-results .DS_Store` (63 files removed from the index, files kept on disk). Added ignores: root `.gitignore` gained `packages/cli/dist/` and `.DS_Store`; `viewer/.gitignore` gained `coverage/` and `test-results/`. `git check-ignore` confirms all four representative paths (`packages/cli/dist/index.js`, `viewer/coverage/index.html`, `viewer/test-results/.last-run.json`, `.DS_Store`) are now ignored.
+  - **Sweep.** No tracked `__pycache__`, `*.pyc`, or `*.egg-info` (grep of `git ls-files` returned none; those are already covered by the root .gitignore). Only one `.DS_Store` was tracked (repo root); handled.
+  - **Accept + no-break checks.** `git ls-files | grep -E "coverage/|packages/cli/dist/"` -> empty. `packages/cli/test/generate.split.test.ts` remains tracked and `npm test` in packages/cli -> 6 passed (imports from `src/`, not `dist/`, so untracking dist does not break the CLI test setup per the P1-2 note). Full `pytest tests/ -q` 657 passed / 1 xfailed, `ruff` clean, worker `npm test` 12 passed at branch end.
 
 ### P2-7: Analyzer robustness sweep
-- Status: TODO
+- Status: DONE
 - Model: Opus 4.8 (Sonnet 5 acceptable for items 3 to 6)
 - Stream: A. Branch: remediation/p2-analyzer
 - Findings: F-AN-5, F-AN-6, F-AN-7, F-AN-8, F-AN-9, F-AN-10
@@ -440,12 +450,21 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   5. Make `--incremental --split` and `--config --incremental` argparse errors instead of silent precedence.
   6. Split mode: remove stale `detail-*.json` files not in the current manifest when writing (guard so it only deletes files matching the detail pattern inside the data dir).
 - Accept:
-  - [ ] Each numbered item has a test or, for dead-code removal, a green suite plus grep proof of no references
+  - [x] Each numbered item has a test or, for dead-code removal, a green suite plus grep proof of no references
 - Verify: pytest; ruff
 - Evidence:
+  - Re-verified all six findings against current code before editing; each still reproduced (line numbers drifted, e.g. the iterdir calls are now scanner.py ~720/731 in `_classify_architectural_role`).
+  - **Item 1 (F-AN-5).** `multi_repo.run()` now reads `repo_def.get("name")` and `sys.exit(1)`s with a readable message (naming the offending entry) instead of raising `KeyError`. The clone `subprocess.run` gained `timeout=CLONE_TIMEOUT_SECONDS` (300s) wrapped in `except subprocess.TimeoutExpired`, which exits 1 printing only the untokenized url (no captured stderr, preserving the F-CRIT-3 redaction). Tests (tests/test_multi_repo.py): `test_missing_name_exits_with_friendly_error` (asserts SystemExit(1), "name" in stderr, no "KeyError"); `test_clone_timeout_exits_without_leaking_token` (asserts `subprocess.run` is called with a `timeout` kwarg, that a simulated `TimeoutExpired` -> SystemExit(1), stderr says "timed out", token never printed).
+  - **Item 2 (F-AN-6).** Added module-level `_safe_iterdir(path)` in scanner.py returning `[]` on `OSError`; both `_classify_architectural_role` iterdir sites (comp_dir and parent_dir) route through it. Test (tests/test_scanner_deep.py::TestSafeIterdir): `test_unreadable_dir_returns_empty` chmod-000s a dir, asserts a raw `iterdir()` raises there but `_safe_iterdir` returns `[]`; skips on non-POSIX or when euid==0. Plus `test_readable_dir_lists_entries` for the happy path.
+  - **Item 3 (F-AN-7).** tree_sitter_base.py adds `logger = logging.getLogger(__name__)`; both `extract_symbols` and `extract_imports` fallbacks now `logger.debug(...)` naming the file (symbols path), the exception type and message, and the regex parser class. Tests (tests/test_tree_sitter.py, no real tree-sitter needed, use a `TreeSitterParser` subclass whose `_extract_*_ts` raise): assert the regex fallback still works AND a debug record contains the filename + "ValueError" (symbols) / "RuntimeError" (imports).
+  - **Item 4 (F-AN-8, dead code).** Removed `SwiftParser.SYMBOL_PATTERNS`, `RubyParser.SYMBOL_PATTERNS`, `UIActionDetector.SWIFTUI_BUTTON_ACTION_RE`, and the deprecated incremental.py trio (`rescan_component`, `merge_component_into_baseline`, `redetect_relationships`) together with the private helpers only they used (`_find_component_in_tree`, `_all_component_paths_flat`, `_find_component_for_file_from_baseline`, `_should_skip_file`, `_resolve_import_from_baseline`, `_build_comp_name_index`) - 513 lines removed from incremental.py - plus their tests (TestRescanComponent, TestMergeComponentIntoBaseline, TestRedetectRelationships, TestResolveImportFromBaseline, and the deprecation-warning test) and now-unused imports (`re`, `warnings`, `CODE_LANGUAGES`, `LANGUAGE_MAP`, `SKIP_EXTENSIONS`, `PARSERS`, `_should_skip_dir` in incremental.py; `warnings` in the test). Confirmed-no-references first, and after removal: grep for `SYMBOL_PATTERNS`, `SWIFTUI_BUTTON_ACTION_RE`, and the trio names across `analyzer/ tests/ scripts/` returns nothing; `ruff check analyzer/ tests/ scripts/` clean (would flag any dangling unused import); full suite green.
+  - **Item 5 (F-AN-9).** cli.py `main()` calls `parser.error(...)` (exit code 2) when `--incremental --split` or `--config --incremental` are combined, immediately after `parse_args()`. Tests (tests/test_cli.py::TestCLIArgumentDefaults): both combinations assert SystemExit(2) with both flag names in stderr.
+  - **Item 6 (F-AN-10).** `write_split` records the set of detail filenames it writes, then after writing globs `data/detail-*.json` and unlinks any not in that set (strict: only the `detail-*.json` pattern directly inside `data/`; guarded by try/except OSError; prints a count when it prunes). This got more important since P1-2 made build.sh write into a persistent split dir (Discovered 2026-07-11). Tests (tests/test_cli.py::TestSafeComponentId): `test_stale_detail_files_are_pruned` (a pre-existing `detail-removed-comp.json` is deleted, current ones kept); `test_pruning_only_touches_detail_pattern_in_data_dir` (a non-detail `data/index.json` and a `detail-*.json` OUTSIDE data/ are both left untouched).
+  - **Fails-before / passes-after.** Stashed the four source fixes (`analyzer/multi_repo.py`, `scanner.py`, `parsers/tree_sitter_base.py`, `cli.py`) and ran the eight new behavioral tests: 7 FAILED, 1 passed. The one that passed pre-fix is `test_pruning_only_touches_detail_pattern_in_data_dir`, a strict-guard safety assertion (with no pruning at all, nothing is wrongly deleted, so it holds in both states). Restored the fixes: all pass.
+  - **Repo-wide + smoke.** `pytest tests/ -q` 650 passed / 1 xfailed (net: -20 deprecated-trio tests, +10 new; deprecation warnings gone). `ruff check analyzer/ tests/ scripts/` clean. Grep proofs empty (see Item 4). Self-analysis smoke: `python3 analyze.py . --split -o <scratch> --compact` produced 636 symbols / 24 relationships; injecting a `detail-STALE__fake.json` and re-running pruned it (0 remaining). Repo-root architecture.json untouched.
 
 ### P2-8: Pipeline hardening sweep
-- Status: TODO
+- Status: DONE
 - Model: Opus 4.8
 - Stream: C (after A and B merge). Branch: remediation/p2-pipeline
 - Findings: F-PL-3 (deploy-downstream verification), F-PL-4 (injection, artifact name), F-PL-7 (token compare)
@@ -455,10 +474,16 @@ Every fix task implicitly includes: re-verify the finding first; write a regress
   3. Worker: constant-time token comparison for INGEST_TOKEN.
   4. Decide and record the action-pinning policy (major tags versus SHAs). Either is defensible; write the decision down here.
 - Accept:
-  - [ ] actionlint clean; no untrusted `${{ inputs.* }}` inside `run:` in action.yml
-  - [ ] A downstream-failure simulation (dispatch a workflow forced to fail, or reason through the polling code in review) shows deploy-downstream reporting failure
+  - [x] actionlint clean; no untrusted `${{ inputs.* }}` inside `run:` in action.yml
+  - [x] A downstream-failure simulation (dispatch a workflow forced to fail, or reason through the polling code in review) shows deploy-downstream reporting failure
 - Verify: actionlint; test dispatch against a scratch workflow if feasible
 - Evidence:
+  - Re-verification (all three findings still reproduced on current code before editing): action.yml interpolated `${{ inputs.config }}`, `${{ inputs.path }}` inside the Run Analyzer `run:` block and hardcoded the artifact name `architecture-viz`; deploy-downstream.yml only called `gh workflow run` with no outcome polling (success == dispatch API accepted); worker `validateBearerToken` (index.ts:43) used `===` on the raw token.
+  - **Item 1 (action.yml injection + artifact name).** Added an `artifact-name` input (default `architecture-viz`). Run Analyzer step now sets `CONFIG: ${{ inputs.config }}` and `TARGET_PATH: ${{ inputs.path }}` in `env:` and the shell body references `"$CONFIG"` / `"$TARGET_PATH"`. Upload Artifact uses `name: ${{ inputs.artifact-name }}`. Verified no `${{ inputs.* }}` remains inside any `run:` shell body (`sed -n '82,110p' action.yml | grep inputs.` matches only the three `env:` keys, not the script). `cloudflare-project-name` is deliberately left as an expression: it lives in `cloudflare/wrangler-action@v3`'s `with.command`, not a `run:` block, and wrangler-action runs that command via `@actions/exec` (no shell), so `$VAR` indirection would be passed literally and there is no shell-injection surface. Confirmed from wrangler-action source (`src/wranglerAction.ts:396` calls `exec(\`${packageManager.exec} wrangler ${command}\`, args, options)`; `@actions/exec` does not spawn a shell). A comment in action.yml records this reasoning.
+  - **Item 2 (deploy-downstream verification).** Rewrote the trigger step to: stamp `DISPATCH_TS` (UTC), `gh workflow run`, then locate the created run via `gh run list --workflow --event workflow_dispatch --created ">=$DISPATCH_TS"` (12 x 5s poll to let it register), then `gh run view --json status,conclusion` in a bounded loop (60 x 20s = 20 min cap). The job `exit 1`s with a `::error::` diagnostic if the run cannot be located, does not complete in the window, or concludes anything other than `success`. Added `fail-fast: false` so all three matrix legs are attempted and each reports independently. `actionlint .github/workflows/deploy-downstream.yml` -> exit 0, clean. Downstream-failure simulation reasoned through in review: a failed downstream run reports `status=completed`, `conclusion=failure`, which hits the `CONCLUSION != success` branch and fails the leg (proven by construction; a real cross-repo forced-fail dispatch needs the UnaMentis DEPLOY_TOKEN and is not runnable from the worktree).
+  - **Item 3 (constant-time token compare).** `validateBearerToken` is now async and delegates to `timingSafeEqualStrings`, which SHA-256-digests both the presented and expected token and compares the fixed-length digests with an XOR-accumulator (no early return, no length leak). Both call sites (`handleIngest`, `handlePostSettings`) now `await` it. Added `src/token.test.ts` (6 tests) asserting only the exact token authorizes: exact accept, same-length wrong reject, prefix reject, superstring reject, missing header reject, non-Bearer scheme reject. Fail-before/pass-after: temporarily replaced the body with `expected.startsWith(auth.slice(7))` -> the "prefix of the secret" test FAILED (`expected false, got true`); restored -> `npm test` 12 passed (2 files), `npm run typecheck` clean.
+  - **Item 4 (pin policy, decided and recorded).** Policy: (a) Third-party actions published by trusted first-party maintainers (`actions/*`, `cloudflare/*`, `pypa/*`, `astral-sh/*`) stay pinned to major-version tags (`@v4`, `@v5`); these publishers sign releases and repoint tags responsibly, and the maintenance cost of SHA-pinning plus Dependabot churn is not justified for this project's threat model. (b) The solution-explorer self-checkout in action.yml is resolved from the action ref / `version` input; consumers SHOULD reference the action by a released tag (`@v1` / `@latest`) and the action already emits a `::warning::` when invoked via `@main`. (c) Cross-repo consumption pins (for example a downstream UnaMentis workflow that runs `sirfifer/solution-explorer@REF`) MUST NOT use a commit SHA carrying a comment that claims a branch (the 2026-07-11 `31145dc # main` incident silently ran stale code). Either pin to the branch literally (`@main`, tracks head, no drift) or to a released tag; if a SHA is used, its comment must not assert a moving ref. Net rule: a comment claiming `main` is not a pin, so verify the SHA actually resolves to the intended ref or drop the misleading comment.
+  - Repo-wide checks after this task: `actionlint .github/workflows/deploy-downstream.yml` exit 0; `actionlint` on the full workflow set shows only pre-existing SC2086 info notes in ci.yml (out of scope). action.yml is a composite action so actionlint reports it as "not a workflow" (syntax-check), which is expected; verified manually per Item 1. Worker `npm test` 12 passed, `npm run typecheck` clean. `pytest tests/ -q` and `ruff` unaffected by this task (no Python touched) and re-run green at the end of the branch.
 
 ---
 
@@ -554,7 +579,7 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 ## Phase 4: The index engine
 
 ### P4-1: Fact store schema, symbol identity, and the parity guard
-- Status: TODO
+- Status: DONE (branch program2/p4-store; Opus 4.8 executor session, 2026-07-13)
 - Model: Opus 4.8 (no substitution)
 - Stream: A. Branch: program2/p4-store
 - Design: TARGET-ARCHITECTURE.md sections 4.2, 6, and 12; invariants I4, I7
@@ -566,12 +591,41 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
   4. Port P2-2 item 1 here: a snapshot test running the CURRENT engine on the fixtures and freezing normalized output (strip timestamps and machine paths). This is the parity baseline for P4-7.
   5. Write FTS5 virtual tables and a thin query module (by name, by path, by kind, bounded-depth edge traversal via recursive CTE) with tests.
 - Accept:
-  - [ ] Schema creates, migrates from empty, round-trips every entity type with deterministic read order
-  - [ ] Symbol ID grammar documented, frozen, round-trip tested including collision and escaping edge cases
-  - [ ] Parity snapshot of the current engine on both fixtures committed and green
-  - [ ] FTS and traversal queries tested
+  - [x] Schema creates, migrates from empty, round-trips every entity type with deterministic read order
+  - [x] Symbol ID grammar documented, frozen, round-trip tested including collision and escaping edge cases
+  - [x] Parity snapshot of the current engine on both fixtures committed and green
+  - [x] FTS and traversal queries tested
 - Verify: pytest tests/test_store.py tests/test_engine_parity.py; ruff
 - Evidence:
+  - Package: `analyzer/store/` (ids.py, schema.py, db.py, __init__.py). Verified dependency-free from the old engine: an AST scan for imports of `scanner`/`incremental` across `analyzer/store/*.py` returns NONE. Stdlib `sqlite3` only, no ORM.
+
+  - FROZEN SYMBOL ID GRAMMAR (this freezes now; changes require a recorded decision + migration). Full spec and escaping table live as the module docstring in `analyzer/store/ids.py`. Summary:
+    - Four space-separated segments: `<repo> <component> <file> <symbol-path>`.
+    - `<symbol-path>` is `descriptor ( "/" descriptor )* ( "#" <digits> )?`; nesting `/` joins class then method then inner symbol; trailing `#<n>` is the collision disambiguator (absent for the common unique case).
+    - Field = bareword or backtick-quoted. A token is quoted iff empty or containing a reserved char or a backtick; internal backticks are doubled (reversible).
+    - Reserved chars: repo/component/file segments reserve space + backtick (`/` is a legal path char there, so paths render verbatim); descriptors additionally reserve `/` and `#`.
+    - Escaping table: `Foo`->`Foo`; ``->`` `` ``(two backticks); `a b`->`` `a b` ``; `a/b`(descriptor)->`` `a/b` ``; `a#b`(descriptor)->`` `a#b` ``; `` a`b ``->`` `a``b` ``; `` ` ``->four backticks.
+    - Multi-repo: single-repo uses repo `.` (SCIP "local"); multi-repo sets the repo segment to the repo name so per-repo stores merge without collision. Replaces the old in-place `repo_name/` string-prefix hack.
+    - Projection escapes stay out: `safe_component_id`'s `/`->`--`, `:`->`__` are projection-layer filename escapes and never appear in store IDs.
+    - Collision policy (`assign_symbol_ids`): source order in, order out; first occurrence of a colliding path is bare (stable), later ones get `#2`, `#3`, ... No line numbers in IDs, so IDs survive line shifts (the old `file:name:line` scheme did not).
+    - Example: `. . src/app/main.py Foo/bar` (method bar in class Foo); `api svc app/server.py UserRepo/get`.
+
+  - SCHEMA (schema_version = 1, WAL on disk). Tables: `meta, files, symbols, signals, components, component_files, edges, capabilities, data_entities, entity_access, enrichment, coverage, extraction_cache` plus the `fts_docs` FTS5 virtual table (unified index over symbol names+docstrings, component names+descriptions, enrichment help text). Every projection-facing reader in db.py sorts by a stable natural key (id/path) so reads are deterministic. WAL asserted via `PRAGMA journal_mode` = wal on an on-disk store.
+
+  - FIXTURES (committed as real files, tiny for CI):
+    - `tests/fixtures/polyglot/`: single solution exercising all seven tree-sitter languages (python api service, typescript + javascript web client, go worker, rust core lib, ruby lib, swift ios app) plus a root `docker-compose.yml` (infra). Current engine emits component types application/api-server/package/module/content/infrastructure and http relationships; 25 symbols across 7 languages, 13 files.
+    - `tests/fixtures/multi/`: `solution.json` multi-repo config pointing at two tiny local repos (backend python, frontend typescript). Exercises `repo:<name>` containers and per-repo id prefixing.
+
+  - PARITY SNAPSHOTS committed at `tests/fixtures/parity/{polyglot,multi}.snapshot.json`. Normalizer strips generated_at, root_path, analyzer_version, changelog; and deep-sorts every list to remove PYTHONHASHSEED-driven set-ordering nondeterminism (imports lists were order-unstable across processes). Verified stable across `PYTHONHASHSEED=1`, `2`, and `random` (fresh processes, all green). This is the P4-7 diff baseline.
+
+  - REGRESSION PROOF (WORK-PLAN.md 2.2): perturbed the committed `polyglot.snapshot.json` on disk (changed one component name) and ran `pytest tests/test_engine_parity.py::test_current_engine_matches_snapshot[polyglot]` -> FAILED; restored the file -> PASSED. The in-suite `test_guard_detects_a_perturbed_snapshot` encodes the same proof.
+
+  - COMMANDS / RESULTS:
+    - `python3 -m pytest tests/test_store.py -q` -> 36 passed.
+    - `python3 -m pytest tests/test_engine_parity.py -q` -> 6 passed (2 skipped only under SE_REGEN_PARITY=1).
+    - `python3 -m pytest tests/ -q` (repo-wide) -> 699 passed, 1 xfailed.
+    - `ruff check analyzer/ tests/ scripts/` -> All checks passed.
+    - `git status --porcelain architecture.json` -> empty (baseline untouched).
 
 ### P4-2: Parallel extraction tier with content-hash cache and nested symbols
 - Status: TODO
@@ -800,6 +854,8 @@ Add new findings here with a date and the task you were on; do not expand task s
 | 2026-07-13 | P2-4 item 3 (hidden-poll test) | `useLiveMonitor.test.ts` had a test-isolation leak: the "pauses polling when tab becomes hidden" test set `document.hidden = true` and never reset it, so it leaked into the next test. Latent before P2-4 because nothing read `document.hidden` at poll start; the new poll/scheduleNext hidden guards made it observable (the resume test then saw 2 fetches instead of 3). | Fixed in place by resetting `document.hidden = false` in that describe's `beforeEach`. Not a product bug; a test hygiene fix required by the correct guard. |
 | 2026-07-13 | P2-4 item 8 (lint) | The audit (F-VW-8) counted 19 unused-var warnings; the tree carried 18 on entry to this stream and 17 after P2-3 removed the dead `applyStatusOverlay` index build. The DetailPanel "48-51 unused destructure block" the audit named had already been reworked by Phase 1 into a used loading state; two OTHER unused destructure blocks remained in DetailPanel and were removed here. | Resolved: `npm run lint` is now 0 warnings. Count drift is expected as Phase 1/2 edits landed; the acceptance bar (0 warnings) is met regardless of the exact starting count. |
 | 2026-07-13 | P3-2 (deep links) | `PROJECT-OVERVIEW.md` still lists inbound `?file=&line=` deep links as a roadmap "Planned" item; the feature is now shipped, but PROJECT-OVERVIEW.md is outside this Stream-B viewer territory. | For P2-5 (docs reconciliation, per that card's item 2): flip the roadmap line for `?file=&line=` to shipped now that P3-2 has landed. |
+| 2026-07-13 | P4-1 parity guard | The current engine's JSON output is not byte-stable across processes: some lists (per-component `imports`, and likely `tech_stack`/`external_services`) are built from Python sets, so their order follows PYTHONHASHSEED. Within one process it is stable; across processes it is not. | Worked around in the P4-1 normalizer (deep-sort every list before snapshotting). The v2 engine must sort these deterministically to satisfy invariant I4; ensure P4-2/P4-3 emit ordered lists rather than set iteration so projections are byte-stable without a normalization crutch. |
+| 2026-07-13 | P4-1 CI (PR #12) | The two CI lanes run different parser tiers: ci.yml installs `.[all,dev]` (tree-sitter active) while architecture-viz.yml's Test & Lint installs only `pytest ruff` (regex fallback). Tier-dependent output made the parity snapshots fail in the regex lane while passing in the tree-sitter lane. | Parity tests now carry a tier guard: they run in the tree-sitter lane and skip with a named reason in the regex lane. Consider aligning architecture-viz.yml's install with `.[all,dev]` so both lanes exercise the shipping tier; workflow files are Stream C (P2-8) territory right now, so this is deferred to that stream or a follow-up rather than edited here. |
 
 ## Phase gate records
 

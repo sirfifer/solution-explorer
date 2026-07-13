@@ -41,6 +41,10 @@ inputs:
     description: 'Solution Explorer version override (e.g., v0.3.0, beta). Defaults to the action ref tag.'
     required: false
     default: ''
+  artifact-name:
+    description: 'Name for the uploaded build artifact. Override when a caller repo also runs the reference workflow to avoid a collision.'
+    required: false
+    default: 'architecture-viz'
 
 runs:
   using: 'composite'
@@ -79,6 +83,8 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        CONFIG: ${{ inputs.config }}
+        TARGET_PATH: ${{ inputs.path }}
       run: |
         OUTPUT_DIR=".solution-explorer/viewer/public/architecture"
         SINGLE_FILE=".solution-explorer/viewer/public/architecture.json"
@@ -95,13 +101,13 @@ runs:
           echo "Using pre-built architecture JSON (AI-enhanced)"
           mkdir -p "$(dirname "$SINGLE_FILE")"
           cp architecture.json "$SINGLE_FILE"
-        elif [ -n "${{ inputs.config }}" ]; then
+        elif [ -n "$CONFIG" ]; then
           python3 .solution-explorer/analyze.py \
-            --config "${{ inputs.config }}" \
+            --config "$CONFIG" \
             --split -o "$OUTPUT_DIR" --compact
         else
           python3 .solution-explorer/analyze.py \
-            "${{ inputs.path }}" \
+            "$TARGET_PATH" \
             --split -o "$OUTPUT_DIR" --compact
         fi
 
@@ -196,13 +202,17 @@ runs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: architecture-viz
+        name: ${{ inputs.artifact-name }}
         path: .solution-explorer/viewer/dist
         retention-days: 30
 
     - name: Deploy to Cloudflare Pages
       if: inputs.deploy-to == 'cloudflare'
       uses: cloudflare/wrangler-action@v3
+      # cloudflare-project-name is interpolated into wrangler-action's `command`,
+      # which is not a `run:` shell block. wrangler-action runs the command via
+      # @actions/exec (no shell), so `$VAR` indirection would be passed literally
+      # and would not expand, and there is no shell-injection surface here.
       with:
         apiToken: ${{ inputs.cloudflare-api-token }}
         accountId: ${{ inputs.cloudflare-account-id }}

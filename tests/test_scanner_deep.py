@@ -1050,3 +1050,46 @@ class TestStatsIntegrity:
         arch = scanner.scan()
 
         assert arch.stats["total_relationships"] == len(arch.relationships)
+
+
+# ---------------------------------------------------------------------------
+# F-AN-6: unreadable directory must not abort the scan
+# ---------------------------------------------------------------------------
+
+
+class TestSafeIterdir:
+    """_safe_iterdir returns [] instead of raising on an unreadable directory.
+
+    The two iterdir() calls in _classify_architectural_role route through this
+    helper, so an unreadable directory no longer aborts the whole scan.
+    """
+
+    def test_unreadable_dir_returns_empty(self, tmp_path):
+        import os
+        import stat
+
+        from analyzer.scanner import _safe_iterdir
+
+        if os.name != "posix" or (hasattr(os, "geteuid") and os.geteuid() == 0):
+            pytest.skip("chmod 000 is not enforceable here (non-POSIX or root)")
+
+        locked = tmp_path / "locked"
+        locked.mkdir()
+        (locked / "child.txt").write_text("x")
+        os.chmod(locked, 0)
+        try:
+            # Sanity: a raw iterdir would raise here.
+            with pytest.raises(OSError):
+                list(locked.iterdir())
+            # The guarded helper swallows it.
+            assert _safe_iterdir(locked) == []
+        finally:
+            os.chmod(locked, stat.S_IRWXU)
+
+    def test_readable_dir_lists_entries(self, tmp_path):
+        from analyzer.scanner import _safe_iterdir
+
+        (tmp_path / "a.txt").write_text("a")
+        (tmp_path / "sub").mkdir()
+        names = {p.name for p in _safe_iterdir(tmp_path)}
+        assert names == {"a.txt", "sub"}

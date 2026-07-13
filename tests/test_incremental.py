@@ -3,7 +3,6 @@
 import json
 import subprocess
 import sys
-import warnings
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,15 +14,10 @@ from analyzer.incremental import (
     MARKER_FILES,
     IncrementalAnalyzer,
     _affected_ids_to_paths,
-    _find_component_in_tree,
     _recalculate_stats,
-    _resolve_import_from_baseline,
     build_component_dependency_graph,
     load_file_index,
     load_import_graph,
-    merge_component_into_baseline,
-    redetect_relationships,
-    rescan_component,
     save_baseline_cache,
 )
 from analyzer.models import to_dict
@@ -241,304 +235,6 @@ class TestBuildComponentDependencyGraph:
         expanded.update(graph.get("c", set()))
         assert expanded == {"c", "b"}
         assert "a" not in expanded
-
-
-# ---------------------------------------------------------------------------
-# K.2: rescan_component Tests
-# ---------------------------------------------------------------------------
-
-
-class TestRescanComponent:
-    """Tests for selective component re-scanning."""
-
-    def test_rescans_files_in_component_directory(self, tmp_path):
-        src = tmp_path / "src"
-        src.mkdir()
-        (src / "app.ts").write_text(
-            "export function hello(): void {}\n"
-        )
-        baseline = {
-            "components": [{
-                "id": "root", "path": "", "files": [], "children": [
-                    {"id": "src", "path": "src", "files": ["src/app.ts"],
-                     "children": [], "metrics": {}}
-                ]
-            }]
-        }
-        result = rescan_component("src", baseline, tmp_path)
-        assert result is not None
-        assert "src/app.ts" in result["files"]
-        assert result["metrics"]["files"] == 1
-        assert result["metrics"]["lines"] > 0
-
-    def test_detects_new_files_added(self, tmp_path):
-        src = tmp_path / "src"
-        src.mkdir()
-        (src / "existing.ts").write_text("const x = 1;\n")
-        (src / "new_file.ts").write_text("const y = 2;\n")
-
-        baseline = {
-            "components": [{
-                "id": "root", "path": "", "files": [], "children": [
-                    {"id": "src", "path": "src", "files": ["src/existing.ts"],
-                     "children": [], "metrics": {}}
-                ]
-            }]
-        }
-        result = rescan_component("src", baseline, tmp_path)
-        assert result is not None
-        assert "src/new_file.ts" in result["files"]
-        assert "src/existing.ts" in result["files"]
-        assert result["metrics"]["files"] == 2
-
-    def test_handles_deleted_files(self, tmp_path):
-        """Files in baseline but not on disk are excluded from rescan."""
-        src = tmp_path / "src"
-        src.mkdir()
-        (src / "remaining.ts").write_text("const x = 1;\n")
-        # "deleted.ts" is in baseline but does not exist on disk
-
-        baseline = {
-            "components": [{
-                "id": "root", "path": "", "files": [], "children": [
-                    {"id": "src", "path": "src",
-                     "files": ["src/remaining.ts", "src/deleted.ts"],
-                     "children": [], "metrics": {}}
-                ]
-            }]
-        }
-        result = rescan_component("src", baseline, tmp_path)
-        assert result is not None
-        assert "src/remaining.ts" in result["files"]
-        assert "src/deleted.ts" not in result["files"]
-
-    def test_extracts_symbols_and_imports(self, tmp_path):
-        src = tmp_path / "src"
-        src.mkdir()
-        (src / "app.ts").write_text(
-            'import { utils } from "./utils";\n'
-            "export class App {\n"
-            "  run() {}\n"
-            "}\n"
-        )
-        baseline = {
-            "components": [{
-                "id": "root", "path": "", "files": [], "children": [
-                    {"id": "src", "path": "src", "files": [],
-                     "children": [], "metrics": {}}
-                ]
-            }]
-        }
-        result = rescan_component("src", baseline, tmp_path)
-        assert result is not None
-        assert len(result["_file_infos"]) == 1
-        file_info = result["_file_infos"][0]
-        assert len(file_info["imports"]) > 0
-        assert result["language"] == "typescript"
-
-    def test_component_not_found_returns_none(self, tmp_path):
-        baseline = {
-            "components": [{"id": "root", "path": "", "files": [], "children": []}]
-        }
-        result = rescan_component("nonexistent", baseline, tmp_path)
-        assert result is None
-
-    def test_missing_directory_returns_empty(self, tmp_path):
-        baseline = {
-            "components": [{
-                "id": "root", "path": "", "files": [], "children": [
-                    {"id": "missing", "path": "missing_dir", "files": [],
-                     "children": [], "metrics": {}}
-                ]
-            }]
-        }
-        result = rescan_component("missing", baseline, tmp_path)
-        assert result is not None
-        assert result["files"] == []
-        assert result["metrics"]["files"] == 0
-
-    def test_skips_hidden_and_vendored_dirs(self, tmp_path):
-        src = tmp_path / "src"
-        src.mkdir()
-        (src / "app.ts").write_text("const x = 1;\n")
-        hidden = src / ".hidden"
-        hidden.mkdir()
-        (hidden / "secret.ts").write_text("const secret = 1;\n")
-        nm = src / "node_modules"
-        nm.mkdir()
-        (nm / "dep.ts").write_text("const dep = 1;\n")
-
-        baseline = {
-            "components": [{
-                "id": "root", "path": "", "files": [], "children": [
-                    {"id": "src", "path": "src", "files": [],
-                     "children": [], "metrics": {}}
-                ]
-            }]
-        }
-        result = rescan_component("src", baseline, tmp_path)
-        assert result is not None
-        paths = result["files"]
-        assert any("app.ts" in p for p in paths)
-        assert not any(".hidden" in p for p in paths)
-        assert not any("node_modules" in p for p in paths)
-
-
-# ---------------------------------------------------------------------------
-# K.2: merge_component_into_baseline Tests
-# ---------------------------------------------------------------------------
-
-
-class TestMergeComponentIntoBaseline:
-    """Tests for merging rescanned data back into baseline."""
-
-    def test_replaces_files_and_metrics(self, baseline_arch):
-        new_data = {
-            "files": ["src/new.ts"],
-            "metrics": {"files": 1, "lines": 50},
-            "language": "typescript",
-            "framework": None,
-            "port": None,
-            "_file_infos": [{"path": "src/new.ts", "language": "typescript",
-                             "lines": 50, "size_bytes": 500}],
-            "_symbols": [],
-        }
-        result = merge_component_into_baseline(baseline_arch, "src", new_data)
-        comp = _find_component_in_tree(result["components"], "src")
-        assert comp["files"] == ["src/new.ts"]
-        assert comp["metrics"]["lines"] == 50
-
-    def test_preserves_structural_fields(self, baseline_arch):
-        new_data = {
-            "files": ["src/new.ts"],
-            "metrics": {"files": 1, "lines": 50},
-            "language": None,
-            "framework": None,
-            "port": None,
-            "_file_infos": [],
-            "_symbols": [],
-        }
-        result = merge_component_into_baseline(baseline_arch, "src", new_data)
-        comp = _find_component_in_tree(result["components"], "src")
-        assert comp["name"] == "src"
-        assert comp["type"] == "module"
-        assert comp["path"] == "src"
-
-    def test_updates_architecture_files_list(self, baseline_arch):
-        new_data = {
-            "files": ["src/new.ts"],
-            "metrics": {"files": 1, "lines": 50},
-            "language": None,
-            "framework": None,
-            "port": None,
-            "_file_infos": [{"path": "src/new.ts", "language": "typescript",
-                             "lines": 50, "size_bytes": 500}],
-            "_symbols": [],
-        }
-        result = merge_component_into_baseline(baseline_arch, "src", new_data)
-        file_paths = [f["path"] for f in result["files"]]
-        assert "src/new.ts" in file_paths
-        # Old files from src should be gone (src owned index.ts and utils.ts)
-        # But note: root also has these files, so they get removed when we
-        # remove files belonging to the "src" component's old file set
-
-    def test_component_not_found_returns_baseline(self, baseline_arch):
-        import copy
-        original = copy.deepcopy(baseline_arch)
-        new_data = {"files": [], "metrics": {}, "language": None,
-                    "framework": None, "port": None, "_file_infos": [], "_symbols": []}
-        result = merge_component_into_baseline(baseline_arch, "nonexistent", new_data)
-        assert result["components"] == original["components"]
-
-
-# ---------------------------------------------------------------------------
-# K.3: redetect_relationships Tests
-# ---------------------------------------------------------------------------
-
-
-class TestRedetectRelationships:
-    """Tests for incremental relationship re-detection."""
-
-    def test_preserves_unaffected_relationships(self, multi_component_baseline):
-        # Only "app" is affected; the api->lib relationship should be preserved
-        rels = redetect_relationships(
-            multi_component_baseline, {"app"}, Path("/tmp/fake")
-        )
-        # api->lib import should be preserved (neither is affected)
-        preserved = [r for r in rels if r["source"] == "api" and r["target"] == "lib"]
-        assert len(preserved) == 1
-
-    def test_removes_stale_relationships_for_affected(self, multi_component_baseline):
-        # app is affected, so app->lib and app->api rels should be removed and re-detected
-        rels = redetect_relationships(
-            multi_component_baseline, {"app"}, Path("/tmp/fake")
-        )
-        # The original app->api HTTP rel should be removed (app is affected)
-        http_rels = [r for r in rels
-                     if r["source"] == "app" and r["target"] == "api" and r["type"] == "http"]
-        assert len(http_rels) == 0
-
-    def test_handles_empty_affected_set(self, multi_component_baseline):
-        rels = redetect_relationships(
-            multi_component_baseline, set(), Path("/tmp/fake")
-        )
-        # All relationships preserved
-        assert len(rels) == len(multi_component_baseline["relationships"])
-
-    def test_handles_deleted_component(self):
-        baseline = {
-            "components": [{"id": "root", "path": "", "files": [], "children": []}],
-            "relationships": [
-                {"source": "deleted", "target": "root", "type": "import"},
-            ],
-            "files": [],
-        }
-        rels = redetect_relationships(baseline, {"deleted"}, Path("/tmp/fake"))
-        # The relationship involving "deleted" is removed
-        assert len(rels) == 0
-
-
-# ---------------------------------------------------------------------------
-# K.3: _resolve_import_from_baseline Tests
-# ---------------------------------------------------------------------------
-
-
-class TestResolveImportFromBaseline:
-    """Tests for import resolution against baseline data."""
-
-    def test_relative_import(self):
-        comp_paths = [("lib", "lib"), ("", "root")]
-        comp_names = {"lib": "lib", "root": "root"}
-        result = _resolve_import_from_baseline(
-            "../lib/utils", "app/main.ts", comp_paths, comp_names
-        )
-        assert result == "lib"
-
-    def test_absolute_import_by_name(self):
-        comp_paths = [("my-lib", "my-lib"), ("", "root")]
-        comp_names = {"mylib": "my-lib"}
-        result = _resolve_import_from_baseline(
-            "my-lib", "app/main.ts", comp_paths, comp_names
-        )
-        assert result == "my-lib"
-
-    def test_absolute_import_by_dirname(self):
-        comp_paths = [("packages/utils", "utils"), ("", "root")]
-        comp_names = {}
-        result = _resolve_import_from_baseline(
-            "utils", "app/main.ts", comp_paths, comp_names
-        )
-        assert result == "utils"
-
-    def test_no_match_returns_none(self):
-        comp_paths = [("", "root")]
-        comp_names = {}
-        result = _resolve_import_from_baseline(
-            "unknown-package", "app/main.ts", comp_paths, comp_names
-        )
-        # Falls through to root (empty path match)
-        # or None if we want strict matching
-        assert result is not None or result is None  # either is acceptable
 
 
 # ---------------------------------------------------------------------------
@@ -1340,35 +1036,150 @@ class TestScopedScanner:
         # Files should match
         assert baseline_lib["files"] == scoped_lib["files"]
 
-    def test_deprecated_functions_emit_warnings(self, tmp_path):
-        """Deprecated standalone functions should emit DeprecationWarning."""
-        baseline = {
-            "components": [
-                {"id": "root", "path": "", "children": [],
-                 "files": [], "metrics": {"files": 0, "lines": 0}}
-            ],
+
+# ---------------------------------------------------------------------------
+# TestUnmappedChangedFileFallback (F-CRIT-8)
+# ---------------------------------------------------------------------------
+
+
+def _git(repo, *args):
+    subprocess.run(
+        ["git", *args], cwd=str(repo), capture_output=True, check=True,
+    )
+
+
+def _head_sha(repo):
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=str(repo), capture_output=True, text=True, check=True,
+    )
+    return result.stdout.strip()
+
+
+def _flatten_output_files(output):
+    """Collect every file path referenced by the analysis output."""
+    paths = {f.get("path") for f in output.get("files", [])}
+
+    def _walk(components):
+        for comp in components:
+            paths.update(comp.get("files", []))
+            _walk(comp.get("children", []))
+
+    _walk(output.get("components", []))
+    return paths
+
+
+class TestUnmappedChangedFileFallback:
+    """A changed file that maps to no component must not be silently dropped.
+
+    Regression tests for F-CRIT-8. The incremental path only rescans components
+    reachable from the change set, so a new root-level file or a file in a
+    brand-new directory maps to zero components and used to vanish from output.
+    The fix falls back to a full rescan when any changed file is unmapped.
+    """
+
+    # A baseline whose file count is high enough that a single changed file is
+    # well under the 50% full-rescan threshold, so the ONLY thing that can
+    # trigger a full rescan in these tests is the unmapped-file fallback.
+    def _baseline(self):
+        return {
+            "name": "test-project",
+            "analyzer_version": __version__,
+            "components": [{
+                "id": "root", "name": "test-project", "type": "project",
+                "path": "", "files": ["src/index.ts"],
+                "children": [
+                    {"id": "src", "name": "src", "type": "module", "path": "src",
+                     "files": ["src/index.ts"], "children": [],
+                     "metrics": {"files": 1, "lines": 3}},
+                ],
+                "metrics": {"files": 1, "lines": 3},
+            }],
             "relationships": [],
-            "files": [],
+            "files": [
+                {"path": "src/index.ts", "language": "typescript", "lines": 3},
+                {"path": "src/a.ts", "language": "typescript", "lines": 3},
+                {"path": "src/b.ts", "language": "typescript", "lines": 3},
+                {"path": "src/c.ts", "language": "typescript", "lines": 3},
+            ],
             "symbols": [],
-            "stats": {"total_files": 0, "total_components": 1},
+            "stats": {"total_files": 4, "total_components": 2},
         }
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            rescan_component("root", baseline, tmp_path)
-            assert any("rescan_component" in str(x.message) for x in w)
-            assert any(issubclass(x.category, DeprecationWarning) for x in w)
+    def _write_baseline(self, repo):
+        # Ignore the baseline cache and commit that first, so it never appears
+        # in the diff (mirrors real usage where .arch-baseline/ is gitignored).
+        (repo / ".gitignore").write_text(".arch-baseline/\n")
+        _git(repo, "add", ".gitignore")
+        _git(repo, "commit", "-m", "Ignore baseline cache")
+        baseline_path = repo / ".arch-baseline" / "architecture.json"
+        baseline_path.parent.mkdir(parents=True, exist_ok=True)
+        baseline_path.write_text(json.dumps(self._baseline()))
+        return baseline_path
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            merge_component_into_baseline(baseline, "nonexistent", {})
-            assert any(
-                "merge_component_into_baseline" in str(x.message) for x in w
-            )
+    def test_new_root_level_file_included_via_full_rescan(self, temp_git_repo):
+        baseline_path = self._write_baseline(temp_git_repo)
+        base_sha = _head_sha(temp_git_repo)
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            redetect_relationships(baseline, set(), tmp_path)
-            assert any(
-                "redetect_relationships" in str(x.message) for x in w
-            )
+        # A new file at the repository root maps to no component under the
+        # incremental directory walk (it has no parent directory to match).
+        (temp_git_repo / "config.ts").write_text("export const flag = true;\n")
+        _git(temp_git_repo, "add", "-A")
+        _git(temp_git_repo, "commit", "-m", "Add root-level config")
+
+        analyzer = IncrementalAnalyzer(
+            temp_git_repo, base_sha=base_sha, head_sha="HEAD",
+            baseline_path=baseline_path,
+        )
+        output = analyzer.run()
+
+        incr = output["incremental"]
+        # Falls back to a full rescan with a stated reason.
+        assert incr["full_rescan"] is True
+        assert "no known component" in incr["rescan_reason"]
+        # The new root-level file appears in the merged output.
+        assert "config.ts" in _flatten_output_files(output)
+
+    def test_new_directory_included_via_full_rescan(self, temp_git_repo):
+        baseline_path = self._write_baseline(temp_git_repo)
+        base_sha = _head_sha(temp_git_repo)
+
+        # A file in a brand-new directory has no matching component path.
+        widgets = temp_git_repo / "widgets"
+        widgets.mkdir()
+        (widgets / "button.ts").write_text("export const Button = 1;\n")
+        _git(temp_git_repo, "add", "-A")
+        _git(temp_git_repo, "commit", "-m", "Add widgets directory")
+
+        analyzer = IncrementalAnalyzer(
+            temp_git_repo, base_sha=base_sha, head_sha="HEAD",
+            baseline_path=baseline_path,
+        )
+        output = analyzer.run()
+
+        incr = output["incremental"]
+        assert incr["full_rescan"] is True
+        assert "no known component" in incr["rescan_reason"]
+        assert "widgets/button.ts" in _flatten_output_files(output)
+
+    def test_change_to_known_component_stays_incremental(self, temp_git_repo):
+        """A change under an existing component must NOT force a full rescan."""
+        baseline_path = self._write_baseline(temp_git_repo)
+        base_sha = _head_sha(temp_git_repo)
+
+        # Modify a file inside the existing src/ component.
+        (temp_git_repo / "src" / "index.ts").write_text(
+            "export function main(): void {\n"
+            '  console.log("changed");\n'
+            "}\n"
+        )
+        _git(temp_git_repo, "add", "-A")
+        _git(temp_git_repo, "commit", "-m", "Edit src/index.ts")
+
+        analyzer = IncrementalAnalyzer(
+            temp_git_repo, base_sha=base_sha, head_sha="HEAD",
+            baseline_path=baseline_path,
+        )
+        output = analyzer.run()
+
+        assert output["incremental"]["full_rescan"] is False

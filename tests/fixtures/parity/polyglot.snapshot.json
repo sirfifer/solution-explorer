@@ -1,0 +1,1074 @@
+{
+  "components": [
+    {
+      "actions": [],
+      "children": [
+        {
+          "actions": [],
+          "children": [],
+          "config_files": [],
+          "description": null,
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [],
+            "purpose": null,
+            "readme": null,
+            "tech_stack": [
+              "Go"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "services/worker/main.go"
+          ],
+          "framework": null,
+          "id": "services/worker",
+          "language": "go",
+          "metrics": {
+            "files": 1,
+            "languages": {
+              "go": 21
+            },
+            "lines": 21,
+            "size_bytes": 389,
+            "symbols": 3
+          },
+          "name": "worker",
+          "path": "services/worker",
+          "port": null,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 1,
+            "test_frameworks": [],
+            "test_lines": 21,
+            "unit_tests": 0
+          },
+          "type": "module"
+        },
+        {
+          "actions": [],
+          "children": [],
+          "config_files": [
+            {
+              "path": "libs/core/Cargo.toml",
+              "type": "Cargo.toml"
+            }
+          ],
+          "description": null,
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [],
+            "purpose": "Shared core library for the polyglot fixture",
+            "readme": null,
+            "tech_stack": [
+              "Rust"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "libs/core/Cargo.toml",
+            "libs/core/src/lib.rs"
+          ],
+          "framework": null,
+          "id": "libs/core",
+          "language": "rust",
+          "metrics": {
+            "files": 2,
+            "languages": {
+              "rust": 24,
+              "toml": 6
+            },
+            "lines": 30,
+            "size_bytes": 588,
+            "symbols": 3
+          },
+          "name": "polyglot-core",
+          "path": "libs/core",
+          "port": null,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 2,
+            "test_frameworks": [],
+            "test_lines": 30,
+            "unit_tests": 0
+          },
+          "type": "package"
+        },
+        {
+          "actions": [],
+          "children": [],
+          "config_files": [
+            {
+              "path": "libs/rubylib/Gemfile",
+              "type": "Gemfile"
+            }
+          ],
+          "description": null,
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [],
+            "purpose": null,
+            "readme": null,
+            "tech_stack": [
+              "Ruby"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "libs/rubylib/lib/parser.rb"
+          ],
+          "framework": null,
+          "id": "libs/rubylib",
+          "language": "ruby",
+          "metrics": {
+            "files": 1,
+            "languages": {
+              "ruby": 21
+            },
+            "lines": 21,
+            "size_bytes": 383,
+            "symbols": 5
+          },
+          "name": "rubylib",
+          "path": "libs/rubylib",
+          "port": null,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 1,
+            "test_frameworks": [],
+            "test_lines": 21,
+            "unit_tests": 0
+          },
+          "type": "package"
+        },
+        {
+          "actions": [],
+          "children": [],
+          "config_files": [
+            {
+              "path": "services/api/pyproject.toml",
+              "type": "pyproject.toml"
+            }
+          ],
+          "description": null,
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [
+              {
+                "method": "GET",
+                "path": "/users/{user_id}"
+              }
+            ],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [],
+            "purpose": "HTTP API service for the polyglot fixture",
+            "readme": null,
+            "tech_stack": [
+              "FastAPI",
+              "Python"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "services/api/api/server.py",
+            "services/api/pyproject.toml"
+          ],
+          "framework": "FastAPI",
+          "id": "services/api",
+          "language": "python",
+          "metrics": {
+            "files": 2,
+            "languages": {
+              "python": 43,
+              "toml": 6
+            },
+            "lines": 49,
+            "size_bytes": 1145,
+            "symbols": 3
+          },
+          "name": "polyglot-api",
+          "path": "services/api",
+          "port": 8000,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 2,
+            "test_frameworks": [],
+            "test_lines": 49,
+            "unit_tests": 0
+          },
+          "type": "api-server"
+        },
+        {
+          "actions": [],
+          "children": [
+            {
+              "actions": [],
+              "children": [],
+              "config_files": [],
+              "description": null,
+              "docs": {
+                "api_docs": null,
+                "api_endpoints": [],
+                "architecture_notes": null,
+                "changelog": null,
+                "claude_md": null,
+                "env_vars": [],
+                "key_decisions": [],
+                "patterns": [],
+                "purpose": null,
+                "readme": null,
+                "tech_stack": [
+                  "Typescript"
+                ]
+              },
+              "entry_points": [],
+              "external_services": [],
+              "files": [
+                "services/web/src/client.ts",
+                "services/web/src/format.js"
+              ],
+              "framework": null,
+              "id": "services/web/src",
+              "language": "typescript",
+              "metrics": {
+                "files": 2,
+                "languages": {
+                  "javascript": 18,
+                  "typescript": 26
+                },
+                "lines": 44,
+                "size_bytes": 800,
+                "symbols": 7
+              },
+              "name": "src",
+              "path": "services/web/src",
+              "port": null,
+              "testing": {
+                "coverage_percent": null,
+                "coverage_source": null,
+                "e2e_tests": 0,
+                "has_ci_tests": true,
+                "integration_tests": 0,
+                "test_files": 2,
+                "test_frameworks": [],
+                "test_lines": 44,
+                "unit_tests": 0
+              },
+              "type": "module"
+            }
+          ],
+          "config_files": [
+            {
+              "path": "services/web/package.json",
+              "type": "package.json"
+            }
+          ],
+          "description": "Web client for the polyglot fixture",
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [],
+            "purpose": "Web client for the polyglot fixture",
+            "readme": null,
+            "tech_stack": [
+              "Typescript"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "services/web/package.json"
+          ],
+          "framework": null,
+          "id": "services/web",
+          "language": "typescript",
+          "metrics": {
+            "files": 1,
+            "languages": {
+              "json": 9
+            },
+            "lines": 9,
+            "size_bytes": 155,
+            "symbols": 0
+          },
+          "name": "polyglot-web",
+          "path": "services/web",
+          "port": null,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 1,
+            "test_frameworks": [],
+            "test_lines": 9,
+            "unit_tests": 0
+          },
+          "type": "content"
+        },
+        {
+          "actions": [
+            {
+              "action_type": "button",
+              "file": "apps/ios/Sources/App/ContentView.swift",
+              "handler": null,
+              "label": "Increment",
+              "line": 10,
+              "target_view": null
+            }
+          ],
+          "children": [],
+          "config_files": [],
+          "description": null,
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [],
+            "purpose": null,
+            "readme": null,
+            "tech_stack": [
+              "Swift",
+              "SwiftUI"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "apps/ios/Package.swift",
+            "apps/ios/Sources/App/ContentView.swift"
+          ],
+          "framework": "SwiftUI",
+          "id": "apps/ios",
+          "language": "swift",
+          "metrics": {
+            "files": 2,
+            "languages": {
+              "swift": 40
+            },
+            "lines": 40,
+            "size_bytes": 664,
+            "symbols": 4
+          },
+          "name": "ios",
+          "path": "apps/ios",
+          "port": null,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 2,
+            "test_frameworks": [],
+            "test_lines": 40,
+            "unit_tests": 0
+          },
+          "type": "package"
+        }
+      ],
+      "config_files": [
+        {
+          "path": "docker-compose.yml",
+          "ports": [
+            {
+              "container": 5432,
+              "host": 5432,
+              "service": "db"
+            },
+            {
+              "container": 6379,
+              "host": 6379,
+              "service": "cache"
+            },
+            {
+              "container": 8000,
+              "host": 8000,
+              "service": "api"
+            }
+          ],
+          "services": [
+            "api",
+            "cache",
+            "db"
+          ],
+          "type": "docker-compose"
+        }
+      ],
+      "description": "Services: api, db, cache",
+      "docs": {
+        "api_docs": null,
+        "api_endpoints": [],
+        "architecture_notes": null,
+        "changelog": null,
+        "claude_md": null,
+        "env_vars": [],
+        "key_decisions": [],
+        "patterns": [],
+        "purpose": null,
+        "readme": "# polyglot fixture\n\nA tiny multi-language solution used by the analyzer test suite. It exists to\nexercise the current engine across every tree-sitter language and the main\ncomponent and relationship types, and to anchor the P4-1 parity snapshot that\nthe P4-7 cutover diffs against.\n\nLayout:\n\n- `services/api` Python service (pyproject.toml), binds port 8000, uses a\n  Postgres driver.\n- `services/web` TypeScript + JavaScript web client (package.json), calls the\n  API over HTTP.\n- `services/worker` Go module (go.mod).\n- `libs/core` Rust library (Cargo.toml).\n- `libs/rubylib` Ruby package (Gemfile).\n- `apps/ios` Swift package (Package.swift).\n- `docker-compose.yml` infrastructure: db and cache services.\n\nKeep it tiny. It is committed as real files and must parse fast in CI.\n",
+        "tech_stack": [
+          "Markdown"
+        ]
+      },
+      "entry_points": [],
+      "external_services": [],
+      "files": [
+        "README.md",
+        "docker-compose.yml"
+      ],
+      "framework": null,
+      "id": "root",
+      "language": "markdown",
+      "metrics": {
+        "files": 2,
+        "languages": {
+          "markdown": 21,
+          "yaml": 20
+        },
+        "lines": 41,
+        "size_bytes": 1090,
+        "symbols": 0
+      },
+      "name": "polyglot",
+      "path": "",
+      "port": 8000,
+      "testing": {
+        "coverage_percent": null,
+        "coverage_source": null,
+        "e2e_tests": 0,
+        "has_ci_tests": true,
+        "integration_tests": 0,
+        "test_files": 2,
+        "test_frameworks": [],
+        "test_lines": 41,
+        "unit_tests": 0
+      },
+      "type": "infrastructure"
+    }
+  ],
+  "default_branch": "main",
+  "description": "A tiny multi-language solution used by the analyzer test suite. It exists to",
+  "files": [
+    {
+      "exports": [],
+      "imports": [
+        "PackageDescription"
+      ],
+      "language": "swift",
+      "lines": 10,
+      "module_doc": "swift-tools-version:5.9",
+      "path": "apps/ios/Package.swift",
+      "size_bytes": 154,
+      "symbols": []
+    },
+    {
+      "exports": [],
+      "imports": [
+        "SwiftUI"
+      ],
+      "language": "swift",
+      "lines": 30,
+      "module_doc": "The root view of the polyglot iOS app.",
+      "path": "apps/ios/Sources/App/ContentView.swift",
+      "size_bytes": 510,
+      "symbols": [
+        "apps/ios/Sources/App/ContentView.swift:ContentView:4",
+        "apps/ios/Sources/App/ContentView.swift:Counter:23",
+        "apps/ios/Sources/App/ContentView.swift:doubled:26",
+        "apps/ios/Sources/App/ContentView.swift:increment:17"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [
+        "fastapi",
+        "os",
+        "psycopg2"
+      ],
+      "language": "python",
+      "lines": 43,
+      "module_doc": "API server for the polyglot fixture.\nBinds a port and talks to Postgres so the scanner emits http and database\nrelationships.",
+      "path": "services/api/api/server.py",
+      "size_bytes": 998,
+      "symbols": [
+        "services/api/api/server.py:UserRepository:18",
+        "services/api/api/server.py:read_user:32",
+        "services/api/api/server.py:serve:39"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [
+        "fmt"
+      ],
+      "language": "go",
+      "lines": 21,
+      "module_doc": "Package main is a background worker for the polyglot fixture.",
+      "path": "services/worker/main.go",
+      "size_bytes": 389,
+      "symbols": [
+        "services/worker/main.go:Job:7",
+        "services/worker/main.go:Run:13",
+        "services/worker/main.go:main:17"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "javascript",
+      "lines": 18,
+      "module_doc": "Plain JavaScript helper to exercise the javascript parser.",
+      "path": "services/web/src/format.js",
+      "size_bytes": 315,
+      "symbols": [
+        "services/web/src/format.js:DEFAULT_GREETING:7",
+        "services/web/src/format.js:Formatter:9",
+        "services/web/src/format.js:formatUser:3"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "json",
+      "lines": 9,
+      "module_doc": null,
+      "path": "services/web/package.json",
+      "size_bytes": 155,
+      "symbols": []
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "markdown",
+      "lines": 21,
+      "module_doc": null,
+      "path": "README.md",
+      "size_bytes": 780,
+      "symbols": []
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "ruby",
+      "lines": 21,
+      "module_doc": null,
+      "path": "libs/rubylib/lib/parser.rb",
+      "size_bytes": 383,
+      "symbols": [
+        "libs/rubylib/lib/parser.rb:Parser:5",
+        "libs/rubylib/lib/parser.rb:RubyLib:3",
+        "libs/rubylib/lib/parser.rb:initialize:6",
+        "libs/rubylib/lib/parser.rb:parse:11",
+        "libs/rubylib/lib/parser.rb:self.version:17"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "rust",
+      "lines": 24,
+      "module_doc": "Core library for the polyglot fixture.",
+      "path": "libs/core/src/lib.rs",
+      "size_bytes": 459,
+      "symbols": [
+        "libs/core/src/lib.rs:Identifier:4",
+        "libs/core/src/lib.rs:double:21",
+        "libs/core/src/lib.rs:impl_Identifier:8"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "toml",
+      "lines": 6,
+      "module_doc": null,
+      "path": "libs/core/Cargo.toml",
+      "size_bytes": 129,
+      "symbols": []
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "toml",
+      "lines": 6,
+      "module_doc": null,
+      "path": "services/api/pyproject.toml",
+      "size_bytes": 147,
+      "symbols": []
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "typescript",
+      "lines": 26,
+      "module_doc": "Web client that calls the API service over HTTP.",
+      "path": "services/web/src/client.ts",
+      "size_bytes": 485,
+      "symbols": [
+        "services/web/src/client.ts:API_BASE:8",
+        "services/web/src/client.ts:ApiClient:10",
+        "services/web/src/client.ts:User:3",
+        "services/web/src/client.ts:createClient:23"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "yaml",
+      "lines": 20,
+      "module_doc": null,
+      "path": "docker-compose.yml",
+      "size_bytes": 310,
+      "symbols": []
+    }
+  ],
+  "name": "polyglot",
+  "relationships": [
+    {
+      "api_style": "rest",
+      "authentication": null,
+      "bidirectional": true,
+      "connection_pattern": null,
+      "data_format": "json",
+      "endpoints": [],
+      "label": "port 8000",
+      "middleware": [],
+      "port": 8000,
+      "protocol": "HTTP",
+      "queue_name": null,
+      "source": "services/web/src",
+      "target": "services/api",
+      "transport": null,
+      "type": "http"
+    }
+  ],
+  "repositories": [],
+  "repository": null,
+  "stats": {
+    "languages": {
+      "go": 21,
+      "javascript": 18,
+      "json": 9,
+      "markdown": 21,
+      "python": 43,
+      "ruby": 21,
+      "rust": 24,
+      "swift": 40,
+      "toml": 12,
+      "typescript": 26,
+      "yaml": 20
+    },
+    "total_components": 8,
+    "total_files": 13,
+    "total_lines": 255,
+    "total_relationships": 1,
+    "total_size_bytes": 5214,
+    "total_symbols": 25,
+    "total_symbols_detected": 25
+  },
+  "symbols": [
+    {
+      "annotations": [],
+      "code_preview": "    def initialize(separator = \"=\")\n      @separator = separator\n    end\n\n    # Parse a single line into a pair.\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 8,
+      "file": "libs/rubylib/lib/parser.rb",
+      "id": "libs/rubylib/lib/parser.rb:initialize:6",
+      "kind": "function",
+      "line": 6,
+      "name": "initialize",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    def parse(line)\n      key, value = line.split(@separator, 2)\n      { key: key, value: value }\n    end\n  end\n    ...",
+      "dependencies": [],
+      "docstring": "Parse a single line into a pair.",
+      "end_line": 14,
+      "file": "libs/rubylib/lib/parser.rb",
+      "id": "libs/rubylib/lib/parser.rb:parse:11",
+      "kind": "function",
+      "line": 11,
+      "name": "parse",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    func doubled() -> Int {\n        value * 2\n    }\n}\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 28,
+      "file": "apps/ios/Sources/App/ContentView.swift",
+      "id": "apps/ios/Sources/App/ContentView.swift:doubled:26",
+      "kind": "function",
+      "line": 26,
+      "name": "doubled",
+      "parent": null,
+      "visibility": "internal"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    func increment() {\n        count += 1\n    }\n}\n",
+      "dependencies": [],
+      "docstring": "Increment the counter.",
+      "end_line": 19,
+      "file": "apps/ios/Sources/App/ContentView.swift",
+      "id": "apps/ios/Sources/App/ContentView.swift:increment:17",
+      "kind": "function",
+      "line": 17,
+      "name": "increment",
+      "parent": null,
+      "visibility": "internal"
+    },
+    {
+      "annotations": [],
+      "code_preview": "  class Parser\n    def initialize(separator = \"=\")\n      @separator = separator\n    end\n\n    ...",
+      "dependencies": [],
+      "docstring": "Parses simple key=value strings.",
+      "end_line": 15,
+      "file": "libs/rubylib/lib/parser.rb",
+      "id": "libs/rubylib/lib/parser.rb:Parser:5",
+      "kind": "class",
+      "line": 5,
+      "name": "Parser",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "  def self.version\n    \"0.1.0\"\n  end\nend\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 19,
+      "file": "libs/rubylib/lib/parser.rb",
+      "id": "libs/rubylib/lib/parser.rb:self.version:17",
+      "kind": "function",
+      "line": 17,
+      "name": "self.version",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "@app.get(\"/users/{user_id}\")\ndef read_user(user_id: int) -> dict:\n    \"\"\"HTTP endpoint returning a user.\"\"\"\n    repo = UserRepository(DATABASE_URL)\n    return repo.get_user(user_id)\n    ...",
+      "dependencies": [],
+      "docstring": "HTTP endpoint returning a user.",
+      "end_line": 36,
+      "file": "services/api/api/server.py",
+      "id": "services/api/api/server.py:read_user:32",
+      "kind": "function",
+      "line": 32,
+      "name": "read_user",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "class UserRepository:\n    \"\"\"Reads and writes user rows in Postgres.\"\"\"\n\n    def __init__(self, dsn: str) -> None:\n        self.conn = psycopg2.connect(dsn)\n    ...",
+      "dependencies": [],
+      "docstring": "Reads and writes user rows in Postgres.",
+      "end_line": 29,
+      "file": "services/api/api/server.py",
+      "id": "services/api/api/server.py:UserRepository:18",
+      "kind": "class",
+      "line": 18,
+      "name": "UserRepository",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "const API_BASE = \"http://api:8000\";\n\nexport class ApiClient {\n  private base: string;\n\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 8,
+      "file": "services/web/src/client.ts",
+      "id": "services/web/src/client.ts:API_BASE:8",
+      "kind": "function",
+      "line": 8,
+      "name": "API_BASE",
+      "parent": null,
+      "visibility": "internal"
+    },
+    {
+      "annotations": [],
+      "code_preview": "def serve() -> None:\n    import uvicorn\n\n    uvicorn.run(app, host=\"0.0.0.0\", port=PORT)\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 42,
+      "file": "services/api/api/server.py",
+      "id": "services/api/api/server.py:serve:39",
+      "kind": "function",
+      "line": 39,
+      "name": "serve",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "export class ApiClient {\n  private base: string;\n\n  constructor(base: string = API_BASE) {\n    this.base = base;\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 21,
+      "file": "services/web/src/client.ts",
+      "id": "services/web/src/client.ts:ApiClient:10",
+      "kind": "class",
+      "line": 10,
+      "name": "ApiClient",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "export class Formatter {\n  constructor(prefix) {\n    this.prefix = prefix;\n  }\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 17,
+      "file": "services/web/src/format.js",
+      "id": "services/web/src/format.js:Formatter:9",
+      "kind": "class",
+      "line": 9,
+      "name": "Formatter",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "export const DEFAULT_GREETING = \"hello\";\n\nexport class Formatter {\n  constructor(prefix) {\n    this.prefix = prefix;\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 7,
+      "file": "services/web/src/format.js",
+      "id": "services/web/src/format.js:DEFAULT_GREETING:7",
+      "kind": "function",
+      "line": 7,
+      "name": "DEFAULT_GREETING",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "export function createClient(): ApiClient {\n  return new ApiClient();\n}\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 25,
+      "file": "services/web/src/client.ts",
+      "id": "services/web/src/client.ts:createClient:23",
+      "kind": "function",
+      "line": 23,
+      "name": "createClient",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "export function formatUser(user) {\n  return `${user.name} (#${user.id})`;\n}\n\nexport const DEFAULT_GREETING = \"hello\";\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 5,
+      "file": "services/web/src/format.js",
+      "id": "services/web/src/format.js:formatUser:3",
+      "kind": "function",
+      "line": 3,
+      "name": "formatUser",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "export interface User {\n  id: number;\n  name: string;\n}\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 6,
+      "file": "services/web/src/client.ts",
+      "id": "services/web/src/client.ts:User:3",
+      "kind": "interface",
+      "line": 3,
+      "name": "User",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "func (j Job) Run() string {\n\treturn fmt.Sprintf(\"ran job %d: %s\", j.ID, j.Name)\n}\n\nfunc main() {\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 15,
+      "file": "services/worker/main.go",
+      "id": "services/worker/main.go:Run:13",
+      "kind": "function",
+      "line": 13,
+      "name": "Run",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "func main() {\n\tjob := Job{ID: 1, Name: \"cleanup\"}\n\tfmt.Println(job.Run())\n}\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 20,
+      "file": "services/worker/main.go",
+      "id": "services/worker/main.go:main:17",
+      "kind": "function",
+      "line": 17,
+      "name": "main",
+      "parent": null,
+      "visibility": "private"
+    },
+    {
+      "annotations": [],
+      "code_preview": "impl Identifier {\n    /// Create a new identifier.\n    pub fn new(value: u64) -> Self {\n        Identifier { value }\n    }",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 18,
+      "file": "libs/core/src/lib.rs",
+      "id": "libs/core/src/lib.rs:impl_Identifier:8",
+      "kind": "impl",
+      "line": 8,
+      "name": "impl Identifier",
+      "parent": null,
+      "visibility": "internal"
+    },
+    {
+      "annotations": [],
+      "code_preview": "module RubyLib\n  # Parses simple key=value strings.\n  class Parser\n    def initialize(separator = \"=\")\n      @separator = separator\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 20,
+      "file": "libs/rubylib/lib/parser.rb",
+      "id": "libs/rubylib/lib/parser.rb:RubyLib:3",
+      "kind": "module",
+      "line": 3,
+      "name": "RubyLib",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "pub fn double(x: u64) -> u64 {\n    x * 2\n}\n",
+      "dependencies": [],
+      "docstring": "Double an input value.",
+      "end_line": 23,
+      "file": "libs/core/src/lib.rs",
+      "id": "libs/core/src/lib.rs:double:21",
+      "kind": "function",
+      "line": 21,
+      "name": "double",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "pub struct Identifier {\n    pub value: u64,\n}\n\nimpl Identifier {\n    ...",
+      "dependencies": [],
+      "docstring": "A parsed identifier shared across services.",
+      "end_line": 6,
+      "file": "libs/core/src/lib.rs",
+      "id": "libs/core/src/lib.rs:Identifier:4",
+      "kind": "struct",
+      "line": 4,
+      "name": "Identifier",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "struct ContentView: View {\n    @State private var count: Int = 0\n\n    var body: some View {\n        VStack {\n    ...",
+      "dependencies": [],
+      "docstring": "The root view of the polyglot iOS app.",
+      "end_line": 20,
+      "file": "apps/ios/Sources/App/ContentView.swift",
+      "id": "apps/ios/Sources/App/ContentView.swift:ContentView:4",
+      "kind": "struct",
+      "line": 4,
+      "name": "ContentView",
+      "parent": null,
+      "visibility": "internal"
+    },
+    {
+      "annotations": [],
+      "code_preview": "struct Counter {\n    var value: Int\n\n    func doubled() -> Int {\n        value * 2\n    ...",
+      "dependencies": [],
+      "docstring": "A small value type used by the app.",
+      "end_line": 29,
+      "file": "apps/ios/Sources/App/ContentView.swift",
+      "id": "apps/ios/Sources/App/ContentView.swift:Counter:23",
+      "kind": "struct",
+      "line": 23,
+      "name": "Counter",
+      "parent": null,
+      "visibility": "internal"
+    },
+    {
+      "annotations": [],
+      "code_preview": "type Job struct {\n\tID   int\n\tName string\n}\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 10,
+      "file": "services/worker/main.go",
+      "id": "services/worker/main.go:Job:7",
+      "kind": "struct",
+      "line": 7,
+      "name": "Job",
+      "parent": null,
+      "visibility": "public"
+    }
+  ]
+}

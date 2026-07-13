@@ -565,3 +565,53 @@ class TestRegistry:
         from analyzer.parsers import PARSERS
         from analyzer.parsers.tree_sitter_base import TreeSitterParser
         assert isinstance(PARSERS["swift"], TreeSitterParser)
+
+
+# ===================================================================
+# F-AN-7: tree-sitter fallback leaves a debug trail
+# ===================================================================
+
+
+def _boom_symbol_parser():
+    from analyzer.parsers.python_lang import PythonParser
+    from analyzer.parsers.tree_sitter_base import TreeSitterParser
+
+    class _BoomParser(TreeSitterParser):
+        def __init__(self):
+            self._ts_available = True
+            self._regex_parser = PythonParser()
+
+        def _extract_symbols_ts(self, content, file_path):
+            raise ValueError("boom")
+
+        def _extract_imports_ts(self, content):
+            raise RuntimeError("kaboom")
+
+    return _BoomParser()
+
+
+def test_ts_symbol_fallback_logs_file_and_exception(caplog):
+    """A failed tree-sitter symbol extraction logs the file and exception type."""
+    import logging
+
+    parser = _boom_symbol_parser()
+    with caplog.at_level(logging.DEBUG, logger="analyzer.parsers.tree_sitter_base"):
+        result = parser.extract_symbols("def f():\n    pass\n", "mymodule.py")
+
+    # Fell back to the regex parser (which finds the function).
+    assert any(getattr(s, "name", None) == "f" for s in result)
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("mymodule.py" in m and "ValueError" in m for m in messages)
+
+
+def test_ts_import_fallback_logs_exception(caplog):
+    """A failed tree-sitter import extraction logs the exception type."""
+    import logging
+
+    parser = _boom_symbol_parser()
+    with caplog.at_level(logging.DEBUG, logger="analyzer.parsers.tree_sitter_base"):
+        result = parser.extract_imports("import os\n")
+
+    assert "os" in result  # regex fallback still worked
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("RuntimeError" in m for m in messages)

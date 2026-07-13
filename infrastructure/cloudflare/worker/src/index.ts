@@ -37,10 +37,35 @@ function nowISO(): string {
   return new Date().toISOString();
 }
 
-function validateBearerToken(request: Request, expected: string): boolean {
+const tokenEncoder = new TextEncoder();
+
+/**
+ * Constant-time comparison of two secret strings. Both sides are hashed to a
+ * fixed-length SHA-256 digest first, so neither the byte-by-byte comparison nor
+ * the length of the presented token leaks timing information about the expected
+ * token. Equal digests imply equal inputs (collision resistance).
+ */
+async function timingSafeEqualStrings(a: string, b: string): Promise<boolean> {
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest("SHA-256", tokenEncoder.encode(a)),
+    crypto.subtle.digest("SHA-256", tokenEncoder.encode(b)),
+  ]);
+  const va = new Uint8Array(ha);
+  const vb = new Uint8Array(hb);
+  let result = 0;
+  for (let i = 0; i < va.length; i++) {
+    result |= va[i] ^ vb[i];
+  }
+  return result === 0;
+}
+
+export async function validateBearerToken(
+  request: Request,
+  expected: string,
+): Promise<boolean> {
   const auth = request.headers.get("Authorization");
   if (!auth?.startsWith("Bearer ")) return false;
-  return auth.slice(7) === expected;
+  return timingSafeEqualStrings(auth.slice(7), expected);
 }
 
 // --- Resource tracking ---
@@ -111,7 +136,7 @@ async function checkResourceLimits(
 // --- Route handlers ---
 
 async function handleIngest(request: Request, env: Env): Promise<Response> {
-  if (!validateBearerToken(request, env.INGEST_TOKEN)) {
+  if (!(await validateBearerToken(request, env.INGEST_TOKEN))) {
     return jsonResponse(401, { error: "Unauthorized" });
   }
 
@@ -486,7 +511,7 @@ async function handlePostSettings(
   projectId: string,
   env: Env,
 ): Promise<Response> {
-  if (!validateBearerToken(request, env.INGEST_TOKEN)) {
+  if (!(await validateBearerToken(request, env.INGEST_TOKEN))) {
     return jsonResponse(401, { error: "Unauthorized" });
   }
 

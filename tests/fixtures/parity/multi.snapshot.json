@@ -1,0 +1,339 @@
+{
+  "components": [
+    {
+      "children": [
+        {
+          "actions": [],
+          "children": [],
+          "config_files": [
+            {
+              "path": "package.json",
+              "type": "package.json"
+            }
+          ],
+          "description": "Frontend repo of the multi-repo fixture",
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [],
+            "purpose": "Frontend repo of the multi-repo fixture",
+            "readme": null,
+            "tech_stack": [
+              "Typescript"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "frontend/package.json",
+            "frontend/src/app.ts"
+          ],
+          "framework": null,
+          "id": "frontend/root",
+          "language": "typescript",
+          "metrics": {
+            "files": 2,
+            "languages": {
+              "json": 6,
+              "typescript": 10
+            },
+            "lines": 16,
+            "size_bytes": 313,
+            "symbols": 2
+          },
+          "name": "multi-frontend",
+          "path": "frontend/",
+          "port": null,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 2,
+            "test_frameworks": [],
+            "test_lines": 16,
+            "unit_tests": 0
+          },
+          "type": "package"
+        }
+      ],
+      "config_files": [],
+      "description": null,
+      "docs": {
+        "api_docs": null,
+        "api_endpoints": [],
+        "architecture_notes": null,
+        "changelog": null,
+        "claude_md": null,
+        "env_vars": [],
+        "key_decisions": [],
+        "patterns": [],
+        "purpose": null,
+        "readme": null,
+        "tech_stack": []
+      },
+      "entry_points": [],
+      "files": [],
+      "framework": null,
+      "id": "repo:frontend",
+      "language": "typescript",
+      "metrics": {
+        "files": 2,
+        "languages": {
+          "json": 6,
+          "typescript": 10
+        },
+        "lines": 16,
+        "size_bytes": 313,
+        "symbols": 2
+      },
+      "name": "frontend",
+      "path": "@frontend",
+      "port": null,
+      "type": "repository"
+    },
+    {
+      "children": [
+        {
+          "actions": [],
+          "children": [],
+          "config_files": [
+            {
+              "path": "pyproject.toml",
+              "type": "pyproject.toml"
+            }
+          ],
+          "description": null,
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [
+              "Service Layer"
+            ],
+            "purpose": "Backend repo of the multi-repo fixture",
+            "readme": null,
+            "tech_stack": [
+              "Python"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "backend/app/service.py",
+            "backend/pyproject.toml"
+          ],
+          "framework": null,
+          "id": "backend/root",
+          "language": "python",
+          "metrics": {
+            "files": 2,
+            "languages": {
+              "python": 14,
+              "toml": 5
+            },
+            "lines": 19,
+            "size_bytes": 420,
+            "symbols": 2
+          },
+          "name": "multi-backend",
+          "path": "backend/",
+          "port": null,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 2,
+            "test_frameworks": [],
+            "test_lines": 19,
+            "unit_tests": 0
+          },
+          "type": "package"
+        }
+      ],
+      "config_files": [],
+      "description": null,
+      "docs": {
+        "api_docs": null,
+        "api_endpoints": [],
+        "architecture_notes": null,
+        "changelog": null,
+        "claude_md": null,
+        "env_vars": [],
+        "key_decisions": [],
+        "patterns": [],
+        "purpose": null,
+        "readme": null,
+        "tech_stack": []
+      },
+      "entry_points": [],
+      "files": [],
+      "framework": null,
+      "id": "repo:backend",
+      "language": "python",
+      "metrics": {
+        "files": 2,
+        "languages": {
+          "python": 14,
+          "toml": 5
+        },
+        "lines": 19,
+        "size_bytes": 420,
+        "symbols": 2
+      },
+      "name": "backend",
+      "path": "@backend",
+      "port": null,
+      "type": "repository"
+    }
+  ],
+  "default_branch": null,
+  "description": "Two small repos analyzed together to exercise multi-repo prefixing",
+  "files": [
+    {
+      "exports": [],
+      "imports": [],
+      "language": "json",
+      "lines": 6,
+      "module_doc": null,
+      "path": "frontend/package.json",
+      "size_bytes": 113,
+      "symbols": []
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "python",
+      "lines": 14,
+      "module_doc": "Backend service for the multi-repo fixture.",
+      "path": "backend/app/service.py",
+      "size_bytes": 314,
+      "symbols": [
+        "backend/app/service.py:Service:4",
+        "backend/app/service.py:build_service:12"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "toml",
+      "lines": 5,
+      "module_doc": null,
+      "path": "backend/pyproject.toml",
+      "size_bytes": 106,
+      "symbols": []
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "typescript",
+      "lines": 10,
+      "module_doc": "Frontend entry point for the multi-repo fixture.",
+      "path": "frontend/src/app.ts",
+      "size_bytes": 200,
+      "symbols": [
+        "frontend/src/app.ts:Config:3",
+        "frontend/src/app.ts:start:7"
+      ]
+    }
+  ],
+  "name": "Polyglot Multi-Repo Fixture",
+  "relationships": [],
+  "repositories": [
+    {
+      "default_branch": "main",
+      "name": "backend",
+      "repository": null
+    },
+    {
+      "default_branch": "main",
+      "name": "frontend",
+      "repository": null
+    }
+  ],
+  "repository": null,
+  "stats": {
+    "languages": {
+      "json": 6,
+      "python": 14,
+      "toml": 5,
+      "typescript": 10
+    },
+    "total_components": 4,
+    "total_files": 4,
+    "total_lines": 35,
+    "total_relationships": 0,
+    "total_size_bytes": 733,
+    "total_symbols": 4
+  },
+  "symbols": [
+    {
+      "annotations": [],
+      "code_preview": "class Service:\n    \"\"\"A trivial service with one operation.\"\"\"\n\n    def handle(self, request: dict) -> dict:\n        \"\"\"Handle a request and echo its payload.\"\"\"\n    ...",
+      "dependencies": [],
+      "docstring": "A trivial service with one operation.",
+      "end_line": 9,
+      "file": "backend/app/service.py",
+      "id": "backend/app/service.py:Service:4",
+      "kind": "class",
+      "line": 4,
+      "name": "Service",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "def build_service() -> Service:\n    return Service()\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 13,
+      "file": "backend/app/service.py",
+      "id": "backend/app/service.py:build_service:12",
+      "kind": "function",
+      "line": 12,
+      "name": "build_service",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "export function start(config: Config): void {\n  console.log(`starting against ${config.apiUrl}`);\n}\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 9,
+      "file": "frontend/src/app.ts",
+      "id": "frontend/src/app.ts:start:7",
+      "kind": "function",
+      "line": 7,
+      "name": "start",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "export interface Config {\n  apiUrl: string;\n}\n\nexport function start(config: Config): void {\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 5,
+      "file": "frontend/src/app.ts",
+      "id": "frontend/src/app.ts:Config:3",
+      "kind": "interface",
+      "line": 3,
+      "name": "Config",
+      "parent": null,
+      "visibility": "public"
+    }
+  ]
+}
