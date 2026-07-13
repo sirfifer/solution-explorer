@@ -842,3 +842,85 @@ class TestCLIIntegration:
             ids.append(comp["id"])
             ids.extend(TestCLIIntegration._collect_ids(comp.get("children", [])))
         return ids
+
+
+# ---------------------------------------------------------------------------
+# Truncation and skip warnings (F-AN-3 / P1-2)
+# ---------------------------------------------------------------------------
+
+
+def _multi_symbol_repo(tmp_path):
+    """Create a repo whose single source file defines several top-level symbols."""
+    (tmp_path / "package.json").write_text(json.dumps({"name": "trunc-test"}))
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "lib.ts").write_text(
+        "export function alpha(): number { return 1; }\n"
+        "export function bravo(): number { return 2; }\n"
+        "export function charlie(): number { return 3; }\n"
+        "export function delta(): number { return 4; }\n"
+        "export function echo(): number { return 5; }\n"
+        "export function foxtrot(): number { return 6; }\n"
+    )
+    return tmp_path
+
+
+class TestTruncationWarnings:
+    """Single-file mode must warn loudly when it drops data, and its stats
+    must agree with the emitted symbol array (F-AN-3)."""
+
+    def test_symbol_cap_warns_and_stats_match_array(self, monkeypatch, tmp_path, capsys):
+        _multi_symbol_repo(tmp_path)
+        out = tmp_path / "out.json"
+        monkeypatch.setattr("sys.argv", [
+            "analyze", str(tmp_path), "--max-symbols", "2", "-o", str(out),
+        ])
+        main()
+
+        captured = capsys.readouterr()
+        # A prominent stderr warning names the dropped count and the flag that lifts the cap.
+        assert "WARNING" in captured.err
+        assert "symbol cap" in captured.err
+        assert "--max-symbols" in captured.err
+
+        data = json.loads(out.read_text())
+        stats = data["stats"]
+        # total_symbols equals the emitted array length; no disagreement with the data.
+        assert stats["total_symbols"] == len(data["symbols"])
+        assert stats["total_symbols"] == 2
+        # The pre-truncation count is exposed separately and is larger.
+        assert stats["total_symbols_detected"] > stats["total_symbols"]
+
+    def test_no_warning_when_nothing_truncated(self, monkeypatch, tmp_path, capsys):
+        _multi_symbol_repo(tmp_path)
+        out = tmp_path / "out.json"
+        monkeypatch.setattr("sys.argv", [
+            "analyze", str(tmp_path), "--max-symbols", "0", "-o", str(out),
+        ])
+        main()
+
+        captured = capsys.readouterr()
+        assert "symbol cap" not in captured.err
+        data = json.loads(out.read_text())
+        stats = data["stats"]
+        assert stats["total_symbols"] == len(data["symbols"])
+        assert stats["total_symbols_detected"] == stats["total_symbols"]
+
+    def test_max_file_size_skip_warns(self, monkeypatch, tmp_path, capsys):
+        (tmp_path / "package.json").write_text(json.dumps({"name": "big-file-test"}))
+        src = tmp_path / "src"
+        src.mkdir()
+        # A valid but large source file that exceeds the tiny --max-file-size below.
+        big = "export function keep(): number { return 0; }\n" + ("// pad\n" * 5000)
+        (src / "big.ts").write_text(big)
+        out = tmp_path / "out.json"
+        monkeypatch.setattr("sys.argv", [
+            "analyze", str(tmp_path), "--max-file-size", "1000", "-o", str(out),
+        ])
+        main()
+
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "skipped" in captured.err
+        assert "--max-file-size" in captured.err
+        assert "big.ts" in captured.err
