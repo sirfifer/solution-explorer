@@ -338,6 +338,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       loading: false,
       annotations: restored,
       componentDetailCache: {},
+      // Clear any in-flight loading marker too: a live refresh mid-detail-load
+      // must not leave the panel stuck in a loading state keyed to the old scan.
+      componentDetailLoading: null,
     });
   },
   setLoading: (loading) => set({ loading }),
@@ -622,10 +625,18 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
     set({ componentDetailLoading: componentId });
     const safeId = safeComponentId(componentId);
+    // Capture the architecture this request belongs to. If a live refresh
+    // swaps the architecture (and invalidates the cache) while the fetch is in
+    // flight, the stale response must not repopulate the fresh cache.
+    const requestArch = arch;
     try {
       const res = await fetch(`./architecture/data/detail-${safeId}.json`);
       if (res.ok) {
         const detail = await res.json();
+        if (get().architecture !== requestArch) {
+          // Architecture changed mid-flight: discard, the next open refetches.
+          return null;
+        }
         set((state) => ({
           componentDetailCache: { ...state.componentDetailCache, [componentId]: detail },
           componentDetailLoading: null,
@@ -639,7 +650,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     } catch {
       // Fetch failed, leave as null
     }
-    set({ componentDetailLoading: null });
+    if (get().architecture === requestArch) {
+      set({ componentDetailLoading: null });
+    }
     return null;
   },
 

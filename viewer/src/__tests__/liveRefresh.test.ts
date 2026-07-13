@@ -149,4 +149,38 @@ describe("live refresh: search preservation and cache invalidation (F-VW-3, F-VW
     expect(refetched?.symbols.map((s) => s.name)).toContain("v2sym");
     expect(useArchStore.getState().getComponentSymbols("comp-a").map((s) => s.name)).toContain("v2sym");
   });
+
+  it("discards an in-flight detail response that resolves after a live refresh (Copilot review on PR #10)", async () => {
+    const archV1 = makeSplitArchitecture();
+    initializeSearch(archV1);
+    useArchStore.setState({ architecture: archV1 });
+
+    const staleSymbol: ArchSymbol = { id: "s", name: "staleSym", kind: "function", file: "src/a/index.ts" } as ArchSymbol;
+
+    // A deferred fetch: the response resolves only when we say so, simulating a
+    // request from the old scan still in flight when the refresh lands.
+    let resolveFetch: (r: Response) => void;
+    const deferred = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(deferred));
+
+    const inFlight = useArchStore.getState().loadComponentDetail("comp-a");
+    expect(useArchStore.getState().componentDetailLoading).toBe("comp-a");
+
+    // Live refresh swaps the architecture and invalidates the cache while the
+    // request is still pending. It must also clear the loading marker.
+    useArchStore.getState().setArchitecture(
+      makeSplitArchitecture({ generated_at: "2026-07-12T00:00:00Z" }),
+    );
+    expect(useArchStore.getState().componentDetailLoading).toBeNull();
+
+    // The stale response arrives after the swap and must be discarded.
+    resolveFetch!(detailResponse([staleSymbol], []));
+    const result = await inFlight;
+
+    expect(result).toBeNull();
+    expect(useArchStore.getState().componentDetailCache["comp-a"]).toBeUndefined();
+    expect(useArchStore.getState().componentDetailLoading).toBeNull();
+  });
 });
