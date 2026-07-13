@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect, useCallback, type ReactNode } from "react";
+import { memo, useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { Component, AnnotationTarget, AnnotationTargetContext } from "../types";
@@ -752,8 +752,15 @@ export const ComponentNode = memo(function ComponentNode({
   const darkMode = useArchStore((s) => s.darkMode);
   const enhancedFrames = useArchStore((s) => s.enhancedFrames);
   const reviewMode = useArchStore((s) => s.reviewMode);
-  const annotationCount = useArchStore(
-    (s) => s.annotations.filter((a) => a.componentId === component.id).length,
+  // Subscribe to the annotations array reference and filter in render: a
+  // filtering selector would re-run for every node on every store update
+  // (Zustand re-runs selectors to compare), while the array reference only
+  // changes on rare annotation edits, so unrelated updates like status polls
+  // cost nothing here.
+  const annotations = useArchStore((s) => s.annotations);
+  const annotationCount = useMemo(
+    () => annotations.filter((a) => a.componentId === component.id).length,
+    [annotations, component.id],
   );
   // Connection counts come from the store's precomputed map, refreshed only on
   // relationship changes, so status-overlay polls do not re-filter per node.

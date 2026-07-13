@@ -212,3 +212,30 @@ describe("file deep links (P3-2)", () => {
     expect(state.componentDetailCache["comp-a"]).toBeTruthy();
   });
 });
+
+describe("parseUrlState line strictness (Copilot review on PR #15)", () => {
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("accepts only a pure positive-integer line token", async () => {
+    const { parseUrlState } = await import("../utils/urlState");
+
+    window.history.replaceState(null, "", "/?file=src/a.ts&line=12");
+    expect(parseUrlState().line).toBe(12);
+
+    // parseInt would read these as 12 / 0; a pasted deep link must not
+    // silently navigate to a line the URL never named.
+    window.history.replaceState(null, "", "/?file=src/a.ts&line=12abc");
+    expect(parseUrlState().line).toBeUndefined();
+
+    window.history.replaceState(null, "", "/?file=src/a.ts&line=abc");
+    expect(parseUrlState().line).toBeUndefined();
+
+    window.history.replaceState(null, "", "/?file=src/a.ts&line=0");
+    expect(parseUrlState().line).toBeUndefined();
+
+    window.history.replaceState(null, "", "/?file=src/a.ts&line=-5");
+    expect(parseUrlState().line).toBeUndefined();
+  });
+});

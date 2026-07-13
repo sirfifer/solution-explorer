@@ -21,7 +21,9 @@ export interface UrlState {
 export function parseUrlState(): UrlState {
   const params = new URLSearchParams(window.location.search);
   const lineRaw = params.get("line");
-  const lineNum = lineRaw !== null ? Number.parseInt(lineRaw, 10) : NaN;
+  // Strict positive-integer token only: parseInt would accept "12abc" as 12,
+  // silently navigating somewhere the pasted link never named.
+  const lineNum = lineRaw !== null && /^\d+$/.test(lineRaw) ? Number.parseInt(lineRaw, 10) : NaN;
   return {
     component: params.get("component") || undefined,
     tab: params.get("tab") || undefined,

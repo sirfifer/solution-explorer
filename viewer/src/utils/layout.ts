@@ -8,7 +8,16 @@ import type { Node, Edge } from "@xyflow/react";
 let elkPromise: Promise<ELKInstance> | null = null;
 function getElk(): Promise<ELKInstance> {
   if (!elkPromise) {
-    elkPromise = import("elkjs/lib/elk.bundled.js").then((mod) => new mod.default());
+    elkPromise = import("elkjs/lib/elk.bundled.js").then(
+      (mod) => new mod.default(),
+      (err) => {
+        // A failed chunk load (flaky network, stale cache) must not be
+        // memoized, or every later layout attempt fails until a full page
+        // reload. Clear the memo so the next layout retries the import.
+        elkPromise = null;
+        throw err;
+      },
+    );
   }
   return elkPromise;
 }
