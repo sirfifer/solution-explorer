@@ -156,4 +156,24 @@ describe("useUrlSync popstate suppression (F-VW-2 / P1-4)", () => {
     expect(parseUrlState().component).toBe("A");
     expect(parseUrlState().tab).toBe("symbols");
   });
+
+  it("consumes an inbound ?file=&line= deep link on load, composing with ?tab (P3-2)", () => {
+    // Child B lives under A and owns a file. A deep link should drill to A and
+    // select B, honoring the explicit tab param.
+    window.history.replaceState({}, "", "/?file=src/a/b/index.ts&line=3&tab=symbols");
+
+    useArchStore.setState({ architecture: makeArchitecture() });
+    renderHook(() => useUrlSync());
+
+    const state = useArchStore.getState();
+    // Navigation was driven by the file deep link (not by absent component/drill).
+    expect(state.selectedComponentId).toBe("B");
+    expect(state.drillLevel).toBe("A");
+    expect(state.fileDeepLink).toMatchObject({ componentId: "B", filePath: "src/a/b/index.ts", line: 3 });
+    // The explicit tab param is honored and preserved in the URL after navigation.
+    expect(parseUrlState().tab).toBe("symbols");
+    // The one-shot file/line params are consumed (dropped from the rebuilt URL).
+    expect(parseUrlState().file).toBeUndefined();
+    expect(parseUrlState().line).toBeUndefined();
+  });
 });

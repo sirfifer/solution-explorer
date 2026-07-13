@@ -149,6 +149,8 @@ export function App() {
     liveConfig,
     liveMonitorStatus,
     mobileChromeHidden,
+    fileDeepLinkNotice,
+    clearFileDeepLinkNotice,
   } = useArchStore();
 
   useLiveMonitor();
@@ -826,6 +828,28 @@ export function App() {
           <span className="text-[10px]">Search</span>
         </button>
       </nav>
+
+      {/* File deep-link "not found" notice (non-blocking, dismissible) */}
+      {fileDeepLinkNotice && (
+        <div
+          role="status"
+          className={`
+            fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3
+            px-4 py-2.5 rounded-xl shadow-xl text-sm max-w-[90vw]
+            ${darkMode ? "bg-zinc-800 text-zinc-200 border border-zinc-700" : "bg-white text-zinc-800 border border-zinc-200"}
+          `}
+        >
+          <span>&#x26A0;&#xFE0F;</span>
+          <span className="truncate">{fileDeepLinkNotice}</span>
+          <button
+            onClick={clearFileDeepLinkNotice}
+            className={`shrink-0 p-1 rounded ${darkMode ? "hover:bg-zinc-700 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"}`}
+            title="Dismiss"
+          >
+            &#x2715;
+          </button>
+        </div>
+      )}
 
       {/* Annotation input modal */}
       {annotatingComponentId && <AnnotationInput />}

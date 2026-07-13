@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import type { Component, FileInfo, Symbol as ArchSymbol, Relationship, ComponentStatus, UIAction } from "../types";
 import { useArchStore } from "../store";
 import {
@@ -724,6 +724,17 @@ function ChildRow({ component }: { component: Component }) {
 function FilesTab({ files, componentId, loading, error, onRetry }: { files: FileInfo[]; componentId: string; loading?: boolean; error?: string; onRetry?: () => void }) {
   const { darkMode, showDetail, reviewMode, setAnnotatingTarget, annotations } = useArchStore();
   const [filter, setFilter] = useState("");
+  // Inbound file deep link: highlight and scroll to the target file for this
+  // component (P3-2). Only active while this component is the deep-link owner.
+  const fileDeepLink = useArchStore((s) => s.fileDeepLink);
+  const deepLinkPath = fileDeepLink?.componentId === componentId ? fileDeepLink.filePath : null;
+  const deepLinkLine = fileDeepLink?.componentId === componentId ? fileDeepLink.line : null;
+  const highlightRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (deepLinkPath && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [deepLinkPath, files]);
 
   const filtered = useMemo(() => {
     if (!filter) return files;
@@ -774,12 +785,15 @@ function FilesTab({ files, componentId, loading, error, onRetry }: { files: File
             </div>
             {dirFiles.map((f) => {
               const name = f.path.split("/").pop() || f.path;
+              const isDeepLinkTarget = f.path === deepLinkPath;
               return (
                 <button
                   key={f.path}
+                  ref={isDeepLinkTarget ? highlightRef : undefined}
                   className={`
                     w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-sm
                     ${darkMode ? "hover:bg-zinc-800/50" : "hover:bg-zinc-100"}
+                    ${isDeepLinkTarget ? (darkMode ? "ring-1 ring-blue-500 bg-blue-500/10" : "ring-1 ring-blue-500 bg-blue-50") : ""}
                   `}
                   onClick={() => showDetail("file", f)}
                 >
@@ -790,6 +804,11 @@ function FilesTab({ files, componentId, loading, error, onRetry }: { files: File
                   <span className={`truncate flex-1 ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
                     {name}
                   </span>
+                  {isDeepLinkTarget && deepLinkLine != null && (
+                    <span className={`text-[9px] px-1 rounded ${darkMode ? "bg-blue-500/20 text-blue-300" : "bg-blue-100 text-blue-600"}`}>
+                      line {deepLinkLine}
+                    </span>
+                  )}
                   {f.module_doc && (
                     <span className={`text-[9px] ${darkMode ? "text-green-600" : "text-green-500"}`} title={f.module_doc.split("\n")[0]}>
                       doc

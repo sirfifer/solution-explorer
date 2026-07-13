@@ -198,6 +198,15 @@ interface ArchStore {
   applyStatusOverlay: (overlay: StatusOverlay) => void;
   navigateToComponent: (componentId: string) => void;
 
+  // Inbound file/line deep links (P3-2). fileDeepLink records the resolved
+  // target so the Files tab can highlight the file and (when the line resolves a
+  // symbol) mark it. fileDeepLinkNotice carries a non-blocking "file not found"
+  // message for the missing case.
+  fileDeepLink: { componentId: string; filePath: string; line: number | null; symbolId: string | null } | null;
+  fileDeepLinkNotice: string | null;
+  openFileDeepLink: (filePath: string, line: number | null) => Promise<"found" | "missing">;
+  clearFileDeepLinkNotice: () => void;
+
   // Component detail cache (for split mode)
   componentDetailCache: Record<string, { symbols: Symbol[]; files: FileInfo[] }>;
   // Per-component loading keys (componentId -> true while in flight) so two
@@ -249,6 +258,32 @@ function findComponentByFile(components: Component[], filePath: string): Compone
     if (found) return found;
   }
   return null;
+}
+
+// Resolve the component that owns a file for a `?file=` deep link (P3-2).
+// Ownership is read from the manifest `files` arrays alone, so no detail-file
+// fetch is needed to locate the owner. When more than one component lists the
+// same path (a parent that aggregates a descendant's files), the DEEPEST
+// component wins: it is the most specific owner. Depth is distance from the
+// root; ties at equal depth are broken by depth-first pre-order (first
+// encountered), which is deterministic for a given manifest.
+function findDeepestComponentByFile(
+  components: Component[],
+  filePath: string,
+): Component | null {
+  let best: Component | null = null;
+  let bestDepth = -1;
+  function walk(comps: Component[], depth: number) {
+    for (const comp of comps) {
+      if (comp.files.includes(filePath) && depth > bestDepth) {
+        best = comp;
+        bestDepth = depth;
+      }
+      walk(comp.children, depth + 1);
+    }
+  }
+  walk(components, 0);
+  return best;
 }
 
 // Count incoming and outgoing relationships per component id in a single pass.
@@ -374,6 +409,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   liveMonitorStatus: "idle",
   statusOverlay: null,
   changelogReadState: getStoredChangelogRead(),
+
+  fileDeepLink: null,
+  fileDeepLinkNotice: null,
 
   setArchitecture: (arch) => {
     // Restore persisted annotations for this architecture's stable identity so
@@ -633,6 +671,52 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       });
     }
   },
+
+  openFileDeepLink: async (filePath, line) => {
+    const arch = get().architecture;
+    if (!arch) return "missing";
+
+    // Resolve the owning component from the manifest file lists (deepest wins).
+    const owner = findDeepestComponentByFile(arch.components, filePath);
+    if (!owner) {
+      // Missing: non-blocking notice, stay on the overview (no navigation).
+      set({
+        fileDeepLink: null,
+        fileDeepLinkNotice: `No component in this architecture owns "${filePath}".`,
+      });
+      return "missing";
+    }
+
+    // Navigate: drill to the owner and open its detail panel. navigateToComponent
+    // handles both nested (drill to parent + select) and top-level cases.
+    get().navigateToComponent(owner.id);
+    set({
+      fileDeepLink: { componentId: owner.id, filePath, line, symbolId: null },
+      fileDeepLinkNotice: null,
+    });
+
+    if (line == null) return "found";
+
+    // Symbol resolution needs the per-component symbols. In split mode these
+    // arrive via the detail fetch (loading state handled by the panel); in
+    // monolithic mode they are already present. Resolve the symbol whose range
+    // contains the line and record it so the Files tab can mark it.
+    await get().loadComponentDetail(owner.id);
+    const symbols = get().getComponentSymbols(owner.id);
+    const match = symbols.find(
+      (s) => s.file === filePath && line >= s.line && line <= s.end_line,
+    );
+    if (match) {
+      set((state) =>
+        state.fileDeepLink && state.fileDeepLink.filePath === filePath
+          ? { fileDeepLink: { ...state.fileDeepLink, symbolId: match.id } }
+          : {},
+      );
+    }
+    return "found";
+  },
+
+  clearFileDeepLinkNotice: () => set({ fileDeepLinkNotice: null }),
 
   isChangelogEntryRead: (serial) => {
     return isSerialRead(get().changelogReadState, serial);

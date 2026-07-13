@@ -32,6 +32,17 @@ export function useUrlSync(): void {
     const urlState = parseUrlState();
     const store = useArchStore.getState();
 
+    // Inbound file/line deep link takes precedence: it computes its own drill and
+    // selection from the owning component, so it overrides any component/drill
+    // params (P3-2). The tab param is still honored, defaulting to the Files tab.
+    if (urlState.file) {
+      // Seed the tab into the URL before navigation so the detail panel mounts on
+      // it; the URL writer below preserves it as component/drill are filled in.
+      replaceUrlState({ tab: urlState.tab || "files" });
+      store.openFileDeepLink(urlState.file, urlState.line ?? null);
+      return;
+    }
+
     // Restore drill level first (so the component is visible in the graph).
     if (urlState.drill) {
       const drillComp = store.getComponentById(urlState.drill);
