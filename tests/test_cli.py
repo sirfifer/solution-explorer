@@ -1009,3 +1009,91 @@ class TestTruncationWarnings:
         assert "skipped" in captured.err
         assert "--max-file-size" in captured.err
         assert "big.ts" in captured.err
+
+
+# ---------------------------------------------------------------------------
+# --max-file-size default semantics per engine (I2: v2 is unbounded by default)
+# ---------------------------------------------------------------------------
+
+
+def _repo_with_large_file(tmp_path, size_bytes=600_000):
+    """A repo with one valid source file larger than the legacy v1 500KB default.
+
+    The file defines a top-level symbol (``keep``) so a "was it analyzed?" check
+    can look for the symbol as well as the coverage disposition.
+    """
+    (tmp_path / "package.json").write_text(json.dumps({"name": "big-cov-test"}))
+    src = tmp_path / "src"
+    src.mkdir()
+    pad = "# pad line to grow the file past the legacy 500KB default\n"
+    body = "def keep():\n    return 0\n" + pad * ((size_bytes // len(pad)) + 1)
+    big = src / "big.py"
+    big.write_text(body)
+    assert big.stat().st_size > 500_000
+    return tmp_path
+
+
+class TestMaxFileSizeDefaultPerEngine:
+    """The v2 engine analyzes 100 percent of source by default; any bound is an
+    explicit opt-in exception, never a silent default (TARGET-ARCHITECTURE 4.1,
+    invariant I2). The legacy v1 engine keeps its historical 500KB default.
+    """
+
+    def test_v2_default_parses_file_over_500kb(self, monkeypatch, tmp_path):
+        # v2 is the DEFAULT engine. With no --max-file-size, a file larger than
+        # the old 500KB default must be PARSED (unbounded), landing a `parsed`
+        # coverage row. Fail-before: the pre-fix argparse default of 500_000 was
+        # forwarded into the v2 path, excluding this file as excluded:max_file_size.
+        _repo_with_large_file(tmp_path)
+        out = tmp_path / "out.json"
+        monkeypatch.setattr("sys.argv", ["analyze", str(tmp_path), "-o", str(out)])
+        main()
+
+        data = json.loads(out.read_text())
+        rows = {r["path"]: r for r in data["coverage"]["rows"]}
+        assert "src/big.py" in rows, "the large file must appear in the coverage ledger"
+        assert rows["src/big.py"]["disposition"] == "parsed", (
+            "v2 must parse the >500KB file by default (100 percent coverage), "
+            f"got {rows['src/big.py']['disposition']!r}"
+        )
+        # No excluded:max_file_size disposition anywhere on a default v2 run.
+        assert all(
+            r["disposition"] != "excluded:max_file_size" for r in data["coverage"]["rows"]
+        ), "a default v2 run must not exclude anything for size"
+
+    def test_v1_default_still_excludes_file_over_500kb(self, monkeypatch, tmp_path, capsys):
+        # v1 keeps its legacy 500KB default byte-for-byte: the >500KB file is
+        # skipped and the loud stderr warning names the historical byte limit.
+        _repo_with_large_file(tmp_path)
+        out = tmp_path / "out.json"
+        monkeypatch.setattr("sys.argv", [
+            "analyze", str(tmp_path), "--engine", "v1", "-o", str(out),
+        ])
+        main()
+
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "500,000 bytes" in captured.err, "v1 default bound is the historical 500KB"
+        assert "big.py" in captured.err
+        data = json.loads(out.read_text())
+        assert not any(
+            s.get("name") == "keep" for s in data.get("symbols", [])
+        ), "v1 must not emit symbols from the skipped oversized file"
+
+    def test_v2_explicit_max_file_size_excludes_with_ledger_row(self, monkeypatch, tmp_path):
+        # An explicit --max-file-size is honored on v2 and lands as a visible
+        # excluded:max_file_size ledger row carrying the byte bound as its reason
+        # (opt-in exception, never silent).
+        _repo_with_large_file(tmp_path)
+        out = tmp_path / "out.json"
+        monkeypatch.setattr("sys.argv", [
+            "analyze", str(tmp_path), "--max-file-size", "1000", "-o", str(out),
+        ])
+        main()
+
+        data = json.loads(out.read_text())
+        rows = {r["path"]: r for r in data["coverage"]["rows"]}
+        assert rows["src/big.py"]["disposition"] == "excluded:max_file_size"
+        assert rows["src/big.py"]["reason"] == "1000", (
+            "the excluded row must carry the opt-in byte bound as its reason"
+        )

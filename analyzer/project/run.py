@@ -130,6 +130,11 @@ def run_v2(args) -> None:
         )
         store = FactStore(str(store_path))
         store_owned = True
+        # v2 analyzes 100 percent of source by default (invariant I2). The CLI
+        # default for --max-file-size is None, so an unspecified value forwards
+        # None (unbounded) and every file is parsed. A user-supplied bound is
+        # honored and lands as an excluded:max_file_size ledger row (never a
+        # silent default). A value of 0 is treated as unbounded too.
         max_file_size = args.max_file_size if args.max_file_size else None
         extraction = extract_repo(root, store, max_file_size=max_file_size)
         print(

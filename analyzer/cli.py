@@ -50,8 +50,12 @@ def main():
     parser.add_argument(
         "--max-file-size",
         type=int,
-        default=500_000,
-        help="Maximum file size to analyze in bytes (default: 500KB)",
+        default=None,
+        help="Maximum file size to analyze in bytes. Default is unlimited on the "
+             "v2 engine (100 percent coverage; any bound is an explicit opt-in "
+             "exception recorded as an excluded:max_file_size ledger row, never a "
+             "silent default). The legacy v1 engine keeps its historical 500KB "
+             "default.",
     )
     parser.add_argument(
         "--pretty",
@@ -160,6 +164,15 @@ def main():
             "--config (multi-repo) cannot be combined with --incremental; "
             "run one mode at a time"
         )
+
+    # The legacy v1 engine keeps its historical 500KB default byte-for-byte. The
+    # argparse default is None so the v2 engine can run unbounded (invariant I2:
+    # 100 percent coverage by default, any bound an explicit opt-in). v1 restores
+    # the historical bound here when the user did not pass --max-file-size, so v1
+    # output and its parity snapshots are unchanged. An explicit --max-file-size
+    # is honored on both engines.
+    if args.max_file_size is None:
+        args.max_file_size = 500_000
 
     # Determine max_symbols default based on mode
     if args.max_symbols is None:
