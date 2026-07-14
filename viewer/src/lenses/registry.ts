@@ -35,6 +35,10 @@ export interface LensContext {
   // existing lenses and callers need not supply them.
   selectedCapabilityId?: string | null;
   selectedEntityId?: string | null;
+  // The currently selected rule (P6-6). The Rules lens graph is the rule-owning
+  // components regardless of selection, so this is carried for parity and future
+  // use; other lenses ignore it. Optional.
+  selectedRuleId?: string | null;
 }
 
 /** One documented question and the gesture that answers it (I14). */

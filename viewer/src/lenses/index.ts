@@ -7,6 +7,7 @@ import "./activity";
 import "./flow";
 import "./capability";
 import "./data";
+import "./rules";
 
 export * from "./registry";
 export { structureLens, STRUCTURE_QUESTIONS } from "./structure";
@@ -55,3 +56,21 @@ export {
   type EntityGroup,
   type EntityAccessor,
 } from "./data";
+export {
+  rulesLens,
+  RULE_QUESTIONS,
+  RULE_KIND_ORDER,
+  DECISION_ANCHORS,
+  hasRules,
+  ruleEntityId,
+  ruleCapabilityId,
+  collectRuleOwnerIds,
+  ruleCountsByComponent,
+  groupRulesByKind,
+  decisionTableFromRule,
+  buildRulesGraph,
+  type RuleKindCounts,
+  type RuleComponentGroup,
+  type RuleKindGroup,
+  type RuleDecisionTable,
+} from "./rules";

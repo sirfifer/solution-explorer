@@ -19,6 +19,7 @@ import type {
   Capability,
   DataEntity,
   EntityAccess,
+  Rule,
   LiveConfig,
   LiveVersion,
   StatusOverlay,
@@ -187,6 +188,22 @@ interface ArchStore {
   // The access edges touching one entity (who reads/writes it), for the Data lens
   // focused view; empty when the entity has no access edges.
   getEntityAccessors: (entityId: string) => EntityAccess[];
+
+  // Rules lens selection (P6-6, LENS-DESIGN L6). The selected rule drives the
+  // panel highlight and the URL param; selecting one also selects its owning
+  // component (I12 stable identity). The two cross-lens jumps switch lens AND
+  // select the linked element, preserving identity and URL state. Reset on reload.
+  selectedRuleId: string | null;
+  selectRule: (ruleId: string) => void;
+  clearRule: () => void;
+  getRules: () => Rule[];
+  // Jump from a rule to the Data lens with the rule's linked entity focused (the
+  // L3 cross-link). No-op when the rule carries no entity link. Returns whether it
+  // jumped, so the UI can gate the affordance.
+  viewRuleInDataLens: (ruleId: string) => boolean;
+  // Jump from a rule to the Capability lens with the rule's trigger capability
+  // selected (the L2 cross-link). No-op when the rule has no capability trigger.
+  viewRuleInCapabilityLens: (ruleId: string) => boolean;
 
   // A one-shot request to open a specific detail-panel tab (P6-3). Set when
   // selecting a capability/entity so the panel jumps to its Capabilities/Data tab;
@@ -601,6 +618,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   flowStep: 0,
   selectedCapabilityId: null,
   selectedEntityId: null,
+  selectedRuleId: null,
   pendingDetailTab: null,
 
   activePanel: null,
@@ -685,6 +703,8 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       // reload so a new scan starts from the ranked landing (P6-3).
       selectedCapabilityId: null,
       selectedEntityId: null,
+      // Rules lens selection belongs to a specific dataset; reset on reload (P6-6).
+      selectedRuleId: null,
       pendingDetailTab: null,
     });
   },
@@ -774,7 +794,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   // Structure this is exactly the existing selectors, so old data renders
   // identically. Falls back to the default lens if the active id is unknown.
   getLensGraph: () => {
-    const { architecture, drillLevel, lens, selectedCapabilityId, selectedEntityId } = get();
+    const { architecture, drillLevel, lens, selectedCapabilityId, selectedEntityId, selectedRuleId } = get();
     if (!architecture) return { nodes: [], aggregates: [], edges: [] };
     const def = getLens(lens) ?? getLens(DEFAULT_LENS_ID)!;
     return def.getGraph({
@@ -785,6 +805,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       getComponentRelationships: get().getComponentRelationships,
       selectedCapabilityId,
       selectedEntityId,
+      selectedRuleId,
     });
   },
 
@@ -893,6 +914,51 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   getEntityAccess: () => get().architecture?.entity_access ?? [],
   getEntityAccessors: (entityId) =>
     (get().architecture?.entity_access ?? []).filter((a) => a.entity_id === entityId),
+
+  // Rules lens (P6-6). Select a rule: highlight it and select its owning component
+  // in the graph (I12 stable identity via navigateToComponent) so the rationale
+  // strip and component detail follow. There is no Rules detail tab, so no tab is
+  // requested; the rule's own detail lives in the RulesPanel focused view.
+  selectRule: (ruleId) => {
+    const rule = get().getRules().find((r) => r.id === ruleId);
+    set({ selectedRuleId: ruleId });
+    if (rule?.component_id) {
+      get().navigateToComponent(rule.component_id);
+    }
+  },
+
+  clearRule: () => set({ selectedRuleId: null }),
+
+  getRules: () => get().architecture?.rules ?? [],
+
+  // Cross-lens jump L6 -> L3: switch to the Data lens with the rule's linked
+  // entity focused. setLens resolves to Data (available when data_entities exist)
+  // and selectEntity focuses the entity's owner (I12) and writes the entity URL
+  // param, so identity and URL state are preserved. No-op (returns false) when the
+  // rule carries no entity link.
+  viewRuleInDataLens: (ruleId) => {
+    const rule = get().getRules().find((r) => r.id === ruleId);
+    const entityId = rule?.detail.entity;
+    if (!entityId) return false;
+    get().setLens("data");
+    if (get().lens !== "data") return false;
+    get().selectEntity(entityId);
+    return true;
+  },
+
+  // Cross-lens jump L6 -> L2: switch to the Capability lens with the rule's
+  // trigger capability selected. Preserves identity (the capability's owner is
+  // selected) and URL state (the capability URL param). No-op (returns false) when
+  // the rule has no capability trigger.
+  viewRuleInCapabilityLens: (ruleId) => {
+    const rule = get().getRules().find((r) => r.id === ruleId);
+    const capabilityId = rule?.detail.trigger?.capability;
+    if (!capabilityId) return false;
+    get().setLens("capability");
+    if (get().lens !== "capability") return false;
+    get().selectCapability(capabilityId);
+    return true;
+  },
 
   setPendingDetailTab: (tab) => set({ pendingDetailTab: tab }),
   clearPendingDetailTab: () => set({ pendingDetailTab: null }),

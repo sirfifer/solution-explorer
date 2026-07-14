@@ -746,6 +746,10 @@ export const ComponentNode = memo(function ComponentNode({
   // Capability lens (P6-3): per-kind capability counts attached to owner nodes,
   // rendered as a badge cluster. Present only under the Capability lens.
   const capBadges = (data as { capBadges?: Record<string, number> }).capBadges;
+  // Rules lens (P6-6): per-kind rule counts attached to rule-owning nodes,
+  // rendered as a badge cluster (the same pattern). Present only under the Rules
+  // lens.
+  const ruleBadges = (data as { ruleBadges?: Record<string, number> }).ruleBadges;
   // Selector-based subscriptions so a node re-renders only when the slice it
   // actually reads changes, instead of on every store mutation (F-VW-6). Actions
   // are stable references; the primitives below only fire a re-render when their
@@ -858,6 +862,25 @@ export const ComponentNode = memo(function ComponentNode({
                 title={`${capBadges[k]} ${k} capabilit${capBadges[k] === 1 ? "y" : "ies"}`}
               >
                 {k} {capBadges[k]}
+              </span>
+            ))}
+        </div>
+      )}
+
+      {/* Rule badges (P6-6): counts by kind on rule-owning nodes */}
+      {ruleBadges && (
+        <div className="absolute -top-2 -left-2 z-20 flex flex-wrap items-center gap-1 max-w-[220px]">
+          {(["policy", "validation", "calculation", "io"] as const)
+            .filter((k) => (ruleBadges[k] ?? 0) > 0)
+            .map((k) => (
+              <span
+                key={k}
+                className={`px-1.5 h-[18px] flex items-center rounded-full text-[9px] font-bold uppercase tracking-wide shadow-sm ${
+                  darkMode ? "bg-indigo-500 text-white" : "bg-indigo-600 text-white"
+                }`}
+                title={`${ruleBadges[k]} ${k} rule${ruleBadges[k] === 1 ? "" : "s"}`}
+              >
+                {k} {ruleBadges[k]}
               </span>
             ))}
         </div>
