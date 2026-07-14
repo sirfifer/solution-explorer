@@ -22,3 +22,8 @@ export {
   FLOW_ACTION_EDGE_TYPE,
   type FlowEntry,
 } from "./flow";
+import "./activity";
+
+export { structureLens, STRUCTURE_QUESTIONS } from "./structure";
+export { activityLens, ACTIVITY_QUESTIONS } from "./activity";
+

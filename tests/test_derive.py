@@ -123,19 +123,25 @@ _JUSTIFIED_REL_KEYS = {"evidence", "confidence", "origin"}  # D3
 
 
 def _strip_capabilities(arch: dict) -> None:
-    """Remove the P5-1 capabilities keys in place, BEFORE normalization (D6).
+    """Remove the P5-1/P5-2 lens keys in place, BEFORE normalization (D6/D7).
 
     ``normalize`` sorts every list by its JSON string, so a new key on one
     component changes that component's sort position among its siblings. The
-    snapshot was frozen before capabilities existed, so capabilities must be
-    removed before sorting for the component order to match. (testing/symbols/
-    evidence are masked after sorting instead, because they were present in both
-    the old and new worlds at normalization time and sort symmetrically.)
+    snapshot was frozen before capabilities (D6) and data entities (D7) existed,
+    so both must be removed before sorting for the component order to match.
+    (testing/symbols/evidence are masked after sorting instead, because they
+    were present in both the old and new worlds at normalization time and sort
+    symmetrically.) The polyglot/multi fixtures carry no ORM models, so the
+    entity keys are empty here; the entities themselves are asserted directly in
+    tests/test_entities.py.
     """
     arch.pop("capabilities", None)
+    arch.pop("data_entities", None)
+    arch.pop("entity_access", None)
 
     def strip(c):
         c.pop("capabilities", None)
+        c.pop("data_entities", None)
         for ch in c.get("children", []):
             strip(ch)
 

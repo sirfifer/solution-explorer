@@ -17,7 +17,7 @@ import {
 import { useArchStore } from "../store";
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
-import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles } from "../utils/layout";
+import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
 import { getLens } from "../lenses";
 import type { Relationship } from "../types";
 
@@ -39,6 +39,7 @@ export function ArchitectureGraph() {
     flowEntryId,
     flowStep,
     getFlowPath,
+    activityData,
     getLensGraph,
     selectComponent,
     navigateToBreadcrumb,
@@ -133,15 +134,27 @@ export function ArchitectureGraph() {
     // existing selectors so old data renders identically (P6-1).
     const { nodes: visible, aggregates, edges: relationships } = getLensGraph();
 
-    // Under the Flow lens, ring the entry node and the current follow step so the
-    // walk reads spatially: the entry is where the journey starts, the step is
-    // "you are here" (P6-2). Absent under every other lens, so Structure and the
-    // other lenses render identically.
+    // Per-lens node encodings, each gated to its own lens so Structure and every
+    // other lens render identically.
+    // Flow lens (P6-2): ring the entry node and the current follow step so the
+    // walk reads spatially.
     const flowEntryNodeId = lens === "flow" ? flowEntryId : null;
     let flowStepNodeId: string | null = null;
     if (lens === "flow" && flowEntryId) {
       const path = getFlowPath(flowEntryId);
       flowStepNodeId = path[Math.min(flowStep, path.length - 1)] ?? null;
+    }
+    // Activity lens (P6-5): encode each node's hotspot score as a heat ring,
+    // normalized against the max score so colors match the ActivityPanel ranking.
+    const heatByComponent = new Map<string, number>();
+    if (lens === "activity" && activityData) {
+      const maxScore = activityData.components.reduce(
+        (m, c) => Math.max(m, c.hotspot_score),
+        0,
+      );
+      for (const c of activityData.components) {
+        heatByComponent.set(c.id, maxScore > 0 ? c.hotspot_score / maxScore : 0);
+      }
     }
 
     const componentNodes: Node[] = visible.map((comp, i) => {
@@ -152,6 +165,11 @@ export function ArchitectureGraph() {
         data: { component: comp },
         selected: comp.id === selectedComponentId,
       };
+      const heat = heatByComponent.get(comp.id);
+      if (heat !== undefined) {
+        node.data = { component: comp, heat };
+        node.style = { boxShadow: `0 0 0 3px ${getHeatColor(heat)}`, borderRadius: 14 };
+      }
       if (comp.id === flowStepNodeId) {
         node.style = { boxShadow: "0 0 0 3px #2DD4BF", borderRadius: 14 };
       } else if (comp.id === flowEntryNodeId) {
@@ -267,7 +285,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, flowEntryId, flowStep, getFlowPath, getLensGraph]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, flowEntryId, flowStep, getFlowPath, activityData, getLensGraph]);
 
   // Apply ELK layout
   useEffect(() => {

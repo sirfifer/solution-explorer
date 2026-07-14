@@ -17,6 +17,7 @@ from ..store import FactStore
 from . import capabilities as capabilities_pass
 from . import components as components_pass
 from . import docs as docs_pass
+from . import entities as entities_pass
 from . import flow as flow_pass
 from . import relationships as rel_pass
 from . import roles as roles_pass
@@ -51,6 +52,7 @@ def derive_all(
     arch_description = _project_description(d, description)
     docs_pass.extract_component_docs(d)
     capabilities_pass.derive_capabilities(d)
+    entities_pass.derive_entities(d)
 
     arch = _assemble(d, root_name, root_path, arch_description)
     _flush(store, d)
@@ -107,6 +109,7 @@ def _project_description(d: Deriver, fallback: str) -> str:
 def _assemble(d: Deriver, root_name: str, root_path: str, description: str) -> dict:
     components = _build_component_tree(d)
     _attach_capabilities(components, d._capabilities_by_component)
+    _attach_entities(components, d._entities_by_component)
     relationships = _relationship_dicts(d)
     return {
         "name": root_name,
@@ -119,6 +122,8 @@ def _assemble(d: Deriver, root_name: str, root_path: str, description: str) -> d
         "components": components,
         "relationships": relationships,
         "capabilities": d.capabilities,   # flat index (P5-1); optional key
+        "data_entities": d.data_entities, # flat index (P5-2); optional key
+        "entity_access": d.entity_access, # flat index (P5-2); optional key
         "symbols": [to_dict(s) for s in d._all_symbols],
         "files": [_file_dict(fi) for fi in d._all_files],
         "stats": _stats(d, relationships),
@@ -137,6 +142,19 @@ def _attach_capabilities(components: list, by_component: dict[str, list[dict]]) 
         if caps:
             comp["capabilities"] = caps
         _attach_capabilities(comp.get("children", []), by_component)
+
+
+def _attach_entities(components: list, by_component: dict[str, list[dict]]) -> None:
+    """Attach the optional per-component ``data_entities`` key in place (P5-2).
+
+    Set only when non-empty, so a component with no entities carries no key
+    (the ai_enhance optional-key precedent; the viewer ignores it).
+    """
+    for comp in components:
+        ents = by_component.get(comp.get("id"))
+        if ents:
+            comp["data_entities"] = ents
+        _attach_entities(comp.get("children", []), by_component)
 
 
 def _file_dict(fi) -> dict:
@@ -207,6 +225,8 @@ def _flush(store: FactStore, d: Deriver) -> None:
     the projection tier (P4-5) reads a complete component from the store.
     """
     store._conn.execute("DELETE FROM edges")
+    store._conn.execute("DELETE FROM entity_access")   # FK -> data_entities
+    store._conn.execute("DELETE FROM data_entities")   # FK -> components
     store._conn.execute("DELETE FROM capabilities")  # FK -> components; drop before components
     store._conn.execute("DELETE FROM component_files")
     store._conn.execute("DELETE FROM components")
@@ -254,5 +274,36 @@ def _flush(store: FactStore, d: Deriver) -> None:
             capability_id=cap["id"], component_id=cap["component_id"],
             kind=cap["kind"], name=cap["name"], detail=cap["detail"],
             evidence=cap["evidence"], confidence=cap["confidence"],
+        )
+
+    # Data entities and access edges land in the store (system of record, P5-2).
+    # Entities are written after components (FK to components(id)); access edges
+    # after entities (FK to data_entities(id)). Ids are content-derived, so a
+    # re-derive is idempotent. The frozen P4-1 schema gives data_entities a
+    # ``fields_json`` payload column (the entity analog of capabilities'
+    # ``detail_json``): it carries the field list plus the framework/table/
+    # symbol/inferred detail, so nothing is lost with no migration (I3/I4).
+    written_entity_ids: set[str] = set()
+    for ent in d.data_entities:
+        detail = {"fields": list(ent.get("fields", [])),
+                  "framework": ent.get("framework")}
+        if ent.get("table"):
+            detail["table"] = ent["table"]
+        if ent.get("symbol"):
+            detail["symbol"] = ent["symbol"]
+        if ent.get("inferred"):
+            detail["inferred"] = True
+        store.add_data_entity(
+            entity_id=ent["id"], component_id=ent["component_id"],
+            name=ent["name"], kind=ent["kind"], fields=detail,
+            evidence=ent.get("evidence", []),
+        )
+        written_entity_ids.add(ent["id"])
+    for acc in d.entity_access:
+        if acc["entity_id"] not in written_entity_ids:
+            continue
+        store.add_entity_access(
+            accessor_id=acc["accessor_id"], entity_id=acc["entity_id"],
+            mode=acc["mode"], evidence=acc["evidence"], confidence=acc["confidence"],
         )
     store.commit()
