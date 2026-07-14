@@ -1657,6 +1657,13 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
   - STORE HELPERS (additive, `analyzer/store/db.py`): `set_finding_verification(finding_id, status)` (same-session table update; the durable record is the enrichment overlay, recorded caveat) and `delete_enrichment(target_kind, target_id)` (removes a superseded verdict row and its FTS entry, used when a satisfied intent clears its stale violation). No schema change (SCHEMA_VERSION stays 4); verdicts/names ride the existing enrichment table's `target_kind`/`target_id`/`payload_json`/`derived_from_hash`/`commit_sha`.
   - VERIFICATION: `pytest tests/ -q` -> 951 passed, 1 xfailed (pre-existing `test_detect_ports`); +23 new tests (8 in test_verify_edges.py, 15 in test_enrich_p7_4.py). `ruff check analyzer/ tests/ scripts/` clean. Working tree clean (proof artifacts in the scratchpad; no root `architecture.json` committed). DEVIATIONS: (1) intent-violation findings ride the enrichment table (target_kind 'finding'), NOT the deterministic findings table, because they are AI-generated (I1: the deterministic table holds only deterministic findings) and must survive the derivation `_flush`; the overlay merges them into the projection findings index. (2) `set_finding_verification` on the table is best-effort within a session; a re-derive resets it and the enrichment overlay is authoritative (recorded). (3) The viewer is untouched (surfacing of `name`/`verdict`/`verification_status` is later viewer work; old viewers ignore the optional keys). (4) The self-repo's broad P5-6 findings are not verified here (bounded fixtures only); a repo-wide verification run is CI/operator work with its own cost budget.
 
+### P7-5: Parallel-run validation and merge-script retirement
+- Status: TODO (carded 2026-07-14 by the orchestrator to own the Phase 7 gate's open line 4)
+- Model: Opus 4.8
+- Design: TARGET-ARCHITECTURE.md section 6; WORK-PLAN-2.md Phase 7 exit gate line 4; the Phase 7 gate record's retirement condition
+- Scope: run the store-provenance enrichment path in parallel with the drift-tolerant merge script across real deploys (this repo's own pipeline plus at least one downstream deploy), comparing preservation outcomes each run; after N consecutive parity runs (N=3 suggested, record the decision), swap CI and action.yml to the provenance path and remove the merge step, keeping scripts/merge-ai-enhancements.py available out-of-pipeline for one release cycle. Requires the downstream stale-pin fix (owner) to have landed for the um-arch leg to count.
+- Evidence:
+
 ## Phase 8: The query surface
 
 ### P8-1: MCP server
