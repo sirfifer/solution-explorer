@@ -1097,3 +1097,26 @@ class TestMaxFileSizeDefaultPerEngine:
         assert rows["src/big.py"]["reason"] == "1000", (
             "the excluded row must carry the opt-in byte bound as its reason"
         )
+
+    def test_v2_explicit_zero_is_a_real_bound_not_unbounded(self, monkeypatch, tmp_path):
+        # An explicit --max-file-size 0 is a real bound (every non-empty file
+        # excluded), matching the v1 engine. It must never be conflated with
+        # "not provided" (unbounded). Fail-before: the pre-fix v2 path used a
+        # truthiness check (`args.max_file_size if args.max_file_size else None`),
+        # so 0 silently meant unbounded and this file parsed.
+        _repo_with_large_file(tmp_path)
+        out = tmp_path / "out.json"
+        monkeypatch.setattr("sys.argv", [
+            "analyze", str(tmp_path), "--max-file-size", "0", "-o", str(out),
+        ])
+        main()
+
+        data = json.loads(out.read_text())
+        rows = {r["path"]: r for r in data["coverage"]["rows"]}
+        assert rows["src/big.py"]["disposition"] == "excluded:max_file_size"
+        assert rows["src/big.py"]["reason"] == "0", (
+            "the excluded row must carry the explicit zero bound as its reason"
+        )
+        assert all(
+            r["disposition"] != "parsed" for r in data["coverage"]["rows"]
+        ), "no non-empty file may parse under an explicit zero bound"
