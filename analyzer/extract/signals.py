@@ -10,9 +10,10 @@ here every signal for a file comes from a single content read.
 Pattern tables are the SHARED SOURCE OF TRUTH in analyzer/constants.py, which
 imports nothing and is safe to use without scanner.py. UI-action regexes reuse
 the compiled patterns on analyzer.action_detector.UIActionDetector rather than
-duplicating them. Only the CLI-command patterns are new and local; the P4-7
-consolidation step should fold them into the shared tables (see P5-2, which
-elaborates CLI extraction with flags).
+duplicating them. Endpoint, CLI-command/flag, and job patterns are the precise,
+framework-anchored rules in frameworks.py (P5-1); they replaced the delegation to
+analyzer/parsers/*.detect_api_endpoints, which stays as the legacy reference and
+which the audited header-name false-positive class came from.
 
 Every returned list is ordered by match position in the file, so extraction is
 deterministic across processes (no set iteration; invariant I4).
@@ -21,7 +22,6 @@ deterministic across processes (no set iteration; invariant I4).
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from ..action_detector import UIActionDetector
 from ..constants import (
@@ -34,50 +34,12 @@ from ..constants import (
     WEBSOCKET_PATTERNS,
 )
 from .facts import SignalRecord
+from .frameworks import extract_cli, extract_endpoints, extract_jobs
 
 
 def _line_of(content: str, pos: int) -> int:
     """1-based line number of a character offset."""
     return content.count("\n", 0, pos) + 1
-
-
-# ---------------------------------------------------------------------------
-# CLI command declarations. NEW local patterns (see module docstring): the
-# shared source of truth for these lands in P5-2 / the P4-7 consolidation.
-# Each entry: (compiled regex, capture-group-index-for-name-or-None).
-# ---------------------------------------------------------------------------
-
-_CLI_COMMAND_PATTERNS: dict[str, list[tuple[re.Pattern, Optional[int]]]] = {
-    "python": [
-        (re.compile(r"@(?:click|[\w.]+)\.command\s*\(\s*['\"]([\w:-]+)['\"]"), 1),
-        (re.compile(r"@(?:click|[\w.]+)\.(?:command|group)\s*\(\s*\)"), None),
-        (re.compile(r"@(?:app|cli|[\w.]+)\.command\s*\(\s*\)"), None),
-        (re.compile(r"\.add_parser\s*\(\s*['\"]([\w:-]+)['\"]"), 1),
-    ],
-    "typescript": [
-        (re.compile(r"\.command\s*\(\s*['\"]([\w:<> -]+)['\"]"), 1),
-    ],
-    "javascript": [
-        (re.compile(r"\.command\s*\(\s*['\"]([\w:<> -]+)['\"]"), 1),
-    ],
-    "go": [
-        (re.compile(r"cobra\.Command\s*\{[^}]*?Use\s*:\s*['\"]([\w:-]+)['\"]", re.DOTALL), 1),
-    ],
-    "rust": [
-        (re.compile(r"Command::new\s*\(\s*['\"]([\w:-]+)['\"]"), 1),
-        (re.compile(r"\.subcommand\s*\(\s*(?:Command::new\s*\(\s*['\"]([\w:-]+)['\"])?"), 1),
-    ],
-    "ruby": [
-        (re.compile(r"^\s*desc\s+['\"]([\w:<> -]+)['\"]", re.MULTILINE), 1),
-    ],
-}
-
-_CLI_OPTION_PATTERNS: list[re.Pattern] = [
-    re.compile(r"@[\w.]+\.option\s*\(\s*['\"](--[\w-]+)['\"]"),   # click / typer
-    re.compile(r"\.add_argument\s*\(\s*['\"](--[\w-]+)['\"]"),    # argparse
-    re.compile(r"\.option\s*\(\s*['\"](-{1,2}[\w-]+)"),           # commander / yargs
-    re.compile(r"\.long\s*\(\s*['\"]([\w-]+)['\"]"),              # clap
-]
 
 
 # ---------------------------------------------------------------------------
@@ -110,8 +72,9 @@ def extract_signals(content: str, language: str, parser) -> list[SignalRecord]:
     out.extend(_queue_drivers(content, language))
     out.extend(_websocket_drivers(content, language))
     out.extend(_grpc_drivers(content, language))
-    out.extend(_endpoints(content, parser))
+    out.extend(_endpoints(content, language))
     out.extend(_cli_commands(content, language))
+    out.extend(_jobs(content, language))
     out.extend(_ui_actions(content, language))
     out.extend(_env_vars(content, parser))
     out.extend(_framework(content, parser))
@@ -178,8 +141,18 @@ def _queue_drivers(content: str, language: str) -> list[SignalRecord]:
             break
     for pat in QUEUE_NAME_PATTERNS:
         for m in re.finditer(pat, content):
+            text = m.group(0)
+            if ".subscribe" in text:
+                direction = "consume"
+            elif ".publish" in text:
+                direction = "produce"
+            else:
+                direction = None
+            value = {"name": m.group(1)}
+            if direction:
+                value["direction"] = direction
             out.append(SignalRecord(
-                "queue_name", {"name": m.group(1)}, _line_of(content, m.start())
+                "queue_name", value, _line_of(content, m.start())
             ))
     return out
 
@@ -208,34 +181,35 @@ def _grpc_drivers(content: str, language: str) -> list[SignalRecord]:
     return out
 
 
-def _endpoints(content: str, parser) -> list[SignalRecord]:
+def _endpoints(content: str, language: str) -> list[SignalRecord]:
+    """Endpoint signals from the precise per-framework rules (P5-1).
+
+    Replaces the old delegation to ``parser.detect_api_endpoints``: every
+    candidate passes through ``frameworks.is_route_path``, so header names
+    (``Authorization``, ``X-Hub-Signature-256``) and outbound client URLs are
+    never captured as routes. The signal value carries the matched ``framework``.
+    """
     out = []
-    for ep in parser.detect_api_endpoints(content):
-        path = ep.get("path", "")
-        line = None
-        if path:
-            idx = content.find(path)
-            if idx >= 0:
-                line = _line_of(content, idx)
-        out.append(SignalRecord("endpoint", dict(ep), line))
+    for value, start in extract_endpoints(content, language):
+        out.append(SignalRecord("endpoint", value, _line_of(content, start)))
     return out
 
 
 def _cli_commands(content: str, language: str) -> list[SignalRecord]:
+    commands, options = extract_cli(content, language)
     out = []
-    for pat, name_group in _CLI_COMMAND_PATTERNS.get(language, []):
-        for m in re.finditer(pat, content):
-            name = None
-            if name_group is not None and m.lastindex and name_group <= m.lastindex:
-                name = m.group(name_group)
-            out.append(SignalRecord(
-                "cli_command", {"name": name}, _line_of(content, m.start())
-            ))
-    for pat in _CLI_OPTION_PATTERNS:
-        for m in re.finditer(pat, content):
-            out.append(SignalRecord(
-                "cli_option", {"flag": m.group(1)}, _line_of(content, m.start())
-            ))
+    for value, start in commands:
+        out.append(SignalRecord("cli_command", value, _line_of(content, start)))
+    for value, start in options:
+        out.append(SignalRecord("cli_option", value, _line_of(content, start)))
+    return out
+
+
+def _jobs(content: str, language: str) -> list[SignalRecord]:
+    """Scheduled / background job declarations (confidence 'inferred')."""
+    out = []
+    for value, start in extract_jobs(content, language):
+        out.append(SignalRecord("job", value, _line_of(content, start)))
     return out
 
 
