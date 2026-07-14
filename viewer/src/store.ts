@@ -21,6 +21,8 @@ import type {
   EntityAccess,
   Finding,
   Concern,
+  Tour,
+  TourStep,
   Rule,
   SelectionSet,
   SetMember,
@@ -433,6 +435,35 @@ interface ArchStore {
   // directive. Returns null when the concern is unknown.
   exportDirectiveForConcern: (concernId: string) => { markdown: string; model: DirectiveModel } | null;
 
+  // Tours: guided-walkthrough player (P6-7, LENS-DESIGN L7). Tours ride the
+  // projection under architecture.tours (the data-first contract); the player is
+  // transient UI state, NOT a store table of tour artifacts (that plus the
+  // enrichment-side generation are the analyzer follow-up). `toursOpen` toggles
+  // the tour list; `activeTourId`/`tourStep` are the walk in progress. All reset
+  // on architecture reload, exactly like the Flow walk (P6-2).
+  toursOpen: boolean;
+  activeTourId: string | null;
+  tourStep: number;
+  openTours: () => void;
+  closeTours: () => void;
+  getTours: () => Tour[];
+  getTourById: (id: string) => Tour | null;
+  // Start playing a tour: land on step 0 and select its target on stable identity
+  // (I12). No-op for an unknown or empty tour.
+  startTour: (tourId: string) => void;
+  // Step forward/back along the active tour, selecting the step's target. No-op at
+  // the ends of the walk.
+  tourStepNext: () => void;
+  tourStepPrev: () => void;
+  // Jump directly to a step (the progress breadcrumb).
+  tourGoToStep: (step: number) => void;
+  // Exit the active tour (clears the walk; leaves the last selection in place).
+  exitTour: () => void;
+  // Navigate to a step's target on stable identity (I12): a component id drills to
+  // and selects the component; otherwise the step's evidence file (or a file-path
+  // target) opens via the file deep link, resolving the symbol at the line.
+  navigateToTourTarget: (step: TourStep) => void;
+
   // Precomputed per-component connection counts, derived from relationships and
   // refreshed only when the architecture's relationships change. Held stable
   // across status-overlay polls so ComponentNode selectors do not fire on every
@@ -805,6 +836,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   connectionCounts: {},
   findingsSurface: { open: false, tab: "findings", kindFilter: null, elementFilter: null },
   stagedFindingSet: null,
+  toursOpen: false,
+  activeTourId: null,
+  tourStep: 0,
 
   reviewMode: false,
   annotations: [],
@@ -881,6 +915,11 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       // dataset; reset on reload so a new scan starts closed (P6-8).
       findingsSurface: { open: false, tab: "findings", kindFilter: null, elementFilter: null },
       stagedFindingSet: null,
+      // A tour walk belongs to a specific dataset; reset it on reload so a new
+      // scan starts with the player closed and no active tour (P6-7).
+      toursOpen: false,
+      activeTourId: null,
+      tourStep: 0,
     });
   },
   setLoading: (loading) => set({ loading }),
@@ -1934,6 +1973,74 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     const setObj = get().getSetById(setId);
     if (!setObj) return null;
     return generateDirective(setObj, get().getSetAnnotation(setId), arch);
+  },
+
+  // ─── Tours player (P6-7) ───────────────────────────────────────────────────
+
+  openTours: () => set({ toursOpen: true }),
+  closeTours: () => set({ toursOpen: false }),
+
+  getTours: () => get().architecture?.tours ?? [],
+  getTourById: (id) => (get().architecture?.tours ?? []).find((t) => t.id === id) ?? null,
+
+  startTour: (tourId) => {
+    const tour = get().getTourById(tourId);
+    if (!tour || tour.steps.length === 0) return;
+    // Close the list and land on the first step, selecting its target (I12).
+    set({ activeTourId: tourId, tourStep: 0, toursOpen: false });
+    get().navigateToTourTarget(tour.steps[0]);
+  },
+
+  tourStepNext: () => {
+    const { activeTourId, tourStep } = get();
+    if (!activeTourId) return;
+    const tour = get().getTourById(activeTourId);
+    if (!tour) return;
+    const next = Math.min(tourStep + 1, tour.steps.length - 1);
+    if (next === tourStep) return;
+    set({ tourStep: next });
+    get().navigateToTourTarget(tour.steps[next]);
+  },
+
+  tourStepPrev: () => {
+    const { activeTourId, tourStep } = get();
+    if (!activeTourId) return;
+    const tour = get().getTourById(activeTourId);
+    if (!tour) return;
+    const prev = Math.max(tourStep - 1, 0);
+    if (prev === tourStep) return;
+    set({ tourStep: prev });
+    get().navigateToTourTarget(tour.steps[prev]);
+  },
+
+  tourGoToStep: (step) => {
+    const { activeTourId } = get();
+    if (!activeTourId) return;
+    const tour = get().getTourById(activeTourId);
+    if (!tour || tour.steps.length === 0) return;
+    const clamped = Math.max(0, Math.min(step, tour.steps.length - 1));
+    set({ tourStep: clamped });
+    get().navigateToTourTarget(tour.steps[clamped]);
+  },
+
+  exitTour: () => set({ activeTourId: null, tourStep: 0 }),
+
+  navigateToTourTarget: (step) => {
+    // Stable identity (I12): a component id drills to and selects the component;
+    // otherwise the step's evidence file (or a file-path target) opens via the
+    // file deep link, which resolves the symbol at the line where present.
+    const comp = get().getComponentById(step.target);
+    if (comp) {
+      get().navigateToComponent(step.target);
+      return;
+    }
+    if (step.evidence?.file) {
+      void get().openFileDeepLink(step.evidence.file, step.evidence.line ?? null);
+      return;
+    }
+    // A bare file-path target (no component match, no evidence): treat the target
+    // as a file path so the walk still lands somewhere concrete.
+    void get().openFileDeepLink(step.target, null);
   },
 
   getComponentById: (id) => {
