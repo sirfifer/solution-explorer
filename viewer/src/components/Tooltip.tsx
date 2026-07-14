@@ -77,9 +77,12 @@ export function Tooltip({
   }, [interactive, clearTimers]);
 
   // Keyboard focus is a first-class trigger, not just mouse hover. onFocus/onBlur
-  // on the wrapper surface the tooltip when the child (or the wrapper itself,
-  // when `focusable`) takes focus. When content is a plain string it also becomes
-  // the wrapper's aria-label so assistive tech reads it without any hover.
+  // on the wrapper surface the tooltip when the child (or the wrapped child)
+  // takes focus. When content is a plain string it also becomes the wrapper's
+  // aria-label. Known limitation: on a non-focusable wrapper (a plain span)
+  // assistive tech support for that label is inconsistent; the robust pattern
+  // is aria-describedby on the actually-focusable element, recorded as a
+  // follow-up in TASKS.md (it needs cloneElement and touches every call site).
   const ariaLabel = label ?? (typeof content === "string" ? content : undefined);
 
   return (
@@ -108,6 +111,12 @@ export function Tooltip({
           }}
           onMouseEnter={onTooltipEnter}
           onMouseLeave={onTooltipLeave}
+          // Keyboard parity for interactive tooltips: tabbing from the trigger
+          // into the tooltip's link fires the wrapper's onBlur (which schedules
+          // the hide); focus landing inside the tooltip must cancel that hide,
+          // exactly as mouse-enter does, or the link is unreachable by keyboard.
+          onFocus={onTooltipEnter}
+          onBlur={onTooltipLeave}
         >
           <div className={`
             min-w-[120px] max-w-[280px] px-3 py-2 rounded-lg text-xs leading-relaxed shadow-lg border

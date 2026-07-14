@@ -165,12 +165,12 @@ export const SWEPT_SURFACES = [
   "rationale.fields",
 ] as const;
 
-// A disposition's tooltip copy, defaulting unknown excluded rules to the loud
-// "treat as a gap" line and unknown non-excluded strings to a plain fallback.
+// A disposition's tooltip copy. Unknown strings never borrow the "parsed"
+// copy: classifyDisposition counts every unrecognized disposition as a gap, so
+// the fallback says exactly that (the copy and the math must agree).
 export function dispositionTooltip(disposition: string): string {
   const known = TOOLTIP_COPY.coverage.disposition as Record<string, string>;
   if (known[disposition]) return known[disposition];
   if (disposition.startsWith("failed")) return known.failed;
-  if (disposition.startsWith("excluded:")) return known.unknownExcluded;
-  return known.parsed;
+  return known.unknownExcluded;
 }

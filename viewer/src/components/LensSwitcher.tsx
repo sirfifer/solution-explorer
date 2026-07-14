@@ -19,8 +19,9 @@ export function LensSwitcher() {
   if (available.length === 0) return null;
 
   // The tooltip on the control shows the active lens's own one-line description
-  // (what this lens shows); each option also carries that description as its
-  // native hover title, so every lens option answers "what does this show".
+  // (what this lens shows). Options carry no native title: option tooltips are
+  // inconsistent across browsers, and the sweep's rule is one tooltip system.
+  // Switching lenses updates this control tooltip to the new lens's description.
   const activeDescription =
     available.find((l) => l.id === lens)?.description ?? TOOLTIP_COPY.lens.switcher;
 
@@ -40,7 +41,7 @@ export function LensSwitcher() {
           className={`bg-transparent outline-none text-xs font-medium ${darkMode ? "text-zinc-200" : "text-zinc-700"}`}
         >
           {available.map((l) => (
-            <option key={l.id} value={l.id} title={l.description}>
+            <option key={l.id} value={l.id}>
               {l.label}
             </option>
           ))}

@@ -6,7 +6,7 @@ import { CoverageBadge } from "../components/CoverageBadge";
 import { FindingsEntry } from "../components/FindingsEntry";
 import { ToursEntry } from "../components/ToursEntry";
 import { FindingsSurface } from "../components/FindingsSurface";
-import { TOOLTIP_COPY, SWEPT_SURFACES } from "../utils/tooltipCopy";
+import { TOOLTIP_COPY, SWEPT_SURFACES, dispositionTooltip } from "../utils/tooltipCopy";
 import { useArchStore } from "../store";
 import type { Architecture, Finding, Concern, Tour } from "../types";
 import "../lenses";
@@ -242,5 +242,27 @@ describe("swept surfaces render their tooltip triggers", () => {
     expect(screen.getByLabelText(TOOLTIP_COPY.tours.entry)).toBeDefined();
     // The stale marker only appears when a tour is stale.
     expect(screen.getByLabelText(TOOLTIP_COPY.tours.stale)).toBeDefined();
+  });
+});
+
+describe("dispositionTooltip fallback semantics", () => {
+  it("returns the exact copy for known dispositions", () => {
+    expect(dispositionTooltip("parsed")).toBe(TOOLTIP_COPY.coverage.disposition.parsed);
+    expect(dispositionTooltip("binary")).toBe(TOOLTIP_COPY.coverage.disposition.binary);
+  });
+
+  it("maps failed:* onto the failed copy", () => {
+    expect(dispositionTooltip("failed:SyntaxError")).toBe(TOOLTIP_COPY.coverage.disposition.failed);
+  });
+
+  it("never borrows the parsed copy for an unknown disposition (gap semantics)", () => {
+    // classifyDisposition counts every unrecognized disposition as a gap, so
+    // the tooltip must say gap, not "Parsed successfully". Fail-before: the
+    // pre-fix fallback returned the parsed copy for e.g. "timeout".
+    expect(dispositionTooltip("timeout")).toBe(TOOLTIP_COPY.coverage.disposition.unknownExcluded);
+    expect(dispositionTooltip("excluded:gitignore")).toBe(
+      TOOLTIP_COPY.coverage.disposition.unknownExcluded,
+    );
+    expect(dispositionTooltip("timeout")).not.toBe(TOOLTIP_COPY.coverage.disposition.parsed);
   });
 });
