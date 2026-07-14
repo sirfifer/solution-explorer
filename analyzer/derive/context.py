@@ -58,6 +58,12 @@ class Deriver:
         self.entity_access: list[dict] = []
         self._entities_by_component: dict[str, list[dict]] = {}
 
+        # Rules derived by the rules pass (P5-5). ``rules`` is the flat,
+        # id-sorted index; ``_rules_by_component`` maps an owning component id to
+        # its rule dicts.
+        self.rules: list[dict] = []
+        self._rules_by_component: dict[str, list[dict]] = {}
+
         # Per-file symbol ids from the store, so metrics and file records match
         # the nested-symbol reality (grammar ids, methods included).
         self._symbol_ids_by_file: dict[str, list[str]] = defaultdict(list)
