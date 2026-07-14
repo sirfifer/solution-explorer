@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import type { Component, ActivityComponent } from "../types";
 import { useArchStore } from "../store";
 import { ROLE_META, getRoleBadgeColors, formatRelativeTime } from "../utils/layout";
+import { Tooltip } from "./Tooltip";
+import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
 // The rationale layer (invariant I13): the "colleague stand-in" context a reader
 // with no colleague to ask would want. It surfaces whatever of ownership, last
@@ -99,31 +101,45 @@ export function RationaleStrip({ component }: { component: Component }) {
       </span>
 
       {roleMeta && r.role && (
-        <span className={`px-1.5 py-0.5 rounded-full font-medium border-0 ${getRoleBadgeColors(r.role, darkMode)}`}>
-          {roleMeta.icon} {roleMeta.label}
-        </span>
+        <Tooltip content={TOOLTIP_COPY.rationale.role} focusable>
+          <span className={`px-1.5 py-0.5 rounded-full font-medium border-0 ${getRoleBadgeColors(r.role, darkMode)}`}>
+            {roleMeta.icon} {roleMeta.label}
+          </span>
+        </Tooltip>
       )}
       {r.hasAiIntent && (
-        <span className={`px-1.5 py-0.5 rounded border ${chip}`} title="AI-written intent is available in the AI Insights tab">
-          {"\u2728"} AI intent
-        </span>
+        <Tooltip content={TOOLTIP_COPY.rationale.aiIntent} focusable>
+          <span className={`px-1.5 py-0.5 rounded border ${chip}`}>
+            {"\u2728"} AI intent
+          </span>
+        </Tooltip>
       )}
       {r.author && (
-        <span className={`px-1.5 py-0.5 rounded border ${chip}`}>by {r.author}</span>
+        <Tooltip content={TOOLTIP_COPY.rationale.author} focusable>
+          <span className={`px-1.5 py-0.5 rounded border ${chip}`}>by {r.author}</span>
+        </Tooltip>
       )}
       {r.lastChange && (
-        <span className={`px-1.5 py-0.5 rounded border ${chip}`}>changed {r.lastChange}</span>
+        <Tooltip content={TOOLTIP_COPY.rationale.lastChange} focusable>
+          <span className={`px-1.5 py-0.5 rounded border ${chip}`}>changed {r.lastChange}</span>
+        </Tooltip>
       )}
       {r.churn !== undefined && (
-        <span className={`px-1.5 py-0.5 rounded border ${chip}`} title="Change frequency">
-          churn {r.churn}
-        </span>
+        <Tooltip content={TOOLTIP_COPY.rationale.churn} focusable>
+          <span className={`px-1.5 py-0.5 rounded border ${chip}`}>
+            churn {r.churn}
+          </span>
+        </Tooltip>
       )}
       {r.commit && (
-        <span className={`px-1.5 py-0.5 rounded border font-mono ${chip}`}>{r.commit.slice(0, 7)}</span>
+        <Tooltip content={TOOLTIP_COPY.rationale.commit} focusable>
+          <span className={`px-1.5 py-0.5 rounded border font-mono ${chip}`}>{r.commit.slice(0, 7)}</span>
+        </Tooltip>
       )}
       {r.pr && (
-        <span className={`px-1.5 py-0.5 rounded border ${chip}`}>PR {r.pr}</span>
+        <Tooltip content={TOOLTIP_COPY.rationale.pr} focusable>
+          <span className={`px-1.5 py-0.5 rounded border ${chip}`}>PR {r.pr}</span>
+        </Tooltip>
       )}
     </div>
   );

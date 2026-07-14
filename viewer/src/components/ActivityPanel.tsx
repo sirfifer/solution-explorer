@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { useArchStore } from "../store";
 import { formatNumber, getHeatColor } from "../utils/layout";
 import type { ActivityComponent, ActivityAuthor } from "../types";
+import { Tooltip } from "./Tooltip";
+import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
 // The Activity lens surface (P6-5, LENS-DESIGN.md L5). The landing view is the
 // ranked hotspot list (invariant I11: "look here first"); selecting a hotspot
@@ -27,19 +29,22 @@ function KnowledgeBadges({ c, darkMode }: { c: ActivityComponent; darkMode: bool
   return (
     <div className="flex flex-wrap items-center gap-1 text-[10px]">
       {c.knowledge_island && (
-        <span className={`px-1.5 py-0.5 rounded ${risk}`} title="One author holds >= 95% of commits: a knowledge island">
-          {"\u{1F512}"} island
-        </span>
+        <Tooltip content={TOOLTIP_COPY.activity.knowledgeIsland}>
+          <span className={`px-1.5 py-0.5 rounded ${risk}`}>
+            {"\u{1F512}"} island
+          </span>
+        </Tooltip>
       )}
-      <span
-        className={`px-1.5 py-0.5 rounded ${c.bus_factor <= 1 ? risk : chip}`}
-        title="Bus factor: the fewest authors covering half the commits"
-      >
-        bus {c.bus_factor}
-      </span>
-      <span className={`px-1.5 py-0.5 rounded ${chip}`} title="Author count">
-        {c.author_count} author{c.author_count !== 1 ? "s" : ""}
-      </span>
+      <Tooltip content={TOOLTIP_COPY.activity.busFactor}>
+        <span className={`px-1.5 py-0.5 rounded ${c.bus_factor <= 1 ? risk : chip}`}>
+          bus {c.bus_factor}
+        </span>
+      </Tooltip>
+      <Tooltip content={TOOLTIP_COPY.activity.authorCount}>
+        <span className={`px-1.5 py-0.5 rounded ${chip}`}>
+          {c.author_count} author{c.author_count !== 1 ? "s" : ""}
+        </span>
+      </Tooltip>
     </div>
   );
 }
@@ -204,12 +209,18 @@ function OverviewView({
                 <span className={`flex-1 text-xs font-medium truncate ${darkMode ? "text-zinc-200" : "text-zinc-800"}`} title={c.id}>
                   {c.name}
                 </span>
-                <span className={`text-[10px] tabular-nums shrink-0 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-                  {formatNumber(c.commit_count)} commits
-                </span>
+                <Tooltip content={TOOLTIP_COPY.activity.commitCount}>
+                  <span className={`text-[10px] tabular-nums shrink-0 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                    {formatNumber(c.commit_count)} commits
+                  </span>
+                </Tooltip>
               </div>
               <div className="mt-1.5 ml-6">
-                <HeatBar t={maxScore > 0 ? c.hotspot_score / maxScore : 0} />
+                <Tooltip content={TOOLTIP_COPY.activity.hotspotScore} position="bottom" className="block w-full">
+                  <div className="w-full">
+                    <HeatBar t={maxScore > 0 ? c.hotspot_score / maxScore : 0} />
+                  </div>
+                </Tooltip>
                 <div className="mt-1.5">
                   <KnowledgeBadges c={c} darkMode={darkMode} />
                 </div>
@@ -308,12 +319,13 @@ function FocusedView({
                 <span className={`truncate ${darkMode ? "text-zinc-300" : "text-zinc-700"}`} title={p.partnerId}>
                   {p.partnerName}
                 </span>
-                <span
-                  className={`shrink-0 tabular-nums px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}
-                  title="Commits that changed both"
-                >
-                  {p.count}
-                </span>
+                <Tooltip content={TOOLTIP_COPY.activity.couplingCount} focusable>
+                  <span
+                    className={`shrink-0 tabular-nums px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}
+                  >
+                    {p.count}
+                  </span>
+                </Tooltip>
               </li>
             ))}
           </ul>

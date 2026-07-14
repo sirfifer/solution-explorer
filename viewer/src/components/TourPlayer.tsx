@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { useArchStore } from "../store";
 import { isTourStale, tourStepCount } from "../tours/model";
 import { evidenceLabel } from "../findings/model";
+import { Tooltip } from "./Tooltip";
+import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
 // The guided-walkthrough player (P6-7, LENS-DESIGN L7). Two surfaces, one
 // component:
@@ -15,13 +17,14 @@ import { evidenceLabel } from "../findings/model";
 
 function StaleMarker({ darkMode }: { darkMode: boolean }) {
   return (
-    <span
-      data-testid="tour-stale-marker"
-      className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${darkMode ? "bg-amber-500/15 text-amber-300" : "bg-amber-100 text-amber-700"}`}
-      title="This walkthrough's provenance says its anchored code has drifted since it was generated (I5). Read it with care."
-    >
-      {"⚠"} may be stale
-    </span>
+    <Tooltip content={TOOLTIP_COPY.tours.stale}>
+      <span
+        data-testid="tour-stale-marker"
+        className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${darkMode ? "bg-amber-500/15 text-amber-300" : "bg-amber-100 text-amber-700"}`}
+      >
+        {"⚠"} may be stale
+      </span>
+    </Tooltip>
   );
 }
 

@@ -7,6 +7,7 @@ import {
   ENTITY_KIND_ORDER,
 } from "../lenses";
 import type { DataEntity, Component, EntityAccess } from "../types";
+import { Tooltip } from "./Tooltip";
 
 // The Data lens surface (P6-3, LENS-DESIGN.md L3). The landing view is a ranked
 // panel (invariant I11): entities grouped by kind, ordered within a kind by how
@@ -71,12 +72,13 @@ function AccessorRow({
         {name}
       </span>
       {confidence === "inferred" && (
-        <span
-          className={`text-[9px] px-1 py-0.5 rounded uppercase tracking-wide ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}
-          title="Inferred by heuristic, not a parse-level certainty"
-        >
-          inferred
-        </span>
+        <Tooltip content="Inferred by heuristic, not a parse-level certainty." focusable>
+          <span
+            className={`text-[9px] px-1 py-0.5 rounded uppercase tracking-wide ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}
+          >
+            inferred
+          </span>
+        </Tooltip>
       )}
     </li>
   );
@@ -243,12 +245,13 @@ export function DataPanel() {
                         <span className={`flex-1 text-xs font-medium truncate ${darkMode ? "text-zinc-200" : "text-zinc-800"}`} title={ent.id}>
                           {ent.name}
                         </span>
-                        <span
-                          className={`shrink-0 text-[10px] tabular-nums px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}
-                          title="Components that read or write this entity"
-                        >
-                          {count}
-                        </span>
+                        <Tooltip content="Components that read or write this entity.">
+                          <span
+                            className={`shrink-0 text-[10px] tabular-nums px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}
+                          >
+                            {count}
+                          </span>
+                        </Tooltip>
                       </div>
                       <div className={`mt-0.5 text-[10px] truncate ${darkMode ? "text-zinc-500" : "text-zinc-400"}`} title={owner}>
                         {owner}

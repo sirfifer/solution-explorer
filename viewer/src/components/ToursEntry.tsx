@@ -1,5 +1,7 @@
 import { useArchStore } from "../store";
 import { hasTours, isTourStale } from "../tours/model";
+import { Tooltip } from "./Tooltip";
+import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
 // The Tours entry point (P6-7, LENS-DESIGN L7). A slim bar below the findings
 // entry, present ONLY when the dataset carries tours; it opens the tour list.
@@ -31,13 +33,17 @@ export function ToursEntry() {
         className="w-full flex items-center gap-2 text-left"
       >
         <span className="shrink-0">{"\u{1F5FA}️"}</span>
-        <span className="font-semibold shrink-0">
-          {tours.length} walkthrough{tours.length !== 1 ? "s" : ""}
-        </span>
-        {staleCount > 0 && (
-          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${darkMode ? "bg-amber-500/15 text-amber-300" : "bg-amber-100 text-amber-700"}`}>
-            {staleCount} stale
+        <Tooltip content={TOOLTIP_COPY.tours.entry}>
+          <span className="font-semibold shrink-0">
+            {tours.length} walkthrough{tours.length !== 1 ? "s" : ""}
           </span>
+        </Tooltip>
+        {staleCount > 0 && (
+          <Tooltip content={TOOLTIP_COPY.tours.stale}>
+            <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${darkMode ? "bg-amber-500/15 text-amber-300" : "bg-amber-100 text-amber-700"}`}>
+              {staleCount} stale
+            </span>
+          </Tooltip>
         )}
         <span className="flex-1" />
         <span className={`shrink-0 text-[10px] ${darkMode ? "text-teal-400/80" : "text-teal-600"}`}>

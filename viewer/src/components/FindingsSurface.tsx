@@ -6,6 +6,8 @@ import {
   findingKinds,
   evidenceLabel,
 } from "../findings/model";
+import { Tooltip } from "./Tooltip";
+import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
 // The Findings and Concerns surface (P6-8, LENS-DESIGN.md sections 8, 9, 10).
 //
@@ -42,10 +44,13 @@ function KindBadge({ kind, darkMode }: { kind: string; darkMode: boolean }) {
     inconsistency: darkMode ? "bg-rose-500/15 text-rose-300" : "bg-rose-100 text-rose-700",
   };
   const cls = map[kind] ?? (darkMode ? "bg-zinc-800 text-zinc-300" : "bg-zinc-100 text-zinc-700");
+  const copy = (TOOLTIP_COPY.findings.kind as Record<string, string>)[kind];
   return (
-    <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider ${cls}`}>
-      {kind}
-    </span>
+    <Tooltip content={copy ?? `Finding kind: ${kind}.`}>
+      <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider ${cls}`}>
+        {kind}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -54,32 +59,35 @@ function KindBadge({ kind, darkMode }: { kind: string; darkMode: boolean }) {
 function VerificationBadge({ status, darkMode }: { status: string; darkMode: boolean }) {
   if (status === "verified") {
     return (
-      <span
-        className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${darkMode ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-100 text-emerald-700"}`}
-        title="Verified against its own evidence (Phase 7)"
-      >
-        {"✓"} verified
-      </span>
+      <Tooltip content={TOOLTIP_COPY.findings.verification.verified}>
+        <span
+          className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${darkMode ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-100 text-emerald-700"}`}
+        >
+          {"✓"} verified
+        </span>
+      </Tooltip>
     );
   }
   if (status === "refuted") {
     return (
-      <span
-        className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${darkMode ? "bg-red-500/15 text-red-300" : "bg-red-100 text-red-700"}`}
-        title="Refuted by verification: shown for transparency, not asserted as fact"
-      >
-        {"✗"} refuted
-      </span>
+      <Tooltip content={TOOLTIP_COPY.findings.verification.refuted}>
+        <span
+          className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${darkMode ? "bg-red-500/15 text-red-300" : "bg-red-100 text-red-700"}`}
+        >
+          {"✗"} refuted
+        </span>
+      </Tooltip>
     );
   }
   // Default and explicit "unverified": marked, never presented as established fact.
   return (
-    <span
-      className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${darkMode ? "bg-amber-500/15 text-amber-300" : "bg-amber-100 text-amber-700"}`}
-      title="Not yet verified against its evidence: a candidate, not a confirmed fact (verification is Phase 7)"
-    >
-      {"⚠"} unverified · not confirmed
-    </span>
+    <Tooltip content={TOOLTIP_COPY.findings.verification.unverified}>
+      <span
+        className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${darkMode ? "bg-amber-500/15 text-amber-300" : "bg-amber-100 text-amber-700"}`}
+      >
+        {"⚠"} unverified · not confirmed
+      </span>
+    </Tooltip>
   );
 }
 
@@ -139,11 +147,17 @@ function FindingRow({ finding, darkMode }: { finding: Finding; darkMode: boolean
         <div className="flex flex-wrap items-center gap-1.5">
           <KindBadge kind={finding.kind} darkMode={darkMode} />
           <VerificationBadge status={finding.verification_status} darkMode={darkMode} />
-          <span className={`text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500"}`} title="Confidence">
-            {finding.confidence}
-          </span>
-          <span className={`ml-auto text-[10px] tabular-nums shrink-0 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`} title="Rank score">
-            {finding.rank_score.toFixed(0)}
+          <Tooltip content={TOOLTIP_COPY.findings.confidence}>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500"}`}>
+              {finding.confidence}
+            </span>
+          </Tooltip>
+          <span className="ml-auto flex items-center">
+            <Tooltip content={TOOLTIP_COPY.findings.rankScore}>
+              <span className={`text-[10px] tabular-nums shrink-0 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                {finding.rank_score.toFixed(0)}
+              </span>
+            </Tooltip>
           </span>
         </div>
         <div className={`mt-1.5 flex items-start gap-1.5 text-xs ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
@@ -151,9 +165,11 @@ function FindingRow({ finding, darkMode }: { finding: Finding; darkMode: boolean
             {expanded ? "▼" : "▶"}
           </span>
           <span className="flex-1">{finding.summary}</span>
-          <span className={`shrink-0 text-[10px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-            {finding.members.length} member{finding.members.length !== 1 ? "s" : ""}
-          </span>
+          <Tooltip content={TOOLTIP_COPY.findings.memberCount}>
+            <span className={`shrink-0 text-[10px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+              {finding.members.length} member{finding.members.length !== 1 ? "s" : ""}
+            </span>
+          </Tooltip>
         </div>
       </button>
 
@@ -163,16 +179,18 @@ function FindingRow({ finding, darkMode }: { finding: Finding; darkMode: boolean
           <ul className="mt-2 space-y-1">
             {finding.members.map((m) => (
               <li key={m.id} className="flex items-baseline gap-2 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => openMember(m)}
-                  className={`font-mono text-left truncate ${linkCls}`}
-                  title={`Open ${m.file ?? m.component_id ?? m.id}`}
-                >
-                  {m.file
-                    ? evidenceLabel({ file: m.file, line: m.line_start })
-                    : (m.component_id ?? m.id)}
-                </button>
+                <Tooltip content={TOOLTIP_COPY.evidence.link} position="bottom">
+                  <button
+                    type="button"
+                    onClick={() => openMember(m)}
+                    className={`font-mono text-left truncate ${linkCls}`}
+                    aria-label={`Open ${m.file ?? m.component_id ?? m.id}`}
+                  >
+                    {m.file
+                      ? evidenceLabel({ file: m.file, line: m.line_start })
+                      : (m.component_id ?? m.id)}
+                  </button>
+                </Tooltip>
                 {m.symbol && (
                   <span className={`shrink-0 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>{m.symbol}</span>
                 )}
@@ -198,14 +216,15 @@ function FindingRow({ finding, darkMode }: { finding: Finding; darkMode: boolean
             >
               Annotate the set
             </button>
-            <button
-              type="button"
-              onClick={() => void exportDirective()}
-              className={`text-[11px] px-2 py-1 rounded font-medium ${copied ? (darkMode ? "bg-emerald-600/20 text-emerald-300" : "bg-emerald-100 text-emerald-700") : btn}`}
-              title="Build a selection set from this finding and copy a structured work-order directive (markdown plus machine-readable JSON) for an AI executor"
-            >
-              {copied ? "Copied directive" : "Export directive"}
-            </button>
+            <Tooltip content={TOOLTIP_COPY.directive.export} position="bottom">
+              <button
+                type="button"
+                onClick={() => void exportDirective()}
+                className={`text-[11px] px-2 py-1 rounded font-medium ${copied ? (darkMode ? "bg-emerald-600/20 text-emerald-300" : "bg-emerald-100 text-emerald-700") : btn}`}
+              >
+                {copied ? "Copied directive" : "Export directive"}
+              </button>
+            </Tooltip>
           </div>
         </div>
       )}
@@ -261,21 +280,29 @@ function ConcernRow({ concern, darkMode }: { concern: Concern; darkMode: boolean
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-2">
               {/* Mechanical name; the Phase 7 plain-language slot sits beside it. */}
-              <span className={`text-sm font-semibold ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
-                {concern.title}
-              </span>
-              <span className={`font-mono text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`} title="Mechanical slug">
-                {concern.id}
-              </span>
+              <Tooltip content={TOOLTIP_COPY.concern.row}>
+                <span className={`text-sm font-semibold ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+                  {concern.title}
+                </span>
+              </Tooltip>
+              <Tooltip content={TOOLTIP_COPY.concern.slug}>
+                <span className={`font-mono text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                  {concern.id}
+                </span>
+              </Tooltip>
               {/* Plain-language name slot (P7-4), shaped but empty until enrichment fills it. */}
             </div>
-            <div className={`text-[11px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-              {concern.basis}
-            </div>
+            <Tooltip content={TOOLTIP_COPY.concern.basis}>
+              <div className={`text-[11px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                {concern.basis}
+              </div>
+            </Tooltip>
           </div>
-          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded tabular-nums ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
-            {concern.members.length} member{concern.members.length !== 1 ? "s" : ""}
-          </span>
+          <Tooltip content={TOOLTIP_COPY.concern.memberCount}>
+            <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded tabular-nums ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+              {concern.members.length} member{concern.members.length !== 1 ? "s" : ""}
+            </span>
+          </Tooltip>
         </div>
       </button>
 
