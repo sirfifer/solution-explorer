@@ -3,6 +3,7 @@ import { useArchStore } from "../store";
 import type { Annotation, Component } from "../types";
 import { getTypeColors, TYPE_META } from "../utils/layout";
 import { generateReviewPrompt, generateComponentPrompt } from "../utils/promptGenerator";
+import { SelectionSetsSection } from "./SelectionSetsSection";
 
 // Human-readable labels for sub-component targets
 const SUB_TARGET_LABELS: Record<string, { label: string; icon: string }> = {
@@ -45,6 +46,7 @@ export function ReviewSummary() {
     selectComponent,
     setActivePanel,
     getComponentById,
+    selectionSets,
   } = useArchStore();
 
   const [copied, setCopied] = useState(false);
@@ -271,11 +273,12 @@ export function ReviewSummary() {
         </button>
       </div>
 
-      {/* Annotations list, grouped by component */}
+      {/* Annotations list, grouped by component, plus selection sets */}
       <div className="flex-1 overflow-y-auto">
-        {annotations.length === 0 ? (
+        {annotations.length === 0 && selectionSets.length === 0 ? (
           <div className={`px-4 py-8 text-center text-sm ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
-            No annotations yet. Click on components in the graph to add feedback.
+            No annotations yet. Click on components in the graph to add feedback,
+            or create a selection set from a finding, concern, or search.
           </div>
         ) : (
           <div className="py-2">
@@ -290,6 +293,7 @@ export function ReviewSummary() {
                 renderAnnotation={renderAnnotation}
               />
             ))}
+            <SelectionSetsSection darkMode={darkMode} />
             {orphaned.length > 0 && (
               <div className="mt-2" data-testid="orphaned-annotations">
                 <div className={`px-4 pt-3 pb-2 flex items-center gap-1.5 ${darkMode ? "text-amber-400" : "text-amber-600"}`}>

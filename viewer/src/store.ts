@@ -20,11 +20,16 @@ import type {
   DataEntity,
   EntityAccess,
   Rule,
+  Finding,
+  SelectionSet,
+  SetMember,
+  SetAnnotation,
   LiveConfig,
   LiveVersion,
   StatusOverlay,
   ChangelogEntry,
 } from "./types";
+import type { SearchResult } from "./utils/search";
 import { addToSearchIndex } from "./utils/search";
 import {
   getLens,
@@ -45,6 +50,7 @@ import {
   loadAnnotations,
   saveAnnotations,
 } from "./utils/annotationStorage";
+import { loadSelectionSets, saveSelectionSets } from "./utils/setStorage";
 
 // Storage key for dark mode preference (localStorage for persistence across sessions)
 const DARK_MODE_KEY = "arch-dark-mode";
@@ -265,6 +271,37 @@ interface ArchStore {
   clearAllAnnotations: () => void;
   getAnnotationsForComponent: (componentId: string) => Annotation[];
   getAnnotationsForTarget: (targetType: AnnotationTarget, targetId: string) => Annotation[];
+
+  // Selection sets and set-level annotations (P6-9, LENS-DESIGN section 10).
+  // Sets are addressable, nameable collections of members keyed on stable
+  // identity, created from a finding, a concern, search results, or manual
+  // multi-select. They and their annotations persist alongside single-element
+  // annotations by the same architecture identity. Restored on setArchitecture.
+  selectionSets: SelectionSet[];
+  setAnnotations: SetAnnotation[];
+  // Create a set from an explicit member list. Returns the new set's id.
+  createSet: (name: string, origin: string, members: SetMember[]) => string;
+  // Create a set from a finding's members (clone cluster, orphan, ...). No-op
+  // (returns null) when the finding id is unknown. Origin `finding:<id>`.
+  createSetFromFinding: (findingId: string) => string | null;
+  // Create a set from a concern's members. No-op (returns null) when the concern
+  // id is unknown. Origin `concern:<id>`.
+  createSetFromConcern: (concernId: string) => string | null;
+  // Create a set from the current search results. Origin `search:<query>`.
+  createSetFromSearchResults: (query: string, results: SearchResult[]) => string;
+  // Manual multi-select: add a component to a set. A null setId appends to (or
+  // creates) the manual set. Returns the target set's id. De-dupes by ref.
+  addComponentToSet: (setId: string | null, componentId: string) => string | null;
+  renameSet: (setId: string, name: string) => void;
+  deleteSet: (setId: string) => void;
+  setSetIntent: (setId: string, intent: string) => void;
+  setSetMemberNote: (setId: string, memberRef: string, note: string) => void;
+  getSelectionSets: () => SelectionSet[];
+  getSetById: (setId: string) => SelectionSet | null;
+  getSetAnnotation: (setId: string) => SetAnnotation | null;
+  // Navigate to a set member on its stable identity (I12): always via its owning
+  // component so component/file/symbol members all land coherently.
+  navigateToSetMember: (member: SetMember) => void;
 
   // Live monitoring
   adminOpen: boolean;
@@ -493,6 +530,50 @@ function persistCurrentAnnotations(get: () => ArchStore): void {
   saveAnnotations(architectureIdentity(arch), get().annotations);
 }
 
+// Persist the current selection sets and set-annotations for the loaded
+// architecture's stable identity. Called after every set mutation so a hard
+// reload or re-analysis restores them, exactly like annotations (P6-9).
+function persistCurrentSets(get: () => ArchStore): void {
+  const arch = get().architecture;
+  if (!arch) return;
+  saveSelectionSets(
+    architectureIdentity(arch),
+    get().selectionSets,
+    get().setAnnotations,
+  );
+}
+
+// Build a set member from one finding member (clone fragment, orphan component).
+// Members carry stable identity (I4): a component member's ref is its component
+// id; a fragment's ref is its unique file:line id. componentId always resolves
+// so navigation and evidence work (I12).
+function setMemberFromFinding(m: Finding["members"][number], finding: Finding): SetMember {
+  const componentId = m.component_id ?? m.id;
+  const kind: SetMember["kind"] =
+    m.kind === "component" ? "component" : m.symbol ? "symbol" : "file";
+  const label =
+    m.symbol && m.file
+      ? `${m.symbol} (${m.file.split("/").pop()})`
+      : m.file
+        ? m.file.split("/").pop() || m.file
+        : componentId;
+  const evidence: string[] = [];
+  const cloneClass = (finding.detail as { clone_class?: string }).clone_class;
+  if (cloneClass) evidence.push(`clone class: ${cloneClass}`);
+  evidence.push(`finding: ${finding.summary}`);
+  if (m.symbol) evidence.push(`symbol: ${m.symbol}`);
+  return {
+    kind,
+    ref: m.id,
+    componentId,
+    label,
+    file: m.file ?? undefined,
+    lineStart: m.line_start,
+    lineEnd: m.line_end,
+    evidence,
+  };
+}
+
 // Split the promoted children at a drill level into the components shown as real
 // nodes and the small internal modules grouped into aggregate nodes (P6-4).
 //
@@ -646,6 +727,8 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   annotations: [],
   annotatingComponentId: null,
   annotatingTarget: null,
+  selectionSets: [],
+  setAnnotations: [],
 
   mobileChromeHidden: false,
   setMobileChromeHidden: (hidden) => set({ mobileChromeHidden: hidden }),
@@ -664,6 +747,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     // Restore persisted annotations for this architecture's stable identity so
     // a hard reload or re-analysis does not destroy review work (F-VW-4).
     const restored = loadAnnotations(architectureIdentity(arch));
+    // Restore persisted selection sets and set-annotations for this architecture
+    // identity too, so a hard reload or re-analysis keeps them (P6-9).
+    const restoredSets = loadSelectionSets(architectureIdentity(arch));
     // Invalidate the split-mode detail cache on every architecture update so
     // panels refetch fresh files/symbols instead of showing stale data from a
     // previous scan (F-VW-3 / F-VW-7). The next open refetches. This is the
@@ -672,6 +758,8 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       architecture: arch,
       loading: false,
       annotations: restored,
+      selectionSets: restoredSets.sets,
+      setAnnotations: restoredSets.annotations,
       componentDetailCache: {},
       // Clear any in-flight loading markers and prior fetch errors too: a live
       // refresh mid-detail-load must not leave the panel stuck in a loading or
@@ -1208,6 +1296,205 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   getAnnotationsForTarget: (targetType, targetId) => {
     return get().annotations.filter((a) => a.targetType === targetType && a.targetId === targetId);
+  },
+
+  // ─── Selection sets (P6-9) ─────────────────────────────────────────────────
+
+  createSet: (name, origin, members) => {
+    // De-dupe members by ref so the same site is never listed twice.
+    const seen = new Set<string>();
+    const deduped = members.filter((m) => {
+      if (seen.has(m.ref)) return false;
+      seen.add(m.ref);
+      return true;
+    });
+    const id = crypto.randomUUID();
+    const setObj: SelectionSet = {
+      id,
+      name: name.trim() || "Untitled set",
+      origin,
+      members: deduped,
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ selectionSets: [...s.selectionSets, setObj] }));
+    persistCurrentSets(get);
+    return id;
+  },
+
+  createSetFromFinding: (findingId) => {
+    const arch = get().architecture;
+    const finding = arch?.findings?.find((f) => f.id === findingId);
+    if (!finding) return null;
+    const members = finding.members.map((m) => setMemberFromFinding(m, finding));
+    const label =
+      finding.kind === "duplication"
+        ? `Duplication: ${finding.summary}`
+        : finding.kind === "orphan"
+          ? `Orphan: ${finding.summary}`
+          : finding.summary;
+    // finding.id already carries the "finding:<kind>:..." namespace, so it IS the
+    // origin (no extra prefix), giving a clean `finding:duplication:...` origin.
+    return get().createSet(label, finding.id, members);
+  },
+
+  createSetFromConcern: (concernId) => {
+    const arch = get().architecture;
+    const concern = arch?.concerns?.find((c) => c.id === concernId);
+    if (!concern) return null;
+    const members: SetMember[] = concern.members.map((m) => {
+      const comp = findComponent(arch!.components, m.component_id);
+      const firstEv = m.evidence[0];
+      const evidence: string[] = [];
+      if (concern.basis) evidence.push(`basis: ${concern.basis}`);
+      for (const marker of m.markers) evidence.push(`marker: ${marker}`);
+      for (const ev of m.evidence.slice(0, 5)) {
+        evidence.push(
+          ev.line != null
+            ? `${ev.signal} at ${ev.file}:${ev.line}`
+            : `${ev.signal} at ${ev.file}`,
+        );
+      }
+      return {
+        kind: "component" as const,
+        ref: m.component_id,
+        componentId: m.component_id,
+        label: comp?.name ?? m.component_id,
+        file: firstEv?.file,
+        lineStart: firstEv?.line ?? null,
+        lineEnd: null,
+        evidence,
+      };
+    });
+    // concern.id already carries the "concern:<kind>" namespace, so it IS the origin.
+    return get().createSet(concern.title || concern.id, concern.id, members);
+  },
+
+  createSetFromSearchResults: (query, results) => {
+    const members: SetMember[] = results.map((r) => {
+      const kind: SetMember["kind"] =
+        r.type === "component" ? "component" : r.type === "symbol" ? "symbol" : "file";
+      const componentId =
+        r.type === "component" ? r.id : r.componentId ?? r.id;
+      const evidence: string[] = [`matched search "${query}"`];
+      return {
+        kind,
+        ref: r.id,
+        componentId,
+        label: r.name,
+        file: r.type === "component" ? undefined : r.path,
+        lineStart: null,
+        lineEnd: null,
+        evidence,
+      };
+    });
+    return get().createSet(`Search: ${query}`, `search:${query}`, members);
+  },
+
+  addComponentToSet: (setId, componentId) => {
+    const arch = get().architecture;
+    if (!arch) return null;
+    const comp = findComponent(arch.components, componentId);
+    if (!comp) return null;
+    const member: SetMember = {
+      kind: "component",
+      ref: comp.id,
+      componentId: comp.id,
+      label: comp.name,
+      file: comp.path,
+      lineStart: null,
+      lineEnd: null,
+      evidence: [`added manually from ${comp.path}`],
+    };
+
+    // Target an explicit set, or the most recent manual set, or create one.
+    let targetId = setId;
+    if (!targetId) {
+      const manualSets = get().selectionSets.filter((s) => s.origin === "manual");
+      targetId = manualSets.length > 0 ? manualSets[manualSets.length - 1].id : null;
+    }
+    if (!targetId) {
+      return get().createSet("Manual selection", "manual", [member]);
+    }
+
+    set((s) => ({
+      selectionSets: s.selectionSets.map((ss) => {
+        if (ss.id !== targetId) return ss;
+        if (ss.members.some((m) => m.ref === member.ref)) return ss; // already present
+        return { ...ss, members: [...ss.members, member] };
+      }),
+    }));
+    persistCurrentSets(get);
+    return targetId;
+  },
+
+  renameSet: (setId, name) => {
+    set((s) => ({
+      selectionSets: s.selectionSets.map((ss) =>
+        ss.id === setId ? { ...ss, name: name.trim() || ss.name } : ss,
+      ),
+    }));
+    persistCurrentSets(get);
+  },
+
+  deleteSet: (setId) => {
+    set((s) => ({
+      selectionSets: s.selectionSets.filter((ss) => ss.id !== setId),
+      setAnnotations: s.setAnnotations.filter((a) => a.setId !== setId),
+    }));
+    persistCurrentSets(get);
+  },
+
+  setSetIntent: (setId, intent) => {
+    set((s) => {
+      const existing = s.setAnnotations.find((a) => a.setId === setId);
+      if (existing) {
+        return {
+          setAnnotations: s.setAnnotations.map((a) =>
+            a.setId === setId ? { ...a, intent } : a,
+          ),
+        };
+      }
+      return {
+        setAnnotations: [...s.setAnnotations, { setId, intent, memberNotes: [] }],
+      };
+    });
+    persistCurrentSets(get);
+  },
+
+  setSetMemberNote: (setId, memberRef, note) => {
+    set((s) => {
+      const existing = s.setAnnotations.find((a) => a.setId === setId);
+      const upsertNote = (a: SetAnnotation): SetAnnotation => {
+        const others = a.memberNotes.filter((n) => n.memberRef !== memberRef);
+        const next = note.trim().length > 0 ? [...others, { memberRef, note }] : others;
+        return { ...a, memberNotes: next };
+      };
+      if (existing) {
+        return {
+          setAnnotations: s.setAnnotations.map((a) =>
+            a.setId === setId ? upsertNote(a) : a,
+          ),
+        };
+      }
+      return {
+        setAnnotations: [
+          ...s.setAnnotations,
+          upsertNote({ setId, intent: "", memberNotes: [] }),
+        ],
+      };
+    });
+    persistCurrentSets(get);
+  },
+
+  getSelectionSets: () => get().selectionSets,
+  getSetById: (setId) => get().selectionSets.find((s) => s.id === setId) ?? null,
+  getSetAnnotation: (setId) =>
+    get().setAnnotations.find((a) => a.setId === setId) ?? null,
+
+  navigateToSetMember: (member) => {
+    // Navigate on stable identity (I12): always via the owning component, which
+    // for a component member is the member itself.
+    get().navigateToComponent(member.componentId);
   },
 
   loadComponentDetail: async (componentId) => {

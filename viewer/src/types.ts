@@ -672,6 +672,11 @@ export interface Architecture {
   // Rules lens (P6-6). The per-component `rules` key is the per-component slice;
   // this index is the whole-system list the Rules lens ranks.
   rules?: Rule[];
+  // Ranked correlation findings and cross-cutting concerns (P5-6). Optional; old
+  // datasets and multi-repo projections omit them. Consumed by set creation
+  // (P6-9) and the findings/concerns surfaces (P6-8).
+  findings?: Finding[];
+  concerns?: Concern[];
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
   live_status?: {
     statuses?: Record<string, ArchitectureStatus>;
@@ -738,6 +743,119 @@ export interface Annotation {
   text: string;
   createdAt: string;
   targetContext?: AnnotationTargetContext;
+}
+
+// Correlation findings and concerns (P5-6 derivation, surfaced to the viewer by
+// P6-8/P6-9). Optional: old datasets and multi-repo projections omit them, so
+// every consumer treats them as possibly-absent (I15 findings are ranked,
+// evidenced, and carry a verification status).
+export interface FindingEvidence {
+  // Fragment/clone evidence carries file + line span + symbol.
+  file?: string;
+  line?: number;
+  end_line?: number;
+  symbol?: string;
+  // Orphan/module evidence carries the component/module shape instead.
+  component_id?: string;
+  path?: string;
+  type?: string;
+  files?: string[];
+}
+
+export interface FindingMember {
+  id: string;
+  kind: string; // "fragment" | "component" | ...
+  component_id: string | null;
+  file: string | null;
+  line_start: number | null;
+  line_end: number | null;
+  symbol?: string | null;
+}
+
+export interface Finding {
+  id: string;
+  kind: string; // "duplication" | "orphan" | ...
+  confidence: string;
+  summary: string;
+  rank_score: number;
+  verification_status: string; // "unverified" until P7-4 verifies
+  members: FindingMember[];
+  evidence: FindingEvidence[];
+  detail: Record<string, unknown>;
+}
+
+export interface ConcernMemberEvidence {
+  file: string;
+  // Optional: some signal kinds (e.g. an import) carry no specific line.
+  line?: number;
+  signal: string;
+}
+
+export interface ConcernMember {
+  component_id: string;
+  files: string[];
+  markers: string[];
+  evidence: ConcernMemberEvidence[];
+}
+
+export interface Concern {
+  id: string;
+  kind: string;
+  title: string;
+  basis: string;
+  detail: Record<string, unknown>;
+  members: ConcernMember[];
+}
+
+// Selection sets and set-level review actions (P6-9, LENS-DESIGN section 10).
+// A set is an addressable, nameable collection of members keyed on STABLE
+// identity, created from a finding, a concern, a search, or manual multi-select.
+// Sets and their annotations persist alongside single-element annotations.
+
+// Where a set came from. `finding:<id>` / `concern:<id>` / `search:<query>` /
+// `manual`. Drives the auto-suggested acceptance criteria in a directive.
+export type SetOrigin = string;
+
+export interface SetMember {
+  // The grain of the referent. Navigation and evidence resolution use this.
+  kind: "component" | "file" | "symbol";
+  // Stable identity within the architecture (I4/I12): a component id, a file
+  // path, or a symbol id. Never an order-derived key.
+  ref: string;
+  // The owning component id (equals ref for component members), so a member can
+  // always be navigated to and its evidence resolved.
+  componentId: string;
+  // Human label shown in the set list and the directive.
+  label: string;
+  // Optional evidence carried from the origin so the directive can cite the
+  // exact site without re-deriving it.
+  file?: string;
+  lineStart?: number | null;
+  lineEnd?: number | null;
+  // Free-form evidence lines (clone class, concern signal, capability/rule kind)
+  // for the directive's per-member evidence block.
+  evidence?: string[];
+}
+
+export interface SelectionSet {
+  id: string;
+  name: string;
+  origin: SetOrigin;
+  members: SetMember[];
+  createdAt: string;
+}
+
+export interface SetMemberNote {
+  memberRef: string; // matches SetMember.ref
+  note: string;
+}
+
+export interface SetAnnotation {
+  setId: string;
+  // The shared intent, stated once for the whole set (LENS-DESIGN section 10).
+  intent: string;
+  // Optional per-member notes, keyed by member ref.
+  memberNotes: SetMemberNote[];
 }
 
 // Navigation state
