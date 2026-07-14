@@ -157,8 +157,11 @@ function ComponentDetail({
     drillInto,
     getComponentFiles,
     getComponentSymbols,
+    addComponentToSet,
+    setActivePanel,
   } = useArchStore();
   const [linkCopied, setLinkCopied] = useState(false);
+  const [addedToSet, setAddedToSet] = useState(false);
 
   // Lazy-load component details (split mode)
   const loadComponentDetail = useArchStore((s) => s.loadComponentDetail);
@@ -291,6 +294,18 @@ function ComponentDetail({
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                addComponentToSet(null, component.id);
+                setAddedToSet(true);
+                setActivePanel("review");
+                setTimeout(() => setAddedToSet(false), 2000);
+              }}
+              className={`px-1.5 py-1 rounded-lg text-[10px] font-medium transition-colors ${addedToSet ? (darkMode ? "bg-green-600/20 text-green-300" : "bg-green-100 text-green-700") : darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"}`}
+              title="Add this component to a selection set"
+            >
+              {addedToSet ? "Added" : "+ Set"}
+            </button>
             <button
               onClick={() => {
                 navigator.clipboard.writeText(window.location.href);

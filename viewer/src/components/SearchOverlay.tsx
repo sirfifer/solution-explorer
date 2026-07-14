@@ -13,6 +13,8 @@ export function SearchOverlay() {
     showDetail,
     architecture,
     darkMode,
+    createSetFromSearchResults,
+    setActivePanel,
   } = useArchStore();
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -84,6 +86,15 @@ export function SearchOverlay() {
       }
     }
     setSearchOpen(false);
+  };
+
+  // Make a selection set from the current results (P6-9). Closes search and opens
+  // the review panel so the new set is immediately visible to annotate/export.
+  const handleMakeSet = () => {
+    if (results.length === 0 || !searchQuery) return;
+    createSetFromSearchResults(searchQuery, results);
+    setSearchOpen(false);
+    setActivePanel("review");
   };
 
   if (!searchOpen) return null;
@@ -204,7 +215,18 @@ export function SearchOverlay() {
             <span><kbd className={`px-1 rounded ${darkMode ? "bg-zinc-800" : "bg-zinc-100"}`}>&uarr;&darr;</kbd> Navigate</span>
             <span><kbd className={`px-1 rounded ${darkMode ? "bg-zinc-800" : "bg-zinc-100"}`}>Enter</kbd> Select</span>
           </div>
-          <span>{results.length} result{results.length !== 1 ? "s" : ""}</span>
+          <div className="flex items-center gap-3">
+            {results.length > 0 && (
+              <button
+                onClick={handleMakeSet}
+                className={`text-[10px] px-2 py-0.5 rounded font-medium ${darkMode ? "bg-blue-600/80 text-white hover:bg-blue-500" : "bg-blue-500 text-white hover:bg-blue-600"}`}
+                title="Create a selection set from these results"
+              >
+                Make set from {results.length} result{results.length !== 1 ? "s" : ""}
+              </button>
+            )}
+            <span>{results.length} result{results.length !== 1 ? "s" : ""}</span>
+          </div>
         </div>
       </div>
     </div>

@@ -679,6 +679,11 @@ export interface Architecture {
   // Rules lens (P6-6). The per-component `rules` key is the per-component slice;
   // this index is the whole-system list the Rules lens ranks.
   rules?: Rule[];
+  // Ranked correlation findings and cross-cutting concerns (P5-6). Optional; old
+  // datasets and multi-repo projections omit them. Consumed by set creation
+  // (P6-9) and the findings/concerns surfaces (P6-8).
+  findings?: Finding[];
+  concerns?: Concern[];
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
   live_status?: {
     statuses?: Record<string, ArchitectureStatus>;
@@ -688,11 +693,6 @@ export interface Architecture {
   };
   changelog?: ChangelogEntry[];
   changelog_serial?: number;
-  // Correlation surfaces (P5-6 / P6-8). Flat indexes of the concerns and findings
-  // the derivation produced. Optional; old datasets omit them and the Findings
-  // surface degrades to nothing (no entry point, byte-identical legacy render).
-  concerns?: Concern[];
-  findings?: Finding[];
 }
 
 // ---------------------------------------------------------------------------
@@ -822,6 +822,57 @@ export interface Annotation {
   text: string;
   createdAt: string;
   targetContext?: AnnotationTargetContext;
+}
+
+// Selection sets and set-level review actions (P6-9, LENS-DESIGN section 10).
+// A set is an addressable, nameable collection of members keyed on STABLE
+// identity, created from a finding, a concern, a search, or manual multi-select.
+// Sets and their annotations persist alongside single-element annotations.
+
+// Where a set came from. `finding:<id>` / `concern:<id>` / `search:<query>` /
+// `manual`. Drives the auto-suggested acceptance criteria in a directive.
+export type SetOrigin = string;
+
+export interface SetMember {
+  // The grain of the referent. Navigation and evidence resolution use this.
+  kind: "component" | "file" | "symbol";
+  // Stable identity within the architecture (I4/I12): a component id, a file
+  // path, or a symbol id. Never an order-derived key.
+  ref: string;
+  // The owning component id (equals ref for component members), so a member can
+  // always be navigated to and its evidence resolved.
+  componentId: string;
+  // Human label shown in the set list and the directive.
+  label: string;
+  // Optional evidence carried from the origin so the directive can cite the
+  // exact site without re-deriving it.
+  file?: string;
+  lineStart?: number | null;
+  lineEnd?: number | null;
+  // Free-form evidence lines (clone class, concern signal, capability/rule kind)
+  // for the directive's per-member evidence block.
+  evidence?: string[];
+}
+
+export interface SelectionSet {
+  id: string;
+  name: string;
+  origin: SetOrigin;
+  members: SetMember[];
+  createdAt: string;
+}
+
+export interface SetMemberNote {
+  memberRef: string; // matches SetMember.ref
+  note: string;
+}
+
+export interface SetAnnotation {
+  setId: string;
+  // The shared intent, stated once for the whole set (LENS-DESIGN section 10).
+  intent: string;
+  // Optional per-member notes, keyed by member ref.
+  memberNotes: SetMemberNote[];
 }
 
 // Navigation state
