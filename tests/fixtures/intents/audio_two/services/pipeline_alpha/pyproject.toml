@@ -1,0 +1,3 @@
+[project]
+name = "pipeline-alpha"
+description = "Primary audio pipeline: decode, resample, and mix audio frames."

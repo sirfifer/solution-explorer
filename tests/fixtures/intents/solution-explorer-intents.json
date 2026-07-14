@@ -1,0 +1,7 @@
+[
+  {
+    "id": "single-audio-pipeline",
+    "statement": "The system has exactly one audio pipeline implementation; audio processing is not duplicated across independent components.",
+    "scope": ["audio", "pipeline"]
+  }
+]

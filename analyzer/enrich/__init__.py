@@ -89,6 +89,7 @@ from .digest import (
     architecture_digest,
     component_digest,
     endpoint_stub_digest,
+    membership_digest,
     relationship_digest,
     relationship_target_id,
     symbol_digest,
@@ -97,6 +98,7 @@ from .importer import ImportResult, import_ai_baseline
 from .overlay import apply_enrichment_overlay
 from .provenance import current_commit_sha, iso_now, stamp_enrichment
 from .staleness import enrichment_staleness
+from .verdicts import apply_verdict_overlay
 
 __all__ = [
     "ARCH_TARGET_ID",
@@ -104,12 +106,14 @@ __all__ = [
     "architecture_digest",
     "component_digest",
     "endpoint_stub_digest",
+    "membership_digest",
     "relationship_digest",
     "relationship_target_id",
     "symbol_digest",
     "ImportResult",
     "import_ai_baseline",
     "apply_enrichment_overlay",
+    "apply_verdict_overlay",
     "current_commit_sha",
     "iso_now",
     "stamp_enrichment",

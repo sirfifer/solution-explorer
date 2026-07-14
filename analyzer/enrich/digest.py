@@ -20,6 +20,7 @@ __all__ = [
     "endpoint_stub_digest",
     "relationship_digest",
     "architecture_digest",
+    "membership_digest",
     "relationship_target_id",
     "DigestIndex",
 ]
@@ -98,6 +99,27 @@ def relationship_target_id(source: str, target: str, type: str) -> str:
     return f"{source}|{target}|{type}"
 
 
+def membership_digest(kind: str, member_component_digests: Iterable[str]) -> str:
+    """Digest for a concern or finding, over its member components' digests.
+
+    A concern and a finding are both membership sets over components; their
+    enrichment (a domain name for a concern, an adversarial verdict for a
+    finding) is *about* the code those members contain, so the digest absorbs the
+    kind plus each member component's own digest, sorted for order-independence.
+    A membership set whose member components' code is unchanged keeps its digest;
+    when any member's code changes (its component digest moves) the enrichment
+    goes stale (I5). Members with no resolvable component digest (a component that
+    left the store) contribute a stable stand-in so the digest stays computable.
+    """
+    h = _h()
+    h.update(kind.encode("utf-8"))
+    h.update(b"\x00")
+    for d in sorted(member_component_digests):
+        h.update(d.encode("utf-8"))
+        h.update(b"\n")
+    return h.hexdigest()
+
+
 class DigestIndex:
     """All current digests for a store, computed once and looked up by target.
 
@@ -114,11 +136,15 @@ class DigestIndex:
         symbol: dict[str, str],
         relationship: dict[str, str],
         architecture: str,
+        concern: dict[str, str] | None = None,
+        finding: dict[str, str] | None = None,
     ):
         self.component = component
         self.symbol = symbol
         self.relationship = relationship  # keyed by relationship_target_id string
         self.architecture = architecture
+        self.concern = concern or {}      # keyed by concern id (P7-4)
+        self.finding = finding or {}      # keyed by finding id (P7-4)
 
     @classmethod
     def from_store(cls, store: FactStore) -> DigestIndex:
@@ -161,16 +187,90 @@ class DigestIndex:
 
         architecture = architecture_digest(component.items())
 
-        return cls(component, symbol, relationship, architecture)
+        # Concern and finding digests (P7-4): each membership set absorbs its
+        # member components' digests, so an AI name/verdict goes stale when a
+        # member's code changes. A missing member component falls back to a
+        # stable stand-in so the digest stays computable store-only.
+        def member_component_digests(members: object) -> list[str]:
+            out: list[str] = []
+            for m in members or []:
+                if not isinstance(m, dict):
+                    continue
+                cid = m.get("component_id")
+                if not cid:
+                    continue
+                out.append(component.get(cid) or endpoint_stub_digest(cid))
+            return out
+
+        concern: dict[str, str] = {}
+        for c in store.concerns():
+            concern[c["id"]] = membership_digest(
+                c.get("kind", ""), member_component_digests(c.get("members"))
+            )
+
+        finding: dict[str, str] = {}
+        for f in store.findings():
+            finding[f["id"]] = membership_digest(
+                f.get("kind", ""), member_component_digests(f.get("members"))
+            )
+
+        return cls(component, symbol, relationship, architecture, concern, finding)
+
+    def membership_digest_for(self, kind: str, members: object) -> str:
+        """Compute a membership digest for a (kind, members) set, resolving each
+        member's component_id to its current component digest.
+
+        Used for AI-generated findings (intent-violations, P7-4) that are not in
+        the deterministic findings table but still need a content digest for
+        provenance and staleness.
+        """
+        digs: list[str] = []
+        for m in members or []:
+            if not isinstance(m, dict):
+                continue
+            cid = m.get("component_id")
+            if not cid:
+                continue
+            digs.append(self.component.get(cid) or endpoint_stub_digest(cid))
+        return membership_digest(kind, digs)
+
+    def register_finding(self, finding_id: str, kind: str, members: object) -> str:
+        """Register (and return) the digest of an AI-generated finding so
+        ``for_target('finding'|'finding-verdict', finding_id)`` resolves it."""
+        d = self.membership_digest_for(kind, members)
+        self.finding[finding_id] = d
+        return d
 
     def for_target(self, target_kind: str, target_id: str) -> str | None:
-        """Current digest for an enrichment target, or None if it no longer exists."""
+        """Current digest for an enrichment target, or None if it no longer exists.
+
+        The four frozen kinds (component, symbol, relationship, architecture) are
+        defined in the package docstring. Three additive verdict/name kinds reuse
+        those digests so their provenance and staleness follow the same content
+        (they do not redefine any frozen digest, invariant I5):
+
+            edge-verdict  -> the relationship digest of the same edge (P7-3): a
+                             verdict goes stale when either endpoint's code
+                             changes or the edge is retyped.
+            concern       -> the concern digest (P7-4): a name goes stale when
+                             the concern's member components' code changes.
+            finding       -> the finding digest (P7-4), also used by
+            finding-verdict  the finding-verdict kind: a finding and its
+                             adversarial verdict go stale when a member
+                             component's code changes.
+        """
         if target_kind == "component":
             return self.component.get(target_id)
         if target_kind == "symbol":
             return self.symbol.get(target_id)
         if target_kind == "relationship":
             return self.relationship.get(target_id)
+        if target_kind == "edge-verdict":
+            return self.relationship.get(target_id)
         if target_kind == "architecture":
             return self.architecture
+        if target_kind == "concern":
+            return self.concern.get(target_id)
+        if target_kind in ("finding", "finding-verdict"):
+            return self.finding.get(target_id)
         return None

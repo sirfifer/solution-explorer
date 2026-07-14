@@ -20,6 +20,19 @@ def main():
 
         sys.exit(enhance_main(sys.argv[2:]))
 
+    # `analyze.py verify <edges|intents|findings|all>` and `analyze.py name
+    # <concerns|all>` run the Phase 7 verification and naming passes (P7-3/P7-4),
+    # dispatched before the flag-based parser for the same single-entrypoint
+    # reason as `enhance`.
+    if len(sys.argv) > 1 and sys.argv[1] == "verify":
+        from .enrich.verify_cli import verify_main
+
+        sys.exit(verify_main(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "name":
+        from .enrich.verify_cli import name_main
+
+        sys.exit(name_main(sys.argv[2:]))
+
     parser = argparse.ArgumentParser(
         description="Analyze codebase architecture and generate interactive visualization data."
     )
