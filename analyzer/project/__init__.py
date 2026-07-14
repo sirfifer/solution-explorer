@@ -20,6 +20,7 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
+from .activity import build_activity
 from .changelog import apply_changelog
 from .coverage import build_coverage
 from .naming import safe_component_id
@@ -40,6 +41,7 @@ __all__ = [
     "project_monolith",
     "apply_changelog",
     "build_coverage",
+    "build_activity",
     "safe_component_id",
     "build_search_entries",
     "shard_entries",

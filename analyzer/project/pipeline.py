@@ -27,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from .activity import build_activity
 from .changelog import apply_changelog
 from .coverage import build_coverage
 from .gitinfo import apply_info_plist_names, read_git_info
@@ -46,11 +47,13 @@ class ProjectionResult:
     manifest_path: Optional[Path] = None
     monolith_path: Optional[Path] = None
     coverage_path: Optional[Path] = None
+    activity_path: Optional[Path] = None
     search_manifest_path: Optional[Path] = None
     detail_count: int = 0
     search_total: int = 0
     changelog_serial: int = 0
     coverage: Optional[dict] = field(default=None)
+    activity: Optional[dict] = field(default=None)
 
 
 def prepare_arch(
@@ -126,13 +129,14 @@ def project_split(
         arch, root=root, generated_at=generated_at, analyzer_version=analyzer_version
     )
     coverage = build_coverage(store)
+    activity = build_activity(store)
     serial = _finish_changelog(
         prepared, previous, output_dir / "manifest.json",
         commit_sha=commit_sha, now=now,
     )
 
     manifest_path = write_manifest_and_details(
-        prepared, output_dir, coverage=coverage, indent=indent
+        prepared, output_dir, coverage=coverage, activity=activity, indent=indent
     )
     search_manifest = write_search_shards(
         prepared, output_dir, store=store, shard_size=shard_size, indent=indent
@@ -144,17 +148,25 @@ def project_split(
         with open(coverage_path, "w", encoding="utf-8") as fh:
             json.dump(coverage, fh, indent=indent, default=str, sort_keys=True)
 
+    activity_path = None
+    if activity is not None:
+        activity_path = output_dir / "activity.json"
+        with open(activity_path, "w", encoding="utf-8") as fh:
+            json.dump(activity, fh, indent=indent, default=str, sort_keys=True)
+
     return ProjectionResult(
         mode="split",
         output_dir=output_dir,
         manifest_path=manifest_path,
         coverage_path=coverage_path,
+        activity_path=activity_path,
         search_manifest_path=output_dir / "search" / "manifest.json",
         detail_count=len(prepared.get("component_detail_index", {}))
         or _count_components(prepared.get("components", [])),
         search_total=search_manifest["total"],
         changelog_serial=serial,
         coverage=coverage,
+        activity=activity,
     )
 
 
@@ -177,15 +189,17 @@ def project_monolith(
         arch, root=root, generated_at=generated_at, analyzer_version=analyzer_version
     )
     coverage = build_coverage(store)
+    activity = build_activity(store)
     serial = _finish_changelog(
         prepared, previous, output_path, commit_sha=commit_sha, now=now
     )
-    write_monolith(prepared, output_path, coverage=coverage, indent=indent)
+    write_monolith(prepared, output_path, coverage=coverage, activity=activity, indent=indent)
     return ProjectionResult(
         mode="monolith",
         monolith_path=output_path,
         changelog_serial=serial,
         coverage=coverage,
+        activity=activity,
     )
 
 

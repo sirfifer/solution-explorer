@@ -16,6 +16,7 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
+from .activity import ActivityResult, extract_activity
 from .facts import FileFacts, SignalRecord
 from .runner import EXTRACT_TIER, ExtractionResult, extract_repo
 
@@ -25,4 +26,6 @@ __all__ = [
     "ExtractionResult",
     "extract_repo",
     "EXTRACT_TIER",
+    "ActivityResult",
+    "extract_activity",
 ]

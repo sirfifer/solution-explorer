@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .activity import activity_manifest_summary
 from .coverage import coverage_manifest_summary
 from .details import write_detail_shards
 
@@ -30,6 +31,7 @@ def write_manifest_and_details(
     output_dir: Path,
     *,
     coverage: dict | None = None,
+    activity: dict | None = None,
     indent=2,
 ) -> Path:
     """Write ``manifest.json`` plus the detail shards. Return the manifest path.
@@ -49,6 +51,9 @@ def write_manifest_and_details(
     summary = coverage_manifest_summary(coverage)
     if summary is not None:
         manifest["coverage"] = summary
+    activity_summary = activity_manifest_summary(activity)
+    if activity_summary is not None:
+        manifest["activity"] = activity_summary
 
     manifest_path = output_dir / "manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as fh:

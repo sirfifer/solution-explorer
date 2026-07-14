@@ -24,6 +24,7 @@ def write_monolith(
     output_path: Path,
     *,
     coverage: dict | None = None,
+    activity: dict | None = None,
     indent=2,
 ) -> Path:
     """Write the whole arch dict to ``output_path``. Return the path."""
@@ -33,6 +34,8 @@ def write_monolith(
     doc = dict(arch)
     if coverage is not None:
         doc["coverage"] = coverage
+    if activity is not None:
+        doc["activity"] = activity
 
     with open(output_path, "w", encoding="utf-8") as fh:
         json.dump(doc, fh, indent=indent, default=str, sort_keys=True)
