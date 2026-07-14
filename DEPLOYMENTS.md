@@ -14,6 +14,42 @@ Tracks where solution-explorer is installed and how to redeploy after changes.
 - `architecture-full.yml`: Advanced build with live-config injection and Cloudflare Pages deploy
 - `live-monitor.yml`: Live data generation, GitHub Pages + optional R2 deploy (if live mode is set)
 
+## Analysis engine (v2 cutover, 2026-07-13)
+
+The default analysis engine is **v2** (the extract/derive/project index engine:
+scale, a coverage ledger, and incremental analysis by construction). The legacy
+v1 single-pass scanner is reachable only via `--engine v1` and is scheduled for
+deletion at the Phase 5 gate. Rollback is a flag flip: pass `--engine v1`, or
+revert the one-line default in `analyzer/cli.py`.
+
+Every deploy surface (`action.yml`, `build.sh`, the workflows, and the npx CLI)
+invokes `analyze.py` with no `--engine` flag, so all of them inherit this single
+default. Nothing overrides it, so the cutover and its rollback happen in one
+place.
+
+Downstream impact, verified at cutover:
+
+- Single-repo installs get the full v2 projection with a coverage ledger and the
+  viewer coverage badge.
+- Multi-repo installs (both UnaMentis installations use a local-path
+  `solution-explorer.json`) run v2's multi-repo path. It produces the same
+  component tree the viewer already renders. A **unified coverage ledger across
+  the per-repo stores is not yet emitted** for multi-repo output, so the viewer
+  shows "Coverage unavailable for this dataset" rather than a badge (a graceful
+  degrade, not an error). Deferred, see TASKS.md P4-7 Discovered.
+- AI-enhancement preservation is unchanged: the deploy merges enhancements from
+  the committed baseline into the fresh output with `merge-ai-enhancements.py
+  --strict`, which is engine-agnostic and drift-tolerant (P3-3).
+- The UnaMentis CI checkout carries only tracked source (its ML weights, GGUF,
+  and build artifacts are gitignored), so v2's extraction never touches the
+  multi-gigabyte model blobs that live in a local working tree.
+
+`live-monitor.yml` also rides v2. It keeps working (correct output, AI
+preserved), but its `--incremental`/`--baseline` flags are accepted no-ops under
+v2, so it re-scans cold each run instead of using v1's surgical incremental.
+Making it cache the v2 fact store for true incremental is a deferred follow-up
+(TASKS.md P4-7 Discovered).
+
 ## How Redeployment Works
 
 Downstream deploys are **automatic**. When changes are pushed to `sirfifer/solution-explorer` main:

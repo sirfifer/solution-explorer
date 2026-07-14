@@ -485,7 +485,8 @@ def test_multi_repo_projection(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# opt-in CLI flag (EXPERIMENTAL)
+# engine selection (v2 is the default after the P4-7 cutover; v1 is the
+# legacy rollback path reachable only via --engine v1)
 # ---------------------------------------------------------------------------
 
 def test_cli_engine_v2_split_end_to_end(tmp_path):
@@ -504,16 +505,56 @@ def test_cli_engine_v2_split_end_to_end(tmp_path):
     assert "coverage" in manifest
 
 
-def test_cli_default_engine_is_v1(tmp_path):
-    # --engine defaults to v1: a plain run produces the old single-file output
-    # with no v2 banner, proving the default is unchanged.
+def test_cli_default_engine_is_v2(tmp_path):
+    # P4-7 cutover: --engine defaults to v2. A plain run (no --engine) produces
+    # the v2 monolith projection with the v2 banner and a coverage ledger.
     out = tmp_path / "architecture.json"
     repo_root = os.path.dirname(os.path.dirname(__file__))
     result = subprocess.run(
-        [sys.executable, "analyze.py", str(POLYGLOT), "-o", str(out)],
+        [sys.executable, "analyze.py", str(POLYGLOT), "-o", str(out),
+         "--store", str(tmp_path / "index.db")],
+        capture_output=True, text=True, cwd=repo_root, check=True,
+    )
+    assert "engine=v2" in result.stdout
+    assert out.is_file()
+    doc = json.loads(out.read_text())
+    assert doc["components"] and doc["symbols"]
+    # v2 monolith embeds the coverage ledger; the legacy v1 output never did.
+    assert "coverage" in doc
+
+
+def test_cli_engine_v1_still_selects_legacy(tmp_path):
+    # Rollback path: --engine v1 still runs the legacy single-pass scanner with
+    # no v2 banner and no coverage ledger, so the cutover is a one-flag rollback.
+    out = tmp_path / "architecture.json"
+    repo_root = os.path.dirname(os.path.dirname(__file__))
+    result = subprocess.run(
+        [sys.executable, "analyze.py", str(POLYGLOT), "-o", str(out), "--engine", "v1"],
         capture_output=True, text=True, cwd=repo_root, check=True,
     )
     assert "engine=v2" not in result.stdout
     assert out.is_file()
     doc = json.loads(out.read_text())
     assert doc["components"] and doc["symbols"]
+    assert "coverage" not in doc
+
+
+def test_cli_default_split_path_is_v2(tmp_path):
+    # The default split path (what build.sh, action.yml, the workflows, and the
+    # npx CLI all invoke: `analyze.py <repo> -o <dir> --split` with no --engine)
+    # now produces v2 split output: a manifest, search shards, and a coverage
+    # ledger shard, none of which the legacy v1 split path emitted.
+    out = tmp_path / "site"
+    repo_root = os.path.dirname(os.path.dirname(__file__))
+    result = subprocess.run(
+        [sys.executable, "analyze.py", str(POLYGLOT), "-o", str(out), "--split",
+         "--compact", "--store", str(tmp_path / "index.db")],
+        capture_output=True, text=True, cwd=repo_root, check=True,
+    )
+    assert "engine=v2" in result.stdout
+    assert (out / "manifest.json").is_file()
+    assert (out / "search" / "manifest.json").is_file()
+    assert (out / "coverage.json").is_file()
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert manifest["components"]
+    assert "coverage" in manifest

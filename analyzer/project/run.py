@@ -51,6 +51,37 @@ def default_store_path(root: Path) -> Path:
     return Path(root) / DEFAULT_STORE_RELPATH
 
 
+def _reject_remote_multi_repo(config_path: Path) -> None:
+    """Exit with a clear message if a multi-repo config needs a remote clone.
+
+    v2's ``derive_multi_from_config`` resolves each repo from a local ``path``.
+    A repo defined only by ``url`` requires a git clone, which the v1
+    orchestrator does but v2 does not yet. Detect it here and direct the user to
+    ``--engine v1`` instead of letting ``derive_multi_from_config`` raise a bare
+    KeyError on the missing ``path``.
+    """
+    import json
+
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return  # derive_multi_from_config will surface the real load error
+    remote = [
+        r.get("name", "?")
+        for r in config.get("repositories", [])
+        if "path" not in r and r.get("url")
+    ]
+    if remote:
+        print(
+            "Error: engine=v2 multi-repo supports local `path` repositories only; "
+            f"these are defined by `url` and need a remote clone: {', '.join(remote)}.\n"
+            "Run with --engine v1 for remote multi-repo clones until v2 remote "
+            "clone lands (deferred, TASKS.md P4-7).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 def run_v2(args) -> None:
     """Run the v2 pipeline from parsed CLI args (analyzer/cli.py ``main``)."""
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -75,8 +106,14 @@ def run_v2(args) -> None:
             print(f"Error: Config file not found: {config_path}", file=sys.stderr)
             sys.exit(1)
         print(f"Multi-repo mode (engine=v2): {config_path}")
-        # Multi-repo assembles per-repo stores internally; a unified persistent
-        # incremental store for a merged multi-repo run is P4-7 territory.
+        # v2 multi-repo assembles per-repo stores from LOCAL paths. Remote-clone
+        # (a repo defined by `url` rather than `path`) is not yet wired into v2
+        # (deferred, see TASKS.md P4-7 Discovered). Fail loudly rather than crash
+        # with a KeyError, and name the one-flag rollback (no silent breakage,
+        # WORK-PLAN principle 4).
+        _reject_remote_multi_repo(config_path)
+        # A unified persistent incremental store and a merged coverage ledger
+        # across per-repo stores are deferred (TASKS.md P4-7 Discovered).
         arch = derive_multi_from_config(config_path)
     else:
         root = Path(args.path).resolve()

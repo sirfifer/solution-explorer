@@ -68,6 +68,19 @@ describe("buildAnalyzerArgs", () => {
     expect(args).not.toContain("--pretty");
   });
 
+  it("never passes --engine, so the npx path rides the analyzer default (v2 after the P4-7 cutover)", () => {
+    // The CLI intentionally does not select an engine: it inherits analyze.py's
+    // default, which is v2. Passing --engine here would freeze the npx path on a
+    // specific engine and defeat the one-flag rollback. Guards the flip.
+    const args = buildAnalyzerArgs("/a/analyze.py", {
+      repoPath: "/repo",
+      outputPath: "/out/architecture",
+      split: true,
+    });
+    expect(args).not.toContain("--engine");
+    expect(args).not.toContain("v1");
+  });
+
   it("uses --config instead of a positional path in multi-repo mode", () => {
     const args = buildAnalyzerArgs("/a/analyze.py", {
       config: "/repo/solution-explorer.json",

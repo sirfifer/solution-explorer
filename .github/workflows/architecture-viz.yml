@@ -36,7 +36,12 @@ jobs:
           node-version: "22"
 
       - name: Install Python tools
-        run: pip install pytest ruff
+        # Install the tree-sitter tier (and dev tools) so this lane exercises the
+        # SHIPPING parser tier, matching ci.yml's python-test lane. Regex-fallback
+        # only ran here before, which diverged the two lanes' parser output and
+        # skipped the parity tests (P4-1 CI Discovered 2026-07-13). The parity
+        # tier-skip stays in place as defense in depth.
+        run: pip install -e ".[all,dev]"
 
       - name: Lint Python
         run: ruff check analyze.py analyzer/ scripts/ tests/

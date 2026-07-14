@@ -304,8 +304,11 @@ class TestCLIArgumentDefaults:
             return original_init(self, *args, **kwargs)
 
         monkeypatch.setattr(ArchitectureScanner, "__init__", capture_init)
+        # Legacy v1 behavior: the symbol cap is a v1-only concept (v2 is uncapped
+        # and covers everything via the ledger), so pin the engine to v1.
         monkeypatch.setattr("sys.argv", [
-            "analyze", str(temp_repo), "-o", str(temp_repo / "out.json"),
+            "analyze", str(temp_repo), "--engine", "v1",
+            "-o", str(temp_repo / "out.json"),
         ])
         main()
         assert captured_kwargs["max_symbols"] == 5000
@@ -322,8 +325,9 @@ class TestCLIArgumentDefaults:
             return original_init(self, *args, **kwargs)
 
         monkeypatch.setattr(ArchitectureScanner, "__init__", capture_init)
+        # Legacy v1 behavior (v2 has no max_symbols concept). Pin to v1.
         monkeypatch.setattr("sys.argv", [
-            "analyze", str(temp_repo), "--split",
+            "analyze", str(temp_repo), "--engine", "v1", "--split",
             "-o", str(temp_repo / "split-out"),
         ])
         main()
@@ -359,8 +363,9 @@ class TestCLIArgumentDefaults:
             return original_init(self, *args, **kwargs)
 
         monkeypatch.setattr(ArchitectureScanner, "__init__", capture_init)
+        # Legacy v1 behavior (v2 has no max_symbols concept). Pin to v1.
         monkeypatch.setattr("sys.argv", [
-            "analyze", str(temp_repo), "--max-symbols", "100",
+            "analyze", str(temp_repo), "--engine", "v1", "--max-symbols", "100",
             "-o", str(temp_repo / "out.json"),
         ])
         main()
@@ -401,9 +406,13 @@ class TestCLIArgumentDefaults:
     def test_incremental_with_split_is_argparse_error(
         self, monkeypatch, temp_repo, capsys
     ):
-        """--incremental --split is rejected, not silently downgraded (F-AN-9)."""
+        """--incremental --split is rejected, not silently downgraded (F-AN-9).
+
+        This is a v1-only guard: v2 is incremental by construction and accepts
+        --incremental --split, so pin the engine to v1.
+        """
         monkeypatch.setattr("sys.argv", [
-            "analyze", str(temp_repo), "--incremental", "--split",
+            "analyze", str(temp_repo), "--engine", "v1", "--incremental", "--split",
             "-o", str(temp_repo / "out"),
         ])
         with pytest.raises(SystemExit) as exc:
@@ -416,11 +425,14 @@ class TestCLIArgumentDefaults:
     def test_config_with_incremental_is_argparse_error(
         self, monkeypatch, tmp_path, capsys
     ):
-        """--config --incremental is rejected, not silently one-wins (F-AN-9)."""
+        """--config --incremental is rejected, not silently one-wins (F-AN-9).
+
+        This is a v1-only guard: v2 accepts --incremental as a no-op, so pin v1.
+        """
         cfg = tmp_path / "solution-explorer.json"
         cfg.write_text(json.dumps({"solution": "S", "repositories": []}))
         monkeypatch.setattr("sys.argv", [
-            "analyze", "--config", str(cfg), "--incremental",
+            "analyze", "--engine", "v1", "--config", str(cfg), "--incremental",
         ])
         with pytest.raises(SystemExit) as exc:
             main()
@@ -932,13 +944,19 @@ def _multi_symbol_repo(tmp_path):
 
 class TestTruncationWarnings:
     """Single-file mode must warn loudly when it drops data, and its stats
-    must agree with the emitted symbol array (F-AN-3)."""
+    must agree with the emitted symbol array (F-AN-3).
+
+    These are v1-engine (legacy) behaviors: the symbol cap and the oversized-file
+    skip are v1-only, so every test here pins --engine v1. v2 is uncapped and
+    accounts for every file in the coverage ledger instead of truncating.
+    """
 
     def test_symbol_cap_warns_and_stats_match_array(self, monkeypatch, tmp_path, capsys):
         _multi_symbol_repo(tmp_path)
         out = tmp_path / "out.json"
         monkeypatch.setattr("sys.argv", [
-            "analyze", str(tmp_path), "--max-symbols", "2", "-o", str(out),
+            "analyze", str(tmp_path), "--engine", "v1",
+            "--max-symbols", "2", "-o", str(out),
         ])
         main()
 
@@ -960,7 +978,8 @@ class TestTruncationWarnings:
         _multi_symbol_repo(tmp_path)
         out = tmp_path / "out.json"
         monkeypatch.setattr("sys.argv", [
-            "analyze", str(tmp_path), "--max-symbols", "0", "-o", str(out),
+            "analyze", str(tmp_path), "--engine", "v1",
+            "--max-symbols", "0", "-o", str(out),
         ])
         main()
 
@@ -980,7 +999,8 @@ class TestTruncationWarnings:
         (src / "big.ts").write_text(big)
         out = tmp_path / "out.json"
         monkeypatch.setattr("sys.argv", [
-            "analyze", str(tmp_path), "--max-file-size", "1000", "-o", str(out),
+            "analyze", str(tmp_path), "--engine", "v1",
+            "--max-file-size", "1000", "-o", str(out),
         ])
         main()
 

@@ -67,9 +67,11 @@ def main():
     parser.add_argument(
         "--engine",
         choices=("v1", "v2"),
-        default="v1",
-        help="Analysis engine: v1 (default, current) or v2 (EXPERIMENTAL: "
-             "extract/derive/project tiers). v2 does not change any v1 default.",
+        default="v2",
+        help="Analysis engine: v2 (default) is the extract/derive/project index "
+             "engine (scale, coverage ledger, incremental by construction). v1 is "
+             "the legacy in-memory scanner, kept only for rollback and scheduled "
+             "for deletion at the Phase 5 gate. Pass --engine v1 to select it.",
     )
     parser.add_argument(
         "--store",
@@ -106,14 +108,16 @@ def main():
 
     args = parser.parse_args()
 
-    # Opt-in v2 engine (EXPERIMENTAL). Routed before any v1 setup or v1-only
-    # flag validation so it cannot change a v1 default and owns its own flag
-    # semantics. v2 is incremental by construction (P4-6): the persistent fact
-    # store is the baseline, hash comparison decides what re-parses, and
-    # --incremental / --base-sha / --head-sha / --baseline are accepted as
-    # compatibility no-ops (the v2 engine is always incremental, so they change
-    # nothing). Unlike v1, --engine v2 --incremental --split is allowed, because
-    # v2 incremental works in split mode.
+    # v2 is the DEFAULT engine (P4-7 cutover). Routed before any v1 setup or
+    # v1-only flag validation so it owns its own flag semantics. v2 is
+    # incremental by construction (P4-6): the persistent fact store is the
+    # baseline, hash comparison decides what re-parses, and --incremental /
+    # --base-sha / --head-sha / --baseline are accepted as compatibility no-ops
+    # (the v2 engine is always incremental, so they change nothing). Unlike v1,
+    # --engine v2 --incremental --split is allowed, because v2 incremental works
+    # in split mode. The legacy v1 scanner is reachable only via --engine v1 and
+    # is scheduled for deletion at the Phase 5 gate; do not remove it before then
+    # (rollback is a flag flip).
     if args.engine == "v2":
         from .project.run import run_v2
 
