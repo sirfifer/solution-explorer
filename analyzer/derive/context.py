@@ -51,6 +51,13 @@ class Deriver:
         self.capabilities: list[dict] = []
         self._capabilities_by_component: dict[str, list[dict]] = {}
 
+        # Data entities and access edges derived by the entities pass (P5-2).
+        # ``data_entities``/``entity_access`` are flat, sorted indexes;
+        # ``_entities_by_component`` maps an owning component id to its entities.
+        self.data_entities: list[dict] = []
+        self.entity_access: list[dict] = []
+        self._entities_by_component: dict[str, list[dict]] = {}
+
         # Per-file symbol ids from the store, so metrics and file records match
         # the nested-symbol reality (grammar ids, methods included).
         self._symbol_ids_by_file: dict[str, list[str]] = defaultdict(list)

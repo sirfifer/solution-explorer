@@ -54,10 +54,19 @@ from ..parsers import PARSERS
 from ..store import LOCAL_REPO, ROOT_COMPONENT, FactStore, assign_symbol_ids
 from ..utils import _is_vendored_repo, _should_skip_dir
 from .facts import FileFacts
-from .signals import extract_signals
+from .signals import extract_entity_signals, extract_signals
 
-EXTRACT_TIER = "p4-extract/1"
+# p4-extract/1 -> p5-extract/1: extraction now also emits `data_entity` signals
+# (P5-2). Bumping the tier invalidates the content-hash cache so a warm store is
+# re-extracted once and never silently serves cached facts that predate the new
+# signal kind (invariant I2 / "no silent anything").
+EXTRACT_TIER = "p5-extract/1"
 INLINE_THRESHOLD = 8  # below this many cache misses, parse inline (no pool)
+
+# v2-only schema formats that are not in the shared LANGUAGE_MAP (which v1
+# scanner.py reads). `.sql` and `.json` are already enumerated; `.prisma` is not,
+# so it is recognized here on the v2 path only, leaving v1 output byte-stable.
+_SCHEMA_ONLY_EXTENSIONS = {".prisma": "prisma"}
 
 
 def _hash_bytes(raw: bytes) -> str:
@@ -104,6 +113,9 @@ def _parse_worker(task: tuple[str, str, str, str]) -> tuple[str, str, object]:
         imports = sorted(set(parser.extract_imports(content))) if parser else []
         module_doc = parser.extract_file_doc(content) if parser else None
         signals = extract_signals(content, language, parser) if parser else []
+        # Entity signals are parser-independent (pure regex), so they run for
+        # both code files and parser-less schema files (P5-2, Data lens L3).
+        signals = signals + extract_entity_signals(content, language, rel)
         facts = FileFacts(
             path=rel,
             language=language,
@@ -243,7 +255,7 @@ def _enumerate(
                 ledger.append((rel, "binary", "null_byte"))
                 continue
 
-            language = LANGUAGE_MAP.get(ext)
+            language = LANGUAGE_MAP.get(ext) or _SCHEMA_ONLY_EXTENSIONS.get(ext)
             if not language:
                 ledger.append((rel, "excluded:unsupported_extension", ext or fname))
                 continue

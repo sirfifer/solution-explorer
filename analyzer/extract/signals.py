@@ -33,6 +33,7 @@ from ..constants import (
     URL_EXTRACTION_PATTERNS,
     WEBSOCKET_PATTERNS,
 )
+from .entities import extract_entities, extract_schema_entities
 from .facts import SignalRecord
 from .frameworks import extract_cli, extract_endpoints, extract_jobs
 
@@ -297,3 +298,21 @@ def _framework(content: str, parser) -> list[SignalRecord]:
     if fw:
         return [SignalRecord("framework", {"name": fw}, None)]
     return []
+
+
+def extract_entity_signals(content: str, language: str, path: str) -> list[SignalRecord]:
+    """Extract ``data_entity`` signals from one file (P5-2, Data lens L3).
+
+    Parser-independent: ORM/model entities come from the per-framework rules in
+    entities.py for code languages, and standalone-schema entities (Prisma, SQL
+    DDL, JSON Schema) come from the schema extractors. Called from the runner
+    alongside ``extract_signals`` so a file is still read exactly once. Every
+    signal carries the match line where locatable, so derivation (Tier 3) can
+    attach evidence and resolve the defining symbol.
+    """
+    out: list[SignalRecord] = []
+    for value, start in extract_entities(content, language):
+        out.append(SignalRecord("data_entity", value, _line_of(content, start)))
+    for value, start in extract_schema_entities(content, language, path):
+        out.append(SignalRecord("data_entity", value, _line_of(content, start)))
+    return out
