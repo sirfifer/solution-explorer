@@ -64,6 +64,15 @@ class Deriver:
         self.rules: list[dict] = []
         self._rules_by_component: dict[str, list[dict]] = {}
 
+        # Correlations derived by the correlations pass (P5-6). ``concerns`` and
+        # ``findings`` are flat indexes (findings rank-ordered); the by-component
+        # maps hold the ID references a component participates in, for the
+        # per-component projection keys.
+        self.concerns: list[dict] = []
+        self.findings: list[dict] = []
+        self._concerns_by_component: dict[str, list[str]] = {}
+        self._findings_by_component: dict[str, list[str]] = {}
+
         # Per-file symbol ids from the store, so metrics and file records match
         # the nested-symbol reality (grammar ids, methods included).
         self._symbol_ids_by_file: dict[str, list[str]] = defaultdict(list)
