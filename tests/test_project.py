@@ -493,7 +493,7 @@ def test_cli_engine_v2_split_end_to_end(tmp_path):
     repo_root = os.path.dirname(os.path.dirname(__file__))
     result = subprocess.run(
         [sys.executable, "analyze.py", str(POLYGLOT), "-o", str(out),
-         "--split", "--engine", "v2"],
+         "--split", "--engine", "v2", "--store", str(tmp_path / "index.db")],
         capture_output=True, text=True, cwd=repo_root, check=True,
     )
     assert "engine=v2" in result.stdout
