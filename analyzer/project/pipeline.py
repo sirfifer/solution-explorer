@@ -137,7 +137,7 @@ def project_split(
     # finding verification statuses, plus AI intent-violation findings. No-op when
     # the store carries none of these enrichment kinds (parity-safe).
     apply_verdict_overlay(prepared, store)
-    coverage = build_coverage(store)
+    coverage = build_coverage(store, root=root)
     activity = build_activity(store)
     serial = _finish_changelog(
         prepared, previous, output_dir / "manifest.json",
@@ -202,7 +202,7 @@ def project_monolith(
     # no enrichment, so non-enriched projections are unchanged.
     apply_enrichment_overlay(prepared, store)
     apply_verdict_overlay(prepared, store)
-    coverage = build_coverage(store)
+    coverage = build_coverage(store, root=root)
     activity = build_activity(store)
     serial = _finish_changelog(
         prepared, previous, output_path, commit_sha=commit_sha, now=now

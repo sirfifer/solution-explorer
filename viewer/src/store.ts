@@ -13,6 +13,7 @@ import type {
   Relationship,
   AggregateNode,
   CoverageRow,
+  Inventory,
   ActivityData,
   ActivityComponent,
   ActivityFile,
@@ -355,6 +356,12 @@ interface ArchStore {
   coverageRowsLoading: boolean;
   coverageRowsError: string | null;
   loadCoverageRows: () => Promise<CoverageRow[] | null>;
+
+  // Non-source inventory (P6-10). Rides in coverage.json (split) or inline under
+  // architecture.coverage.inventory (monolith), so it arrives with the same
+  // lazy fetch as the coverage rows. Null until loaded or when the dataset
+  // carries no inventory (old datasets), which the panel degrades on.
+  coverageInventory: Inventory | null;
 
   // Git-activity data (P5-4 / P6-5 Activity lens). The full ranked hotspot list,
   // per-component knowledge, coupling, and per-file detail live in activity.json
@@ -830,6 +837,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   coverageRows: null,
   coverageRowsLoading: false,
   coverageRowsError: null,
+  coverageInventory: null,
   activityData: null,
   activityLoading: false,
   activityError: null,
@@ -891,6 +899,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       coverageRows: null,
       coverageRowsLoading: false,
       coverageRowsError: null,
+      coverageInventory: null,
       // Drop activity data fetched for a previous scan; the Activity lens or the
       // rationale strip refetches (or reads the new inline data) on next use.
       activityData: null,
@@ -1754,10 +1763,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     if (!arch) return null;
 
     // Monolith mode: the full rows ride inline in architecture.coverage.rows, so
-    // no fetch is needed.
+    // no fetch is needed. The inventory (P6-10) rides inline the same way.
     const inline = arch.coverage?.rows;
     if (inline && inline.length > 0) {
-      set({ coverageRows: inline });
+      set({ coverageRows: inline, coverageInventory: arch.coverage?.inventory ?? null });
       return inline;
     }
 
@@ -1780,7 +1789,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
         const data = await res.json();
         if (get().architecture !== requestArch) return null;
         const rows: CoverageRow[] = Array.isArray(data?.rows) ? data.rows : [];
-        set({ coverageRows: rows, coverageRowsLoading: false });
+        // The inventory (P6-10) rides in the same coverage.json. Absent on old
+        // datasets, in which case the panel degrades to no inventory affordance.
+        const inventory: Inventory | null = data?.inventory ?? null;
+        set({ coverageRows: rows, coverageInventory: inventory, coverageRowsLoading: false });
         return rows;
       }
       set({ coverageRowsError: `HTTP ${res.status}`, coverageRowsLoading: false });
