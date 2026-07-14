@@ -85,6 +85,19 @@ def build_search_entries(arch: dict, store=None) -> list[dict]:
     components = arch.get("components", [])
     owner = _component_file_owner(components)
 
+    # Store enrichment is CANONICAL, so it is added FIRST: `add` keeps the first
+    # entry per (ref_kind, ref_id), so a store enrichment row wins over any
+    # inline ai_enhance help text carried on the same target. This reverses the
+    # P4-5 Discovered dedupe (where inline won because components were processed
+    # first); the store overlay is now the source of truth (P7-1).
+    if store is not None:
+        for row in store.enrichment():
+            payload = row.get("payload") or {}
+            help_text = payload.get("help_text") if isinstance(payload, dict) else None
+            if help_text:
+                ref = f"{row['target_kind']}:{row['target_id']}"
+                add("enrichment", ref, "", "", row["target_id"], help_text)
+
     for comp in _iter_components(components):
         cid = comp["id"]
         desc = comp.get("description")
@@ -94,6 +107,7 @@ def build_search_entries(arch: dict, store=None) -> list[dict]:
         add("component", cid, comp.get("name", cid), comp.get("path", ""), cid, desc or "")
 
         # Enrichment help text inlined on the component (monolithic AI baseline).
+        # Falls back to the store row above on a (ref_kind, ref_id) collision.
         ai = comp.get("ai_enhance") or {}
         help_text = ai.get("help_text")
         if help_text:
@@ -110,15 +124,6 @@ def build_search_entries(arch: dict, store=None) -> list[dict]:
         fpath = s.get("file", "")
         add("symbol", sid, s.get("name", ""), fpath, owner.get(fpath, ""),
             s.get("docstring") or "")
-
-    # Enrichment help text from the store overlay (Tier 2 enrichment rows).
-    if store is not None:
-        for row in store.enrichment():
-            payload = row.get("payload") or {}
-            help_text = payload.get("help_text") if isinstance(payload, dict) else None
-            if help_text:
-                ref = f"{row['target_kind']}:{row['target_id']}"
-                add("enrichment", ref, "", "", row["target_id"], help_text)
 
     entries.sort(key=lambda e: (e["ref_kind"], e["ref_id"]))
     return entries
