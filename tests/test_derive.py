@@ -113,9 +113,34 @@ def test_http_edge_evidence_points_at_the_real_call_site():
 #      found the host's CI config by walking above the scan root; the new
 #      root-bounded pass emits {} on these fixtures (P2-2 item 3).
 #   D5 metrics/stats symbol counts follow D2.
+#   D6 capabilities: first-class capabilities (api/cli/event/job) are a NEW
+#      optional key on the arch dict and on owning component dicts (P5-1). They
+#      did not exist when the snapshot was frozen, so they are masked here; the
+#      capabilities themselves are asserted directly in tests/test_capabilities.py.
 
 _JUSTIFIED_COMPONENT_KEYS = {"testing"}          # D4
 _JUSTIFIED_REL_KEYS = {"evidence", "confidence", "origin"}  # D3
+
+
+def _strip_capabilities(arch: dict) -> None:
+    """Remove the P5-1 capabilities keys in place, BEFORE normalization (D6).
+
+    ``normalize`` sorts every list by its JSON string, so a new key on one
+    component changes that component's sort position among its siblings. The
+    snapshot was frozen before capabilities existed, so capabilities must be
+    removed before sorting for the component order to match. (testing/symbols/
+    evidence are masked after sorting instead, because they were present in both
+    the old and new worlds at normalization time and sort symmetrically.)
+    """
+    arch.pop("capabilities", None)
+
+    def strip(c):
+        c.pop("capabilities", None)
+        for ch in c.get("children", []):
+            strip(ch)
+
+    for c in arch.get("components", []):
+        strip(c)
 
 
 def _mask(arch: dict) -> dict:
@@ -151,6 +176,7 @@ def _symbol_keys(arch: dict, legacy: bool) -> set:
 @requires_ts
 def test_polyglot_diff_vs_snapshot_is_only_enumerated_differences():
     _, _, arch = _extract_and_derive(POLYGLOT, "polyglot")
+    _strip_capabilities(arch)  # D6: strip before sorting; asserted in test_capabilities.py
     new = normalize(arch)
     with open(os.path.join(FIXTURES, "parity", "polyglot.snapshot.json")) as f:
         old = json.load(f)

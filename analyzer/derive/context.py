@@ -45,6 +45,12 @@ class Deriver:
         self._rel_confidence: dict = {}
         self._rel_origin: dict = {}
 
+        # Capabilities derived by the capabilities pass (P5-1). ``capabilities``
+        # is the flat, id-sorted index; ``_capabilities_by_component`` maps an
+        # owning component id to its capability dicts.
+        self.capabilities: list[dict] = []
+        self._capabilities_by_component: dict[str, list[dict]] = {}
+
         # Per-file symbol ids from the store, so metrics and file records match
         # the nested-symbol reality (grammar ids, methods included).
         self._symbol_ids_by_file: dict[str, list[str]] = defaultdict(list)

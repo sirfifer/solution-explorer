@@ -14,6 +14,7 @@ from collections import defaultdict
 
 from ..models import Component, to_dict
 from ..store import FactStore
+from . import capabilities as capabilities_pass
 from . import components as components_pass
 from . import docs as docs_pass
 from . import flow as flow_pass
@@ -49,6 +50,7 @@ def derive_all(
     testing_pass.detect_testing(d)
     arch_description = _project_description(d, description)
     docs_pass.extract_component_docs(d)
+    capabilities_pass.derive_capabilities(d)
 
     arch = _assemble(d, root_name, root_path, arch_description)
     _flush(store, d)
@@ -104,6 +106,7 @@ def _project_description(d: Deriver, fallback: str) -> str:
 
 def _assemble(d: Deriver, root_name: str, root_path: str, description: str) -> dict:
     components = _build_component_tree(d)
+    _attach_capabilities(components, d._capabilities_by_component)
     relationships = _relationship_dicts(d)
     return {
         "name": root_name,
@@ -115,11 +118,25 @@ def _assemble(d: Deriver, root_name: str, root_path: str, description: str) -> d
         "root_path": root_path,      # stripped
         "components": components,
         "relationships": relationships,
+        "capabilities": d.capabilities,   # flat index (P5-1); optional key
         "symbols": [to_dict(s) for s in d._all_symbols],
         "files": [_file_dict(fi) for fi in d._all_files],
         "stats": _stats(d, relationships),
         "repositories": [],
     }
+
+
+def _attach_capabilities(components: list, by_component: dict[str, list[dict]]) -> None:
+    """Attach the optional per-component ``capabilities`` key in place.
+
+    Set only when non-empty, so a component with no capabilities carries no key
+    (matches the ai_enhance optional-key precedent; the viewer ignores it).
+    """
+    for comp in components:
+        caps = by_component.get(comp.get("id"))
+        if caps:
+            comp["capabilities"] = caps
+        _attach_capabilities(comp.get("children", []), by_component)
 
 
 def _file_dict(fi) -> dict:
@@ -190,6 +207,7 @@ def _flush(store: FactStore, d: Deriver) -> None:
     the projection tier (P4-5) reads a complete component from the store.
     """
     store._conn.execute("DELETE FROM edges")
+    store._conn.execute("DELETE FROM capabilities")  # FK -> components; drop before components
     store._conn.execute("DELETE FROM component_files")
     store._conn.execute("DELETE FROM components")
     if store.with_fts:
@@ -225,5 +243,16 @@ def _flush(store: FactStore, d: Deriver) -> None:
             evidence=d._rel_evidence.get(key) or d._ui_edge_evidence.get(key) or [],
             confidence=d._rel_confidence.get(key, "inferred"),
             origin=d._rel_origin.get(key, "static"),
+        )
+
+    # Capabilities land in the store (system of record, I6). Written after
+    # components so the FK to components(id) holds; ids are content-derived so a
+    # re-derive is idempotent. The defining symbol link, where resolved, rides
+    # inside detail_json (the schema has no symbol column; additive, no migration).
+    for cap in d.capabilities:
+        store.add_capability(
+            capability_id=cap["id"], component_id=cap["component_id"],
+            kind=cap["kind"], name=cap["name"], detail=cap["detail"],
+            evidence=cap["evidence"], confidence=cap["confidence"],
         )
     store.commit()
