@@ -9,6 +9,9 @@ export interface UrlState {
   component?: string;
   tab?: string;
   drill?: string;
+  // Active lens (P6-1). Omitted from the URL when it is the default (Structure)
+  // so old links and the default view carry no lens param.
+  lens?: string;
   // Inbound deep-link params (P3-2). `file` is a repo-relative source path; the
   // optional `line` selects the symbol whose range contains it. These are
   // consumed once on load to drive navigation and are not re-persisted into the
@@ -28,6 +31,7 @@ export function parseUrlState(): UrlState {
     component: params.get("component") || undefined,
     tab: params.get("tab") || undefined,
     drill: params.get("drill") || undefined,
+    lens: params.get("lens") || undefined,
     file: params.get("file") || undefined,
     line: Number.isFinite(lineNum) && lineNum > 0 ? lineNum : undefined,
   };
@@ -50,6 +54,9 @@ function buildUrl(state: UrlState): string {
   if (state.component) params.set("component", state.component);
   if (state.tab) params.set("tab", state.tab);
   if (state.drill) params.set("drill", state.drill);
+  // Only emit the lens param when it is non-default, so Structure URLs (and old
+  // links) stay clean and unchanged (P6-1).
+  if (state.lens && state.lens !== "structure") params.set("lens", state.lens);
   const search = params.toString();
   return search ? `${window.location.pathname}?${search}` : window.location.pathname;
 }

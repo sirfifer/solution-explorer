@@ -12,6 +12,7 @@ import { ReviewSummary } from "./components/ReviewSummary";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { CoverageBadge } from "./components/CoverageBadge";
+import { LensSwitcher } from "./components/LensSwitcher";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useBottomSheet } from "./hooks/useBottomSheet";
@@ -450,6 +451,9 @@ export function App() {
               &#x2318;K
             </kbd>
           </button>
+
+          {/* Lens switcher (P6-1) */}
+          <LensSwitcher />
 
           {/* Desktop: show all buttons inline */}
           <div className="hidden sm:flex items-center gap-2">

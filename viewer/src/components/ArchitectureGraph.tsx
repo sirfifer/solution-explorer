@@ -16,11 +16,13 @@ import {
 } from "@xyflow/react";
 import { useArchStore } from "../store";
 import { ComponentNode } from "./ComponentNode";
+import { AggregateNode } from "./AggregateNode";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles } from "../utils/layout";
 import type { Relationship } from "../types";
 
 const nodeTypes: NodeTypes = {
   component: ComponentNode,
+  aggregate: AggregateNode,
 };
 
 export function ArchitectureGraph() {
@@ -31,8 +33,9 @@ export function ArchitectureGraph() {
     selectedComponentId,
     breadcrumbs,
     darkMode,
-    getVisibleComponents,
-    getComponentRelationships,
+    expandedAggregates,
+    lens,
+    getLensGraph,
     selectComponent,
     navigateToBreadcrumb,
     drillUp,
@@ -122,10 +125,11 @@ export function ArchitectureGraph() {
   const { rawNodes, rawEdges } = useMemo(() => {
     if (!architecture) return { rawNodes: [], rawEdges: [] };
 
-    const visible = getVisibleComponents();
-    const relationships = getComponentRelationships();
+    // The active lens selects the nodes and edges; Structure returns exactly the
+    // existing selectors so old data renders identically (P6-1).
+    const { nodes: visible, aggregates, edges: relationships } = getLensGraph();
 
-    const newNodes: Node[] = visible.map((comp, i) => ({
+    const componentNodes: Node[] = visible.map((comp, i) => ({
       id: comp.id,
       type: "component",
       position: { x: (i % 4) * 320, y: Math.floor(i / 4) * 200 },
@@ -133,6 +137,22 @@ export function ArchitectureGraph() {
       selected: comp.id === selectedComponentId,
     }));
 
+    // Aggregate nodes make the small internal modules the hero filter would hide
+    // visible and expandable in place (P6-4). They carry no edges (their members
+    // are collapsed); expanding one promotes its members into real component
+    // nodes with their normal edges.
+    const aggregateNodes: Node[] = aggregates.map((agg, i) => {
+      const idx = componentNodes.length + i;
+      return {
+        id: agg.id,
+        type: "aggregate",
+        position: { x: (idx % 4) * 320, y: Math.floor(idx / 4) * 200 },
+        data: { aggregate: agg },
+        selectable: false,
+      };
+    });
+
+    const newNodes = [...componentNodes, ...aggregateNodes];
     const nodeIds = new Set(newNodes.map((n) => n.id));
     const newEdges: Edge[] = relationships
       .filter((r: Relationship) => nodeIds.has(r.source) && nodeIds.has(r.target))
@@ -224,7 +244,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, getVisibleComponents, getComponentRelationships]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, getLensGraph]);
 
   // Apply ELK layout
   useEffect(() => {
@@ -350,6 +370,9 @@ export function ArchitectureGraph() {
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
+      // Aggregate nodes handle their own expand/collapse (P6-4); they are not
+      // selectable components, so do not route them through selectComponent.
+      if (node.type === "aggregate") return;
       selectComponent(node.id);
     },
     [selectComponent],

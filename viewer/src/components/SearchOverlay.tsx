@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useArchStore } from "../store";
-import { search, type SearchResult } from "../utils/search";
+import { search, loadSearchShards, type SearchResult } from "../utils/search";
 import { getLanguageColor } from "../utils/layout";
 
 export function SearchOverlay() {
@@ -9,7 +9,7 @@ export function SearchOverlay() {
     searchQuery,
     setSearchOpen,
     setSearchQuery,
-    selectComponent,
+    navigateToComponent,
     showDetail,
     architecture,
     darkMode,
@@ -22,11 +22,14 @@ export function SearchOverlay() {
     [searchQuery],
   );
 
-  // Focus input when opened
+  // Focus input when opened, and lazily load the prebuilt search shards on first
+  // open so search covers descriptions, docstrings, and AI help text without
+  // visiting each component (P6-4). Idempotent and silent when no shards exist.
   useEffect(() => {
     if (searchOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
       setSelectedIndex(0);
+      void loadSearchShards();
     }
   }, [searchOpen]);
 
@@ -59,13 +62,26 @@ export function SearchOverlay() {
 
   const handleSelect = (result: SearchResult) => {
     if (result.type === "component") {
-      selectComponent(result.id);
+      navigateToComponent(result.id);
     } else if (result.type === "file") {
       const file = architecture?.files.find((f) => f.path === result.id);
-      if (file) showDetail("file", file);
+      if (file) {
+        showDetail("file", file);
+      } else if (result.componentId) {
+        // Split-mode file only present in the shard index: open its owning
+        // component so its Files tab loads the detail (P6-4).
+        navigateToComponent(result.componentId);
+      }
     } else if (result.type === "symbol") {
       const sym = architecture?.symbols.find((s) => s.id === result.id);
-      if (sym) showDetail("symbol", sym);
+      if (sym) {
+        showDetail("symbol", sym);
+      } else if (result.componentId) {
+        // Split-mode symbol found via the shard index before its component was
+        // opened: navigate to the owning component, whose detail fetch will load
+        // it (P6-4).
+        navigateToComponent(result.componentId);
+      }
     }
     setSearchOpen(false);
   };

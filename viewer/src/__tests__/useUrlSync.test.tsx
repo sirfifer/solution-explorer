@@ -3,7 +3,17 @@ import { renderHook, act, cleanup } from "@testing-library/react";
 import { useArchStore } from "../store";
 import { useUrlSync } from "../hooks/useUrlSync";
 import { parseUrlState } from "../utils/urlState";
+import { registerLens, type LensDefinition } from "../lenses";
 import type { Architecture, Component } from "../types";
+
+// A second lens available for the lens-URL tests below (P6-1).
+const flowTestLens: LensDefinition = {
+  id: "flow-test", label: "Flow (test)", description: "test",
+  isAvailable: () => true,
+  getGraph: () => ({ nodes: [], aggregates: [], edges: [] }),
+  questions: [],
+};
+registerLens(flowTestLens);
 
 // Regression test for F-VW-2 (P1-4): the popstate handler mutates the store,
 // which fires the URL-sync subscription. Before the fix, that subscription
@@ -175,5 +185,49 @@ describe("useUrlSync popstate suppression (F-VW-2 / P1-4)", () => {
     // The one-shot file/line params are consumed (dropped from the rebuilt URL).
     expect(parseUrlState().file).toBeUndefined();
     expect(parseUrlState().line).toBeUndefined();
+  });
+});
+
+describe("useUrlSync lens state (P6-1)", () => {
+  beforeEach(() => {
+    window.history.replaceState({}, "", "/");
+    useArchStore.setState({
+      architecture: null, selectedComponentId: null, drillLevel: null,
+      breadcrumbs: [], annotations: [], componentDetailCache: {}, lens: "structure",
+    });
+  });
+  afterEach(() => cleanup());
+
+  it("writes ?lens= when the lens changes and omits it for the default", () => {
+    useArchStore.setState({ architecture: makeArchitecture() });
+    renderHook(() => useUrlSync());
+
+    act(() => { useArchStore.getState().setLens("flow-test"); });
+    expect(parseUrlState().lens).toBe("flow-test");
+
+    // Back to the default Structure lens: the param is dropped to keep URLs clean.
+    act(() => { useArchStore.getState().setLens("structure"); });
+    expect(parseUrlState().lens).toBeUndefined();
+  });
+
+  it("restores the lens from the URL on load", () => {
+    window.history.replaceState({}, "", "/?lens=flow-test");
+    useArchStore.setState({ architecture: makeArchitecture() });
+    renderHook(() => useUrlSync());
+    expect(useArchStore.getState().lens).toBe("flow-test");
+  });
+
+  it("applies the lens on browser back/forward", () => {
+    useArchStore.setState({ architecture: makeArchitecture() });
+    renderHook(() => useUrlSync());
+    act(() => { useArchStore.getState().setLens("flow-test"); });
+    expect(useArchStore.getState().lens).toBe("flow-test");
+
+    // Back to a URL without a lens param: popstate restores the default.
+    act(() => {
+      window.history.replaceState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(useArchStore.getState().lens).toBe("structure");
   });
 });

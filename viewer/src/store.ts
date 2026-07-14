@@ -11,6 +11,7 @@ import type {
   Symbol,
   FileInfo,
   Relationship,
+  AggregateNode,
   CoverageRow,
   LiveConfig,
   LiveVersion,
@@ -18,6 +19,12 @@ import type {
   ChangelogEntry,
 } from "./types";
 import { addToSearchIndex } from "./utils/search";
+import {
+  getLens,
+  resolveLensId,
+  DEFAULT_LENS_ID,
+  type LensGraph,
+} from "./lenses";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
 import {
@@ -131,6 +138,13 @@ interface ArchStore {
   drillLevel: string | null; // component id we've drilled into (shows children as nodes)
   viewMode: ViewMode;
 
+  // Lens (P6-1). The active perspective. Structure is the default and renders
+  // pixel-identically for old data. Switching lens preserves selection,
+  // breadcrumbs, drill level, and URL state (invariant I12).
+  lens: string;
+  setLens: (id: string) => void;
+  getLensGraph: () => LensGraph;
+
   // Panels
   activePanel: Panel;
   detailItem: { type: "component" | "file" | "symbol"; data: Component | FileInfo | Symbol } | null;
@@ -219,6 +233,8 @@ interface ArchStore {
   componentDetailErrors: Record<string, string>;
   loadComponentDetail: (componentId: string) => Promise<{ symbols: Symbol[]; files: FileInfo[] } | null>;
   retryComponentDetail: (componentId: string) => Promise<{ symbols: Symbol[]; files: FileInfo[] } | null>;
+  // Predictive prefetch of the detail shards likely to be opened next (P6-4).
+  prefetchDetails: (componentId: string) => void;
 
   // Coverage ledger drill-in rows (P4-4). The badge reads the summary directly
   // from `architecture.coverage`; the panel needs the full rows, which live in
@@ -241,6 +257,16 @@ interface ArchStore {
   markAllChangelogRead: () => void;
   getUnreadChangelogCount: () => number;
   getChangelog: () => ChangelogEntry[];
+
+  // Aggregation nodes (P6-4). Small internal modules that the hero filter would
+  // otherwise hide silently are grouped by type into expandable aggregate nodes
+  // so every child at a drill level is visible or visibly aggregated.
+  // Expansion state is keyed by aggregate id and reset on architecture reload.
+  expandedAggregates: Record<string, boolean>;
+  toggleAggregate: (id: string) => void;
+  expandAggregate: (id: string) => void;
+  collapseAggregate: (id: string) => void;
+  getAggregateNodes: () => AggregateNode[];
 
   // Helpers
   getComponentById: (id: string) => Component | null;
@@ -380,6 +406,117 @@ function persistCurrentAnnotations(get: () => ArchStore): void {
   saveAnnotations(architectureIdentity(arch), get().annotations);
 }
 
+// Split the promoted children at a drill level into the components shown as real
+// nodes and the small internal modules grouped into aggregate nodes (P6-4).
+//
+// This is the single source of truth for the hero filter. The old code DROPPED
+// the small-internal set (only warning if it removed everything); here they are
+// diverted into typed aggregates so nothing is ever silently hidden. Content-type
+// children stay a deliberate exclusion (assets/data blobs, not code).
+function computeDrillLevelView(
+  promoted: Component[],
+  drillLevel: string | null,
+): { shown: Component[]; aggregates: AggregateNode[] } {
+  const hasHero = promoted.some((c) => isHeroType(c.type));
+  const shown: Component[] = [];
+  const hiddenByType: Record<string, Component[]> = {};
+
+  for (const c of promoted) {
+    if (c.type === "content") continue; // deliberate exclusion, not aggregated
+    const isSmallInternal =
+      hasHero &&
+      !isHeroType(c.type) &&
+      c.type !== "library" &&
+      c.type !== "infrastructure" &&
+      c.children.length === 0 &&
+      c.files.length < 10;
+    if (isSmallInternal) {
+      (hiddenByType[c.type] ??= []).push(c);
+    } else {
+      shown.push(c);
+    }
+  }
+
+  const levelKey = drillLevel ?? "root";
+  const aggregates: AggregateNode[] = Object.entries(hiddenByType)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([type, members]) => ({
+      id: `__agg__${levelKey}__${type}`,
+      kind: "aggregate" as const,
+      aggregateType: type,
+      label: `${members.length} ${type}${members.length !== 1 ? "s" : ""}`,
+      members,
+      memberCount: members.length,
+      parentDrillLevel: drillLevel,
+    }));
+
+  return { shown, aggregates };
+}
+
+// Compute the current drill level's shown components and aggregates in one pass,
+// so getVisibleComponents and getAggregateNodes agree and never double-walk.
+function drillView(
+  architecture: Architecture,
+  drillLevel: string | null,
+): { shown: Component[]; aggregates: AggregateNode[] } {
+  if (!drillLevel) {
+    const shown = flattenTopLevel(architecture.components, architecture.relationships)
+      .filter((c) => c.type !== "content");
+    return { shown, aggregates: [] };
+  }
+  const parent = findComponent(architecture.components, drillLevel);
+  if (!parent) return { shown: [], aggregates: [] };
+  const children = parent.children.length > 0 ? parent.children : [parent];
+  const promoted = promoteDrillChildren(children);
+  return computeDrillLevelView(promoted, drillLevel);
+}
+
+// Predictive prefetch targets (P6-4): the children of the selected component plus
+// the breadcrumb ancestors, deduplicated and bounded. These are the components a
+// user is most likely to open next (drill down into a child, or navigate back up
+// an ancestor), so prefetching their detail shards at idle time makes the next
+// open instant. Pure so the target set is testable without scheduling.
+export function collectPrefetchTargets(
+  architecture: Architecture | null,
+  componentId: string,
+  breadcrumbs: BreadcrumbItem[],
+  limit = 8,
+): string[] {
+  if (!architecture) return [];
+  const comp = findComponent(architecture.components, componentId);
+  const ordered: string[] = [];
+  // Children first (drill-down is the most common next move).
+  if (comp) {
+    for (const child of comp.children) ordered.push(child.id);
+  }
+  // Then breadcrumb ancestors (navigate-up), excluding the selection itself.
+  for (const crumb of breadcrumbs) {
+    if (crumb.id !== componentId) ordered.push(crumb.id);
+  }
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const id of ordered) {
+    if (id === componentId || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+// Schedule a callback at browser idle time, falling back to a short timeout where
+// requestIdleCallback is unavailable (Safari, jsdom). Prefetch is best-effort and
+// must never block interaction, so failures are swallowed.
+function scheduleIdle(fn: () => void): void {
+  const ric = (globalThis as { requestIdleCallback?: (cb: () => void) => void })
+    .requestIdleCallback;
+  if (typeof ric === "function") {
+    ric(() => { try { fn(); } catch { /* best-effort */ } });
+  } else {
+    setTimeout(() => { try { fn(); } catch { /* best-effort */ } }, 1);
+  }
+}
+
 export const useArchStore = create<ArchStore>((set, get) => ({
   architecture: null,
   loading: true,
@@ -389,6 +526,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   breadcrumbs: [],
   drillLevel: null,
   viewMode: "graph",
+  lens: DEFAULT_LENS_ID,
 
   activePanel: null,
   detailItem: null,
@@ -402,6 +540,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   componentDetailCache: {},
   componentDetailLoading: {},
   componentDetailErrors: {},
+  expandedAggregates: {},
   coverageRows: null,
   coverageRowsLoading: false,
   coverageRowsError: null,
@@ -443,6 +582,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       // error state keyed to the old scan.
       componentDetailLoading: {},
       componentDetailErrors: {},
+      // Aggregate expansion belongs to a specific tree; drop it on reload so a
+      // new scan starts from collapsed aggregates (P6-4).
+      expandedAggregates: {},
       // Drop any coverage rows fetched for a previous scan; the panel refetches
       // (or reads the new inline rows) on next open.
       coverageRows: null,
@@ -477,6 +619,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
           activePanel: "detail",
         });
       }
+      // Predictive prefetch: warm the detail shards the user is most likely to
+      // open next (children + breadcrumb ancestors) at idle time (P6-4).
+      get().prefetchDetails(id);
     }
   },
 
@@ -492,6 +637,8 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       selectedComponentId: null,
       detailItem: null,
     });
+    // Prefetch the newly visible children's detail shards at idle time (P6-4).
+    get().prefetchDetails(component.id);
   },
 
   drillUp: () => {
@@ -525,6 +672,27 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   setViewMode: (mode) => set({ viewMode: mode }),
   setActivePanel: (panel) => set({ activePanel: panel }),
+
+  // Switch lens WITHOUT disturbing the current selection, breadcrumbs, or drill
+  // level (invariant I12: the same element stays selected across lens switches).
+  // An unknown or unavailable id resolves to the default lens.
+  setLens: (id) => set((s) => ({ lens: resolveLensId(id, s.architecture) })),
+
+  // The active lens's node/edge selection, fed to the graph pipeline. For
+  // Structure this is exactly the existing selectors, so old data renders
+  // identically. Falls back to the default lens if the active id is unknown.
+  getLensGraph: () => {
+    const { architecture, drillLevel, lens } = get();
+    if (!architecture) return { nodes: [], aggregates: [], edges: [] };
+    const def = getLens(lens) ?? getLens(DEFAULT_LENS_ID)!;
+    return def.getGraph({
+      architecture,
+      drillLevel,
+      getVisibleComponents: get().getVisibleComponents,
+      getAggregateNodes: get().getAggregateNodes,
+      getComponentRelationships: get().getComponentRelationships,
+    });
+  },
 
   showDetail: (type, data) =>
     set({ detailItem: { type, data }, activePanel: "detail" }),
@@ -864,6 +1032,37 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     return get().loadComponentDetail(componentId);
   },
 
+  prefetchDetails: (componentId) => {
+    const { architecture, breadcrumbs } = get();
+    // Monolith mode: detail is already inline, nothing to fetch.
+    if (!architecture || architecture.files.length > 0) return;
+    const targets = collectPrefetchTargets(architecture, componentId, breadcrumbs);
+    for (const id of targets) {
+      // loadComponentDetail is guarded (cache + in-flight + negative cache), so
+      // scheduling one idle call per target is safe and self-deduplicating.
+      scheduleIdle(() => { void get().loadComponentDetail(id); });
+    }
+  },
+
+  toggleAggregate: (id) =>
+    set((s) => ({
+      expandedAggregates: { ...s.expandedAggregates, [id]: !s.expandedAggregates[id] },
+    })),
+  expandAggregate: (id) =>
+    set((s) => ({ expandedAggregates: { ...s.expandedAggregates, [id]: true } })),
+  collapseAggregate: (id) =>
+    set((s) => {
+      const next = { ...s.expandedAggregates };
+      delete next[id];
+      return { expandedAggregates: next };
+    }),
+
+  getAggregateNodes: () => {
+    const { architecture, drillLevel } = get();
+    if (!architecture) return [];
+    return drillView(architecture, drillLevel).aggregates;
+  },
+
   loadCoverageRows: async () => {
     // Already loaded for this architecture.
     const existing = get().coverageRows;
@@ -927,40 +1126,20 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   },
 
   getVisibleComponents: () => {
-    const { architecture, drillLevel } = get();
+    const { architecture, drillLevel, expandedAggregates } = get();
     if (!architecture) return [];
 
-    if (!drillLevel) {
-      // Top level: show clients (Domain 1) and their dependent servers (Domain 2)
-      return flattenTopLevel(architecture.components, architecture.relationships)
-        .filter((c) => c.type !== "content");
-    }
-
-    const parent = findComponent(architecture.components, drillLevel);
-    if (!parent) return [];
-    // When drilled in, promote hero grandchildren from non-hero wrappers
-    const children = parent.children.length > 0 ? parent.children : [parent];
-    const promoted = promoteDrillChildren(children);
-    const hasHero = promoted.some((c) => isHeroType(c.type));
-    const filtered = promoted.filter((c) => {
-      if (c.type === "content") return false;
-      // When hero components exist at this level, hide small internal modules
-      if (hasHero && !isHeroType(c.type)
-        && c.type !== "library" && c.type !== "infrastructure"
-        && c.children.length === 0 && c.files.length < 10) {
-        return false;
-      }
-      return true;
-    });
-    // Fallback: if filtering removed everything, show all non-content children.
-    // Every part of the model must be reachable; gaps should never be silently hidden.
-    if (filtered.length === 0 && promoted.length > 0) {
-      console.warn(
-        `[store] Hero filter removed all ${promoted.length} components at drill level "${drillLevel}". Falling back to unfiltered view.`,
-      );
-      return promoted.filter((c) => c.type !== "content");
-    }
-    return filtered;
+    // Top level and drill levels share one computation (drillView), which returns
+    // the shown components plus the aggregates that stand in for the small
+    // internal modules the old hero filter used to drop silently (P6-4). Members
+    // of an expanded aggregate are promoted back to real nodes here; the
+    // aggregate marker itself still renders (getAggregateNodes) so the grouping
+    // stays visible. Nothing is ever hidden without a visible, counted trace.
+    const { shown, aggregates } = drillView(architecture, drillLevel);
+    const expandedMembers = aggregates
+      .filter((agg) => expandedAggregates[agg.id])
+      .flatMap((agg) => agg.members);
+    return [...shown, ...expandedMembers];
   },
 
   getComponentRelationships: () => {
