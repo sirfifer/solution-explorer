@@ -295,6 +295,17 @@ export function formatRelativeTime(isoString: string): string {
   return date.toLocaleDateString();
 }
 
+// Heat color for the Activity lens (P6-5). Maps a normalized hotspot intensity
+// t in [0,1] to a warm ramp from amber (cool, low change) to red (hot, high
+// change), with alpha rising so near-zero hotspots barely tint. Used for the
+// node heat ring in the graph and the heat bars in the ActivityPanel.
+export function getHeatColor(t: number): string {
+  const x = Math.max(0, Math.min(1, t));
+  const hue = 45 - 45 * x; // 45 (amber) -> 0 (red)
+  const alpha = 0.25 + 0.7 * x;
+  return `hsla(${hue.toFixed(0)}, 90%, 55%, ${alpha.toFixed(2)})`;
+}
+
 // Edge categories: "communication" edges carry runtime data, "structural" edges
 // represent code-level or organizational relationships (imports, FFI, companions).
 export type EdgeCategory = "communication" | "structural";

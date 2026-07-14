@@ -17,7 +17,7 @@ import {
 import { useArchStore } from "../store";
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
-import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles } from "../utils/layout";
+import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
 import type { Relationship } from "../types";
 
 const nodeTypes: NodeTypes = {
@@ -35,6 +35,7 @@ export function ArchitectureGraph() {
     darkMode,
     expandedAggregates,
     lens,
+    activityData,
     getLensGraph,
     selectComponent,
     navigateToBreadcrumb,
@@ -129,13 +130,36 @@ export function ArchitectureGraph() {
     // existing selectors so old data renders identically (P6-1).
     const { nodes: visible, aggregates, edges: relationships } = getLensGraph();
 
-    const componentNodes: Node[] = visible.map((comp, i) => ({
-      id: comp.id,
-      type: "component",
-      position: { x: (i % 4) * 320, y: Math.floor(i / 4) * 200 },
-      data: { component: comp },
-      selected: comp.id === selectedComponentId,
-    }));
+    // Under the Activity lens, encode each node's hotspot score as a heat ring,
+    // normalized against the max score across all ranked components so the colors
+    // are comparable to the ActivityPanel ranking (P6-5, invariant I11 spatial
+    // complement). Absent under every other lens, so Structure renders identically.
+    const heatByComponent = new Map<string, number>();
+    if (lens === "activity" && activityData) {
+      const maxScore = activityData.components.reduce(
+        (m, c) => Math.max(m, c.hotspot_score),
+        0,
+      );
+      for (const c of activityData.components) {
+        heatByComponent.set(c.id, maxScore > 0 ? c.hotspot_score / maxScore : 0);
+      }
+    }
+
+    const componentNodes: Node[] = visible.map((comp, i) => {
+      const node: Node = {
+        id: comp.id,
+        type: "component",
+        position: { x: (i % 4) * 320, y: Math.floor(i / 4) * 200 },
+        data: { component: comp },
+        selected: comp.id === selectedComponentId,
+      };
+      const heat = heatByComponent.get(comp.id);
+      if (heat !== undefined) {
+        node.data = { component: comp, heat };
+        node.style = { boxShadow: `0 0 0 3px ${getHeatColor(heat)}`, borderRadius: 14 };
+      }
+      return node;
+    });
 
     // Aggregate nodes make the small internal modules the hero filter would hide
     // visible and expandable in place (P6-4). They carry no edges (their members
@@ -244,7 +268,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, getLensGraph]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, activityData, getLensGraph]);
 
   // Apply ELK layout
   useEffect(() => {
