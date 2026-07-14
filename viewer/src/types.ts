@@ -693,11 +693,6 @@ export interface Architecture {
   };
   changelog?: ChangelogEntry[];
   changelog_serial?: number;
-  // Correlation surfaces (P5-6 / P6-8). Flat indexes of the concerns and findings
-  // the derivation produced. Optional; old datasets omit them and the Findings
-  // surface degrades to nothing (no entry point, byte-identical legacy render).
-  concerns?: Concern[];
-  findings?: Finding[];
 }
 
 // ---------------------------------------------------------------------------
@@ -827,68 +822,6 @@ export interface Annotation {
   text: string;
   createdAt: string;
   targetContext?: AnnotationTargetContext;
-}
-
-// Correlation findings and concerns (P5-6 derivation, surfaced to the viewer by
-// P6-8/P6-9). Optional: old datasets and multi-repo projections omit them, so
-// every consumer treats them as possibly-absent (I15 findings are ranked,
-// evidenced, and carry a verification status).
-export interface FindingEvidence {
-  // Fragment/clone evidence carries file + line span + symbol.
-  file?: string;
-  line?: number;
-  end_line?: number;
-  symbol?: string;
-  // Orphan/module evidence carries the component/module shape instead.
-  component_id?: string;
-  path?: string;
-  type?: string;
-  files?: string[];
-}
-
-export interface FindingMember {
-  id: string;
-  kind: string; // "fragment" | "component" | ...
-  component_id: string | null;
-  file: string | null;
-  line_start: number | null;
-  line_end: number | null;
-  symbol?: string | null;
-}
-
-export interface Finding {
-  id: string;
-  kind: string; // "duplication" | "orphan" | ...
-  confidence: string;
-  summary: string;
-  rank_score: number;
-  verification_status: string; // "unverified" until P7-4 verifies
-  members: FindingMember[];
-  evidence: FindingEvidence[];
-  detail: Record<string, unknown>;
-}
-
-export interface ConcernMemberEvidence {
-  file: string;
-  // Optional: some signal kinds (e.g. an import) carry no specific line.
-  line?: number;
-  signal: string;
-}
-
-export interface ConcernMember {
-  component_id: string;
-  files: string[];
-  markers: string[];
-  evidence: ConcernMemberEvidence[];
-}
-
-export interface Concern {
-  id: string;
-  kind: string;
-  title: string;
-  basis: string;
-  detail: Record<string, unknown>;
-  members: ConcernMember[];
 }
 
 // Selection sets and set-level review actions (P6-9, LENS-DESIGN section 10).

@@ -22,7 +22,6 @@ import type {
   Finding,
   Concern,
   Rule,
-  Finding,
   SelectionSet,
   SetMember,
   SetAnnotation,
