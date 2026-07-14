@@ -97,6 +97,7 @@ from .importer import ImportResult, import_ai_baseline
 from .overlay import apply_enrichment_overlay
 from .provenance import current_commit_sha, iso_now, stamp_enrichment
 from .staleness import enrichment_staleness
+from .verdicts import apply_verdict_overlay
 
 __all__ = [
     "ARCH_TARGET_ID",
@@ -110,6 +111,7 @@ __all__ = [
     "ImportResult",
     "import_ai_baseline",
     "apply_enrichment_overlay",
+    "apply_verdict_overlay",
     "current_commit_sha",
     "iso_now",
     "stamp_enrichment",

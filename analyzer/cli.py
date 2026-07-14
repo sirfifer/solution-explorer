@@ -20,6 +20,14 @@ def main():
 
         sys.exit(enhance_main(sys.argv[2:]))
 
+    # `analyze.py verify <edges>` runs the Phase 7 edge-verification pass (P7-3),
+    # dispatched before the flag-based parser for the same single-entrypoint
+    # reason as `enhance`. P7-4 adds the `name` subcommand and more verify targets.
+    if len(sys.argv) > 1 and sys.argv[1] == "verify":
+        from .enrich.verify_cli import verify_main
+
+        sys.exit(verify_main(sys.argv[2:]))
+
     parser = argparse.ArgumentParser(
         description="Analyze codebase architecture and generate interactive visualization data."
     )

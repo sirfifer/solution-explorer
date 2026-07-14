@@ -164,12 +164,21 @@ class DigestIndex:
         return cls(component, symbol, relationship, architecture)
 
     def for_target(self, target_kind: str, target_id: str) -> str | None:
-        """Current digest for an enrichment target, or None if it no longer exists."""
+        """Current digest for an enrichment target, or None if it no longer exists.
+
+        The four frozen kinds (component, symbol, relationship, architecture) are
+        defined in the package docstring. The additive ``edge-verdict`` kind (P7-3)
+        reuses the relationship digest of the same edge, so an edge verdict goes
+        stale when either endpoint's code changes or the edge is retyped; it does
+        not redefine any frozen digest (invariant I5).
+        """
         if target_kind == "component":
             return self.component.get(target_id)
         if target_kind == "symbol":
             return self.symbol.get(target_id)
         if target_kind == "relationship":
+            return self.relationship.get(target_id)
+        if target_kind == "edge-verdict":
             return self.relationship.get(target_id)
         if target_kind == "architecture":
             return self.architecture

@@ -1,0 +1,191 @@
+"""Tests for P7-3: AI verification of inferred edges.
+
+The polyglot fixture has exactly one inferred http edge
+(services/web/src -> services/api). These tests mock the model for the
+refuted/uncertain/invalid paths and the provenance/staleness/de-emphasis
+mechanics; the real bounded run (a real ``confirmed`` verdict with a cost) is
+recorded in TASKS.md P7-3 Evidence.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+from analyzer.derive import derive_all
+from analyzer.enrich import DigestIndex, apply_verdict_overlay, enrichment_staleness
+from analyzer.enrich.digest import relationship_target_id
+from analyzer.enrich.engine import InvokeResult
+from analyzer.enrich.passes import VerifyConfig, verify_edges
+from analyzer.extract import extract_repo
+from analyzer.store import FactStore
+
+FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+POLYGLOT = os.path.join(FIXTURES, "polyglot")
+EDGE_KEY = relationship_target_id("services/web/src", "services/api", "http")
+
+FIXED_CLOCK = lambda: "2026-07-13T00:00:00+00:00"  # noqa: E731
+
+
+def _build_store(tmp_path):
+    db = tmp_path / "index.db"
+    store = FactStore(str(db))
+    extract_repo(POLYGLOT, store)
+    derive_all(store, "polyglot", root_path=POLYGLOT)
+    store.commit()
+    store.close()
+    return db
+
+
+def _cfg(db, **kw):
+    return VerifyConfig(store_path=db, root=Path(POLYGLOT), **kw)
+
+
+def _mock(status, reason="grounded reason"):
+    def invoker(prompt):
+        return InvokeResult(
+            ok=True, text=json.dumps({"status": status, "reason": reason}), cost_usd=0.01
+        )
+    return invoker
+
+
+class _Exploding:
+    called = False
+
+    def __call__(self, prompt):
+        _Exploding.called = True
+        raise AssertionError("invoker must not be called")
+
+
+def test_inferred_edge_gets_verdict_stamped_with_relationship_digest(tmp_path):
+    db = _build_store(tmp_path)
+    report = verify_edges(_cfg(db), invoker=_mock("confirmed"), clock=FIXED_CLOCK)
+    assert report.ok and report.done == 1
+    assert report.tally() == {"confirmed": 1}
+
+    store = FactStore(str(db))
+    rows = [r for r in store.enrichment() if r["target_kind"] == "edge-verdict"]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["target_id"] == EDGE_KEY
+    assert row["payload"]["status"] == "confirmed"
+    # The stamped digest equals the current relationship digest (provenance).
+    index = DigestIndex.from_store(store)
+    assert row["derived_from_hash"] == index.for_target("edge-verdict", EDGE_KEY)
+    assert row["derived_from_hash"] is not None
+    store.close()
+
+
+def test_refuted_edge_is_marked_and_de_emphasized_never_deleted(tmp_path):
+    db = _build_store(tmp_path)
+    verify_edges(_cfg(db), invoker=_mock("refuted", "the snippet is a bare string"), clock=FIXED_CLOCK)
+
+    store = FactStore(str(db))
+    # The edge itself is still in the store (never deleted, the gate line).
+    assert any(
+        e["source_id"] == "services/web/src" and e["target_id"] == "services/api"
+        for e in store.edges()
+    )
+    _, arch = derive_all(store, "polyglot", root_path=POLYGLOT)
+    apply_verdict_overlay(arch, store)
+    rel = next(r for r in arch["relationships"] if r["source"] == "services/web/src")
+    assert rel["verdict"]["status"] == "refuted"
+    assert rel["de_emphasized"] is True
+    # The relationship is still present (marked, not removed).
+    assert rel["target"] == "services/api"
+    store.close()
+
+
+def test_uncertain_verdict_recorded(tmp_path):
+    db = _build_store(tmp_path)
+    report = verify_edges(_cfg(db), invoker=_mock("uncertain"), clock=FIXED_CLOCK)
+    assert report.tally() == {"uncertain": 1}
+    store = FactStore(str(db))
+    _, arch = derive_all(store, "polyglot", root_path=POLYGLOT)
+    apply_verdict_overlay(arch, store)
+    rel = next(r for r in arch["relationships"] if r["source"] == "services/web/src")
+    assert rel["verdict"]["status"] == "uncertain"
+    assert "de_emphasized" not in rel  # only refuted edges are de-emphasized
+    store.close()
+
+
+def test_invalid_verdict_is_not_written(tmp_path):
+    db = _build_store(tmp_path)
+
+    def bad(prompt):
+        return InvokeResult(ok=True, text=json.dumps({"status": "maybe", "reason": "x"}), cost_usd=0.01)
+
+    report = verify_edges(_cfg(db), invoker=bad, clock=FIXED_CLOCK)
+    assert not report.ok
+    assert report.failed == [EDGE_KEY]
+    store = FactStore(str(db))
+    assert [r for r in store.enrichment() if r["target_kind"] == "edge-verdict"] == []
+    store.close()
+
+
+def test_dry_run_invokes_nothing(tmp_path):
+    db = _build_store(tmp_path)
+    _Exploding.called = False
+    report = verify_edges(_cfg(db, dry_run=True), invoker=_Exploding(), clock=FIXED_CLOCK)
+    assert report.dry_run and report.target_count == 1
+    assert not _Exploding.called
+    store = FactStore(str(db))
+    assert [r for r in store.enrichment() if r["target_kind"] == "edge-verdict"] == []
+    store.close()
+
+
+def test_max_targets_zero_caps_to_no_work(tmp_path):
+    db = _build_store(tmp_path)
+    _Exploding.called = False
+    report = verify_edges(_cfg(db, max_targets=0), invoker=_Exploding(), clock=FIXED_CLOCK)
+    assert report.target_count == 0
+    assert not _Exploding.called
+
+
+def test_verdict_goes_stale_when_endpoint_code_changes(tmp_path):
+    db = _build_store(tmp_path)
+    verify_edges(_cfg(db), invoker=_mock("confirmed"), clock=FIXED_CLOCK)
+
+    store = FactStore(str(db))
+    fresh = {r["target_id"]: r for r in enrichment_staleness(store)
+             if r["target_kind"] == "edge-verdict"}
+    assert fresh[EDGE_KEY]["stale"] is False
+
+    # Change an endpoint component's member file content: the relationship digest
+    # (and thus the edge-verdict) must go stale, but the verdict payload is kept.
+    store._conn.execute(
+        "UPDATE files SET content_hash = 'CHANGED' WHERE path = 'services/api/api/server.py'"
+    )
+    store.commit()
+    stale = {r["target_id"]: r for r in enrichment_staleness(store)
+             if r["target_kind"] == "edge-verdict"}
+    assert stale[EDGE_KEY]["stale"] is True
+    assert stale[EDGE_KEY]["payload"]["status"] == "confirmed"  # served, not dropped
+
+    # The projection carries the stale marker on the verdict.
+    _, arch = derive_all(store, "polyglot", root_path=POLYGLOT)
+    apply_verdict_overlay(arch, store)
+    rel = next(r for r in arch["relationships"] if r["source"] == "services/web/src")
+    assert rel["verdict"]["stale"] is True
+    store.close()
+
+
+def test_update_reverifies_only_stale_or_missing(tmp_path):
+    db = _build_store(tmp_path)
+    verify_edges(_cfg(db), invoker=_mock("confirmed"), clock=FIXED_CLOCK)
+
+    # A no-change --update re-verifies nothing (invoker must not be called).
+    _Exploding.called = False
+    report = verify_edges(_cfg(db, update=True), invoker=_Exploding(), clock=FIXED_CLOCK)
+    assert report.target_count == 0 and not _Exploding.called
+
+    # After an endpoint changes, --update re-verifies exactly the stale edge.
+    store = FactStore(str(db))
+    store._conn.execute(
+        "UPDATE files SET content_hash = 'CHANGED2' WHERE path = 'services/api/api/server.py'"
+    )
+    store.commit()
+    store.close()
+    report2 = verify_edges(_cfg(db, update=True), invoker=_mock("refuted"), clock=FIXED_CLOCK)
+    assert report2.target_count == 1 and report2.tally() == {"refuted": 1}

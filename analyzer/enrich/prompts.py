@@ -24,6 +24,7 @@ __all__ = [
     "StoreFacts",
     "build_partition_prompt",
     "build_architecture_prompt",
+    "build_edge_verify_prompt",
 ]
 
 # The architectural role vocabulary (RESOURCES.md). Kept in sync with the
@@ -288,6 +289,62 @@ top-level components into meaningful layers. Do not add fields beyond those show
         "Return the JSON object now.",
     ]
     return "\n".join(parts)
+
+
+# --- P7-3 edge-verification prompt -------------------------------------------
+#
+# The prompt is adversarial-honest per LENS-DESIGN.md sections 8 and 9: the model
+# is asked to ground its answer in the supplied evidence and to say "uncertain"
+# rather than invent. The pass code validates the shape and treats anything
+# unparseable as a non-answer (never junk). P7-4 adds the naming, intent, and
+# finding-verification prompts alongside this one.
+
+
+def build_edge_verify_prompt(edge: dict, source: dict, target: dict) -> str:
+    """Prompt to verify one inferred edge against its own evidence (P7-3).
+
+    ``edge`` carries type, confidence, and evidence (file, line, snippet from the
+    store). ``source`` and ``target`` are compact endpoint summaries.
+    """
+    contract = """\
+Return ONLY a single JSON object, no prose, no fences:
+
+{ "status": "confirmed | refuted | uncertain",
+  "reason": "one sentence, grounded in the evidence above" }
+
+RULES:
+- confirmed: the evidence genuinely shows this connection exists between these
+  two components.
+- refuted: the evidence does NOT support this connection (for example the
+  snippet is a comment, a string that only resembles a URL, an unrelated match,
+  or points at a different target).
+- uncertain: the evidence is too thin to decide either way.
+- reason MUST cite what in the evidence drove the verdict. Do not invent facts
+  not present above. When unsure, say uncertain rather than guessing.
+"""
+    payload = {
+        "edge": {
+            "source": edge.get("source"),
+            "target": edge.get("target"),
+            "type": edge.get("type"),
+            "confidence": edge.get("confidence"),
+            "evidence": (edge.get("evidence") or [])[:5],
+        },
+        "source_component": source,
+        "target_component": target,
+    }
+    return "\n".join([
+        "You are verifying an INFERRED dependency edge in an architecture graph. "
+        "The edge was guessed by a static heuristic and may be a false positive. "
+        "Using ONLY the evidence and endpoint summaries below, return a verdict.",
+        "",
+        contract,
+        "",
+        "EDGE AND EVIDENCE:",
+        json.dumps(payload, indent=2, default=str),
+        "",
+        "Return the JSON object now.",
+    ])
 
 
 def _index_components(components: list, index: Optional[dict] = None) -> dict:

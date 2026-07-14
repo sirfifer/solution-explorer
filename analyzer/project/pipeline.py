@@ -27,7 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from ..enrich import apply_enrichment_overlay
+from ..enrich import apply_enrichment_overlay, apply_verdict_overlay
 from .activity import build_activity
 from .changelog import apply_changelog
 from .coverage import build_coverage
@@ -133,6 +133,10 @@ def project_split(
     # the changelog, manifest, and search shards read the arch (I5). No-op when
     # the store carries no enrichment, so non-enriched projections are unchanged.
     apply_enrichment_overlay(prepared, store)
+    # Phase 7 verdicts and names (P7-3/P7-4): edge verdicts, concern names, and
+    # finding verification statuses, plus AI intent-violation findings. No-op when
+    # the store carries none of these enrichment kinds (parity-safe).
+    apply_verdict_overlay(prepared, store)
     coverage = build_coverage(store)
     activity = build_activity(store)
     serial = _finish_changelog(
@@ -197,6 +201,7 @@ def project_monolith(
     # the changelog and monolith read the arch (I5). No-op when the store carries
     # no enrichment, so non-enriched projections are unchanged.
     apply_enrichment_overlay(prepared, store)
+    apply_verdict_overlay(prepared, store)
     coverage = build_coverage(store)
     activity = build_activity(store)
     serial = _finish_changelog(
