@@ -12,6 +12,11 @@ export interface UrlState {
   // Active lens (P6-1). Omitted from the URL when it is the default (Structure)
   // so old links and the default view carry no lens param.
   lens?: string;
+  // Flow lens follow state (P6-2). `flow` is the entry flow being walked and
+  // `step` its index; both are emitted only under the Flow lens so other lenses'
+  // links stay clean. They compose with the existing params.
+  flow?: string;
+  step?: number;
   // Inbound deep-link params (P3-2). `file` is a repo-relative source path; the
   // optional `line` selects the symbol whose range contains it. These are
   // consumed once on load to drive navigation and are not re-persisted into the
@@ -27,11 +32,16 @@ export function parseUrlState(): UrlState {
   // Strict positive-integer token only: parseInt would accept "12abc" as 12,
   // silently navigating somewhere the pasted link never named.
   const lineNum = lineRaw !== null && /^\d+$/.test(lineRaw) ? Number.parseInt(lineRaw, 10) : NaN;
+  const stepRaw = params.get("step");
+  // Same strict token discipline as line: a non-negative integer step or nothing.
+  const stepNum = stepRaw !== null && /^\d+$/.test(stepRaw) ? Number.parseInt(stepRaw, 10) : NaN;
   return {
     component: params.get("component") || undefined,
     tab: params.get("tab") || undefined,
     drill: params.get("drill") || undefined,
     lens: params.get("lens") || undefined,
+    flow: params.get("flow") || undefined,
+    step: Number.isFinite(stepNum) && stepNum >= 0 ? stepNum : undefined,
     file: params.get("file") || undefined,
     line: Number.isFinite(lineNum) && lineNum > 0 ? lineNum : undefined,
   };
@@ -57,6 +67,12 @@ function buildUrl(state: UrlState): string {
   // Only emit the lens param when it is non-default, so Structure URLs (and old
   // links) stay clean and unchanged (P6-1).
   if (state.lens && state.lens !== "structure") params.set("lens", state.lens);
+  // Flow follow state rides only under the Flow lens (P6-2). Guarding on the lens
+  // keeps the params from leaking onto other lenses' links.
+  if (state.lens === "flow" && state.flow) {
+    params.set("flow", state.flow);
+    if (state.step && state.step > 0) params.set("step", String(state.step));
+  }
   const search = params.toString();
   return search ? `${window.location.pathname}?${search}` : window.location.pathname;
 }

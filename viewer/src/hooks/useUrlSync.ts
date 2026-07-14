@@ -39,6 +39,16 @@ export function useUrlSync(): void {
       store.setLens(urlState.lens);
     }
 
+    // Flow lens follow state (P6-2). If the link names an entry flow (and the
+    // Flow lens is active and available), enter follow mode and jump to the saved
+    // step. This drives its own selection, so it takes precedence over the
+    // component/drill params below.
+    if (urlState.flow && useArchStore.getState().lens === "flow") {
+      store.setFlowEntry(urlState.flow);
+      if (urlState.step) store.flowGoToStep(urlState.step);
+      return;
+    }
+
     // Inbound file/line deep link takes precedence: it computes its own drill and
     // selection from the owning component, so it overrides any component/drill
     // params (P3-2). The tab param is still honored, defaulting to the Files tab.
@@ -73,13 +83,18 @@ export function useUrlSync(): void {
       const selChanged = state.selectedComponentId !== prev.selectedComponentId;
       const drillChanged = state.drillLevel !== prev.drillLevel;
       const lensChanged = state.lens !== prev.lens;
-      if (selChanged || drillChanged || lensChanged) {
+      const flowChanged =
+        state.flowEntryId !== prev.flowEntryId || state.flowStep !== prev.flowStep;
+      if (selChanged || drillChanged || lensChanged || flowChanged) {
         const update = {
           component: state.selectedComponentId || undefined,
           drill: state.drillLevel || undefined,
           // Carry the active lens so a lens switch is shareable and survives
           // back/forward (P6-1, invariant I12).
           lens: state.lens,
+          // Carry the Flow follow state so a walked flow is shareable (P6-2).
+          flow: state.flowEntryId || undefined,
+          step: state.flowStep || undefined,
           // Preserve the active-tab param that DetailPanel manages; rebuilding
           // the URL from component/drill alone would erase it (F-VW-7).
           tab: parseUrlState().tab,
@@ -109,6 +124,15 @@ export function useUrlSync(): void {
       try {
         // Restore the lens from the target URL (absent means the default).
         store.setLens(urlState.lens ?? "structure");
+
+        // Flow follow state (P6-2): restore or clear it to match the target URL,
+        // then let it own selection when present.
+        if (urlState.flow && useArchStore.getState().lens === "flow") {
+          store.setFlowEntry(urlState.flow);
+          if (urlState.step) store.flowGoToStep(urlState.step);
+          return;
+        }
+        if (useArchStore.getState().flowEntryId) store.clearFlow();
 
         if (urlState.drill) {
           const drillComp = store.getComponentById(urlState.drill);

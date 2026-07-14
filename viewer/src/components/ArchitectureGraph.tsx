@@ -18,6 +18,7 @@ import { useArchStore } from "../store";
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles } from "../utils/layout";
+import { getLens } from "../lenses";
 import type { Relationship } from "../types";
 
 const nodeTypes: NodeTypes = {
@@ -35,6 +36,9 @@ export function ArchitectureGraph() {
     darkMode,
     expandedAggregates,
     lens,
+    flowEntryId,
+    flowStep,
+    getFlowPath,
     getLensGraph,
     selectComponent,
     navigateToBreadcrumb,
@@ -129,13 +133,32 @@ export function ArchitectureGraph() {
     // existing selectors so old data renders identically (P6-1).
     const { nodes: visible, aggregates, edges: relationships } = getLensGraph();
 
-    const componentNodes: Node[] = visible.map((comp, i) => ({
-      id: comp.id,
-      type: "component",
-      position: { x: (i % 4) * 320, y: Math.floor(i / 4) * 200 },
-      data: { component: comp },
-      selected: comp.id === selectedComponentId,
-    }));
+    // Under the Flow lens, ring the entry node and the current follow step so the
+    // walk reads spatially: the entry is where the journey starts, the step is
+    // "you are here" (P6-2). Absent under every other lens, so Structure and the
+    // other lenses render identically.
+    const flowEntryNodeId = lens === "flow" ? flowEntryId : null;
+    let flowStepNodeId: string | null = null;
+    if (lens === "flow" && flowEntryId) {
+      const path = getFlowPath(flowEntryId);
+      flowStepNodeId = path[Math.min(flowStep, path.length - 1)] ?? null;
+    }
+
+    const componentNodes: Node[] = visible.map((comp, i) => {
+      const node: Node = {
+        id: comp.id,
+        type: "component",
+        position: { x: (i % 4) * 320, y: Math.floor(i / 4) * 200 },
+        data: { component: comp },
+        selected: comp.id === selectedComponentId,
+      };
+      if (comp.id === flowStepNodeId) {
+        node.style = { boxShadow: "0 0 0 3px #2DD4BF", borderRadius: 14 };
+      } else if (comp.id === flowEntryNodeId) {
+        node.style = { boxShadow: "0 0 0 3px #818CF8", borderRadius: 14 };
+      }
+      return node;
+    });
 
     // Aggregate nodes make the small internal modules the hero filter would hide
     // visible and expandable in place (P6-4). They carry no edges (their members
@@ -244,7 +267,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, getLensGraph]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, flowEntryId, flowStep, getFlowPath, getLensGraph]);
 
   // Apply ELK layout
   useEffect(() => {
@@ -262,7 +285,11 @@ export function ArchitectureGraph() {
     // Stamp this layout run so a stale resolution can be discarded below.
     const myGen = ++layoutGenRef.current;
 
-    getLayoutedElements(rawNodes, rawEdges, "DOWN").then(({ nodes: ln, edges: le }) => {
+    // The active lens chooses the layout direction: Structure lays out top-down,
+    // the Flow lens left-to-right for a walkable diagram (P6-2). Default "DOWN".
+    const direction = getLens(lens)?.layoutDirection ?? "DOWN";
+
+    getLayoutedElements(rawNodes, rawEdges, direction).then(({ nodes: ln, edges: le }) => {
       // Discard a stale layout: a newer run superseded this one while ELK was
       // computing (rapid drill navigation), so its positions are obsolete.
       if (myGen !== layoutGenRef.current) return;
@@ -300,7 +327,7 @@ export function ArchitectureGraph() {
     return () => {
       if (layoutTimeout.current) clearTimeout(layoutTimeout.current);
     };
-  }, [rawNodes, rawEdges, setNodes, setEdges, fitView]);
+  }, [rawNodes, rawEdges, lens, setNodes, setEdges, fitView]);
 
   // Pan to selected node and highlight its neighbors
   useEffect(() => {

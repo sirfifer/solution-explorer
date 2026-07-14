@@ -13,6 +13,7 @@ import { AdminDashboard } from "./components/AdminDashboard";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { CoverageBadge } from "./components/CoverageBadge";
 import { LensSwitcher } from "./components/LensSwitcher";
+import { FlowPanel } from "./components/FlowPanel";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useBottomSheet } from "./hooks/useBottomSheet";
@@ -137,6 +138,7 @@ export function App() {
     reviewMode,
     annotatingComponentId,
     drillLevel,
+    lens,
     setArchitecture,
     setLoading,
     setError,
@@ -734,11 +736,14 @@ export function App() {
           </div>
         )}
 
-        {/* Graph */}
-        <main className="flex-1 relative">
-          <ReactFlowProvider>
-            <ArchitectureGraph />
-          </ReactFlowProvider>
+        {/* Graph (with the Flow lens ranked/follow panel docked left when active) */}
+        <main className="flex-1 relative flex overflow-hidden">
+          {lens === "flow" && <FlowPanel />}
+          <div className="flex-1 relative">
+            <ReactFlowProvider>
+              <ArchitectureGraph />
+            </ReactFlowProvider>
+          </div>
         </main>
 
         {/* Detail / Review panel - desktop */}
