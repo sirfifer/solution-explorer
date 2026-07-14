@@ -11,6 +11,15 @@ from .scanner import ArchitectureScanner
 
 
 def main():
+    # Subcommand dispatch: `analyze.py enhance ...` runs the headless AI
+    # enrichment CLI (P7-2). It is dispatched before the flag-based parser below
+    # so analyze.py stays the single entrypoint without restructuring the whole
+    # positional-path parser into subparsers.
+    if len(sys.argv) > 1 and sys.argv[1] == "enhance":
+        from .enrich.enhance_cli import main as enhance_main
+
+        sys.exit(enhance_main(sys.argv[2:]))
+
     parser = argparse.ArgumentParser(
         description="Analyze codebase architecture and generate interactive visualization data."
     )
