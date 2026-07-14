@@ -47,9 +47,11 @@ function makeArch(): Architecture {
 }
 
 function resetStore() {
+  localStorage.clear();
   useArchStore.setState({
     architecture: null, selectedComponentId: null, breadcrumbs: [], drillLevel: null,
     reviewMode: false, annotatingComponentId: null, annotations: [],
+    selectionSets: [], setAnnotations: [], activePanel: null,
     findingsSurface: { open: false, tab: "findings", kindFilter: null, elementFilter: null },
     stagedFindingSet: null,
   });
@@ -86,12 +88,14 @@ describe("Findings question list (I14)", () => {
       const c = useArchStore.getState().getConcerns()[0];
       expect(c.members.map((m) => m.component_id)).toEqual(["alpha", "beta"]);
     },
-    // "What can I do about it?" -> the I15 affordances (annotate stages the set).
+    // "What can I do about it?" -> the I15 affordances: annotate builds a real
+    // selection set and opens the annotation flow; export renders a directive.
     "what-can-i-do": () => {
       useArchStore.getState().setArchitecture(makeArch());
-      const rep = useArchStore.getState().annotateFindingSet(finding);
-      expect(rep).toBe("alpha");
-      expect(useArchStore.getState().stagedFindingSet?.memberComponentIds).toEqual(["alpha", "beta"]);
+      const setId = useArchStore.getState().annotateFindingSet(finding);
+      expect(setId).toBeTruthy();
+      expect(useArchStore.getState().getSetById(setId!)!.members.map((m) => m.componentId)).toEqual(["alpha", "beta"]);
+      expect(useArchStore.getState().exportDirectiveForFinding(finding.id)?.model.members.length).toBeGreaterThan(0);
     },
   };
 

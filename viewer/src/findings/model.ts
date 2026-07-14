@@ -41,7 +41,7 @@ export const FINDINGS_QUESTIONS: LensQuestion[] = [
     id: "what-can-i-do",
     question: "What can I do about it?",
     gesture:
-      "Use a finding's action affordances: open members (navigate to each), annotate the set (stage the members and attach review feedback), or export a directive (P6-9).",
+      "Use a finding's action affordances: open members (navigate to each), annotate the set (build a selection set and open the set annotation flow), or export a directive (build the set and copy a structured work order for an AI executor).",
   },
 ];
 

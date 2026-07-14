@@ -17,6 +17,24 @@ import {
 // export directive). An unverified finding is marked and never presented as
 // established fact (the DeepWiki lesson).
 
+// Copy a generated directive's markdown to the clipboard, falling back to a
+// popup window when the Clipboard API is unavailable (mirrors the review-panel
+// export). Returns whether the clipboard write succeeded.
+async function copyDirectiveMarkdown(markdown: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(markdown);
+    return true;
+  } catch {
+    const w = window.open("", "_blank", "width=700,height=600");
+    if (w) {
+      w.document.write(
+        `<pre style="white-space:pre-wrap;font-family:monospace;padding:20px">${markdown.replace(/</g, "&lt;")}</pre>`,
+      );
+    }
+    return false;
+  }
+}
+
 function KindBadge({ kind, darkMode }: { kind: string; darkMode: boolean }) {
   const map: Record<string, string> = {
     duplication: darkMode ? "bg-violet-500/15 text-violet-300" : "bg-violet-100 text-violet-700",
@@ -67,10 +85,12 @@ function VerificationBadge({ status, darkMode }: { status: string; darkMode: boo
 
 function FindingRow({ finding, darkMode }: { finding: Finding; darkMode: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
   const openFileDeepLink = useArchStore((s) => s.openFileDeepLink);
   const navigateToComponent = useArchStore((s) => s.navigateToComponent);
   const closeFindingsSurface = useArchStore((s) => s.closeFindingsSurface);
   const annotateFindingSet = useArchStore((s) => s.annotateFindingSet);
+  const exportDirectiveForFinding = useArchStore((s) => s.exportDirectiveForFinding);
 
   // Navigate to a member's exact location (I15 open members). File members use
   // the file/line deep link; component members drill to the component.
@@ -85,6 +105,19 @@ function FindingRow({ finding, darkMode }: { finding: Finding; darkMode: boolean
 
   const openFirstMember = () => {
     if (finding.members.length > 0) openMember(finding.members[0]);
+  };
+
+  // Export a structured directive (P6-9) built from this finding's members. The
+  // set is created (or reused) from the finding, then rendered to markdown with
+  // an embedded machine-readable JSON work order and copied to the clipboard.
+  const exportDirective = async () => {
+    const result = exportDirectiveForFinding(finding.id);
+    if (!result) return;
+    const ok = await copyDirectiveMarkdown(result.markdown);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
   };
 
   const rowBg = darkMode ? "border-zinc-800 hover:bg-zinc-900/60" : "border-zinc-200 hover:bg-zinc-50";
@@ -161,17 +194,17 @@ function FindingRow({ finding, darkMode }: { finding: Finding; darkMode: boolean
               type="button"
               onClick={() => annotateFindingSet(finding)}
               className={`text-[11px] px-2 py-1 rounded font-medium ${btn}`}
-              title="Stage this finding's members as a set and attach review feedback (single-element annotation today; set-level annotation is P6-9)"
+              title="Build a selection set from this finding's members and open the set annotation flow in the review panel"
             >
               Annotate the set
             </button>
             <button
               type="button"
-              disabled
-              className={`text-[11px] px-2 py-1 rounded font-medium cursor-not-allowed opacity-50 ${darkMode ? "bg-zinc-900 text-zinc-500" : "bg-zinc-100 text-zinc-400"}`}
-              title="Export a structured work-order directive for an AI executor. Coming in P6-9 (set-level review actions and directives)."
+              onClick={() => void exportDirective()}
+              className={`text-[11px] px-2 py-1 rounded font-medium ${copied ? (darkMode ? "bg-emerald-600/20 text-emerald-300" : "bg-emerald-100 text-emerald-700") : btn}`}
+              title="Build a selection set from this finding and copy a structured work-order directive (markdown plus machine-readable JSON) for an AI executor"
             >
-              Export directive
+              {copied ? "Copied directive" : "Export directive"}
             </button>
           </div>
         </div>
@@ -182,18 +215,36 @@ function FindingRow({ finding, darkMode }: { finding: Finding; darkMode: boolean
 
 function ConcernRow({ concern, darkMode }: { concern: Concern; darkMode: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
   const navigateToComponent = useArchStore((s) => s.navigateToComponent);
   const closeFindingsSurface = useArchStore((s) => s.closeFindingsSurface);
+  const annotateConcernSet = useArchStore((s) => s.annotateConcernSet);
+  const exportDirectiveForConcern = useArchStore((s) => s.exportDirectiveForConcern);
 
   const openMember = (componentId: string) => {
     closeFindingsSurface();
     navigateToComponent(componentId);
   };
 
+  // The same I15 affordances as a finding row, built from the concern's members
+  // (createSetFromConcern under the hood).
+  const exportDirective = async () => {
+    const result = exportDirectiveForConcern(concern.id);
+    if (!result) return;
+    const ok = await copyDirectiveMarkdown(result.markdown);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
+  };
+
   const rowBg = darkMode ? "border-zinc-800 hover:bg-zinc-900/60" : "border-zinc-200 hover:bg-zinc-50";
   const linkCls = darkMode
     ? "text-blue-400 hover:text-blue-300 hover:underline"
     : "text-blue-600 hover:text-blue-700 hover:underline";
+  const btn = darkMode
+    ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+    : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200";
 
   return (
     <div className={`rounded-lg border ${rowBg}`}>
@@ -254,6 +305,26 @@ function ConcernRow({ concern, darkMode }: { concern: Concern; darkMode: boolean
               </li>
             ))}
           </ul>
+
+          {/* I15 action affordances, same as a finding row (via createSetFromConcern) */}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => annotateConcernSet(concern)}
+              className={`text-[11px] px-2 py-1 rounded font-medium ${btn}`}
+              title="Build a selection set from this concern's members and open the set annotation flow in the review panel"
+            >
+              Annotate the set
+            </button>
+            <button
+              type="button"
+              onClick={() => void exportDirective()}
+              className={`text-[11px] px-2 py-1 rounded font-medium ${copied ? (darkMode ? "bg-emerald-600/20 text-emerald-300" : "bg-emerald-100 text-emerald-700") : btn}`}
+              title="Build a selection set from this concern and copy a structured work-order directive (markdown plus machine-readable JSON) for an AI executor"
+            >
+              {copied ? "Copied directive" : "Export directive"}
+            </button>
+          </div>
         </div>
       )}
     </div>

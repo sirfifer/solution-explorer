@@ -6,7 +6,6 @@ import {
   findingKinds,
   filterFindingsByKind,
   findingsForComponent,
-  representativeComponentId,
 } from "../findings/model";
 import type { Architecture, Component, Finding, Concern } from "../types";
 
@@ -100,10 +99,12 @@ function archWithFindings(): Architecture {
 }
 
 function resetStore() {
+  localStorage.clear();
   useArchStore.setState({
     architecture: null, selectedComponentId: null, breadcrumbs: [], drillLevel: null,
     expandedAggregates: {}, detailItem: null, activePanel: null, lens: "structure",
     reviewMode: false, annotatingComponentId: null, annotatingTarget: null, annotations: [],
+    selectionSets: [], setAnnotations: [],
     findingsSurface: { open: false, tab: "findings", kindFilter: null, elementFilter: null },
     stagedFindingSet: null,
   });
@@ -228,22 +229,35 @@ describe("I15 action affordances and the P6-9 seam", () => {
     expect(staged.memberCount).toBe(2);
   });
 
-  it("annotate the set: stages the members and opens annotation on the representative component", () => {
+  it("annotate the set: builds a real selection set and opens the set annotation flow", () => {
     useArchStore.getState().setArchitecture(archWithFindings());
-    const rep = useArchStore.getState().annotateFindingSet(dupFinding());
-    expect(rep).toBe("alpha"); // first component member
-    expect(representativeComponentId(dupFinding())).toBe("alpha");
+    const setId = useArchStore.getState().annotateFindingSet(dupFinding());
+    expect(setId).toBeTruthy();
     const st = useArchStore.getState();
-    expect(st.reviewMode).toBe(true); // entered review mode
-    expect(st.annotatingComponentId).toBe("alpha"); // annotation input targets the rep
-    expect(st.stagedFindingSet?.findingId).toBe("finding:duplication:aaa"); // set recorded
-    expect(st.findingsSurface.open).toBe(false); // overlay closed to reveal the component
+    // A real selection set was built from the finding's members (P6-9 engine),
+    // replacing the old single-element annotation fallback.
+    const created = st.getSetById(setId!)!;
+    expect(created.origin).toBe("finding:duplication:aaa");
+    expect(created.members.map((m) => m.componentId)).toEqual(["alpha", "beta"]);
+    // The set annotation flow is open: review mode with the review panel visible.
+    expect(st.reviewMode).toBe(true);
+    expect(st.activePanel).toBe("review");
+    expect(st.findingsSurface.open).toBe(false); // overlay closed to reveal the review panel
+    expect(st.stagedFindingSet?.findingId).toBe("finding:duplication:aaa"); // membership still recorded
   });
 
-  it("annotate returns null for an evidence-only finding with no component member", () => {
-    const noComp: Finding = { ...dupFinding(), members: [{ id: "x", kind: "fragment", component_id: null, file: "x", line_start: 1, line_end: 2 }] };
+  it("annotate reuses an existing set for the same finding instead of duplicating", () => {
     useArchStore.getState().setArchitecture(archWithFindings());
-    expect(useArchStore.getState().annotateFindingSet(noComp)).toBeNull();
+    const first = useArchStore.getState().annotateFindingSet(dupFinding());
+    const second = useArchStore.getState().annotateFindingSet(dupFinding());
+    expect(second).toBe(first);
+    expect(useArchStore.getState().selectionSets.filter((s) => s.origin === "finding:duplication:aaa")).toHaveLength(1);
+  });
+
+  it("annotate returns null for a finding not present in the architecture", () => {
+    const unknown: Finding = { ...dupFinding(), id: "finding:duplication:not-in-arch" };
+    useArchStore.getState().setArchitecture(archWithFindings());
+    expect(useArchStore.getState().annotateFindingSet(unknown)).toBeNull();
   });
 });
 

@@ -14,6 +14,8 @@ import { StatusDashboard } from "./components/StatusDashboard";
 import { CoverageBadge } from "./components/CoverageBadge";
 import { FindingsEntry } from "./components/FindingsEntry";
 import { FindingsSurface } from "./components/FindingsSurface";
+import { ToursEntry } from "./components/ToursEntry";
+import { TourPlayer } from "./components/TourPlayer";
 import { LensSwitcher } from "./components/LensSwitcher";
 import { FlowPanel } from "./components/FlowPanel";
 import { ActivityPanel } from "./components/ActivityPanel";
@@ -668,6 +670,9 @@ export function App() {
           whenever the dataset carries findings or concerns. */}
       <FindingsEntry />
 
+      {/* Tours entry point (P6-7); present only when the dataset carries tours. */}
+      <ToursEntry />
+
       {/* Review mode banner */}
       {reviewMode && (
         <div className={`
@@ -886,6 +891,9 @@ export function App() {
 
       {/* Findings and concerns surface overlay (P6-8) */}
       <FindingsSurface />
+
+      {/* Guided-walkthrough player: tour list overlay + docked step panel (P6-7) */}
+      <TourPlayer />
 
       {/* Admin dashboard */}
       {adminOpen && <AdminDashboard />}
