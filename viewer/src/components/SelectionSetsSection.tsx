@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useArchStore } from "../store";
 import type { SelectionSet, SetMember } from "../types";
 import { generateDirective } from "../utils/directiveGenerator";
+import { Tooltip } from "./Tooltip";
+import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
 /**
  * Selection Sets section of the review panel (P6-9, LENS-DESIGN section 10).
@@ -215,19 +217,23 @@ function SelectionSetCard({ set, darkMode }: { set: SelectionSet; darkMode: bool
 
       {/* Export directive */}
       <div className={`px-3 py-2 border-t ${darkMode ? "border-zinc-800/50" : "border-zinc-100"}`}>
-        <button
-          onClick={() => setShowExport((v) => !v)}
-          className={`text-[10px] font-medium ${darkMode ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-500 hover:text-zinc-700"}`}
-        >
-          {showExport ? "▾" : "▸"} Export directive
-        </button>
+        <Tooltip content={TOOLTIP_COPY.directive.export} position="bottom">
+          <button
+            onClick={() => setShowExport((v) => !v)}
+            className={`text-[10px] font-medium ${darkMode ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-500 hover:text-zinc-700"}`}
+          >
+            {showExport ? "▾" : "▸"} Export directive
+          </button>
+        </Tooltip>
         {showExport && (
           <div className="mt-2 space-y-2" data-testid="directive-export">
             {/* Exemptions */}
             <div>
-              <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-                Exemptions (uncheck to leave a member out)
-              </div>
+              <Tooltip content={TOOLTIP_COPY.directive.exemption} focusable>
+                <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                  Exemptions (uncheck to leave a member out)
+                </div>
+              </Tooltip>
               {set.members.map((m) => {
                 const exempt = m.ref in exemptReasons;
                 return (
@@ -258,9 +264,11 @@ function SelectionSetCard({ set, darkMode }: { set: SelectionSet; darkMode: bool
             </div>
             {/* Acceptance criteria */}
             <div>
-              <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-                Acceptance criteria (one per line; origin suggestions are added automatically)
-              </div>
+              <Tooltip content={TOOLTIP_COPY.directive.acceptance} focusable>
+                <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                  Acceptance criteria (one per line; origin suggestions are added automatically)
+                </div>
+              </Tooltip>
               <textarea
                 aria-label="Acceptance criteria"
                 value={acceptanceText}

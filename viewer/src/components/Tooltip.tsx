@@ -8,9 +8,28 @@ interface TooltipProps {
   delay?: number;
   position?: "top" | "bottom";
   interactive?: boolean;
+  // Make the trigger reachable by keyboard when the wrapped child is not itself
+  // focusable (a badge or a plain span). Interactive children (buttons, links)
+  // already take focus and surface the tooltip via the wrapper's onFocus.
+  focusable?: boolean;
+  // Explicit accessible label. Defaults to `content` when it is a plain string,
+  // so assistive tech and keyboard users get the tooltip text without a hover.
+  label?: string;
+  // Wrapper display class. Defaults to inline-flex; pass e.g. "block w-full" when
+  // the trigger must keep a block child's width (a full-width bar).
+  className?: string;
 }
 
-export function Tooltip({ content, children, delay = 300, position = "top", interactive = false }: TooltipProps) {
+export function Tooltip({
+  content,
+  children,
+  delay = 300,
+  position = "top",
+  interactive = false,
+  focusable = false,
+  label,
+  className = "inline-flex",
+}: TooltipProps) {
   const { darkMode } = useArchStore();
   const [visible, setVisible] = useState(false);
   const [coords, setCoords] = useState({ x: 0, y: 0 });
@@ -57,13 +76,26 @@ export function Tooltip({ content, children, delay = 300, position = "top", inte
     }
   }, [interactive, clearTimers]);
 
+  // Keyboard focus is a first-class trigger, not just mouse hover. onFocus/onBlur
+  // on the wrapper surface the tooltip when the child (or the wrapped child)
+  // takes focus. When content is a plain string it also becomes the wrapper's
+  // aria-label. Known limitation: on a non-focusable wrapper (a plain span)
+  // assistive tech support for that label is inconsistent; the robust pattern
+  // is aria-describedby on the actually-focusable element, recorded as a
+  // follow-up in TASKS.md (it needs cloneElement and touches every call site).
+  const ariaLabel = label ?? (typeof content === "string" ? content : undefined);
+
   return (
     <>
       <span
         ref={triggerRef}
         onMouseEnter={show}
         onMouseLeave={hide}
-        className="inline-flex"
+        onFocus={show}
+        onBlur={hide}
+        tabIndex={focusable ? 0 : undefined}
+        aria-label={ariaLabel}
+        className={className}
       >
         {children}
       </span>
@@ -79,6 +111,12 @@ export function Tooltip({ content, children, delay = 300, position = "top", inte
           }}
           onMouseEnter={onTooltipEnter}
           onMouseLeave={onTooltipLeave}
+          // Keyboard parity for interactive tooltips: tabbing from the trigger
+          // into the tooltip's link fires the wrapper's onBlur (which schedules
+          // the hide); focus landing inside the tooltip must cancel that hide,
+          // exactly as mouse-enter does, or the link is unreachable by keyboard.
+          onFocus={onTooltipEnter}
+          onBlur={onTooltipLeave}
         >
           <div className={`
             min-w-[120px] max-w-[280px] px-3 py-2 rounded-lg text-xs leading-relaxed shadow-lg border

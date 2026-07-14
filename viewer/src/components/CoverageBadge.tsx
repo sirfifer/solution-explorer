@@ -1,16 +1,27 @@
 import { useState, useMemo, useCallback } from "react";
 import { useArchStore } from "../store";
 import type { CoverageRow } from "../types";
+import { Tooltip } from "./Tooltip";
+import { TOOLTIP_COPY, dispositionTooltip } from "../utils/tooltipCopy";
 
 // Coverage badge and drill-in panel (P4-4; TARGET-ARCHITECTURE.md section 7,
 // invariant I2; LENS-DESIGN.md I11 rank-don't-render).
 //
-// The badge shows percent parsed and counts per disposition, reading the summary
-// straight from `architecture.coverage` (which the manifest carries inline).
-// Clicking opens a panel that lists failures first, then exclusions grouped by
-// rule ranked by count (I11). The full rows drill-in comes from
-// `architecture.coverage.rows` (monolith) or a lazy fetch of coverage.json
-// (split mode).
+// Coverage semantics classify every ledger disposition into three families, so
+// the percent means "how much of your source did we analyze" and never gets
+// diluted by files that contain no code:
+//
+//   - SOURCE ANALYZED  (parsed): the numerator, and the good part of the
+//     denominator.
+//   - SOURCE GAPS  (failed, excluded:max_file_size, and any other exclusion of
+//     analyzable source): loud, amber, counted against the percent.
+//   - NON-SOURCE ACCOUNTED  (binary, unsupported extensions, empty files, pruned
+//     directories, vendored repos): never in the denominator; recorded so
+//     nothing is silently missing, and shown as reassurance, not alarm.
+//
+// So a repo of all-source parsed files plus 6,047 images reads "100% of source
+// analyzed" with "6,047 non-source files accounted for", not "10% parsed". The
+// old total-based percent (parsed / total) is gone.
 //
 // Degradation:
 //   - No coverage key and no repositories: legacy single-repo dataset. Render
@@ -19,10 +30,79 @@ import type { CoverageRow } from "../types";
 //     projection omits a unified ledger (P4-5 known limitation). Show a small
 //     "coverage unavailable for this dataset" note instead of a fake percentage.
 
+export type CoverageFamily = "analyzed" | "gap" | "nonsource";
+
+// The dispositions that are non-source: recorded for completeness, never counted
+// against coverage. Everything else that is not `parsed` is a source gap (loud),
+// including any future excluded rule, per "exceptions as loud exceptions".
+const NON_SOURCE_DISPOSITIONS = new Set([
+  "binary",
+  "excluded:unsupported_extension",
+  "excluded:empty_file",
+  "excluded:skipped_directory",
+  "excluded:vendored_repo",
+]);
+
+// Classify a disposition into one of the three families. `parsed` is analyzed;
+// the known non-source rules are non-source; `failed`/`failed:*`,
+// `excluded:max_file_size`, and any unrecognized exclusion are source gaps.
+export function classifyDisposition(disposition: string): CoverageFamily {
+  if (disposition === "parsed") return "analyzed";
+  if (NON_SOURCE_DISPOSITIONS.has(disposition)) return "nonsource";
+  return "gap";
+}
+
 // A disposition is a "failure" when it is exactly `failed` or namespaced
-// `failed:<error>`. Failures list first and expanded, per I11.
+// `failed:<error>`. Failures list first within the gaps family, per I11.
 function isFailure(disposition: string): boolean {
   return disposition === "failed" || disposition.startsWith("failed:");
+}
+
+export interface CoverageFamilies {
+  analyzed: number;
+  gap: number;
+  nonsource: number;
+  // The percent's denominator: analyzed source plus source gaps only.
+  sourceTotal: number;
+  // Analyzed source over the source total, 0 to 100. 100 when there is no source.
+  percent: number;
+  perFamily: Record<CoverageFamily, Array<{ disposition: string; count: number }>>;
+}
+
+// Reduce a disposition->count summary into the three families and the source
+// percent. This is the whole of the new coverage math and is unit-tested
+// directly (the old parsed/total math must fail these tests).
+export function computeCoverageFamilies(summary: Record<string, number>): CoverageFamilies {
+  let analyzed = 0;
+  let gap = 0;
+  let nonsource = 0;
+  const perFamily: CoverageFamilies["perFamily"] = { analyzed: [], gap: [], nonsource: [] };
+
+  for (const [disposition, count] of Object.entries(summary)) {
+    const family = classifyDisposition(disposition);
+    perFamily[family].push({ disposition, count });
+    if (family === "analyzed") analyzed += count;
+    else if (family === "gap") gap += count;
+    else nonsource += count;
+  }
+
+  const sourceTotal = analyzed + gap;
+  const percent = sourceTotal > 0 ? (analyzed / sourceTotal) * 100 : 100;
+  return { analyzed, gap, nonsource, sourceTotal, percent, perFamily };
+}
+
+// Format the source percent for display. No gaps reads exactly "100". With gaps,
+// show one decimal, and never round up to a bare "100" while a real gap exists
+// (so a single skipped file cannot masquerade as full coverage).
+export function formatSourcePercent(fam: CoverageFamilies): string {
+  if (fam.sourceTotal === 0 || fam.gap === 0) return "100";
+  let rounded = Math.round(fam.percent * 10) / 10;
+  if (rounded >= 100) rounded = 99.9;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function fmt(n: number): string {
+  return n.toLocaleString("en-US");
 }
 
 // Human label for a disposition string. `excluded:skipped_directory` becomes
@@ -40,19 +120,17 @@ interface Group {
   rows: CoverageRow[];
 }
 
-// Order the non-parsed dispositions: failures first (per I11), then the rest by
-// count descending, ties broken by disposition name for determinism.
+// Order the dispositions inside a family: failures first (per I11), then the
+// rest by count descending, ties broken by disposition name for determinism.
 function orderGroups(
-  summary: Record<string, number>,
+  entries: Array<{ disposition: string; count: number }>,
   rowsByDisposition: Map<string, CoverageRow[]>,
 ): Group[] {
-  const groups: Group[] = Object.entries(summary)
-    .filter(([disposition]) => disposition !== "parsed")
-    .map(([disposition, count]) => ({
-      disposition,
-      count,
-      rows: rowsByDisposition.get(disposition) ?? [],
-    }));
+  const groups: Group[] = entries.map(({ disposition, count }) => ({
+    disposition,
+    count,
+    rows: rowsByDisposition.get(disposition) ?? [],
+  }));
   groups.sort((a, b) => {
     const af = isFailure(a.disposition);
     const bf = isFailure(b.disposition);
@@ -84,16 +162,30 @@ function GroupRows({ rows, darkMode }: { rows: CoverageRow[]; darkMode: boolean 
 
 function CoverageGroup({
   group,
+  tone,
   darkMode,
   defaultExpanded,
 }: {
   group: Group;
+  tone: "gap" | "nonsource";
   darkMode: boolean;
   defaultExpanded: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const failure = isFailure(group.disposition);
   const hasRows = group.rows.length > 0;
+  const chipCls =
+    tone === "gap"
+      ? failure
+        ? darkMode
+          ? "bg-red-500/15 text-red-400"
+          : "bg-red-100 text-red-700"
+        : darkMode
+          ? "bg-amber-500/15 text-amber-400"
+          : "bg-amber-100 text-amber-700"
+      : darkMode
+        ? "bg-zinc-800 text-zinc-400"
+        : "bg-zinc-100 text-zinc-600";
 
   return (
     <div className={`rounded-md border ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
@@ -105,24 +197,16 @@ function CoverageGroup({
           hasRows ? "cursor-pointer" : "cursor-default"
         } ${darkMode ? "hover:bg-zinc-800/60" : "hover:bg-zinc-50"}`}
       >
-        <span
-          className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider ${
-            failure
-              ? darkMode
-                ? "bg-red-500/15 text-red-400"
-                : "bg-red-100 text-red-700"
-              : darkMode
-                ? "bg-amber-500/15 text-amber-400"
-                : "bg-amber-100 text-amber-700"
-          }`}
-        >
-          {failure ? "failed" : "excluded"}
+        <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider ${chipCls}`}>
+          {tone === "gap" ? (failure ? "failed" : "excluded") : "non-source"}
         </span>
-        <span className={`flex-1 text-xs ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
-          {dispositionLabel(group.disposition)}
-        </span>
+        <Tooltip content={dispositionTooltip(group.disposition)}>
+          <span className={`flex-1 text-xs ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+            {dispositionLabel(group.disposition)}
+          </span>
+        </Tooltip>
         <span className={`shrink-0 text-xs font-mono ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}>
-          {group.count}
+          {fmt(group.count)}
         </span>
         {hasRows && (
           <span className={`shrink-0 text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
@@ -133,6 +217,61 @@ function CoverageGroup({
       {expanded && hasRows && (
         <div className="px-2 pb-2">
           <GroupRows rows={group.rows} darkMode={darkMode} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One of the three family sections in the drill-in panel: a labeled, explained
+// header with the family count, and the per-disposition groups beneath it.
+function FamilySection({
+  title,
+  tooltip,
+  explanation,
+  count,
+  tone,
+  groups,
+  darkMode,
+  defaultExpandGroups,
+}: {
+  title: string;
+  tooltip: string;
+  explanation: string;
+  count: number;
+  tone: "analyzed" | "gap" | "nonsource";
+  groups: Group[];
+  darkMode: boolean;
+  defaultExpandGroups: boolean;
+}) {
+  const dot =
+    tone === "analyzed"
+      ? darkMode ? "text-emerald-400" : "text-emerald-600"
+      : tone === "gap"
+        ? darkMode ? "text-amber-400" : "text-amber-600"
+        : darkMode ? "text-zinc-500" : "text-zinc-400";
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline gap-2">
+        <Tooltip content={tooltip} focusable>
+          <span className={`text-[11px] font-semibold uppercase tracking-wider ${dot}`}>{title}</span>
+        </Tooltip>
+        <Tooltip content={tooltip} focusable>
+          <span className={`text-xs font-mono ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>{fmt(count)}</span>
+        </Tooltip>
+      </div>
+      <p className={`text-[11px] leading-relaxed ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>{explanation}</p>
+      {tone !== "analyzed" && groups.length > 0 && (
+        <div className="space-y-1 pt-0.5">
+          {groups.map((group) => (
+            <CoverageGroup
+              key={group.disposition}
+              group={group}
+              tone={tone === "gap" ? "gap" : "nonsource"}
+              darkMode={darkMode}
+              defaultExpanded={defaultExpandGroups && isFailure(group.disposition)}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -161,9 +300,18 @@ export function CoverageBadge() {
     return map;
   }, [coverageRows]);
 
-  const groups = useMemo(
-    () => (coverage ? orderGroups(coverage.summary, rowsByDisposition) : []),
-    [coverage, rowsByDisposition],
+  const families = useMemo(
+    () => (coverage ? computeCoverageFamilies(coverage.summary) : null),
+    [coverage],
+  );
+
+  const gapGroups = useMemo(
+    () => (families ? orderGroups(families.perFamily.gap, rowsByDisposition) : []),
+    [families, rowsByDisposition],
+  );
+  const nonSourceGroups = useMemo(
+    () => (families ? orderGroups(families.perFamily.nonsource, rowsByDisposition) : []),
+    [families, rowsByDisposition],
   );
 
   const toggleOpen = useCallback(() => {
@@ -176,7 +324,7 @@ export function CoverageBadge() {
 
   // Nothing to show for a legacy single-repo dataset (no coverage, no
   // repositories): degrade silently so old datasets render unchanged.
-  if (!coverage) {
+  if (!coverage || !families) {
     const multiRepo = (architecture?.repositories?.length ?? 0) > 0;
     if (!multiRepo) return null;
     return (
@@ -193,17 +341,18 @@ export function CoverageBadge() {
     );
   }
 
-  const percent = coverage.total > 0 ? Math.round((coverage.parsed / coverage.total) * 100) : 0;
-  const nonParsed = Object.entries(coverage.summary).filter(([d]) => d !== "parsed");
+  const hasGaps = families.gap > 0;
+  const percentStr = formatSourcePercent(families);
+  const tone = hasGaps
+    ? darkMode
+      ? "bg-amber-950/20 border-b border-amber-900/30 text-amber-200"
+      : "bg-amber-50 border-b border-amber-200 text-amber-900"
+    : darkMode
+      ? "bg-emerald-950/20 border-b border-emerald-900/30 text-emerald-300"
+      : "bg-emerald-50 border-b border-emerald-200 text-emerald-800";
 
   return (
-    <div
-      className={`px-4 py-2 text-xs shrink-0 ${
-        darkMode
-          ? "bg-emerald-950/20 border-b border-emerald-900/30 text-emerald-300"
-          : "bg-emerald-50 border-b border-emerald-200 text-emerald-800"
-      }`}
-    >
+    <div className={`px-4 py-2 text-xs shrink-0 ${tone}`}>
       <button
         type="button"
         data-testid="coverage-badge"
@@ -211,61 +360,94 @@ export function CoverageBadge() {
         aria-expanded={open}
         className="w-full flex items-center gap-2 text-left"
       >
-        <span className="shrink-0">&#x1F4C1;</span>
-        <span className="font-semibold shrink-0">Coverage {percent}% parsed</span>
-        <span className={`shrink-0 ${darkMode ? "text-emerald-500" : "text-emerald-600"}`}>
-          ({coverage.parsed}/{coverage.total} files)
-        </span>
-        <span className="flex-1 flex flex-wrap items-center gap-1.5 min-w-0">
-          {nonParsed.map(([disposition, count]) => (
+        <span className="shrink-0">{hasGaps ? "⚠️" : "✅"}</span>
+        <Tooltip content={TOOLTIP_COPY.coverage.percent}>
+          <span className="font-semibold shrink-0" data-testid="coverage-headline">
+            {percentStr}% of source analyzed
+          </span>
+        </Tooltip>
+
+        {hasGaps ? (
+          <Tooltip content={TOOLTIP_COPY.coverage.gapCount}>
             <span
-              key={disposition}
-              className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                isFailure(disposition)
-                  ? darkMode
-                    ? "bg-red-500/15 text-red-400"
-                    : "bg-red-100 text-red-700"
-                  : darkMode
-                    ? "bg-zinc-800 text-zinc-400"
-                    : "bg-zinc-100 text-zinc-600"
-              }`}
+              data-testid="coverage-gap-count"
+              className={`shrink-0 text-[11px] font-medium ${darkMode ? "text-amber-300" : "text-amber-700"}`}
             >
-              {count} {dispositionLabel(disposition).toLowerCase()}
+              {fmt(families.gap)} file{families.gap !== 1 ? "s" : ""} skipped
             </span>
-          ))}
-        </span>
-        <span className={`shrink-0 text-[10px] ${darkMode ? "text-emerald-500" : "text-emerald-600"}`}>
+          </Tooltip>
+        ) : (
+          families.nonsource > 0 && (
+            <Tooltip content={TOOLTIP_COPY.coverage.nonSourceCount}>
+              <span
+                data-testid="coverage-nonsource-count"
+                className={`shrink-0 ${darkMode ? "text-emerald-500" : "text-emerald-600"}`}
+              >
+                {fmt(families.nonsource)} non-source file{families.nonsource !== 1 ? "s" : ""} accounted for
+              </span>
+            </Tooltip>
+          )
+        )}
+
+        {/* When gaps exist, still surface the non-source reassurance count quietly. */}
+        {hasGaps && families.nonsource > 0 && (
+          <Tooltip content={TOOLTIP_COPY.coverage.nonSourceCount}>
+            <span
+              data-testid="coverage-nonsource-count"
+              className={`shrink-0 text-[10px] ${darkMode ? "text-amber-400/70" : "text-amber-600/80"}`}
+            >
+              {fmt(families.nonsource)} non-source accounted for
+            </span>
+          </Tooltip>
+        )}
+
+        <span className="flex-1" />
+        <span className={`shrink-0 text-[10px] ${hasGaps ? (darkMode ? "text-amber-400" : "text-amber-600") : darkMode ? "text-emerald-500" : "text-emerald-600"}`}>
           {open ? "▲" : "▼"}
         </span>
       </button>
 
       {open && (
-        <div data-testid="coverage-panel" className="mt-2 pt-2 border-t space-y-1.5 border-current/20">
-          {nonParsed.length === 0 ? (
-            <p className={`${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
-              Every file under the scan root was parsed. Nothing excluded, nothing failed.
+        <div data-testid="coverage-panel" className="mt-2 pt-2 border-t space-y-3 border-current/20">
+          <FamilySection
+            title="Source analyzed"
+            tooltip={TOOLTIP_COPY.coverage.familyAnalyzed}
+            explanation={TOOLTIP_COPY.coverage.familyAnalyzed}
+            count={families.analyzed}
+            tone="analyzed"
+            groups={[]}
+            darkMode={darkMode}
+            defaultExpandGroups={false}
+          />
+          <FamilySection
+            title="Source gaps"
+            tooltip={TOOLTIP_COPY.coverage.familyGaps}
+            explanation={TOOLTIP_COPY.coverage.familyGaps}
+            count={families.gap}
+            tone="gap"
+            groups={gapGroups}
+            darkMode={darkMode}
+            defaultExpandGroups
+          />
+          <FamilySection
+            title="Non-source accounted"
+            tooltip={TOOLTIP_COPY.coverage.familyNonSource}
+            explanation={TOOLTIP_COPY.coverage.familyNonSource}
+            count={families.nonsource}
+            tone="nonsource"
+            groups={nonSourceGroups}
+            darkMode={darkMode}
+            defaultExpandGroups={false}
+          />
+          {coverageRowsLoading && (
+            <p className={`text-[11px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+              Loading file list...
             </p>
-          ) : (
-            <>
-              {groups.map((group) => (
-                <CoverageGroup
-                  key={group.disposition}
-                  group={group}
-                  darkMode={darkMode}
-                  defaultExpanded={isFailure(group.disposition)}
-                />
-              ))}
-              {coverageRowsLoading && (
-                <p className={`text-[11px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-                  Loading file list...
-                </p>
-              )}
-              {coverageRowsError && (
-                <p className={`text-[11px] ${darkMode ? "text-amber-400" : "text-amber-600"}`}>
-                  Could not load the full file list ({coverageRowsError}). Counts per rule are shown above.
-                </p>
-              )}
-            </>
+          )}
+          {coverageRowsError && (
+            <p className={`text-[11px] ${darkMode ? "text-amber-400" : "text-amber-600"}`}>
+              Could not load the full file list ({coverageRowsError}). Counts per rule are shown above.
+            </p>
           )}
         </div>
       )}

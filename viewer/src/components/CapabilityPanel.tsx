@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useArchStore } from "../store";
 import { groupCapabilitiesByKind, capabilityIsTested, CAP_KIND_ORDER } from "../lenses";
 import type { Capability, Component } from "../types";
+import { Tooltip } from "./Tooltip";
+import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
 // The Capability lens surface (P6-3, LENS-DESIGN.md L2). The landing view is a
 // ranked panel (invariant I11) grouping capabilities by kind (api, cli, event,
@@ -34,21 +36,23 @@ function buildNameMap(components: Component[]): Record<string, string> {
 function TestedBadge({ tested, darkMode }: { tested: boolean; darkMode: boolean }) {
   if (tested) {
     return (
-      <span
-        className={`px-1.5 py-0.5 rounded text-[10px] ${darkMode ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-100 text-emerald-700"}`}
-        title="A test references this capability's route or command (L2 proof bridge)"
-      >
-        tested
-      </span>
+      <Tooltip content={TOOLTIP_COPY.capability.tested}>
+        <span
+          className={`px-1.5 py-0.5 rounded text-[10px] ${darkMode ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-100 text-emerald-700"}`}
+        >
+          tested
+        </span>
+      </Tooltip>
     );
   }
   return (
-    <span
-      className={`px-1.5 py-0.5 rounded text-[10px] ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}
-      title="No test references this capability"
-    >
-      untested
-    </span>
+    <Tooltip content={TOOLTIP_COPY.capability.untested}>
+      <span
+        className={`px-1.5 py-0.5 rounded text-[10px] ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}
+      >
+        untested
+      </span>
+    </Tooltip>
   );
 }
 
@@ -106,9 +110,11 @@ export function CapabilityPanel() {
                 onClick={() => toggle(group.kind)}
                 className={`w-full flex items-center justify-between px-2 py-1 rounded ${darkMode ? "hover:bg-zinc-900" : "hover:bg-white"}`}
               >
-                <span className={`text-[11px] font-semibold uppercase tracking-wider ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}>
-                  {KIND_LABEL[group.kind]} ({group.items.length})
-                </span>
+                <Tooltip content={TOOLTIP_COPY.capability.kind}>
+                  <span className={`text-[11px] font-semibold uppercase tracking-wider ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}>
+                    {KIND_LABEL[group.kind]} ({group.items.length})
+                  </span>
+                </Tooltip>
                 <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                   {isCollapsed ? "▸" : "▾"}
                 </span>

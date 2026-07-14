@@ -9,6 +9,8 @@ import {
 } from "../lenses";
 import { getSourceUrl } from "../utils/sourceLinks";
 import type { Rule, Component, Evidence } from "../types";
+import { Tooltip } from "./Tooltip";
+import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
 // The Rules lens surface (P6-6, LENS-DESIGN.md L6). The landing view is a ranked
 // panel (invariant I11): rules grouped by kind (policy, validation, calculation,
@@ -66,18 +68,20 @@ function EvidenceLinks({ evidence }: { evidence: Evidence[] }) {
               {label}
             </span>
             {link && (
-              <a
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className={`shrink-0 inline-flex items-center ${darkMode ? "text-zinc-600 hover:text-blue-400" : "text-zinc-400 hover:text-blue-500"} transition-colors`}
-                title="Open in GitHub"
-              >
-                <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M4.5 1.5H2a.5.5 0 00-.5.5v8a.5.5 0 00.5.5h8a.5.5 0 00.5-.5V7.5M7 1.5h3.5V5M6 6l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </a>
+              <Tooltip content={TOOLTIP_COPY.evidence.link} position="bottom">
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className={`shrink-0 inline-flex items-center ${darkMode ? "text-zinc-600 hover:text-blue-400" : "text-zinc-400 hover:text-blue-500"} transition-colors`}
+                  aria-label={TOOLTIP_COPY.evidence.link}
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M4.5 1.5H2a.5.5 0 00-.5.5v8a.5.5 0 00.5.5h8a.5.5 0 00.5-.5V7.5M7 1.5h3.5V5M6 6l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </a>
+              </Tooltip>
             )}
           </li>
         );
@@ -88,12 +92,13 @@ function EvidenceLinks({ evidence }: { evidence: Evidence[] }) {
 
 function InferredMarker({ darkMode }: { darkMode: boolean }) {
   return (
-    <span
-      className={`text-[9px] px-1 py-0.5 rounded uppercase tracking-wide ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}
-      title="Inferred by shape-matching, not a declared/parse-level certainty (I3)"
-    >
-      inferred
-    </span>
+    <Tooltip content={TOOLTIP_COPY.rules.inferred}>
+      <span
+        className={`text-[9px] px-1 py-0.5 rounded uppercase tracking-wide ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}
+      >
+        inferred
+      </span>
+    </Tooltip>
   );
 }
 
@@ -112,12 +117,13 @@ function StatementSlot({ rule, darkMode }: { rule: Rule; darkMode: boolean }) {
             In plain language
           </div>
           {stale && (
-            <span
-              className={`text-[9px] px-1 py-0.5 rounded uppercase tracking-wide ${darkMode ? "bg-amber-900/40 text-amber-300" : "bg-amber-100 text-amber-700"}`}
-              title="The cited code changed since this statement was written; it may be out of date (I5)"
-            >
-              stale
-            </span>
+            <Tooltip content={TOOLTIP_COPY.rules.stale} focusable>
+              <span
+                className={`text-[9px] px-1 py-0.5 rounded uppercase tracking-wide ${darkMode ? "bg-amber-900/40 text-amber-300" : "bg-amber-100 text-amber-700"}`}
+              >
+                stale
+              </span>
+            </Tooltip>
           )}
         </div>
         <p className={`text-xs leading-relaxed ${stale ? (darkMode ? "text-zinc-500" : "text-zinc-400") : darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
@@ -173,9 +179,11 @@ function FocusedRule({ rule }: { rule: Rule }) {
 
       <div className="px-4 pt-2 pb-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide ${darkMode ? colors.dark : colors.light}`}>
-            {rule.kind}
-          </span>
+          <Tooltip content={TOOLTIP_COPY.rules.kind} focusable>
+            <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide ${darkMode ? colors.dark : colors.light}`}>
+              {rule.kind}
+            </span>
+          </Tooltip>
           {rule.confidence === "inferred" && <InferredMarker darkMode={darkMode} />}
         </div>
         {owner && (
@@ -325,14 +333,18 @@ function RuleRow({ rule, selected }: { rule: Rule; selected: boolean }) {
         <div className="mt-1 flex items-center gap-1.5 flex-wrap">
           {rule.confidence === "inferred" && <InferredMarker darkMode={darkMode} />}
           {entityId && (
-            <span className={`text-[9px] px-1 py-0.5 rounded ${darkMode ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-100 text-emerald-700"}`} title="Governs a data entity (view in Data lens)">
-              data
-            </span>
+            <Tooltip content={TOOLTIP_COPY.rules.dataTag}>
+              <span className={`text-[9px] px-1 py-0.5 rounded ${darkMode ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-100 text-emerald-700"}`}>
+                data
+              </span>
+            </Tooltip>
           )}
           {capabilityId && (
-            <span className={`text-[9px] px-1 py-0.5 rounded ${darkMode ? "bg-cyan-500/15 text-cyan-300" : "bg-cyan-100 text-cyan-700"}`} title="Guards a capability (view in Capability lens)">
-              contract
-            </span>
+            <Tooltip content={TOOLTIP_COPY.rules.contractTag}>
+              <span className={`text-[9px] px-1 py-0.5 rounded ${darkMode ? "bg-cyan-500/15 text-cyan-300" : "bg-cyan-100 text-cyan-700"}`}>
+                contract
+              </span>
+            </Tooltip>
           )}
         </div>
         <EvidenceLinks evidence={rule.evidence} />
@@ -426,9 +438,11 @@ export function RulesPanel() {
                       <div key={cg.componentId || "__unowned__"}>
                         <div className={`px-2 py-0.5 text-[10px] flex items-center justify-between ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
                           <span className="truncate" title={owner}>{owner}</span>
-                          <span className={`shrink-0 tabular-nums px-1 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`} title="Rules of this kind enforced here">
-                            {cg.count}
-                          </span>
+                          <Tooltip content={TOOLTIP_COPY.rules.ownerCount} focusable>
+                            <span className={`shrink-0 tabular-nums px-1 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+                              {cg.count}
+                            </span>
+                          </Tooltip>
                         </div>
                         <ul className="space-y-1">
                           {cg.items.map((rule) => (
