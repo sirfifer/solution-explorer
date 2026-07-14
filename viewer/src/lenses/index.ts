@@ -3,10 +3,12 @@
 // re-exports the registry API. The store imports this for the side-effect
 // registration plus the resolver helpers.
 import "./structure";
+import "./activity";
 import "./flow";
 
 export * from "./registry";
 export { structureLens, STRUCTURE_QUESTIONS } from "./structure";
+export { activityLens, ACTIVITY_QUESTIONS } from "./activity";
 export {
   flowLens,
   FLOW_QUESTIONS,
@@ -22,8 +24,3 @@ export {
   FLOW_ACTION_EDGE_TYPE,
   type FlowEntry,
 } from "./flow";
-import "./activity";
-
-export { structureLens, STRUCTURE_QUESTIONS } from "./structure";
-export { activityLens, ACTIVITY_QUESTIONS } from "./activity";
-
