@@ -18,7 +18,7 @@ import { useArchStore } from "../store";
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
-import { getLens } from "../lenses";
+import { getLens, capabilityCountsByComponent, type CapabilityKindCounts } from "../lenses";
 import type { Relationship } from "../types";
 
 const nodeTypes: NodeTypes = {
@@ -40,6 +40,8 @@ export function ArchitectureGraph() {
     flowStep,
     getFlowPath,
     activityData,
+    selectedCapabilityId,
+    selectedEntityId,
     getLensGraph,
     selectComponent,
     navigateToBreadcrumb,
@@ -156,6 +158,19 @@ export function ArchitectureGraph() {
         heatByComponent.set(c.id, maxScore > 0 ? c.hotspot_score / maxScore : 0);
       }
     }
+    // Capability lens (P6-3): per-node capability counts by kind, rendered as a
+    // badge cluster by ComponentNode. Only owner components carry counts.
+    const capCounts =
+      lens === "capability"
+        ? capabilityCountsByComponent(architecture.capabilities ?? [])
+        : null;
+    // Data lens (P6-3): the focused entity's owner is the hub of the ego view;
+    // ring it so the "who touches this data" center reads spatially.
+    let dataOwnerNodeId: string | null = null;
+    if (lens === "data" && selectedEntityId) {
+      const ent = (architecture.data_entities ?? []).find((e) => e.id === selectedEntityId);
+      dataOwnerNodeId = ent?.component_id ?? null;
+    }
 
     const componentNodes: Node[] = visible.map((comp, i) => {
       const node: Node = {
@@ -170,9 +185,17 @@ export function ArchitectureGraph() {
         node.data = { component: comp, heat };
         node.style = { boxShadow: `0 0 0 3px ${getHeatColor(heat)}`, borderRadius: 14 };
       }
+      // Capability lens: attach per-kind capability counts for the badge cluster.
+      const caps: CapabilityKindCounts | undefined = capCounts?.get(comp.id);
+      if (caps) {
+        node.data = { ...node.data, capBadges: caps };
+      }
       if (comp.id === flowStepNodeId) {
         node.style = { boxShadow: "0 0 0 3px #2DD4BF", borderRadius: 14 };
       } else if (comp.id === flowEntryNodeId) {
+        node.style = { boxShadow: "0 0 0 3px #818CF8", borderRadius: 14 };
+      } else if (comp.id === dataOwnerNodeId) {
+        // Ring the ego-view hub (the entity's owning component) under the Data lens.
         node.style = { boxShadow: "0 0 0 3px #818CF8", borderRadius: 14 };
       }
       return node;
@@ -285,7 +308,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, flowEntryId, flowStep, getFlowPath, activityData, getLensGraph]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, getLensGraph]);
 
   // Apply ELK layout
   useEffect(() => {

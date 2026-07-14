@@ -30,6 +30,11 @@ export interface LensContext {
   getVisibleComponents: () => Component[];
   getAggregateNodes: () => AggregateNode[];
   getComponentRelationships: () => Relationship[];
+  // The currently selected capability/entity (P6-3). The Data lens reads
+  // selectedEntityId to build the ego view; other lenses ignore these. Optional so
+  // existing lenses and callers need not supply them.
+  selectedCapabilityId?: string | null;
+  selectedEntityId?: string | null;
 }
 
 /** One documented question and the gesture that answers it (I14). */

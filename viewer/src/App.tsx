@@ -15,6 +15,8 @@ import { CoverageBadge } from "./components/CoverageBadge";
 import { LensSwitcher } from "./components/LensSwitcher";
 import { FlowPanel } from "./components/FlowPanel";
 import { ActivityPanel } from "./components/ActivityPanel";
+import { CapabilityPanel } from "./components/CapabilityPanel";
+import { DataPanel } from "./components/DataPanel";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useBottomSheet } from "./hooks/useBottomSheet";
@@ -741,6 +743,8 @@ export function App() {
         <main className="flex-1 relative flex overflow-hidden">
           {lens === "flow" && <FlowPanel />}
           {lens === "activity" && <ActivityPanel />}
+          {lens === "capability" && <CapabilityPanel />}
+          {lens === "data" && <DataPanel />}
           <div className="flex-1 relative">
             <ReactFlowProvider>
               <ArchitectureGraph />

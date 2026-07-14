@@ -743,6 +743,9 @@ export const ComponentNode = memo(function ComponentNode({
   selected,
 }: NodeProps) {
   const { component } = data as ComponentNodeData;
+  // Capability lens (P6-3): per-kind capability counts attached to owner nodes,
+  // rendered as a badge cluster. Present only under the Capability lens.
+  const capBadges = (data as { capBadges?: Record<string, number> }).capBadges;
   // Selector-based subscriptions so a node re-renders only when the slice it
   // actually reads changes, instead of on every store mutation (F-VW-6). Actions
   // are stable references; the primitives below only fire a re-render when their
@@ -840,6 +843,25 @@ export const ComponentNode = memo(function ComponentNode({
 
       {/* Hover documentation card */}
       {hovered && <HoverCard component={component} darkMode={darkMode} triggerRef={nodeRef} />}
+
+      {/* Capability badges (P6-3): counts by kind on capability-owning nodes */}
+      {capBadges && (
+        <div className="absolute -top-2 -left-2 z-20 flex items-center gap-1">
+          {(["api", "cli", "event", "job"] as const)
+            .filter((k) => (capBadges[k] ?? 0) > 0)
+            .map((k) => (
+              <span
+                key={k}
+                className={`px-1.5 h-[18px] flex items-center rounded-full text-[9px] font-bold uppercase tracking-wide shadow-sm ${
+                  darkMode ? "bg-cyan-500 text-white" : "bg-cyan-600 text-white"
+                }`}
+                title={`${capBadges[k]} ${k} capabilit${capBadges[k] === 1 ? "y" : "ies"}`}
+              >
+                {k} {capBadges[k]}
+              </span>
+            ))}
+        </div>
+      )}
 
       {/* Annotation badge */}
       {annotationCount > 0 && (

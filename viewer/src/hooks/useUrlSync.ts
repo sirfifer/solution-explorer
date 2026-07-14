@@ -49,6 +49,19 @@ export function useUrlSync(): void {
       return;
     }
 
+    // Capability/Data lens selection (P6-3). If the link names a capability (under
+    // the Capability lens) or an entity (under the Data lens), select it; that
+    // drives its own component selection, so it takes precedence over the
+    // component/drill params below.
+    if (urlState.capability && useArchStore.getState().lens === "capability") {
+      store.selectCapability(urlState.capability);
+      return;
+    }
+    if (urlState.entity && useArchStore.getState().lens === "data") {
+      store.selectEntity(urlState.entity);
+      return;
+    }
+
     // Inbound file/line deep link takes precedence: it computes its own drill and
     // selection from the owning component, so it overrides any component/drill
     // params (P3-2). The tab param is still honored, defaulting to the Files tab.
@@ -85,7 +98,10 @@ export function useUrlSync(): void {
       const lensChanged = state.lens !== prev.lens;
       const flowChanged =
         state.flowEntryId !== prev.flowEntryId || state.flowStep !== prev.flowStep;
-      if (selChanged || drillChanged || lensChanged || flowChanged) {
+      const capEntityChanged =
+        state.selectedCapabilityId !== prev.selectedCapabilityId ||
+        state.selectedEntityId !== prev.selectedEntityId;
+      if (selChanged || drillChanged || lensChanged || flowChanged || capEntityChanged) {
         const update = {
           component: state.selectedComponentId || undefined,
           drill: state.drillLevel || undefined,
@@ -95,6 +111,9 @@ export function useUrlSync(): void {
           // Carry the Flow follow state so a walked flow is shareable (P6-2).
           flow: state.flowEntryId || undefined,
           step: state.flowStep || undefined,
+          // Carry the Capability/Data lens selection so it is shareable (P6-3).
+          capability: state.selectedCapabilityId || undefined,
+          entity: state.selectedEntityId || undefined,
           // Preserve the active-tab param that DetailPanel manages; rebuilding
           // the URL from component/drill alone would erase it (F-VW-7).
           tab: parseUrlState().tab,
@@ -133,6 +152,19 @@ export function useUrlSync(): void {
           return;
         }
         if (useArchStore.getState().flowEntryId) store.clearFlow();
+
+        // Capability/Data lens selection (P6-3): restore or clear it to match the
+        // target URL, then let it own the component selection when present.
+        if (urlState.capability && useArchStore.getState().lens === "capability") {
+          store.selectCapability(urlState.capability);
+          return;
+        }
+        if (urlState.entity && useArchStore.getState().lens === "data") {
+          store.selectEntity(urlState.entity);
+          return;
+        }
+        if (useArchStore.getState().selectedCapabilityId) store.clearCapability();
+        if (useArchStore.getState().selectedEntityId) store.clearEntity();
 
         if (urlState.drill) {
           const drillComp = store.getComponentById(urlState.drill);

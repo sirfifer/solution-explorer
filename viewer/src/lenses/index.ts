@@ -5,6 +5,8 @@
 import "./structure";
 import "./activity";
 import "./flow";
+import "./capability";
+import "./data";
 
 export * from "./registry";
 export { structureLens, STRUCTURE_QUESTIONS } from "./structure";
@@ -24,3 +26,32 @@ export {
   FLOW_ACTION_EDGE_TYPE,
   type FlowEntry,
 } from "./flow";
+export {
+  capabilityLens,
+  CAPABILITY_QUESTIONS,
+  CAP_KIND_ORDER,
+  hasCapabilities,
+  capabilityIsTested,
+  collectCapabilityOwnerIds,
+  groupCapabilitiesByKind,
+  capabilityCountsByComponent,
+  buildCapabilityGraph,
+  type CapabilityGroup,
+  type CapabilityKindCounts,
+} from "./capability";
+export {
+  dataLens,
+  DATA_QUESTIONS,
+  ENTITY_KIND_ORDER,
+  READ_EDGE_TYPE,
+  WRITE_EDGE_TYPE,
+  hasDataEntities,
+  collectEntityOwnerIds,
+  accessCountForEntity,
+  rankEntitiesByAccess,
+  collectEntityAccessors,
+  buildEntityEgoGraph,
+  buildDataLandingGraph,
+  type EntityGroup,
+  type EntityAccessor,
+} from "./data";

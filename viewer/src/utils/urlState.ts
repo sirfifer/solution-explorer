@@ -17,6 +17,11 @@ export interface UrlState {
   // links stay clean. They compose with the existing params.
   flow?: string;
   step?: number;
+  // Capability/Data lens selection (P6-3). `capability` is the selected capability
+  // id (Capability lens); `entity` is the selected entity id (Data lens). Each is
+  // emitted only under its own lens, composing with the existing params.
+  capability?: string;
+  entity?: string;
   // Inbound deep-link params (P3-2). `file` is a repo-relative source path; the
   // optional `line` selects the symbol whose range contains it. These are
   // consumed once on load to drive navigation and are not re-persisted into the
@@ -42,6 +47,8 @@ export function parseUrlState(): UrlState {
     lens: params.get("lens") || undefined,
     flow: params.get("flow") || undefined,
     step: Number.isFinite(stepNum) && stepNum >= 0 ? stepNum : undefined,
+    capability: params.get("capability") || undefined,
+    entity: params.get("entity") || undefined,
     file: params.get("file") || undefined,
     line: Number.isFinite(lineNum) && lineNum > 0 ? lineNum : undefined,
   };
@@ -72,6 +79,14 @@ function buildUrl(state: UrlState): string {
   if (state.lens === "flow" && state.flow) {
     params.set("flow", state.flow);
     if (state.step && state.step > 0) params.set("step", String(state.step));
+  }
+  // Capability/Data lens selection rides only under its own lens (P6-3), keeping
+  // the param off other lenses' links.
+  if (state.lens === "capability" && state.capability) {
+    params.set("capability", state.capability);
+  }
+  if (state.lens === "data" && state.entity) {
+    params.set("entity", state.entity);
   }
   const search = params.toString();
   return search ? `${window.location.pathname}?${search}` : window.location.pathname;

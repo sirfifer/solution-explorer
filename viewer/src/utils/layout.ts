@@ -336,6 +336,11 @@ const EDGE_STYLES: Record<string, { color: string; animated: boolean; dash: stri
   // dotted line distinguishes an in-screen action tap from a real navigation edge.
   action:        { color: "#2DD4BF", animated: false, dash: "2 3",  strokeWidth: 1.4 },
   embed:         { color: "#94A3B8", animated: false, dash: "1 4",  strokeWidth: 1.2 },
+  // Data lens (P6-3): read/write access edges in the entity ego view. Read is
+  // green, write is amber (the card's colors); an inferred edge is dashed via the
+  // ai_discovered channel in ArchitectureGraph.
+  reads:         { color: "#10B981", animated: true,  dash: "",     strokeWidth: 1.8 },
+  writes:        { color: "#F59E0B", animated: true,  dash: "",     strokeWidth: 1.8 },
   message_queue: { color: "#F59E0B", animated: true,  dash: "",     strokeWidth: 2 },
   pubsub:        { color: "#D946EF", animated: true,  dash: "",     strokeWidth: 2 },
   event_bus:     { color: "#A855F7", animated: true,  dash: "4 4",  strokeWidth: 1.8 },

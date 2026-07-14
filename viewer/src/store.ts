@@ -16,6 +16,9 @@ import type {
   ActivityData,
   ActivityComponent,
   ActivityFile,
+  Capability,
+  DataEntity,
+  EntityAccess,
   LiveConfig,
   LiveVersion,
   StatusOverlay,
@@ -167,6 +170,30 @@ interface ArchStore {
   flowStepPrev: () => void;
   flowGoToStep: (step: number) => void;
   clearFlow: () => void;
+
+  // Capability and Data lens selection (P6-3, LENS-DESIGN L2/L3). The selected
+  // capability/entity drives the panel highlight and the URL param; selecting one
+  // also selects its owning component (I12 stable identity) and opens the matching
+  // detail tab. Reset on architecture reload.
+  selectedCapabilityId: string | null;
+  selectedEntityId: string | null;
+  selectCapability: (capabilityId: string) => void;
+  selectEntity: (entityId: string) => void;
+  clearCapability: () => void;
+  clearEntity: () => void;
+  getCapabilities: () => Capability[];
+  getDataEntities: () => DataEntity[];
+  getEntityAccess: () => EntityAccess[];
+  // The access edges touching one entity (who reads/writes it), for the Data lens
+  // focused view; empty when the entity has no access edges.
+  getEntityAccessors: (entityId: string) => EntityAccess[];
+
+  // A one-shot request to open a specific detail-panel tab (P6-3). Set when
+  // selecting a capability/entity so the panel jumps to its Capabilities/Data tab;
+  // the panel consumes and clears it. Null when nothing is pending.
+  pendingDetailTab: string | null;
+  setPendingDetailTab: (tab: string) => void;
+  clearPendingDetailTab: () => void;
 
   // Panels
   activePanel: Panel;
@@ -572,6 +599,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   lens: DEFAULT_LENS_ID,
   flowEntryId: null,
   flowStep: 0,
+  selectedCapabilityId: null,
+  selectedEntityId: null,
+  pendingDetailTab: null,
 
   activePanel: null,
   detailItem: null,
@@ -651,6 +681,11 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       // new scan starts from the ranked landing (P6-2).
       flowEntryId: null,
       flowStep: 0,
+      // Capability/Data lens selection belongs to a specific dataset; reset on
+      // reload so a new scan starts from the ranked landing (P6-3).
+      selectedCapabilityId: null,
+      selectedEntityId: null,
+      pendingDetailTab: null,
     });
   },
   setLoading: (loading) => set({ loading }),
@@ -739,7 +774,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   // Structure this is exactly the existing selectors, so old data renders
   // identically. Falls back to the default lens if the active id is unknown.
   getLensGraph: () => {
-    const { architecture, drillLevel, lens } = get();
+    const { architecture, drillLevel, lens, selectedCapabilityId, selectedEntityId } = get();
     if (!architecture) return { nodes: [], aggregates: [], edges: [] };
     const def = getLens(lens) ?? getLens(DEFAULT_LENS_ID)!;
     return def.getGraph({
@@ -748,6 +783,8 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       getVisibleComponents: get().getVisibleComponents,
       getAggregateNodes: get().getAggregateNodes,
       getComponentRelationships: get().getComponentRelationships,
+      selectedCapabilityId,
+      selectedEntityId,
     });
   },
 
@@ -823,6 +860,42 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     set({ flowEntryId: null, flowStep: 0 });
     get().selectComponent(null);
   },
+
+  // Capability lens (P6-3). Select a capability: highlight it, select its owning
+  // component in the graph (I12 stable identity via navigateToComponent), and
+  // request the Capabilities tab so the contract and test linkage are in view.
+  selectCapability: (capabilityId) => {
+    const cap = get().getCapabilities().find((c) => c.id === capabilityId);
+    set({ selectedCapabilityId: capabilityId });
+    if (cap?.component_id) {
+      get().navigateToComponent(cap.component_id);
+      set({ pendingDetailTab: "capabilities" });
+    }
+  },
+
+  // Data lens (P6-3). Select an entity: record it (driving the ego view in the
+  // graph), focus its owning component (I12), and request the Data tab so the
+  // fields, evidence, and who-touches-this detail are in view.
+  selectEntity: (entityId) => {
+    const ent = get().getDataEntities().find((e) => e.id === entityId);
+    set({ selectedEntityId: entityId });
+    if (ent?.component_id) {
+      get().navigateToComponent(ent.component_id);
+      set({ pendingDetailTab: "data" });
+    }
+  },
+
+  clearCapability: () => set({ selectedCapabilityId: null }),
+  clearEntity: () => set({ selectedEntityId: null }),
+
+  getCapabilities: () => get().architecture?.capabilities ?? [],
+  getDataEntities: () => get().architecture?.data_entities ?? [],
+  getEntityAccess: () => get().architecture?.entity_access ?? [],
+  getEntityAccessors: (entityId) =>
+    (get().architecture?.entity_access ?? []).filter((a) => a.entity_id === entityId),
+
+  setPendingDetailTab: (tab) => set({ pendingDetailTab: tab }),
+  clearPendingDetailTab: () => set({ pendingDetailTab: null }),
 
   showDetail: (type, data) =>
     set({ detailItem: { type, data }, activePanel: "detail" }),
