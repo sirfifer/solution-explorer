@@ -18,6 +18,7 @@ import { useArchStore } from "../store";
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
+import { getLens } from "../lenses";
 import type { Relationship } from "../types";
 
 const nodeTypes: NodeTypes = {
@@ -35,6 +36,9 @@ export function ArchitectureGraph() {
     darkMode,
     expandedAggregates,
     lens,
+    flowEntryId,
+    flowStep,
+    getFlowPath,
     activityData,
     getLensGraph,
     selectComponent,
@@ -130,10 +134,18 @@ export function ArchitectureGraph() {
     // existing selectors so old data renders identically (P6-1).
     const { nodes: visible, aggregates, edges: relationships } = getLensGraph();
 
-    // Under the Activity lens, encode each node's hotspot score as a heat ring,
-    // normalized against the max score across all ranked components so the colors
-    // are comparable to the ActivityPanel ranking (P6-5, invariant I11 spatial
-    // complement). Absent under every other lens, so Structure renders identically.
+    // Per-lens node encodings, each gated to its own lens so Structure and every
+    // other lens render identically.
+    // Flow lens (P6-2): ring the entry node and the current follow step so the
+    // walk reads spatially.
+    const flowEntryNodeId = lens === "flow" ? flowEntryId : null;
+    let flowStepNodeId: string | null = null;
+    if (lens === "flow" && flowEntryId) {
+      const path = getFlowPath(flowEntryId);
+      flowStepNodeId = path[Math.min(flowStep, path.length - 1)] ?? null;
+    }
+    // Activity lens (P6-5): encode each node's hotspot score as a heat ring,
+    // normalized against the max score so colors match the ActivityPanel ranking.
     const heatByComponent = new Map<string, number>();
     if (lens === "activity" && activityData) {
       const maxScore = activityData.components.reduce(
@@ -157,6 +169,11 @@ export function ArchitectureGraph() {
       if (heat !== undefined) {
         node.data = { component: comp, heat };
         node.style = { boxShadow: `0 0 0 3px ${getHeatColor(heat)}`, borderRadius: 14 };
+      }
+      if (comp.id === flowStepNodeId) {
+        node.style = { boxShadow: "0 0 0 3px #2DD4BF", borderRadius: 14 };
+      } else if (comp.id === flowEntryNodeId) {
+        node.style = { boxShadow: "0 0 0 3px #818CF8", borderRadius: 14 };
       }
       return node;
     });
@@ -268,7 +285,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, activityData, getLensGraph]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, flowEntryId, flowStep, getFlowPath, activityData, getLensGraph]);
 
   // Apply ELK layout
   useEffect(() => {
@@ -286,7 +303,11 @@ export function ArchitectureGraph() {
     // Stamp this layout run so a stale resolution can be discarded below.
     const myGen = ++layoutGenRef.current;
 
-    getLayoutedElements(rawNodes, rawEdges, "DOWN").then(({ nodes: ln, edges: le }) => {
+    // The active lens chooses the layout direction: Structure lays out top-down,
+    // the Flow lens left-to-right for a walkable diagram (P6-2). Default "DOWN".
+    const direction = getLens(lens)?.layoutDirection ?? "DOWN";
+
+    getLayoutedElements(rawNodes, rawEdges, direction).then(({ nodes: ln, edges: le }) => {
       // Discard a stale layout: a newer run superseded this one while ELK was
       // computing (rapid drill navigation), so its positions are obsolete.
       if (myGen !== layoutGenRef.current) return;
@@ -324,7 +345,7 @@ export function ArchitectureGraph() {
     return () => {
       if (layoutTimeout.current) clearTimeout(layoutTimeout.current);
     };
-  }, [rawNodes, rawEdges, setNodes, setEdges, fitView]);
+  }, [rawNodes, rawEdges, lens, setNodes, setEdges, fitView]);
 
   // Pan to selected node and highlight its neighbors
   useEffect(() => {

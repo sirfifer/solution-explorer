@@ -13,6 +13,7 @@ import { AdminDashboard } from "./components/AdminDashboard";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { CoverageBadge } from "./components/CoverageBadge";
 import { LensSwitcher } from "./components/LensSwitcher";
+import { FlowPanel } from "./components/FlowPanel";
 import { ActivityPanel } from "./components/ActivityPanel";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { useUrlSync } from "./hooks/useUrlSync";
@@ -736,8 +737,9 @@ export function App() {
           </div>
         )}
 
-        {/* Graph (with the Activity lens ranked panel docked left when active) */}
+        {/* Graph (with the active lens's ranked panel docked left when present) */}
         <main className="flex-1 relative flex overflow-hidden">
+          {lens === "flow" && <FlowPanel />}
           {lens === "activity" && <ActivityPanel />}
           <div className="flex-1 relative">
             <ReactFlowProvider>

@@ -4,7 +4,23 @@
 // registration plus the resolver helpers.
 import "./structure";
 import "./activity";
+import "./flow";
 
 export * from "./registry";
 export { structureLens, STRUCTURE_QUESTIONS } from "./structure";
 export { activityLens, ACTIVITY_QUESTIONS } from "./activity";
+export {
+  flowLens,
+  FLOW_QUESTIONS,
+  hasFlowData,
+  collectFlowComponents,
+  buildFlowEdges,
+  buildAdjacency,
+  walkFlow,
+  rankEntryFlows,
+  collectActionEdges,
+  FLOW_COMPONENT_TYPES,
+  FLOW_EDGE_TYPES,
+  FLOW_ACTION_EDGE_TYPE,
+  type FlowEntry,
+} from "./flow";

@@ -27,6 +27,12 @@ import {
   resolveLensId,
   DEFAULT_LENS_ID,
   type LensGraph,
+  type FlowEntry,
+  collectFlowComponents,
+  buildFlowEdges,
+  buildAdjacency,
+  walkFlow,
+  rankEntryFlows,
 } from "./lenses";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
@@ -147,6 +153,20 @@ interface ArchStore {
   lens: string;
   setLens: (id: string) => void;
   getLensGraph: () => LensGraph;
+
+  // Flow lens follow state (P6-2, LENS-DESIGN L4). `flowEntryId` is the entry
+  // flow currently being walked (null on the ranked landing); `flowStep` is the
+  // index into that entry's walk. The walk itself is derived (getFlowPath), not
+  // stored, so it always reflects the loaded architecture.
+  flowEntryId: string | null;
+  flowStep: number;
+  getFlowEntries: () => FlowEntry[];
+  getFlowPath: (entryId: string) => string[];
+  setFlowEntry: (entryId: string | null) => void;
+  flowStepNext: () => void;
+  flowStepPrev: () => void;
+  flowGoToStep: (step: number) => void;
+  clearFlow: () => void;
 
   // Panels
   activePanel: Panel;
@@ -550,6 +570,8 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   drillLevel: null,
   viewMode: "graph",
   lens: DEFAULT_LENS_ID,
+  flowEntryId: null,
+  flowStep: 0,
 
   activePanel: null,
   detailItem: null,
@@ -625,6 +647,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       // (F-VW-6). Status overlays reuse this map since they never touch
       // relationships.
       connectionCounts: computeConnectionCounts(arch.relationships),
+      // A Flow lens walk belongs to a specific dataset; reset it on reload so a
+      // new scan starts from the ranked landing (P6-2).
+      flowEntryId: null,
+      flowStep: 0,
     });
   },
   setLoading: (loading) => set({ loading }),
@@ -723,6 +749,79 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       getAggregateNodes: get().getAggregateNodes,
       getComponentRelationships: get().getComponentRelationships,
     });
+  },
+
+  // The ranked entry flows for the Flow lens landing (I11). Empty when the
+  // dataset carries no flow-bearing data, so the panel degrades cleanly.
+  getFlowEntries: () => {
+    const { architecture } = get();
+    if (!architecture) return [];
+    const flowComponents = collectFlowComponents(architecture.components);
+    const edges = buildFlowEdges(architecture, flowComponents);
+    return rankEntryFlows(flowComponents, edges);
+  },
+
+  // The ordered walk (DFS pre-order) for one entry flow. Consecutive entries are
+  // the "what happens from here" steps; the prefix is the "how did I get here"
+  // breadcrumb.
+  getFlowPath: (entryId) => {
+    const { architecture } = get();
+    if (!architecture) return [];
+    const flowComponents = collectFlowComponents(architecture.components);
+    const edges = buildFlowEdges(architecture, flowComponents);
+    return walkFlow(entryId, buildAdjacency(edges));
+  },
+
+  // Enter (or leave) follow mode for an entry flow, landing on its first step and
+  // selecting that node so the graph centers and highlights it (I12: selection is
+  // the shared identity across lenses).
+  setFlowEntry: (entryId) => {
+    if (!entryId) {
+      set({ flowEntryId: null, flowStep: 0 });
+      get().selectComponent(null);
+      return;
+    }
+    const path = get().getFlowPath(entryId);
+    set({ flowEntryId: entryId, flowStep: 0 });
+    if (path.length > 0) get().selectComponent(path[0]);
+  },
+
+  // Step forward along the current flow, selecting the next screen. No-op at the
+  // end of the walk.
+  flowStepNext: () => {
+    const { flowEntryId, flowStep } = get();
+    if (!flowEntryId) return;
+    const path = get().getFlowPath(flowEntryId);
+    const next = Math.min(flowStep + 1, path.length - 1);
+    if (next === flowStep) return;
+    set({ flowStep: next });
+    get().selectComponent(path[next]);
+  },
+
+  // Step back along the breadcrumbed path. No-op at the entry.
+  flowStepPrev: () => {
+    const { flowEntryId, flowStep } = get();
+    if (!flowEntryId) return;
+    const path = get().getFlowPath(flowEntryId);
+    const prev = Math.max(flowStep - 1, 0);
+    if (prev === flowStep) return;
+    set({ flowStep: prev });
+    get().selectComponent(path[prev]);
+  },
+
+  // Jump directly to a breadcrumb hop.
+  flowGoToStep: (step) => {
+    const { flowEntryId } = get();
+    if (!flowEntryId) return;
+    const path = get().getFlowPath(flowEntryId);
+    const clamped = Math.max(0, Math.min(step, path.length - 1));
+    set({ flowStep: clamped });
+    if (path.length > 0) get().selectComponent(path[clamped]);
+  },
+
+  clearFlow: () => {
+    set({ flowEntryId: null, flowStep: 0 });
+    get().selectComponent(null);
   },
 
   showDetail: (type, data) =>

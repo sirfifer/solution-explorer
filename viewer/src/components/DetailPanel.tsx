@@ -202,9 +202,9 @@ function ComponentDetail({
     { key: "overview", label: "Overview" },
     ...(hasDocContent ? [{ key: "docs" as Tab, label: "Docs" }] : []),
     ...(component.ai_enhance ? [{ key: "ai" as Tab, label: "AI Insights" }] : []),
-    ...(component.testing && (component.testing.test_files > 0 || component.testing.test_frameworks.length > 0)
+    ...(component.testing && ((component.testing.test_files ?? 0) > 0 || (component.testing.test_frameworks?.length ?? 0) > 0)
       ? [{ key: "testing" as Tab, label: "Testing",
-           count: component.testing.unit_tests + component.testing.integration_tests + component.testing.e2e_tests }]
+           count: (component.testing.unit_tests ?? 0) + (component.testing.integration_tests ?? 0) + (component.testing.e2e_tests ?? 0) }]
       : []),
     ...(component.live_status?.statuses && Object.keys(component.live_status.statuses).length > 0
       ? [{ key: "status" as Tab, label: "Status",

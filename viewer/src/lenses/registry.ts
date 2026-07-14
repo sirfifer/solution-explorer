@@ -47,6 +47,12 @@ export interface LensDefinition {
   isAvailable: (arch: Architecture) => boolean;
   /** Select the nodes and edges the graph renders under this lens. */
   getGraph: (ctx: LensContext) => LensGraph;
+  /**
+   * The ELK layout direction the graph should use under this lens. Defaults to
+   * "DOWN" (the Structure hierarchy); the Flow lens sets "RIGHT" for a
+   * left-to-right walkable diagram. Only the graph's layout reads this.
+   */
+  layoutDirection?: "RIGHT" | "DOWN";
   /** The question-to-gesture list this lens answers (I14). */
   questions: LensQuestion[];
 }

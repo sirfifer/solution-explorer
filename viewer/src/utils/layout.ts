@@ -332,6 +332,10 @@ const EDGE_STYLES: Record<string, { color: string; animated: boolean; dash: stri
   navigation:{ color: "#06B6D4", animated: false, dash: "",     strokeWidth: 1.5 },
   tab:       { color: "#818CF8", animated: false, dash: "4 2",  strokeWidth: 1.2 },
   modal:         { color: "#A78BFA", animated: false, dash: "6 3",  strokeWidth: 1.5 },
+  // Flow lens (P6-2): synthetic edges for UIAction target_view links. A teal
+  // dotted line distinguishes an in-screen action tap from a real navigation edge.
+  action:        { color: "#2DD4BF", animated: false, dash: "2 3",  strokeWidth: 1.4 },
+  embed:         { color: "#94A3B8", animated: false, dash: "1 4",  strokeWidth: 1.2 },
   message_queue: { color: "#F59E0B", animated: true,  dash: "",     strokeWidth: 2 },
   pubsub:        { color: "#D946EF", animated: true,  dash: "",     strokeWidth: 2 },
   event_bus:     { color: "#A855F7", animated: true,  dash: "4 4",  strokeWidth: 1.8 },
