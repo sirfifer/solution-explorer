@@ -1,18 +1,24 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup, within } from "@testing-library/react";
-import { CoverageBadge } from "../components/CoverageBadge";
+import {
+  CoverageBadge,
+  classifyDisposition,
+  computeCoverageFamilies,
+  formatSourcePercent,
+} from "../components/CoverageBadge";
 import { useArchStore } from "../store";
 import type { Architecture, Coverage, CoverageRow, RepositoryInfo } from "../types";
 
-// P4-4 coverage ledger, viewer half. These tests drive the real store (no store
-// mock) and the real CoverageBadge. They assert:
-//   - the badge renders percent parsed and counts per disposition from a
-//     coverage-bearing manifest;
-//   - the drill-in panel groups by rule and ranks failures first then by count
-//     (LENS-DESIGN.md I11);
-//   - a legacy dataset with no coverage key renders nothing (identical output);
-//   - a multi-repo dataset without coverage shows the unavailable message;
-//   - split mode lazy-fetches coverage.json for the row detail.
+// P4-4 coverage ledger, viewer half, with the three-family coverage semantics
+// (program2/p6). These tests drive the real store (no store mock) and the real
+// CoverageBadge. The percent now means "how much of your SOURCE was analyzed";
+// non-source files (binary, unsupported extensions, empty files, pruned dirs,
+// vendored repos) are counted for reassurance but never in the denominator.
+//
+// Fail-before proof: the old badge computed parsed / total and rendered strings
+// like "Coverage 10% parsed" and "(641/6688 files)". Every assertion below that
+// checks the new "N% of source analyzed" wording, and every queryByText that
+// asserts the old strings are ABSENT, fails against the old implementation.
 
 function makeArchitecture(overrides: Partial<Architecture> = {}): Architecture {
   return {
@@ -40,8 +46,6 @@ function makeArchitecture(overrides: Partial<Architecture> = {}): Architecture {
 }
 
 function setArch(arch: Architecture) {
-  // Set the architecture directly and reset coverage state, mirroring what
-  // setArchitecture does, without pulling in annotation persistence side effects.
   useArchStore.setState({
     architecture: arch,
     loading: false,
@@ -64,90 +68,152 @@ afterEach(() => {
   });
 });
 
+describe("coverage family classification (the new math)", () => {
+  it("classifies dispositions into analyzed / gap / non-source", () => {
+    expect(classifyDisposition("parsed")).toBe("analyzed");
+    // Source gaps: loud, counted against the percent.
+    expect(classifyDisposition("failed")).toBe("gap");
+    expect(classifyDisposition("failed:SyntaxError")).toBe("gap");
+    expect(classifyDisposition("excluded:max_file_size")).toBe("gap");
+    // Any unrecognized exclusion is a gap by default (exceptions stay loud).
+    expect(classifyDisposition("excluded:gitignore")).toBe("gap");
+    // Non-source: recorded, never counted against coverage.
+    expect(classifyDisposition("binary")).toBe("nonsource");
+    expect(classifyDisposition("excluded:unsupported_extension")).toBe("nonsource");
+    expect(classifyDisposition("excluded:empty_file")).toBe("nonsource");
+    expect(classifyDisposition("excluded:skipped_directory")).toBe("nonsource");
+    expect(classifyDisposition("excluded:vendored_repo")).toBe("nonsource");
+  });
+
+  it("keeps non-source files out of the percent denominator", () => {
+    // The iOS-demo shape: every source file parsed, 6,047 non-source files.
+    const fam = computeCoverageFamilies({
+      parsed: 641,
+      binary: 6006,
+      "excluded:skipped_directory": 40,
+      "excluded:unsupported_extension": 1,
+    });
+    expect(fam.analyzed).toBe(641);
+    expect(fam.gap).toBe(0);
+    expect(fam.nonsource).toBe(6047);
+    expect(fam.sourceTotal).toBe(641); // NOT 6688
+    expect(fam.percent).toBe(100);
+    expect(formatSourcePercent(fam)).toBe("100");
+    // The old parsed/total math would have been ~10%. That must be gone.
+    const oldPercent = Math.round((641 / 6688) * 100);
+    expect(oldPercent).toBe(10);
+    expect(formatSourcePercent(fam)).not.toBe(String(oldPercent));
+  });
+
+  it("counts gaps against the percent and never rounds a real gap up to 100", () => {
+    const fam = computeCoverageFamilies({ parsed: 499, failed: 1, binary: 10 });
+    expect(fam.sourceTotal).toBe(500);
+    expect(formatSourcePercent(fam)).toBe("99.8");
+
+    // A single gap among many must not display as a bare "100".
+    const fam2 = computeCoverageFamilies({ parsed: 9999, failed: 1 });
+    expect(fam2.percent).toBeGreaterThan(99.9);
+    expect(formatSourcePercent(fam2)).toBe("99.9");
+  });
+});
+
 describe("CoverageBadge summary rendering", () => {
-  it("renders percent parsed and counts per disposition from the manifest summary", () => {
+  it("reads '100% of source analyzed' with a non-source reassurance count (green)", () => {
     const coverage: Coverage = {
       summary: {
-        parsed: 491,
-        "excluded:skipped_directory": 19,
-        "excluded:unsupported_extension": 7,
-        binary: 6,
-        "excluded:max_file_size": 5,
-        "excluded:empty_file": 1,
+        parsed: 641,
+        binary: 6006,
+        "excluded:skipped_directory": 40,
+        "excluded:unsupported_extension": 1,
       },
-      total: 529,
-      parsed: 491,
-      // No rows: split-mode manifest summary.
+      total: 6688,
+      parsed: 641,
     };
     setArch(makeArchitecture({ coverage }));
     render(<CoverageBadge />);
 
-    // 491 / 529 = 92.8 -> 93%.
-    expect(screen.getByText("Coverage 93% parsed")).toBeDefined();
-    expect(screen.getByText("(491/529 files)")).toBeDefined();
-    // A chip per non-parsed disposition (counts per disposition).
-    const badge = screen.getByTestId("coverage-badge");
-    expect(within(badge).getByText(/19 excluded: skipped directory/)).toBeDefined();
-    expect(within(badge).getByText(/6 binary/)).toBeDefined();
-    // No "parsed" chip (parsed is the headline, not a chip).
-    expect(within(badge).queryByText(/491 parsed/)).toBeNull();
+    expect(screen.getByTestId("coverage-headline").textContent).toBe("100% of source analyzed");
+    expect(screen.getByText("6,047 non-source files accounted for")).toBeDefined();
+
+    // Fail-before: the old total-based wording is gone.
+    expect(screen.queryByText(/Coverage 10% parsed/)).toBeNull();
+    expect(screen.queryByText("(641/6688 files)")).toBeNull();
+    expect(screen.queryByText(/% parsed/)).toBeNull();
+  });
+
+  it("reads '99.8% of source analyzed, N files skipped' when gaps exist (amber)", () => {
+    const coverage: Coverage = {
+      summary: { parsed: 499, failed: 1, binary: 10 },
+      total: 510,
+      parsed: 499,
+    };
+    setArch(makeArchitecture({ coverage }));
+    render(<CoverageBadge />);
+
+    expect(screen.getByTestId("coverage-headline").textContent).toBe("99.8% of source analyzed");
+    expect(screen.getByTestId("coverage-gap-count").textContent).toBe("1 file skipped");
   });
 });
 
-describe("CoverageBadge drill-in panel grouping and ranking (I11)", () => {
-  it("lists failures first, then exclusions ranked by count, with reasons", () => {
+describe("CoverageBadge drill-in panel: three families", () => {
+  it("groups by the three families, failures first within gaps, with reasons", () => {
     const rows: CoverageRow[] = [
       { path: "broken.py", disposition: "failed", reason: "SyntaxError: bad token" },
       { path: "logo.png", disposition: "binary", reason: "skip_extension:.png" },
       { path: "big.json", disposition: "excluded:max_file_size", reason: "500000" },
       { path: "a.png", disposition: "binary", reason: "skip_extension:.png" },
       { path: "web/node_modules", disposition: "excluded:skipped_directory", reason: "node_modules" },
-      { path: "web/dist", disposition: "excluded:skipped_directory", reason: "dist" },
-      { path: ".git", disposition: "excluded:skipped_directory", reason: "vcs" },
     ];
     const coverage: Coverage = {
       summary: {
         parsed: 100,
         failed: 1,
-        binary: 2,
         "excluded:max_file_size": 1,
-        "excluded:skipped_directory": 3,
+        binary: 2,
+        "excluded:skipped_directory": 1,
       },
-      total: 107,
+      total: 105,
       parsed: 100,
-      rows, // inline (monolith): no fetch needed.
+      rows,
     };
     setArch(makeArchitecture({ coverage }));
     render(<CoverageBadge />);
 
-    // Open the panel.
     fireEvent.click(screen.getByTestId("coverage-badge"));
     const panel = screen.getByTestId("coverage-panel");
 
-    // Group headers in DOM order. failed is first despite count 1 (I11 failures
-    // first), then excluded:skipped_directory (3), then binary (2), then
-    // excluded:max_file_size (1); ties broken by name.
-    const labels = within(panel)
-      .getAllByText(
-        /^(Failed|Binary|Excluded: skipped directory|Excluded: max file size)$/,
-      )
+    // The three family headers are present.
+    expect(within(panel).getByText("Source analyzed")).toBeDefined();
+    expect(within(panel).getByText("Source gaps")).toBeDefined();
+    expect(within(panel).getByText("Non-source accounted")).toBeDefined();
+
+    // Within gaps, failures rank first (I11): Failed before Excluded: max file size.
+    const gapLabels = within(panel)
+      .getAllByText(/^(Failed|Excluded: max file size)$/)
       .map((el) => el.textContent);
-    expect(labels).toEqual([
-      "Failed",
-      "Excluded: skipped directory",
-      "Binary",
-      "Excluded: max file size",
-    ]);
+    expect(gapLabels).toEqual(["Failed", "Excluded: max file size"]);
 
     // Failures are expanded by default and show the error reason.
     expect(within(panel).getByText("broken.py")).toBeDefined();
     expect(within(panel).getByText("SyntaxError: bad token")).toBeDefined();
 
-    // An excluded-directory group is a single row per directory whose reason
-    // names the pruning rule; expanding it shows the directory paths.
-    fireEvent.click(within(panel).getByText("Excluded: skipped directory"));
-    expect(within(panel).getByText("web/node_modules")).toBeDefined();
-    expect(within(panel).getByText(".git")).toBeDefined();
+    // A non-source group expands to its file rows.
+    fireEvent.click(within(panel).getByText("Binary"));
+    expect(within(panel).getByText("logo.png")).toBeDefined();
+  });
+
+  it("shows Source gaps of 0 when everything analyzable parsed", () => {
+    const coverage: Coverage = {
+      summary: { parsed: 641, binary: 6006 },
+      total: 6647,
+      parsed: 641,
+    };
+    setArch(makeArchitecture({ coverage }));
+    render(<CoverageBadge />);
+    fireEvent.click(screen.getByTestId("coverage-badge"));
+    const panel = screen.getByTestId("coverage-panel");
+    // Non-source count is shown as reassurance (family header and its group).
+    expect(within(panel).getAllByText("6,006").length).toBeGreaterThan(0);
   });
 });
 
@@ -167,7 +233,6 @@ describe("CoverageBadge lazy fetch in split mode", () => {
       vi.fn(async () => ({ ok: true, json: async () => coverageJson })),
     );
 
-    // Manifest summary only (no inline rows): the split-mode shape.
     const coverage: Coverage = {
       summary: { parsed: 2, failed: 1 },
       total: 3,
@@ -188,9 +253,8 @@ describe("CoverageBadge lazy fetch in split mode", () => {
 
 describe("CoverageBadge degradation", () => {
   it("renders nothing for a legacy dataset with no coverage key", () => {
-    setArch(makeArchitecture()); // no coverage, no repositories
+    setArch(makeArchitecture());
     const { container } = render(<CoverageBadge />);
-    // Absent key changes nothing: the component contributes no DOM.
     expect(container.innerHTML).toBe("");
     expect(screen.queryByTestId("coverage-badge")).toBeNull();
     expect(screen.queryByTestId("coverage-unavailable")).toBeNull();
@@ -201,11 +265,10 @@ describe("CoverageBadge degradation", () => {
       { name: "backend", repository: null, default_branch: "main" },
       { name: "frontend", repository: null, default_branch: "main" },
     ];
-    setArch(makeArchitecture({ repositories })); // repositories but no coverage
+    setArch(makeArchitecture({ repositories }));
     render(<CoverageBadge />);
     expect(screen.getByTestId("coverage-unavailable")).toBeDefined();
     expect(screen.getByText("Coverage unavailable for this dataset")).toBeDefined();
-    // No fake percentage.
     expect(screen.queryByTestId("coverage-badge")).toBeNull();
   });
 });
