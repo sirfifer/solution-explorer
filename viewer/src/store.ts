@@ -47,7 +47,6 @@ import {
 import {
   sortFindings,
   findingsForComponent,
-  representativeComponentId,
 } from "./findings/model";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
@@ -57,6 +56,7 @@ import {
   saveAnnotations,
 } from "./utils/annotationStorage";
 import { loadSelectionSets, saveSelectionSets } from "./utils/setStorage";
+import { generateDirective, type DirectiveModel } from "./utils/directiveGenerator";
 
 // Storage key for dark mode preference (localStorage for persistence across sessions)
 const DARK_MODE_KEY = "arch-dark-mode";
@@ -400,11 +400,11 @@ interface ArchStore {
   getFindingsForComponent: (componentId: string) => Finding[];
   getConcernById: (id: string) => Concern | null;
 
-  // Selection-set seam for set-level actions (P6-9, LENS-DESIGN section 10).
-  // Staging a finding's members records the intended addressable set; true
-  // set-level annotation and the structured directive export are P6-9. Today the
-  // annotate affordance stages the set and attaches a single-element annotation on
-  // the representative component (as far as single-element annotation allows).
+  // Selection-set seam for set-level actions (P6-9 engine, LENS-DESIGN section
+  // 10), now wired live from the findings surface (the P6-8/P6-9 integration).
+  // `stagedFindingSet` remains as a lightweight record of the last-staged finding
+  // membership; the annotate and export affordances below build real selection
+  // sets and directives through the P6-9 engine.
   stagedFindingSet: {
     findingId: string;
     label: string;
@@ -413,13 +413,25 @@ interface ArchStore {
   } | null;
   stageFindingSet: (finding: Finding) => void;
   clearStagedSet: () => void;
-  // The "annotate the set" affordance (I15). Stages the member set (the P6-9
-  // seam), navigates to the finding's representative component, enters review
-  // mode, and opens the annotation input there. Single-element annotation is as
-  // far as the review model reaches today; the staged set records the full
-  // intended membership for true set annotation in P6-9. Returns the representative
-  // component id (or null when the finding has no component member).
+  // The "annotate the set" affordance (I15), live. Builds (or reuses) a real
+  // selection set from the finding's members via the P6-9 engine
+  // (createSetFromFinding), closes the findings overlay, and opens the set
+  // annotation flow in the review panel so the reviewer states the shared intent
+  // and per-member notes. Returns the set id (null when the finding is unknown).
   annotateFindingSet: (finding: Finding) => string | null;
+  // The same affordance for a concern row: builds (or reuses) a selection set
+  // from the concern's members (createSetFromConcern) and opens the annotation
+  // flow. Returns the set id (null when the concern is unknown).
+  annotateConcernSet: (concern: Concern) => string | null;
+  // The "export directive" affordance (I15), live. Builds (or reuses) a selection
+  // set from the finding's members, then renders the structured work-order
+  // directive (markdown + embedded, versioned JSON) through the P6-9 generator,
+  // using any set annotation already attached. Returns null when the finding is
+  // unknown or no architecture is loaded.
+  exportDirectiveForFinding: (findingId: string) => { markdown: string; model: DirectiveModel } | null;
+  // The same for a concern row: build (or reuse) the concern's set and render its
+  // directive. Returns null when the concern is unknown.
+  exportDirectiveForConcern: (concernId: string) => { markdown: string; model: DirectiveModel } | null;
 
   // Precomputed per-component connection counts, derived from relationships and
   // refreshed only when the architecture's relationships change. Held stable
@@ -611,7 +623,7 @@ function setMemberFromFinding(m: Finding["members"][number], finding: Finding): 
         ? m.file.split("/").pop() || m.file
         : componentId;
   const evidence: string[] = [];
-  const cloneClass = (finding.detail as { clone_class?: string }).clone_class;
+  const cloneClass = (finding.detail as { clone_class?: string } | undefined)?.clone_class;
   if (cloneClass) evidence.push(`clone class: ${cloneClass}`);
   evidence.push(`finding: ${finding.summary}`);
   if (m.symbol) evidence.push(`symbol: ${m.symbol}`);
@@ -736,6 +748,22 @@ function scheduleIdle(fn: () => void): void {
   } else {
     setTimeout(() => { try { fn(); } catch { /* best-effort */ } }, 1);
   }
+}
+
+// Find-or-create the selection set for a finding/concern so the annotate and
+// export affordances on the same row reuse one set instead of spawning a
+// duplicate on every click. A finding's/concern's id IS its set origin (the
+// createSetFrom* actions use it directly), so the origin is the stable key.
+function findOrCreateFindingSet(get: () => ArchStore, findingId: string): string | null {
+  const existing = get().selectionSets.find((s) => s.origin === findingId);
+  if (existing) return existing.id;
+  return get().createSetFromFinding(findingId);
+}
+
+function findOrCreateConcernSet(get: () => ArchStore, concernId: string): string | null {
+  const existing = get().selectionSets.find((s) => s.origin === concernId);
+  if (existing) return existing.id;
+  return get().createSetFromConcern(concernId);
 }
 
 export const useArchStore = create<ArchStore>((set, get) => ({
@@ -1865,16 +1893,47 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   clearStagedSet: () => set({ stagedFindingSet: null }),
 
   annotateFindingSet: (finding) => {
+    // Record the staged membership (the historical seam) and build a real
+    // selection set from the finding's members via the P6-9 engine.
     get().stageFindingSet(finding);
-    const rep = representativeComponentId(finding);
-    if (!rep) return null;
-    // Close the overlay, focus the representative component so the reviewer sees
-    // it, enter review mode, and open the annotation input on it.
+    const setId = findOrCreateFindingSet(get, finding.id);
+    if (!setId) return null;
+    // Close the overlay and open the set annotation flow: review mode with the
+    // review panel showing the SelectionSetsSection, where the reviewer states
+    // the shared intent and per-member notes for the whole set.
     set((s) => ({ findingsSurface: { ...s.findingsSurface, open: false } }));
-    get().navigateToComponent(rep);
     if (!get().reviewMode) get().toggleReviewMode();
-    get().setAnnotatingComponent(rep);
-    return rep;
+    get().setActivePanel("review");
+    return setId;
+  },
+
+  annotateConcernSet: (concern) => {
+    const setId = findOrCreateConcernSet(get, concern.id);
+    if (!setId) return null;
+    set((s) => ({ findingsSurface: { ...s.findingsSurface, open: false } }));
+    if (!get().reviewMode) get().toggleReviewMode();
+    get().setActivePanel("review");
+    return setId;
+  },
+
+  exportDirectiveForFinding: (findingId) => {
+    const arch = get().architecture;
+    if (!arch) return null;
+    const setId = findOrCreateFindingSet(get, findingId);
+    if (!setId) return null;
+    const setObj = get().getSetById(setId);
+    if (!setObj) return null;
+    return generateDirective(setObj, get().getSetAnnotation(setId), arch);
+  },
+
+  exportDirectiveForConcern: (concernId) => {
+    const arch = get().architecture;
+    if (!arch) return null;
+    const setId = findOrCreateConcernSet(get, concernId);
+    if (!setId) return null;
+    const setObj = get().getSetById(setId);
+    if (!setObj) return null;
+    return generateDirective(setObj, get().getSetAnnotation(setId), arch);
   },
 
   getComponentById: (id) => {
