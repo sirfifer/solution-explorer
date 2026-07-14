@@ -62,6 +62,14 @@ export function useUrlSync(): void {
       return;
     }
 
+    // Rules lens selection (P6-6). If the link names a rule (under the Rules
+    // lens), select it; that drives its own component selection, so it takes
+    // precedence over the component/drill params below.
+    if (urlState.rule && useArchStore.getState().lens === "rules") {
+      store.selectRule(urlState.rule);
+      return;
+    }
+
     // Inbound file/line deep link takes precedence: it computes its own drill and
     // selection from the owning component, so it overrides any component/drill
     // params (P3-2). The tab param is still honored, defaulting to the Files tab.
@@ -101,7 +109,8 @@ export function useUrlSync(): void {
       const capEntityChanged =
         state.selectedCapabilityId !== prev.selectedCapabilityId ||
         state.selectedEntityId !== prev.selectedEntityId;
-      if (selChanged || drillChanged || lensChanged || flowChanged || capEntityChanged) {
+      const ruleChanged = state.selectedRuleId !== prev.selectedRuleId;
+      if (selChanged || drillChanged || lensChanged || flowChanged || capEntityChanged || ruleChanged) {
         const update = {
           component: state.selectedComponentId || undefined,
           drill: state.drillLevel || undefined,
@@ -114,6 +123,8 @@ export function useUrlSync(): void {
           // Carry the Capability/Data lens selection so it is shareable (P6-3).
           capability: state.selectedCapabilityId || undefined,
           entity: state.selectedEntityId || undefined,
+          // Carry the Rules lens selection so it is shareable (P6-6).
+          rule: state.selectedRuleId || undefined,
           // Preserve the active-tab param that DetailPanel manages; rebuilding
           // the URL from component/drill alone would erase it (F-VW-7).
           tab: parseUrlState().tab,
@@ -163,8 +174,16 @@ export function useUrlSync(): void {
           store.selectEntity(urlState.entity);
           return;
         }
+
+        // Rules lens selection (P6-6): restore or clear it to match the target
+        // URL, then let it own the component selection when present.
+        if (urlState.rule && useArchStore.getState().lens === "rules") {
+          store.selectRule(urlState.rule);
+          return;
+        }
         if (useArchStore.getState().selectedCapabilityId) store.clearCapability();
         if (useArchStore.getState().selectedEntityId) store.clearEntity();
+        if (useArchStore.getState().selectedRuleId) store.clearRule();
 
         if (urlState.drill) {
           const drillComp = store.getComponentById(urlState.drill);

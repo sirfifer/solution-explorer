@@ -18,7 +18,7 @@ import { useArchStore } from "../store";
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
-import { getLens, capabilityCountsByComponent, type CapabilityKindCounts } from "../lenses";
+import { getLens, capabilityCountsByComponent, ruleCountsByComponent, type CapabilityKindCounts, type RuleKindCounts } from "../lenses";
 import type { Relationship } from "../types";
 
 const nodeTypes: NodeTypes = {
@@ -42,6 +42,7 @@ export function ArchitectureGraph() {
     activityData,
     selectedCapabilityId,
     selectedEntityId,
+    selectedRuleId,
     getLensGraph,
     selectComponent,
     navigateToBreadcrumb,
@@ -164,6 +165,13 @@ export function ArchitectureGraph() {
       lens === "capability"
         ? capabilityCountsByComponent(architecture.capabilities ?? [])
         : null;
+    // Rules lens (P6-6): per-node rule counts by kind, rendered as a badge cluster
+    // by ComponentNode (the Capability lens badge pattern). Only rule-owning
+    // components carry counts.
+    const ruleCounts =
+      lens === "rules"
+        ? ruleCountsByComponent(architecture.rules ?? [])
+        : null;
     // Data lens (P6-3): the focused entity's owner is the hub of the ego view;
     // ring it so the "who touches this data" center reads spatially.
     let dataOwnerNodeId: string | null = null;
@@ -189,6 +197,11 @@ export function ArchitectureGraph() {
       const caps: CapabilityKindCounts | undefined = capCounts?.get(comp.id);
       if (caps) {
         node.data = { ...node.data, capBadges: caps };
+      }
+      // Rules lens: attach per-kind rule counts for the badge cluster.
+      const rules: RuleKindCounts | undefined = ruleCounts?.get(comp.id);
+      if (rules) {
+        node.data = { ...node.data, ruleBadges: rules };
       }
       if (comp.id === flowStepNodeId) {
         node.style = { boxShadow: "0 0 0 3px #2DD4BF", borderRadius: 14 };
@@ -308,7 +321,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, getLensGraph]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, getLensGraph]);
 
   // Apply ELK layout
   useEffect(() => {
