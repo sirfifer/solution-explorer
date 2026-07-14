@@ -16,6 +16,7 @@ from ..models import Component, to_dict
 from ..store import FactStore
 from . import capabilities as capabilities_pass
 from . import components as components_pass
+from . import correlations as correlations_pass
 from . import docs as docs_pass
 from . import entities as entities_pass
 from . import flow as flow_pass
@@ -55,6 +56,9 @@ def derive_all(
     capabilities_pass.derive_capabilities(d)
     entities_pass.derive_entities(d)
     rules_pass.derive_rules(d)
+    # Correlations run last: they read the components, edges, capabilities,
+    # entities, rules, and clone-fragment signals every earlier pass produced.
+    correlations_pass.derive_correlations(d)
 
     arch = _assemble(d, root_name, root_path, arch_description)
     _flush(store, d)
@@ -113,6 +117,8 @@ def _assemble(d: Deriver, root_name: str, root_path: str, description: str) -> d
     _attach_capabilities(components, d._capabilities_by_component)
     _attach_entities(components, d._entities_by_component)
     _attach_rules(components, d._rules_by_component)
+    _attach_id_refs(components, d._concerns_by_component, "concerns")
+    _attach_id_refs(components, d._findings_by_component, "findings")
     relationships = _relationship_dicts(d)
     return {
         "name": root_name,
@@ -128,6 +134,8 @@ def _assemble(d: Deriver, root_name: str, root_path: str, description: str) -> d
         "data_entities": d.data_entities, # flat index (P5-2); optional key
         "entity_access": d.entity_access, # flat index (P5-2); optional key
         "rules": d.rules,                 # flat index (P5-5); optional key
+        "concerns": d.concerns,           # flat index (P5-6); optional key
+        "findings": d.findings,           # ranked flat index (P5-6); optional key
         "symbols": [to_dict(s) for s in d._all_symbols],
         "files": [_file_dict(fi) for fi in d._all_files],
         "stats": _stats(d, relationships),
@@ -172,6 +180,21 @@ def _attach_rules(components: list, by_component: dict[str, list[dict]]) -> None
         if rls:
             comp["rules"] = rls
         _attach_rules(comp.get("children", []), by_component)
+
+
+def _attach_id_refs(components: list, by_component: dict[str, list[str]], key: str) -> None:
+    """Attach an optional per-component id-reference list in place (P5-6).
+
+    Used for ``concerns`` and ``findings``: a component carries the ids of the
+    concerns it belongs to and the findings that involve it (the full records
+    live in the top-level flat indexes). Set only when non-empty, matching the
+    ai_enhance optional-key precedent; old viewers ignore it.
+    """
+    for comp in components:
+        refs = by_component.get(comp.get("id"))
+        if refs:
+            comp[key] = list(refs)
+        _attach_id_refs(comp.get("children", []), by_component, key)
 
 
 def _file_dict(fi) -> dict:
@@ -242,6 +265,8 @@ def _flush(store: FactStore, d: Deriver) -> None:
     the projection tier (P4-5) reads a complete component from the store.
     """
     store._conn.execute("DELETE FROM edges")
+    store._conn.execute("DELETE FROM findings")        # derived; soft refs only
+    store._conn.execute("DELETE FROM concerns")        # derived; soft refs only
     store._conn.execute("DELETE FROM rules")           # FK -> components
     store._conn.execute("DELETE FROM entity_access")   # FK -> data_entities
     store._conn.execute("DELETE FROM data_entities")   # FK -> components
@@ -336,5 +361,25 @@ def _flush(store: FactStore, d: Deriver) -> None:
             rule_id=rule["id"], component_id=rule["component_id"],
             kind=rule["kind"], summary=rule["summary"], detail=rule["detail"],
             evidence=rule["evidence"], confidence=rule["confidence"],
+        )
+
+    # Correlations land in the store (system of record, P5-6). Concerns and
+    # findings reference components by soft id (not FK), so ordering relative to
+    # components does not matter; ids are content-derived so a re-derive is
+    # idempotent. Findings default to verification_status='unverified' (P7-4
+    # flips it, I15) and carry a deterministic rank_score (I11).
+    for concern in d.concerns:
+        store.add_concern(
+            concern_id=concern["id"], kind=concern["kind"],
+            title=concern.get("title"), basis=concern.get("basis"),
+            members=concern["members"], detail=concern.get("detail"),
+        )
+    for finding in d.findings:
+        store.add_finding(
+            finding_id=finding["id"], kind=finding["kind"],
+            summary=finding.get("summary"), members=finding["members"],
+            evidence=finding.get("evidence"), confidence=finding.get("confidence"),
+            verification_status=finding["verification_status"],
+            rank_score=finding["rank_score"], detail=finding.get("detail"),
         )
     store.commit()

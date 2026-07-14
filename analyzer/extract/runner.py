@@ -53,15 +53,18 @@ from ..constants import LANGUAGE_MAP, SKIP_EXTENSIONS
 from ..parsers import PARSERS
 from ..store import LOCAL_REPO, ROOT_COMPONENT, FactStore, assign_symbol_ids
 from ..utils import _is_vendored_repo, _should_skip_dir
+from .clones import extract_clone_signals
 from .facts import FileFacts
 from .signals import extract_entity_signals, extract_rule_signals, extract_signals
 
 # p4-extract/1 -> p5-extract/1: extraction now also emits `data_entity` signals
 # (P5-2). p5-extract/1 -> p5-extract/2: extraction now also emits `rule` signals
-# (P5-5). Bumping the tier invalidates the content-hash cache so a warm store is
-# re-extracted once and never silently serves cached facts that predate the new
-# signal kind (invariant I2 / "no silent anything").
-EXTRACT_TIER = "p5-extract/2"
+# (P5-5). p5-extract/2 -> p5-extract/3: extraction now also emits `clone_fragment`
+# signals (token fingerprints, P5-6). Bumping the tier invalidates the
+# content-hash cache so a warm store is re-extracted once and never silently
+# serves cached facts that predate the new signal kind (invariant I2 / "no
+# silent anything").
+EXTRACT_TIER = "p5-extract/3"
 INLINE_THRESHOLD = 8  # below this many cache misses, parse inline (no pool)
 
 # v2-only schema formats that are not in the shared LANGUAGE_MAP (which v1
@@ -119,6 +122,10 @@ def _parse_worker(task: tuple[str, str, str, str]) -> tuple[str, str, object]:
         signals = signals + extract_entity_signals(content, language, rel)
         # Rule signals are likewise parser-independent (P5-5, Rules lens L6).
         signals = signals + extract_rule_signals(content, language, rel)
+        # Clone-fragment fingerprints (P5-6, correlation extraction). Needs the
+        # parser's token stream and the already-extracted symbols; empty for
+        # regex-only parsers and parser-less files.
+        signals = signals + extract_clone_signals(content, language, parser, symbols)
         facts = FileFacts(
             path=rel,
             language=language,

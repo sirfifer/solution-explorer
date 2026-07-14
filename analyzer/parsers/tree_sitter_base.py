@@ -8,6 +8,16 @@ from .base import BaseParser, NestedSymbol
 
 logger = logging.getLogger(__name__)
 
+# Token-stream normalization vocabulary (P5-6 clone detection). Kept
+# language-agnostic: literal container/leaf types collapse to one placeholder
+# and comment subtrees are dropped, across every tree-sitter grammar we load.
+_COMMENT_TYPES = frozenset({"comment", "line_comment", "block_comment", "doc_comment"})
+_LITERAL_TYPES = frozenset({
+    "string", "integer", "float", "number", "true", "false", "none", "null",
+    "nil", "boolean", "char", "character", "regex", "template_string",
+    "concatenated_string", "raw_string", "byte", "rune",
+})
+
 
 class TreeSitterParser(BaseParser):
     """Base class for tree-sitter parsers.
@@ -74,6 +84,70 @@ class TreeSitterParser(BaseParser):
                     type(self._regex_parser).__name__,
                 )
         return self._regex_parser.extract_nested_symbols(content, file_path)
+
+    # --- Token stream for clone fingerprinting (P5-6, additive) ----------
+
+    def token_stream(self, content: str) -> Optional[list[tuple[int, str, str]]]:
+        """Leaf tokens as ``(line, norm, raw)`` in source order, for clone
+        detection (P5-6, LENS-DESIGN.md section 9). Returns ``None`` when
+        tree-sitter is unavailable, so the caller skips the file (regex-only
+        files never participate in clone clusters; recorded deviation).
+
+        Normalization supports type-2 (renamed) clone matching: comments are
+        dropped, string/number/boolean literals collapse to ``LIT`` and
+        identifiers to ``ID`` (so renamed variables and changed constants still
+        match), while operators, punctuation, and keywords keep their literal
+        text (anonymous tree-sitter leaves whose type equals their source text),
+        preserving structure. ``raw`` is the un-normalized token, which the
+        caller hashes to tell an exact (type-1) clone from a renamed one.
+
+        This method only reads the parsed tree; it does not touch the disk. It
+        is called exclusively by P5-6 extraction and changes no existing path.
+        """
+        if not self._ts_available:
+            return None
+        try:
+            root = self._parse(content)
+        except Exception as exc:  # noqa: BLE001 - degrade to no tokens, never crash
+            logger.debug(
+                "tree-sitter tokenize failed (%s: %s)", type(exc).__name__, exc
+            )
+            return None
+
+        out: list[tuple[int, str, str]] = []
+        # Explicit stack, children pushed reversed so pops yield source order.
+        # A plain recursion would risk RecursionError on deeply nested trees.
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            ntype = node.type
+            if ntype in _COMMENT_TYPES or "comment" in ntype:
+                continue  # drop the whole comment subtree
+            if ntype in _LITERAL_TYPES or ntype.endswith("_literal"):
+                # Collapse the whole literal (including multi-child strings) to
+                # one normalized placeholder token; do not descend into its
+                # pieces. The raw token keeps the literal's actual text so an
+                # exact (type-1) clone stays distinct from a renamed (type-2) one
+                # where a constant value changed.
+                out.append((
+                    node.start_point[0] + 1, "LIT",
+                    node.text.decode("utf-8", "replace"),
+                ))
+                continue
+            if node.child_count == 0:
+                line = node.start_point[0] + 1
+                if node.is_named:
+                    # A named leaf that is neither literal nor comment is an
+                    # identifier-like token.
+                    out.append((line, "ID", node.text.decode("utf-8", "replace")))
+                else:
+                    # Anonymous leaf: operator, punctuation, or keyword. Its type
+                    # equals its source text, kept verbatim to preserve shape.
+                    out.append((line, ntype, ntype))
+                continue
+            for child in reversed(node.children):
+                stack.append(child)
+        return out
 
     def _extract_nested_ts(self, root, content, file_path, out, parent_index, path) -> None:
         """Walk the tree-sitter tree appending NestedSymbol records.

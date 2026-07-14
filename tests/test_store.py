@@ -192,13 +192,16 @@ def test_schema_migration_v1_to_current_is_additive(tmp_path):
             "DROP TABLE IF EXISTS file_author;"
             "DROP TABLE IF EXISTS cochange_pair;"
             "DROP TABLE IF EXISTS rules;"
+            "DROP TABLE IF EXISTS concerns;"
+            "DROP TABLE IF EXISTS findings;"
         )
         s.set_meta("schema_version", "1")
         s.add_file("src/a.py", "python", 10, 100, "ha", "parsed")
         s.commit()
-    # Re-open with current code: migrations 2 (activity) and 3 (rules) run.
+    # Re-open with current code: migrations 2 (activity), 3 (rules), and 4
+    # (concerns/findings) run in order.
     with FactStore(db_path) as s:
-        assert s.get_meta("schema_version") == str(SCHEMA_VERSION) == "3"
+        assert s.get_meta("schema_version") == str(SCHEMA_VERSION) == "4"
         # Pre-existing row intact.
         assert [f["path"] for f in s.files()] == ["src/a.py"]
         # The v2 activity tables exist and are usable.
@@ -213,6 +216,18 @@ def test_schema_migration_v1_to_current_is_additive(tmp_path):
                    detail={"anchor": "match"}, evidence=[], confidence="inferred")
         s.commit()
         assert len(s.rules()) == 1
+        # The v4 correlation tables exist and are usable.
+        assert s.concerns() == []
+        assert s.findings() == []
+        s.add_concern("concern:logging", "logging", title="Logging",
+                      basis="logger imports", members=[{"component_id": "c"}])
+        s.add_finding("finding:orphan:c", "orphan", summary="orphan c",
+                      members=[{"kind": "component", "id": "c"}], evidence=[],
+                      confidence="inferred", rank_score=21.0)
+        s.commit()
+        assert len(s.concerns()) == 1
+        got = s.findings()
+        assert len(got) == 1 and got[0]["verification_status"] == "unverified"
 
 
 def test_activity_merge_is_additive(tmp_path):

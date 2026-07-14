@@ -24,7 +24,9 @@ from __future__ import annotations
 #            Additive; see MIGRATIONS below.
 #   3  P5-5: rules table (typed rule entities) for the Rules lens (LENS-DESIGN
 #            L6). Additive; see MIGRATIONS below.
-SCHEMA_VERSION = 3
+#   4  P5-6: correlation tables (concerns, findings) for the Concerns and
+#            Findings surfaces (LENS-DESIGN section 9). Additive; see MIGRATIONS.
+SCHEMA_VERSION = 4
 
 # ---------------------------------------------------------------------------
 # Core tables. Foreign keys are declared for documentation and optional
@@ -243,13 +245,56 @@ CREATE INDEX IF NOT EXISTS idx_rules_component ON rules(component_id);
 CREATE INDEX IF NOT EXISTS idx_rules_kind ON rules(kind);
 """
 
+# ---------------------------------------------------------------------------
+# Correlation tables (schema v4, P5-6; LENS-DESIGN.md section 9). Concerns are
+# cross-cutting membership sets orthogonal to the containment hierarchy
+# (logging, auth, persistence, http-client, caching, configuration, plus
+# clone-derived concerns); findings are typed, ranked, evidenced correlations
+# (duplication clusters, orphans, inconsistency candidates). Both are DERIVED
+# (Tier 3) from stored signals, edges, and imports, never from a source re-read
+# (invariant I1). Members and per-member evidence ride in *_json payload columns
+# (the additive pattern capabilities/rules use); component references are soft
+# ids, not FKs, so the derivation flush order stays trivial. Findings default to
+# verification_status='unverified' (P7-4 flips it, invariant I15) and carry a
+# deterministic rank_score (I11). Ids are content-derived so a re-derive is
+# idempotent; the deterministic readers in db.py sort by id (concerns) and by
+# rank_score desc then id (findings) for byte-determinism (I4).
+# ---------------------------------------------------------------------------
+
+_CORRELATIONS_DDL = """
+CREATE TABLE IF NOT EXISTS concerns (
+    id           TEXT PRIMARY KEY,   -- slug: concern:logging, concern:clone-<hash>
+    kind         TEXT NOT NULL,      -- logging|auth|persistence|http-client|caching|configuration|clone
+    title        TEXT,               -- mechanical title (AI naming is P7-4)
+    basis        TEXT,               -- mechanical detection basis
+    members_json TEXT,               -- [{component_id, files:[...], evidence:[...]}]
+    detail_json  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_concerns_kind ON concerns(kind);
+
+CREATE TABLE IF NOT EXISTS findings (
+    id                  TEXT PRIMARY KEY,  -- finding:duplication:<hash> | finding:orphan:<comp> | finding:inconsistency:<slug>-<hash>
+    kind                TEXT NOT NULL,     -- duplication|orphan|inconsistency
+    summary             TEXT,              -- mechanical summary
+    members_json        TEXT,              -- [{kind, id, file, line_start, line_end, component_id}]
+    evidence_json       TEXT,
+    confidence          TEXT,              -- inferred (deterministic tier)
+    verification_status TEXT NOT NULL,     -- 'unverified' until P7-4 verifies
+    rank_score          REAL NOT NULL,     -- I11/I15 ranking input
+    detail_json         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_findings_kind ON findings(kind);
+CREATE INDEX IF NOT EXISTS idx_findings_rank ON findings(rank_score);
+"""
+
 # Migration registry: MIGRATIONS[v] is the DDL that upgrades a store at version
 # v-1 to version v. Each script is idempotent (IF NOT EXISTS), so re-running is
 # safe. A cold store gets every table from schema_statements in one shot; a warm
 # store at an older version runs the gap scripts in order (db.py._create_schema).
 MIGRATIONS: dict[int, str] = {
-    2: _ACTIVITY_DDL,  # v1 -> v2: add the git-activity tables (P5-4)
-    3: _RULES_DDL,     # v2 -> v3: add the rules table (P5-5)
+    2: _ACTIVITY_DDL,        # v1 -> v2: add the git-activity tables (P5-4)
+    3: _RULES_DDL,           # v2 -> v3: add the rules table (P5-5)
+    4: _CORRELATIONS_DDL,    # v3 -> v4: add the concerns + findings tables (P5-6)
 }
 
 # ---------------------------------------------------------------------------
@@ -276,4 +321,7 @@ FTS_AVAILABLE_PROBE = "CREATE VIRTUAL TABLE temp.__fts_probe USING fts5(x);"
 
 def schema_statements(with_fts: bool = True) -> str:
     """Return the full DDL script. FTS can be omitted if the build lacks it."""
-    return _CORE_DDL + _ACTIVITY_DDL + _RULES_DDL + (_FTS_DDL if with_fts else "")
+    return (
+        _CORE_DDL + _ACTIVITY_DDL + _RULES_DDL + _CORRELATIONS_DDL
+        + (_FTS_DDL if with_fts else "")
+    )
