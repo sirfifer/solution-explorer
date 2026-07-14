@@ -75,6 +75,102 @@ export interface ComponentTesting {
   has_ci_tests: boolean;
 }
 
+// Capabilities and data entities (optional, present only for v2 projections that
+// ran the P5-1 capability pass and the P5-2 entity pass). All keys are additive:
+// a dataset without them renders identically (every consumer uses optional
+// access). Shapes match the derived arch dict exactly (see analyzer/derive/
+// capabilities.py and entities.py to_dict).
+
+// A single piece of evidence for a capability, entity, or access edge: the file
+// and line where the fact was observed, plus the source line snippet.
+export interface Evidence {
+  file: string;
+  line: number | null;
+  snippet: string;
+}
+
+// A test file that textually references a capability's route path (api) or
+// command name (cli). Groundwork for the L2 "test linkage is the proof bridge";
+// the full linkage lens is P6-3. Rides in capability.detail.tests.
+export interface CapabilityTestLink {
+  file: string;
+  line: number;
+  confidence: "certain" | "inferred";
+}
+
+// The structured contract for a capability. Fields present depend on kind:
+// api carries method/path/framework; cli carries command/framework/flags;
+// event carries topic/direction; job carries name/framework/trigger. `symbol`
+// is the defining symbol id where resolvable; `tests` is the L2 linkage.
+export interface CapabilityDetail {
+  // api
+  method?: string;
+  path?: string;
+  // cli
+  command?: string;
+  flags?: string[];
+  // event
+  topic?: string;
+  direction?: string;
+  // job (name also used as the job label)
+  name?: string;
+  trigger?: string;
+  // shared
+  framework?: string | null;
+  symbol?: string;
+  tests?: CapabilityTestLink[];
+  [key: string]: unknown;
+}
+
+// Something the system can be asked to do (P5-1). Kind is api (HTTP operation),
+// cli (command with flags), event (queue topic), or job (scheduled/background
+// task). Confidence is certain for parse-level api/cli facts, inferred for
+// heuristic event/job facts (invariant I3).
+export interface Capability {
+  id: string;
+  component_id: string | null;
+  kind: "api" | "cli" | "event" | "job";
+  name: string;
+  detail: CapabilityDetail;
+  evidence: Evidence[];
+  confidence: "certain" | "inferred";
+}
+
+// A named field on a data entity, with its declared type where parseable.
+export interface EntityField {
+  name: string;
+  type: string | null;
+}
+
+// A data entity the system knows about (P5-2): an ORM model, a physical table, a
+// migration-declared table, or a standalone schema. Kind takes the most specific
+// source by priority model > table > migration > schema. `table` is the physical
+// table name where known; `symbol` the defining symbol id; `inferred` marks a
+// partial extraction (for example CoreData).
+export interface DataEntity {
+  id: string;
+  component_id: string | null;
+  name: string;
+  kind: "model" | "table" | "migration" | "schema";
+  framework: string | null;
+  fields: EntityField[];
+  evidence: Evidence[];
+  table?: string;
+  symbol?: string;
+  inferred?: boolean;
+}
+
+// A read/write access edge from a component (accessor_id) to a data entity
+// (entity_id). Confidence is certain for ORM-class usage, inferred for a
+// table-name string reference (invariant I3).
+export interface EntityAccess {
+  accessor_id: string;
+  entity_id: string;
+  mode: "read" | "write";
+  confidence: "certain" | "inferred";
+  evidence: Evidence[];
+}
+
 // AI enhancement data (optional, present only when AI assist has been run)
 export interface ComponentAIEnhance {
   // Core fields
@@ -291,6 +387,12 @@ export interface Component {
   actions?: UIAction[];
   // Rationale layer (I13); optional and populated by later passes. See RationaleInfo.
   rationale?: RationaleInfo;
+  // Capabilities owned by this component (P5-1). Set only when non-empty; a
+  // component with no capabilities carries no key. Gates the Capabilities tab.
+  capabilities?: Capability[];
+  // Data entities owned by this component (P5-2). Set only when non-empty; gates
+  // the Data tab. The access edges themselves live at architecture.entity_access.
+  data_entities?: DataEntity[];
 }
 
 // Aggregation node (P6-4). At a drill level, components that the hero filter
@@ -488,6 +590,16 @@ export interface Architecture {
   // ActivityData inline in monolith mode. Presence gates the Activity lens
   // (P6-5); old datasets omit it and the lens does not appear.
   activity?: ActivityManifestSummary | ActivityData;
+  // Flat capability index (P5-1). Optional; old datasets omit it. The per-
+  // component `capabilities` key is the primary consumer for the Capabilities
+  // tab; this index is the whole-system list used by the Capability lens (P6-3).
+  capabilities?: Capability[];
+  // Flat data-entity index (P5-2). Optional; old datasets omit it.
+  data_entities?: DataEntity[];
+  // Flat entity-access edge index (P5-2). Optional; old datasets omit it. The
+  // Data tab reads this both directions: what a component touches, and who else
+  // touches an entity this component owns.
+  entity_access?: EntityAccess[];
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
   live_status?: {
     statuses?: Record<string, ArchitectureStatus>;

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import type { Component, FileInfo, Symbol as ArchSymbol, Relationship, ComponentStatus, UIAction } from "../types";
+import type { Component, FileInfo, Symbol as ArchSymbol, Relationship, ComponentStatus, UIAction, Capability, DataEntity, EntityAccess, Evidence } from "../types";
 import { useArchStore } from "../store";
 import {
   getTypeColors,
@@ -78,7 +78,9 @@ function DetailErrorState({ label, detail, onRetry }: { label: string; detail?: 
   );
 }
 
-type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai" | "status" | "testing" | "actions";
+type Tab = "overview" | "docs" | "files" | "symbols" | "relationships" | "ai" | "status" | "testing" | "actions" | "capabilities" | "data";
+
+const TAB_KEYS: Tab[] = ["overview", "docs", "files", "symbols", "relationships", "ai", "status", "testing", "actions", "capabilities", "data"];
 
 export function DetailPanel() {
   const {
@@ -88,7 +90,7 @@ export function DetailPanel() {
   } = useArchStore();
   const [activeTab, setActiveTabRaw] = useState<Tab>(() => {
     const urlTab = parseUrlState().tab;
-    return urlTab && ["overview", "docs", "files", "symbols", "relationships", "ai", "status", "testing", "actions"].includes(urlTab)
+    return urlTab && (TAB_KEYS as string[]).includes(urlTab)
       ? urlTab as Tab
       : "overview";
   });
@@ -212,6 +214,13 @@ function ComponentDetail({
       : []),
     ...(component.actions && component.actions.length > 0
       ? [{ key: "actions" as Tab, label: "Actions", count: component.actions.length }]
+      : []),
+    ...(component.capabilities && component.capabilities.length > 0
+      ? [{ key: "capabilities" as Tab, label: "Capabilities", count: component.capabilities.length }]
+      : []),
+    ...(hasDataTabContent(component, architecture?.entity_access)
+      ? [{ key: "data" as Tab, label: "Data",
+           count: (component.data_entities?.length || 0) }]
       : []),
     { key: "files", label: "Files", count: files.length },
     { key: "symbols", label: "Symbols", count: symbols.length },
@@ -414,6 +423,12 @@ function ComponentDetail({
         )}
         {activeTab === "actions" && component.actions && (
           <ActionsTab actions={component.actions} />
+        )}
+        {activeTab === "capabilities" && component.capabilities && (
+          <CapabilitiesTab capabilities={component.capabilities} />
+        )}
+        {activeTab === "data" && (
+          <DataTab component={component} />
         )}
       </div>
 
@@ -1172,6 +1187,377 @@ function ActionsTab({ actions }: { actions: UIAction[] }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// --- Capabilities and Data tabs (P5-3) -----------------------------------
+
+// Capabilities land ranked (invariant I11): kinds in a fixed order, then by
+// name within a kind. Entities rank by kind (most specific first) then name.
+const CAP_KIND_ORDER: Capability["kind"][] = ["api", "cli", "event", "job"];
+const CAP_KIND_LABEL: Record<Capability["kind"], string> = {
+  api: "API",
+  cli: "CLI",
+  event: "Events",
+  job: "Jobs",
+};
+const ENTITY_KIND_ORDER: DataEntity["kind"][] = ["model", "table", "migration", "schema"];
+
+// The Data tab appears when this component owns entities or touches any entity.
+// A dataset with neither key present has no access edges and no owned entities,
+// so the tab does not appear (backward compatibility).
+function hasDataTabContent(component: Component, entityAccess?: EntityAccess[]): boolean {
+  if (component.data_entities && component.data_entities.length > 0) return true;
+  if (entityAccess) {
+    return entityAccess.some((e) => e.accessor_id === component.id);
+  }
+  return false;
+}
+
+// Flatten the component tree into an id -> name map for labeling access edges.
+function buildComponentNameMap(components: Component[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  const walk = (list: Component[]) => {
+    for (const c of list) {
+      map[c.id] = c.name;
+      if (c.children.length > 0) walk(c.children);
+    }
+  };
+  walk(components);
+  return map;
+}
+
+// An inferred-confidence marker. Certain facts carry no badge (only the
+// heuristic ones are called out, per the card).
+function ConfidenceBadge({ confidence }: { confidence: "certain" | "inferred" }) {
+  const { darkMode } = useArchStore();
+  if (confidence === "certain") return null;
+  return (
+    <Tooltip content="Inferred by heuristic, not a parse-level certainty.">
+      <span className={`text-[9px] px-1 py-0.5 rounded uppercase tracking-wide ${darkMode ? "bg-amber-900/30 text-amber-400" : "bg-amber-50 text-amber-600"}`}>
+        inferred
+      </span>
+    </Tooltip>
+  );
+}
+
+// Evidence rows: file:line with a clickable GitHub source link, mirroring the
+// symbol-row and action-row source-link pattern used elsewhere in this panel.
+function EvidenceLinks({ evidence }: { evidence: Evidence[] }) {
+  const { darkMode } = useArchStore();
+  if (!evidence || evidence.length === 0) return null;
+  return (
+    <div className="mt-1 space-y-0.5">
+      {evidence.map((ev, i) => (
+        <div
+          key={`${ev.file}:${ev.line}:${i}`}
+          className={`text-[10px] font-mono flex items-center gap-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}
+        >
+          <span className="truncate">{ev.file}{ev.line != null ? `:${ev.line}` : ""}</span>
+          <SourceLink filePath={ev.file} line={ev.line ?? undefined} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MethodBadge({ method }: { method: string }) {
+  const { darkMode } = useArchStore();
+  const m = method.toUpperCase();
+  const color =
+    m === "GET" ? (darkMode ? "bg-green-900/40 text-green-400" : "bg-green-100 text-green-700") :
+    m === "POST" ? (darkMode ? "bg-blue-900/40 text-blue-400" : "bg-blue-100 text-blue-700") :
+    m === "DELETE" ? (darkMode ? "bg-red-900/40 text-red-400" : "bg-red-100 text-red-700") :
+    (darkMode ? "bg-yellow-900/40 text-yellow-400" : "bg-yellow-100 text-yellow-700");
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${color}`}>{m}</span>
+  );
+}
+
+function CapabilitiesTab({ capabilities }: { capabilities: Capability[] }) {
+  const { darkMode } = useArchStore();
+
+  // Rank: group by kind in CAP_KIND_ORDER, sort by name within each group (I11).
+  const groups = useMemo(() => {
+    return CAP_KIND_ORDER
+      .map((kind) => ({
+        kind,
+        items: capabilities
+          .filter((c) => c.kind === kind)
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [capabilities]);
+
+  return (
+    <div className="p-4 space-y-5">
+      {groups.map((group) => (
+        <div key={group.kind}>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            {CAP_KIND_LABEL[group.kind]} ({group.items.length})
+          </h4>
+          <div className="space-y-2">
+            {group.items.map((cap) => (
+              <div
+                key={cap.id}
+                className={`px-3 py-2 rounded-lg ${darkMode ? "bg-zinc-800/50" : "bg-zinc-50"}`}
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  {cap.kind === "api" && cap.detail.method && (
+                    <MethodBadge method={cap.detail.method} />
+                  )}
+                  <span className={`text-sm font-mono ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+                    {cap.kind === "api" ? (cap.detail.path || cap.name) : cap.name}
+                  </span>
+                  {cap.detail.framework && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-cyan-900/30 text-cyan-400" : "bg-cyan-50 text-cyan-700"}`}>
+                      {cap.detail.framework}
+                    </span>
+                  )}
+                  <ConfidenceBadge confidence={cap.confidence} />
+                </div>
+
+                {/* CLI flags */}
+                {cap.kind === "cli" && cap.detail.flags && cap.detail.flags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {cap.detail.flags.map((flag, i) => (
+                      <span key={i} className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-700/50 text-zinc-300" : "bg-zinc-200 text-zinc-600"}`}>
+                        {flag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Event direction */}
+                {cap.kind === "event" && cap.detail.direction && (
+                  <div className={`text-[11px] mt-1 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
+                    direction: {cap.detail.direction}
+                  </div>
+                )}
+
+                {/* Job trigger */}
+                {cap.kind === "job" && cap.detail.trigger && (
+                  <div className={`text-[11px] mt-1 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
+                    trigger: {cap.detail.trigger}
+                  </div>
+                )}
+
+                <EvidenceLinks evidence={cap.evidence} />
+
+                {/* Test linkage (L2: the proof bridge). */}
+                {cap.detail.tests && cap.detail.tests.length > 0 && (
+                  <div className="mt-2">
+                    <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-emerald-500" : "text-emerald-600"}`}>
+                      Tested by ({cap.detail.tests.length})
+                    </div>
+                    <div className="space-y-0.5">
+                      {cap.detail.tests.map((t, i) => (
+                        <div
+                          key={`${t.file}:${t.line}:${i}`}
+                          className={`text-[10px] font-mono flex items-center gap-1 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}
+                        >
+                          <span className="truncate">{t.file}:{t.line}</span>
+                          <SourceLink filePath={t.file} line={t.line} />
+                          <ConfidenceBadge confidence={t.confidence} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AccessRow({ label, mode, confidence, evidence }: {
+  label: string;
+  mode: "read" | "write";
+  confidence: "certain" | "inferred";
+  evidence: Evidence[];
+}) {
+  const { darkMode } = useArchStore();
+  const modeColor = mode === "write"
+    ? (darkMode ? "bg-orange-900/40 text-orange-400" : "bg-orange-100 text-orange-700")
+    : (darkMode ? "bg-sky-900/40 text-sky-400" : "bg-sky-100 text-sky-700");
+  return (
+    <div className={`px-2 py-1.5 rounded-md ${darkMode ? "bg-zinc-800/40" : "bg-white"}`}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${modeColor}`}>{mode}</span>
+        <span className={`text-xs flex-1 truncate ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>{label}</span>
+        <ConfidenceBadge confidence={confidence} />
+      </div>
+      <EvidenceLinks evidence={evidence} />
+    </div>
+  );
+}
+
+function DataTab({ component }: { component: Component }) {
+  const { darkMode, architecture } = useArchStore();
+
+  const entities = useMemo(
+    () =>
+      (component.data_entities || [])
+        .slice()
+        .sort((a, b) => {
+          const ka = ENTITY_KIND_ORDER.indexOf(a.kind);
+          const kb = ENTITY_KIND_ORDER.indexOf(b.kind);
+          if (ka !== kb) return ka - kb;
+          return a.name.localeCompare(b.name);
+        }),
+    [component.data_entities],
+  );
+
+  const entityAccess = architecture?.entity_access || [];
+  const componentNames = useMemo(
+    () => buildComponentNameMap(architecture?.components || []),
+    [architecture?.components],
+  );
+  const entityNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const e of architecture?.data_entities || []) map[e.id] = e.name;
+    for (const e of component.data_entities || []) map[e.id] = e.name;
+    return map;
+  }, [architecture?.data_entities, component.data_entities]);
+
+  // What this component reads/writes (outgoing access edges), ranked by
+  // confidence (certain first) then entity name then mode (I11).
+  const outgoing = useMemo(
+    () =>
+      entityAccess
+        .filter((e) => e.accessor_id === component.id)
+        .sort((a, b) => {
+          if (a.confidence !== b.confidence) return a.confidence === "certain" ? -1 : 1;
+          const na = entityNames[a.entity_id] || a.entity_id;
+          const nb = entityNames[b.entity_id] || b.entity_id;
+          if (na !== nb) return na.localeCompare(nb);
+          return a.mode.localeCompare(b.mode);
+        }),
+    [entityAccess, component.id, entityNames],
+  );
+
+  const kindBadge = (kind: DataEntity["kind"]) => {
+    const colors: Record<DataEntity["kind"], string> = {
+      model: darkMode ? "bg-violet-900/40 text-violet-300" : "bg-violet-100 text-violet-700",
+      table: darkMode ? "bg-emerald-900/40 text-emerald-300" : "bg-emerald-100 text-emerald-700",
+      migration: darkMode ? "bg-amber-900/40 text-amber-300" : "bg-amber-100 text-amber-700",
+      schema: darkMode ? "bg-zinc-700 text-zinc-300" : "bg-zinc-200 text-zinc-600",
+    };
+    return (
+      <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide ${colors[kind]}`}>
+        {kind}
+      </span>
+    );
+  };
+
+  return (
+    <div className="p-4 space-y-5">
+      {/* Owned entities */}
+      {entities.length > 0 && (
+        <div>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            Entities ({entities.length})
+          </h4>
+          <div className="space-y-3">
+            {entities.map((ent) => {
+              // Other components that touch this entity (who else reads/writes it).
+              const others = entityAccess
+                .filter((e) => e.entity_id === ent.id && e.accessor_id !== component.id)
+                .sort((a, b) => {
+                  if (a.confidence !== b.confidence) return a.confidence === "certain" ? -1 : 1;
+                  const na = componentNames[a.accessor_id] || a.accessor_id;
+                  const nb = componentNames[b.accessor_id] || b.accessor_id;
+                  if (na !== nb) return na.localeCompare(nb);
+                  return a.mode.localeCompare(b.mode);
+                });
+              return (
+                <div key={ent.id} className={`px-3 py-2 rounded-lg ${darkMode ? "bg-zinc-800/50" : "bg-zinc-50"}`}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {kindBadge(ent.kind)}
+                    <span className={`text-sm font-medium ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+                      {ent.name}
+                    </span>
+                    {ent.table && ent.table !== ent.name && (
+                      <span className={`text-[10px] font-mono ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                        {ent.table}
+                      </span>
+                    )}
+                    {ent.framework && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-cyan-900/30 text-cyan-400" : "bg-cyan-50 text-cyan-700"}`}>
+                        {ent.framework}
+                      </span>
+                    )}
+                    {ent.inferred && <ConfidenceBadge confidence="inferred" />}
+                  </div>
+
+                  {/* Parsed fields */}
+                  {ent.fields.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {ent.fields.map((f, i) => (
+                        <span key={`${f.name}-${i}`} className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-700/50 text-zinc-300" : "bg-zinc-200 text-zinc-600"}`}>
+                          {f.name}{f.type ? `: ${f.type}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <EvidenceLinks evidence={ent.evidence} />
+
+                  {/* Who else touches this entity */}
+                  {others.length > 0 && (
+                    <div className="mt-2">
+                      <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                        Accessed by ({others.length})
+                      </div>
+                      <div className="space-y-1">
+                        {others.map((e, i) => (
+                          <AccessRow
+                            key={`${e.accessor_id}:${e.mode}:${i}`}
+                            label={componentNames[e.accessor_id] || e.accessor_id}
+                            mode={e.mode}
+                            confidence={e.confidence}
+                            evidence={e.evidence}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* What this component reads/writes */}
+      {outgoing.length > 0 && (
+        <div>
+          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            Reads / Writes ({outgoing.length})
+          </h4>
+          <div className="space-y-1">
+            {outgoing.map((e, i) => (
+              <AccessRow
+                key={`${e.entity_id}:${e.mode}:${i}`}
+                label={entityNames[e.entity_id] || e.entity_id}
+                mode={e.mode}
+                confidence={e.confidence}
+                evidence={e.evidence}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {entities.length === 0 && outgoing.length === 0 && (
+        <div className={`text-xs text-center py-4 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+          No data entities or access edges for this component
+        </div>
+      )}
     </div>
   );
 }
