@@ -653,13 +653,19 @@ class TestIncrementalIntegration:
         assert len(incr["affected_components"]) > 0
 
     def test_cli_incremental_flag(self, monkeypatch, temp_git_repo):
-        """CLI --incremental flag runs the incremental analyzer."""
+        """CLI --engine v1 --incremental flag runs the legacy incremental analyzer.
+
+        The v1 IncrementalAnalyzer (the `incremental` output key and the
+        .arch-baseline cache files) is a v1-only path; v2 is incremental by
+        construction via its fact store, so pin the engine to v1 here.
+        """
         from analyzer.cli import main
 
         out_file = temp_git_repo / "output" / "arch.json"
         monkeypatch.setattr("sys.argv", [
             "analyze",
             str(temp_git_repo),
+            "--engine", "v1",
             "--incremental",
             "--base-sha", "",
             "-o", str(out_file),
