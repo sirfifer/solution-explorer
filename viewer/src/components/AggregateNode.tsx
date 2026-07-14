@@ -33,6 +33,16 @@ export const AggregateNode = memo(function AggregateNode({ data }: NodeProps) {
           : "border-zinc-300 bg-zinc-50 text-zinc-700"}
       `}
       onClick={() => toggleAggregate(aggregate.id)}
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      aria-label={`${aggregate.memberCount} aggregated ${typeLabel} components. ${expanded ? "Collapse" : "Expand"} this group`}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggleAggregate(aggregate.id);
+        }
+      }}
       title={expanded ? "Collapse this group" : "Expand this group"}
     >
       <Handle id="target-left" type="target" position={Position.Left} className="!bg-zinc-500 !w-2 !h-2 !border-0" />

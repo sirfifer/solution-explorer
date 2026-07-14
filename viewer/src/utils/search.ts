@@ -123,6 +123,11 @@ function symbolResult(sym: Symbol): SearchResult {
 
 export function initializeSearch(arch: Architecture) {
   baseResults = [];
+  // Shard entries belong to the dataset, not the session: a live manifest
+  // refresh must drop stale shard text and allow the (possibly updated) shard
+  // set to be fetched again. Detail-derived entries are preserved separately.
+  shardResults = [];
+  shardsLoadStarted = false;
 
   // Index components
   function indexComponents(components: Component[]) {

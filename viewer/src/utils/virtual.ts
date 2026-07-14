@@ -65,12 +65,25 @@ export function computeVisibleRange(
   const top = Math.max(0, scrollTop);
   const bottom = scrollTop + viewportHeight;
 
-  // First row whose bottom edge is past the viewport top.
-  let start = 0;
-  while (start < rowCount && offsets[start + 1] <= top) start++;
-  // First row whose top edge is at or past the viewport bottom.
-  let end = start;
-  while (end < rowCount && offsets[end] < bottom) end++;
+  // offsets is a prefix-sum array, so both bounds are binary searches:
+  // O(log n) per scroll event instead of a linear scan (Copilot, PR #25).
+  // start: first row whose bottom edge (offsets[i + 1]) is past the top.
+  let lo = 0;
+  let hi = rowCount;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (offsets[mid + 1] <= top) lo = mid + 1;
+    else hi = mid;
+  }
+  let start = lo;
+  // end: first row whose top edge (offsets[i]) is at or past the bottom.
+  hi = rowCount;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (offsets[mid] < bottom) lo = mid + 1;
+    else hi = mid;
+  }
+  let end = lo;
 
   start = Math.max(0, start - overscan);
   end = Math.min(rowCount, end + overscan);
