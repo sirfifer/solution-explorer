@@ -178,6 +178,18 @@ function ComponentDetail({
     loadComponentDetail(component.id);
   }, [component.id, loadComponentDetail]);
 
+  // Open a requested tab (P6-3): selecting a capability/entity in the Capability
+  // or Data lens asks the panel to jump to the Capabilities/Data tab. Consume the
+  // one-shot request and clear it so it does not re-fire on unrelated re-renders.
+  const pendingDetailTab = useArchStore((s) => s.pendingDetailTab);
+  const clearPendingDetailTab = useArchStore((s) => s.clearPendingDetailTab);
+  useEffect(() => {
+    if (pendingDetailTab && (TAB_KEYS as string[]).includes(pendingDetailTab)) {
+      setActiveTab(pendingDetailTab as Tab);
+      clearPendingDetailTab();
+    }
+  }, [pendingDetailTab, component.id]);
+
   const colors = getTypeColors(component.type, darkMode);
   const files = useMemo(
     () => getComponentFiles(component.id),
