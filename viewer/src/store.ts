@@ -19,6 +19,12 @@ import type {
   ChangelogEntry,
 } from "./types";
 import { addToSearchIndex } from "./utils/search";
+import {
+  getLens,
+  resolveLensId,
+  DEFAULT_LENS_ID,
+  type LensGraph,
+} from "./lenses";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
 import {
@@ -131,6 +137,13 @@ interface ArchStore {
   breadcrumbs: BreadcrumbItem[];
   drillLevel: string | null; // component id we've drilled into (shows children as nodes)
   viewMode: ViewMode;
+
+  // Lens (P6-1). The active perspective. Structure is the default and renders
+  // pixel-identically for old data. Switching lens preserves selection,
+  // breadcrumbs, drill level, and URL state (invariant I12).
+  lens: string;
+  setLens: (id: string) => void;
+  getLensGraph: () => LensGraph;
 
   // Panels
   activePanel: Panel;
@@ -513,6 +526,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   breadcrumbs: [],
   drillLevel: null,
   viewMode: "graph",
+  lens: DEFAULT_LENS_ID,
 
   activePanel: null,
   detailItem: null,
@@ -658,6 +672,27 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   setViewMode: (mode) => set({ viewMode: mode }),
   setActivePanel: (panel) => set({ activePanel: panel }),
+
+  // Switch lens WITHOUT disturbing the current selection, breadcrumbs, or drill
+  // level (invariant I12: the same element stays selected across lens switches).
+  // An unknown or unavailable id resolves to the default lens.
+  setLens: (id) => set((s) => ({ lens: resolveLensId(id, s.architecture) })),
+
+  // The active lens's node/edge selection, fed to the graph pipeline. For
+  // Structure this is exactly the existing selectors, so old data renders
+  // identically. Falls back to the default lens if the active id is unknown.
+  getLensGraph: () => {
+    const { architecture, drillLevel, lens } = get();
+    if (!architecture) return { nodes: [], aggregates: [], edges: [] };
+    const def = getLens(lens) ?? getLens(DEFAULT_LENS_ID)!;
+    return def.getGraph({
+      architecture,
+      drillLevel,
+      getVisibleComponents: get().getVisibleComponents,
+      getAggregateNodes: get().getAggregateNodes,
+      getComponentRelationships: get().getComponentRelationships,
+    });
+  },
 
   showDetail: (type, data) =>
     set({ detailItem: { type, data }, activePanel: "detail" }),

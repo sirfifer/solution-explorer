@@ -255,6 +255,20 @@ export interface UIAction {
   target_view: string | null;
 }
 
+// Rationale / "colleague stand-in" data for the I13 rationale strip. All fields
+// are optional and forward-compatible: git-activity fields (author, last_change,
+// churn, commit, pr) are populated by the P5-4 git-activity pass when it lands;
+// AI intent is read from ai_enhance today. The strip renders whatever is present
+// and nothing when none is.
+export interface RationaleInfo {
+  author?: string;
+  authors?: string[];
+  last_change?: string;
+  churn?: number;
+  commit?: string;
+  pr?: string;
+}
+
 export interface Component {
   id: string;
   name: string;
@@ -275,6 +289,8 @@ export interface Component {
   ai_enhance?: ComponentAIEnhance;
   live_status?: ComponentLiveStatus;
   actions?: UIAction[];
+  // Rationale layer (I13); optional and populated by later passes. See RationaleInfo.
+  rationale?: RationaleInfo;
 }
 
 // Aggregation node (P6-4). At a drill level, components that the hero filter

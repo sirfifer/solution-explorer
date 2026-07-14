@@ -32,6 +32,13 @@ export function useUrlSync(): void {
     const urlState = parseUrlState();
     const store = useArchStore.getState();
 
+    // Restore the lens first so the graph selects the right nodes/edges before
+    // drill/selection are applied (P6-1). Unknown/unavailable ids fall back to
+    // Structure inside setLens.
+    if (urlState.lens) {
+      store.setLens(urlState.lens);
+    }
+
     // Inbound file/line deep link takes precedence: it computes its own drill and
     // selection from the owning component, so it overrides any component/drill
     // params (P3-2). The tab param is still honored, defaulting to the Files tab.
@@ -63,21 +70,24 @@ export function useUrlSync(): void {
       // Suppress URL writes while a popstate navigation is being applied; the
       // browser already owns the URL during back/forward (F-VW-2).
       if (applyingPopStateRef.current) return;
-      if (
-        state.selectedComponentId !== prev.selectedComponentId ||
-        state.drillLevel !== prev.drillLevel
-      ) {
-        const isDrillChange = state.drillLevel !== prev.drillLevel;
+      const selChanged = state.selectedComponentId !== prev.selectedComponentId;
+      const drillChanged = state.drillLevel !== prev.drillLevel;
+      const lensChanged = state.lens !== prev.lens;
+      if (selChanged || drillChanged || lensChanged) {
         const update = {
           component: state.selectedComponentId || undefined,
           drill: state.drillLevel || undefined,
+          // Carry the active lens so a lens switch is shareable and survives
+          // back/forward (P6-1, invariant I12).
+          lens: state.lens,
           // Preserve the active-tab param that DetailPanel manages; rebuilding
           // the URL from component/drill alone would erase it (F-VW-7).
           tab: parseUrlState().tab,
         };
         // pushState for drill navigation (supports browser back), replaceState
-        // for selection (a minor change that should not add a history entry).
-        if (isDrillChange) {
+        // for selection or a lens-only change (minor changes that should not add
+        // a history entry).
+        if (drillChanged) {
           pushUrlState(update);
         } else {
           replaceUrlState(update);
@@ -97,6 +107,9 @@ export function useUrlSync(): void {
       // a fresh history entry mid-popstate and corrupt the forward stack.
       applyingPopStateRef.current = true;
       try {
+        // Restore the lens from the target URL (absent means the default).
+        store.setLens(urlState.lens ?? "structure");
+
         if (urlState.drill) {
           const drillComp = store.getComponentById(urlState.drill);
           if (drillComp) {

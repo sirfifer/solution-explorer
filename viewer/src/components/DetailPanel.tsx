@@ -14,6 +14,7 @@ import { getSourceUrl } from "../utils/sourceLinks";
 import { parseUrlState, replaceUrlState } from "../utils/urlState";
 import { CodePreview } from "./CodePreview";
 import { VirtualList } from "./VirtualList";
+import { RationaleStrip } from "./RationaleStrip";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, getPatternRef, getProtocolRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
@@ -344,6 +345,10 @@ function ComponentDetail({
           </div>
         )}
       </div>
+
+      {/* Rationale strip (I13): ownership, last change, churn, and AI intent
+          where present; renders nothing when the dataset carries none. */}
+      <RationaleStrip component={component} />
 
       {/* Tabs */}
       <div className={`flex border-b ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>

@@ -34,9 +34,8 @@ export function ArchitectureGraph() {
     breadcrumbs,
     darkMode,
     expandedAggregates,
-    getVisibleComponents,
-    getAggregateNodes,
-    getComponentRelationships,
+    lens,
+    getLensGraph,
     selectComponent,
     navigateToBreadcrumb,
     drillUp,
@@ -126,9 +125,9 @@ export function ArchitectureGraph() {
   const { rawNodes, rawEdges } = useMemo(() => {
     if (!architecture) return { rawNodes: [], rawEdges: [] };
 
-    const visible = getVisibleComponents();
-    const aggregates = getAggregateNodes();
-    const relationships = getComponentRelationships();
+    // The active lens selects the nodes and edges; Structure returns exactly the
+    // existing selectors so old data renders identically (P6-1).
+    const { nodes: visible, aggregates, edges: relationships } = getLensGraph();
 
     const componentNodes: Node[] = visible.map((comp, i) => ({
       id: comp.id,
@@ -245,7 +244,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, getVisibleComponents, getAggregateNodes, getComponentRelationships]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, getLensGraph]);
 
   // Apply ELK layout
   useEffect(() => {
