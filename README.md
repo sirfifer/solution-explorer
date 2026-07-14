@@ -180,14 +180,14 @@ pip install -e ".[all]"          # Everything above
 
 - **Hierarchical drill-down**: Click to see details, double-click to drill into sub-components
 - **Breadcrumb navigation**: Always know where you are, click to jump back
-- **Three views**: Graph (interactive diagram), tree (hierarchical list), and list (tabular)
+- **Graph and tree views**: An interactive React Flow diagram plus a collapsible component tree sidebar, with a tabbed detail panel for the selected component
 - **Fuzzy search**: Cmd/Ctrl+K to search across components, files, and symbols
 - **Detail panel**: Tabbed view with overview, files, symbols, relationships, and AI insights
 - **Code preview**: Inline syntax-highlighted code for every symbol
 - **Relationship visualization**: Arrows show dependencies, HTTP connections, and AI-discovered relationships
 - **Tree sidebar**: Collapsible component tree for quick navigation
 - **Source linking**: Clickable links from symbols and files to their GitHub source code
-- **URL deep linking**: Shareable URLs that encode selected component, tab, and drill-down state
+- **URL deep linking**: Shareable URLs that encode selected component, tab, and drill-down state, plus inbound `?file=&line=` links that drill straight to the owning component and select the symbol at that line
 - **Review mode**: Add architectural annotations to components, then view a summary of all feedback
 - **Architecture changelog**: Track component additions, removals, and modifications over time
 - **AI enhancements**: Role badges, criticality indicators, help text tooltips, and data flow descriptions (when AI data is present)
@@ -372,8 +372,11 @@ Output:
 
 Analysis:
   --config PATH           Multi-repo config file (solution-explorer.json)
+  --engine {v1,v2}        Analysis engine (default: v2). See "Analysis Engine" below.
+  --store PATH            v2 only: persistent fact-store database used as the
+                          incremental baseline (default: <root>/.solution-explorer/index.db)
   --max-file-size BYTES   Skip files larger than N bytes (default: 500KB)
-  --max-symbols N         Limit symbols (default: 5000 single-file, unlimited split; 0=unlimited)
+  --max-symbols N         v1 only: limit symbols (default: 5000 single-file, unlimited split; 0=unlimited)
   --preview-lines N       Lines per code preview (default: 5)
   --validate              Validate output against data model (requires pydantic)
 
@@ -383,6 +386,24 @@ Incremental:
   --head-sha SHA          Head commit for diff (default: HEAD)
   --baseline PATH         Previous architecture.json to merge into
 ```
+
+## Analysis Engine
+
+The default engine is **v2**, an extract, derive, project pipeline built around a
+persistent fact store:
+
+- **Extraction** parses each file once and records its symbols and signals in the store, keyed by content hash so unchanged files are skipped on the next run.
+- **Derivation** builds components, relationships, and metrics from the store without re-reading source.
+- **Projection** writes the same `architecture.json` (or split `manifest.json` plus detail files) the viewer already renders.
+
+Two properties come from this design:
+
+- **Coverage ledger.** Every file under the root is accounted for exactly once: parsed, skipped for a stated reason, or inside a pruned directory recorded as a single row. Split output writes a `coverage.json` the viewer surfaces as a coverage badge, so a silent gap is not possible. There is no symbol cap in v2.
+- **Incremental by construction.** The fact store is the baseline. A warm run re-parses only the files whose content changed, so `--incremental`, `--base-sha`, `--head-sha`, and `--baseline` are accepted as compatibility no-ops.
+
+On a large repository the engine holds up: analyzing the VS Code codebase (about 3.47M lines) took 152 seconds cold and produced a complete coverage ledger.
+
+The legacy **v1** single-pass scanner is still available with `--engine v1` for rollback. It is scheduled for removal at a later gate. Rollback is a flag flip; nothing else changes.
 
 ## AI Enhancement
 
@@ -507,7 +528,8 @@ Enable in the GitHub Action with `live-monitor: 'true'`. See [Live Monitoring St
   "stats": {
     "total_files": "number",
     "total_lines": "number",
-    "total_symbols": "number"
+    "total_symbols": "number",
+    "total_symbols_detected": "number (optional; pre-truncation count when single-file mode drops symbols, equals total_symbols otherwise)"
   },
   "ai_enhance": {
     "summary": "string (optional, from AI enhancement)",

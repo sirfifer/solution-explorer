@@ -50,6 +50,14 @@ v2, so it re-scans cold each run instead of using v1's surgical incremental.
 Making it cache the v2 fact store for true incremental is a deferred follow-up
 (TASKS.md P4-7 Discovered).
 
+## Known issues and divergence (2026-07-13)
+
+- **UnaMentis (full), `solution-explorer.unamentis.org`: verified on v2.** At the Phase 4 gate this install ran `engine=v2` in production and reported "251/251 enhanced components preserved (100.0% of still-present)" after the AI-enhancement merge, so the v2 cutover with enrichment preservation is confirmed end to end here. Its `architecture-full.yml` is pinned to `sirfifer/solution-explorer@main`.
+
+- **UnaMentis (static), `um-arch.unamentis.org`: stale pin, owner action needed.** Its `architecture.yml` is still pinned to `sirfifer/solution-explorer@31145dcdc4da6cb95b17a08d5422fe1cfe6e4b16` behind a misleading `# main` comment. That SHA is a 2026-03-06, pre-v2 commit, so this install is served by a four-month-old engine and its run reports "No baseline found, skipping AI enhancement merge, 0/254 preserved" (structural only, un-enriched, no data loss). This is the same stale-SHA-pin class fixed for `architecture-full.yml` on 2026-07-11 but not for `architecture.yml`. Re-pin `architecture.yml` to `@main` to match. Tracked in TASKS.md (Phase 4 gate NOTE 1 and the 2026-07-11 Discovered row).
+
+- **Upstream vs downstream `live-monitor.yml` divergence (F-PL-8).** The UnaMentis `live-monitor.yml` has diverged substantially from the upstream template: it uses the pre-built-JSON path, has no incremental mode, and has no R2/worker steps. Upstream template changes no longer describe what is deployed downstream. Downstream is green; do not assume the upstream template is the source of truth for a given install. When changing the template, verify the effect against the actual downstream workflow files rather than the template alone. Under the v2 default, `live-monitor.yml` runs correctly but its `--incremental`/`--baseline` flags are no-ops, so it re-scans cold each run (see the Analysis engine section above).
+
 ## How Redeployment Works
 
 Downstream deploys are **automatic**. When changes are pushed to `sirfifer/solution-explorer` main:

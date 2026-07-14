@@ -1,4 +1,4 @@
-> **Status (2025-02-17):** Wave 1 (Changes 1-3) is complete. The analyzer has been refactored into the `analyzer/` package, split JSON output is implemented, and the symbol cap is configurable. See CHANGELOG.md for details. Wave 2 (Changes 4-6) is planned but not yet started.
+> **Historical snapshot (assessment 2025-02-17, banner updated 2026-07-13).** This document is a point-in-time assessment and is kept for its research and reasoning, not as a description of the current codebase. Since it was written, both Wave 1 (Changes 1-3) and Wave 2 (Changes 4-6) have shipped, and the analyzer was rebuilt again around the default v2 extract, derive, project index engine with a coverage ledger. In particular, the "single 4,525-line `analyze.py`" this document describes as current state no longer exists: `analyze.py` is a thin wrapper and the analyzer lives in the `analyzer/` package. Treat the numbers and "Where We Are" sections below as the state on 2025-02-17. See CHANGELOG.md and PROJECT-OVERVIEW.md for what ships today.
 
 # Solution Explorer: Architectural Assessment and Evolution Plan
 

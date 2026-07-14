@@ -22,7 +22,7 @@ Solution Explorer is built on three principles:
 
 **1. Representation for humans.** The architecture diagram is the primary artifact. Every component appears as a visual card shaped like the device it represents: an iOS app looks like an iPhone, a web client looks like a browser window, an API server looks like a server rack. You do not need to know that the project uses SwiftUI or React or Express. The visual representation tells you what each component is and how it relates to the others. User interface workflows and navigation flows are the primary gateways into understanding the application, not raw class hierarchies or API specifications.
 
-**2. 100% coverage.** Every component, every file, every symbol, every relationship. The diagram accounts for the entire codebase. No sampling, no approximation, no arbitrary caps. When you drill into a component, you see all of its internals. When you open its files tab, every file is listed. When you open its symbols tab, every class, struct, function, and protocol is there. The goal is a complete, navigable map of the entire system.
+**2. 100% coverage.** Every component, every file, every symbol, every relationship. The diagram accounts for the entire codebase. No sampling, no approximation, no arbitrary caps. When you drill into a component, you see all of its internals. When you open its files tab, every file is listed. When you open its symbols tab, every class, struct, function, and protocol is there. The default v2 engine makes this verifiable rather than aspirational: it emits a coverage ledger that accounts for every file exactly once, either parsed or skipped for a stated reason, and the viewer surfaces it as a coverage badge. The goal is a complete, navigable map of the entire system.
 
 **3. Bidirectional workflow.** Humans explore what AI built, annotate what needs to change, and export those annotations as structured prompts that feed back into the AI. Each annotation carries full context: the component's path, framework, language, current values, relationships, and the reviewer's feedback. The exported prompt is designed to be pasted directly into Claude Code or any AI coding assistant to implement the requested changes. This is not just a visualization tool. It is a review and feedback tool that completes the human-AI collaboration loop.
 
@@ -154,7 +154,7 @@ The prompt is designed to paste directly into Claude Code or any AI coding assis
 
 ### Visual Indicators
 
-Annotations are visible throughout the interface. Annotated nodes show a count badge. The tree navigator shows a blue dot next to annotated components. The Review button in the toolbar displays the total annotation count. These indicators persist across the session so you can review and annotate across multiple drill-down levels without losing track.
+Annotations are visible throughout the interface. Annotated nodes show a count badge. The tree navigator shows a blue dot next to annotated components. The Review button in the toolbar displays the total annotation count. Annotations persist to localStorage under the architecture's stable identity, so they survive a hard reload and you can review and annotate across multiple drill-down levels without losing track.
 
 ---
 
@@ -194,11 +194,13 @@ How it works:
 
 **SwiftUI flow detection** is a specialized capability. The SwiftUIFlowDetector identifies TabView tabs, NavigationLink targets, sheet and fullScreenCover modals, and embedded view composition. It uses distance-based breadth-first search to assign screens to their closest tab, preventing contamination across navigation hierarchies. The result is a faithful representation of an iOS app's navigation structure rendered as navigable nodes in the viewer.
 
-**Output modes:** The analyzer supports two output formats. Single-file mode produces one `architecture.json` with everything (default 5,000 symbol limit, configurable). Split mode (`--split` flag) produces a directory with a lightweight `manifest.json` (~20-100 KB) containing the component tree, relationships, and stats, plus per-component detail files loaded on demand. Split mode has no symbol limit.
+**Analysis engine (v2, default).** The default engine is an extract, derive, project pipeline over a persistent fact store. Extraction parses each file once and records its symbols and signals in the store, keyed by content hash, so a warm run re-parses only the files whose content changed. Derivation builds components, relationships, and metrics from the store without re-reading source. Projection writes the same `architecture.json` or split output the viewer already renders. Two properties fall out of this design: a coverage ledger that accounts for every file under the root exactly once (parsed, skipped for a stated reason, or inside a pruned directory recorded as a single row), and incremental analysis by construction (the store is the baseline, so `--incremental` and its sibling flags are accepted as no-ops). There is no symbol cap in v2. On the VS Code codebase (about 3.47M lines) a cold run took 152 seconds and produced a complete ledger. The legacy v1 single-pass scanner remains available via `--engine v1` for rollback and is scheduled for removal at a later gate.
+
+**Output modes:** The analyzer supports two output formats. Single-file mode produces one `architecture.json` with everything. Split mode (`--split` flag) produces a directory with a lightweight `manifest.json` (~20-100 KB) containing the component tree, relationships, and stats, plus per-component detail files loaded on demand. Under the legacy v1 engine, single-file mode applies a configurable default 5,000 symbol cap (lifted with `--max-symbols 0` or `--split`); the default v2 engine never caps symbols.
 
 **Tree-sitter parsers.** Each of the six language parsers has an optional tree-sitter upgrade that provides AST-based extraction instead of regex matching. Tree-sitter parsers activate automatically when the `treesitter` dependency group is installed (`pip install -e ".[treesitter]"`). If tree-sitter is unavailable, the analyzer falls back to regex parsers silently. This dual-parser architecture means the core analyzer remains zero-dependency while teams that need higher parsing accuracy can opt in.
 
-**Incremental analysis.** The `--incremental` flag enables selective re-scanning. The `IncrementalAnalyzer` compares git revisions (via `--base-sha` and `--head-sha`), identifies which files changed, maps those changes to affected components, and rescans only those components plus their direct importers. Results merge back into a `--baseline` file to produce an updated architecture. Marker file changes (package.json, Cargo.toml, etc.) trigger a full rescan. This reduces CI analysis time significantly for large projects with small changesets.
+**Incremental analysis.** The default v2 engine is incremental by construction: the persistent fact store is the baseline and content-hash comparison decides what re-parses, so no explicit flags are needed. Under the legacy v1 engine, the `--incremental` flag enables selective re-scanning: the `IncrementalAnalyzer` compares git revisions (via `--base-sha` and `--head-sha`), identifies which files changed, maps those changes to affected components, and rescans only those components plus their direct importers. Results merge back into a `--baseline` file to produce an updated architecture. Marker file changes (package.json, Cargo.toml, etc.) trigger a full rescan. Either way, analysis time drops significantly for large projects with small changesets.
 
 **Validation.** The `--validate` flag (requires the `models` dependency group with pydantic) validates the output JSON against the data model, checking cross-references between components, symbols, files, and relationships.
 
@@ -344,6 +346,12 @@ Three major capabilities were added in parallel:
 
 **CI pipeline.** A proper quality gate (`ci.yml`) was added with Python linting (ruff), TypeScript linting (eslint), test suites for both layers (pytest with coverage, vitest with coverage), type checking, and build verification. The architecture visualization and live monitoring workflows were separated into dedicated pipeline files.
 
+### After 1.2.0: The Index Engine
+
+The work since 1.2.0 replaced the in-memory scanner with the default v2 extract, derive, project engine, added the coverage ledger and its viewer badge, made review annotations persist across reloads, and shipped inbound `?file=&line=` deep links. See the CHANGELOG's Unreleased section for the full list.
+
+The package version is reconciled to **1.2.0** across `pyproject.toml`, the CLI package, and the viewer, and the CHANGELOG carries a 1.2.0 entry. The tagged release and the npm and PyPI publish are prepared but not yet done, pending the maintainer setting the publish credentials, so `npx solution-explorer` is not on the public registries yet. The CHANGELOG is the authoritative record of release dates.
+
 ### The Decision Not to Rewrite
 
 Before the v1.1.0 refactor, a thorough architectural assessment was conducted. Research into Sourcegraph, Sourcetrail, CodeScene, NDepend, Structure101, Semgrep, SonarQube, and other tools informed the key decisions.
@@ -358,15 +366,17 @@ See [docs/architectural-assessment.md](docs/architectural-assessment.md) for the
 
 ## Roadmap
 
-### Wave 2: Features (Planned)
+### Wave 2: Features (Shipped)
 
-**UI action detection.** Capture every interactive element, buttons, toolbar items, menus, swipe actions, context menus, and state properties, as symbols in the analyzer. When you drill into a screen, you will see not just its code structure but every user-facing action it offers. This applies across languages: SwiftUI buttons, React onClick handlers, Python endpoint handlers.
+All three Wave 2 features have shipped:
 
-**Source code linking.** Every symbol, file, and action will link directly to the exact GitHub source location. Click a function name in the symbols tab and open it on GitHub at the right line number. This connects the abstract architecture view to the concrete code.
+**UI action detection.** The analyzer captures interactive elements, buttons, tap and long-press gestures, toolbar items, context menus, and swipe actions, and surfaces them in component details with file and line references (Swift and TypeScript today).
 
-**Bidirectional navigation.** Deep-link URLs will let external tools navigate into the architecture viewer. An AI assistant could output a link like `?file=Sources/Auth/LoginView.swift&line=42`, and clicking it would drill into the right component and highlight the right symbol.
+**Source code linking.** Symbols, files, and actions link directly to their source location. Click a function name in the symbols tab to open it on GitHub at the right line number, connecting the abstract architecture view to the concrete code.
 
-See [docs/ui-actions-source-linking-plan.md](docs/ui-actions-source-linking-plan.md) for the detailed implementation plan.
+**Bidirectional navigation.** Inbound deep-link URLs let external tools navigate into the viewer. An AI assistant can output a link like `?file=Sources/Auth/LoginView.swift&line=42`, and opening it drills into the owning component and selects the symbol at that line. Ambiguous and missing targets degrade gracefully rather than crashing.
+
+See [docs/ui-actions-source-linking-plan.md](docs/ui-actions-source-linking-plan.md) for the original implementation plan (a historical snapshot).
 
 ### Wave 3: Scale Hardening (Future)
 
@@ -423,6 +433,6 @@ For projects exceeding 5,000 files, additional optimizations are planned:
 | [docs/architecture.md](docs/architecture.md) | Technical architecture, data model, design decisions |
 | [docs/architectural-assessment.md](docs/architectural-assessment.md) | Technical design decisions, industry research, evolution plan |
 | [docs/analyzer-package.md](docs/analyzer-package.md) | Analyzer package structure and module guide |
-| [docs/research/live-architecture-monitoring.md](docs/research/live-architecture-monitoring.md) | Live monitoring design, cost analysis, dual-mode architecture |
-| [docs/ui-actions-source-linking-plan.md](docs/ui-actions-source-linking-plan.md) | Wave 2 feature design (UI actions, source linking, deep navigation) |
+| [docs/archive/live-architecture-monitoring.md](docs/archive/live-architecture-monitoring.md) | Live monitoring design, cost analysis, dual-mode architecture (historical) |
+| [docs/ui-actions-source-linking-plan.md](docs/ui-actions-source-linking-plan.md) | Wave 2 feature design (UI actions, source linking, deep navigation), a historical snapshot now that all three have shipped |
 | [DEPLOYMENTS.md](DEPLOYMENTS.md) | Installation tracking and redeployment guide |
