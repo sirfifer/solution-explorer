@@ -13,6 +13,7 @@ import {
 import { getSourceUrl } from "../utils/sourceLinks";
 import { parseUrlState, replaceUrlState } from "../utils/urlState";
 import { CodePreview } from "./CodePreview";
+import { VirtualList } from "./VirtualList";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, getPatternRef, getProtocolRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
@@ -861,7 +862,7 @@ function SymbolsTab({
   error?: string;
   onRetry?: () => void;
 }) {
-  const { darkMode, reviewMode, setAnnotatingTarget, annotations } = useArchStore();
+  const { darkMode, reviewMode, setAnnotatingTarget, annotations, showDetail } = useArchStore();
   const [filter, setFilter] = useState("");
   const [kindFilter, setKindFilter] = useState<string>("all");
 
@@ -906,40 +907,98 @@ function SymbolsTab({
     extension: "x",
   };
 
+  // Past this size, render through the windowed VirtualList so a component with
+  // thousands of symbols stays responsive (P6-4). Below it, keep the inline
+  // expandable list unchanged so common cases are pixel-identical. The old hard
+  // 100-symbol cap is gone: every symbol is reachable in both paths.
+  const VIRTUALIZE_THRESHOLD = 150;
+  const virtualize = filtered.length > VIRTUALIZE_THRESHOLD;
+
+  const filters = (
+    <div className="flex gap-2 mb-3 shrink-0">
+      <input
+        type="text"
+        placeholder="Filter symbols..."
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        className={`
+          flex-1 px-3 py-2 rounded-lg text-sm outline-none
+          ${darkMode
+            ? "bg-zinc-800 text-zinc-200 placeholder-zinc-600 focus:ring-1 focus:ring-blue-500"
+            : "bg-zinc-100 text-zinc-800 placeholder-zinc-400 focus:ring-1 focus:ring-blue-500"
+          }
+        `}
+      />
+      <select
+        value={kindFilter}
+        onChange={(e) => setKindFilter(e.target.value)}
+        className={`
+          px-2 py-2 rounded-lg text-sm outline-none
+          ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-zinc-100 text-zinc-700"}
+        `}
+      >
+        {kinds.map((k) => (
+          <option key={k} value={k}>
+            {k}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
+  if (virtualize) {
+    // Virtualized path: fixed-height compact rows. Clicking a row opens the
+    // symbol in the detail view (SymbolDetail), which shows the docstring and
+    // code preview, since inline expansion would break fixed-height windowing.
+    return (
+      <div className="p-3 h-full flex flex-col min-h-0">
+        {filters}
+        <div className={`text-[10px] mb-2 shrink-0 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+          {filtered.length.toLocaleString()} symbols
+        </div>
+        <VirtualList
+          items={filtered}
+          rowHeight={40}
+          getKey={(s) => s.id}
+          className="flex-1 min-h-0"
+          renderRow={(sym) => (
+            <button
+              className={`
+                w-full h-[36px] flex items-center gap-2 px-2 rounded-md text-left text-sm
+                ${darkMode ? "hover:bg-zinc-800/50" : "hover:bg-zinc-100"}
+              `}
+              onClick={() => showDetail("symbol", sym)}
+            >
+              <span
+                className={`
+                  w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0
+                  ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-200 text-zinc-600"}
+                `}
+                title={SYMBOL_KIND_DESCRIPTIONS[sym.kind] || `Symbol kind: ${sym.kind}`}
+              >
+                {kindIcons[sym.kind] || sym.kind[0]}
+              </span>
+              <span className={`truncate flex-1 font-mono ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
+                {sym.name}
+              </span>
+              {sym.docstring && (
+                <span className={`text-[9px] ${darkMode ? "text-green-600" : "text-green-500"}`}>doc</span>
+              )}
+              <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                L{sym.line}
+              </span>
+            </button>
+          )}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="p-3">
-      <div className="flex gap-2 mb-3">
-        <input
-          type="text"
-          placeholder="Filter symbols..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className={`
-            flex-1 px-3 py-2 rounded-lg text-sm outline-none
-            ${darkMode
-              ? "bg-zinc-800 text-zinc-200 placeholder-zinc-600 focus:ring-1 focus:ring-blue-500"
-              : "bg-zinc-100 text-zinc-800 placeholder-zinc-400 focus:ring-1 focus:ring-blue-500"
-            }
-          `}
-        />
-        <select
-          value={kindFilter}
-          onChange={(e) => setKindFilter(e.target.value)}
-          className={`
-            px-2 py-2 rounded-lg text-sm outline-none
-            ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-zinc-100 text-zinc-700"}
-          `}
-        >
-          {kinds.map((k) => (
-            <option key={k} value={k}>
-              {k}
-            </option>
-          ))}
-        </select>
-      </div>
-
+      {filters}
       <div className="space-y-1">
-        {filtered.slice(0, 100).map((sym) => (
+        {filtered.map((sym) => (
           <div key={sym.id}>
             <button
               className={`
@@ -1004,11 +1063,6 @@ function SymbolsTab({
             )}
           </div>
         ))}
-        {filtered.length > 100 && (
-          <div className={`text-xs text-center py-2 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
-            Showing 100 of {filtered.length} symbols
-          </div>
-        )}
       </div>
     </div>
   );

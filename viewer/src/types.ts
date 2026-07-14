@@ -277,6 +277,26 @@ export interface Component {
   actions?: UIAction[];
 }
 
+// Aggregation node (P6-4). At a drill level, components that the hero filter
+// would otherwise hide silently are grouped by type into a labeled, counted
+// aggregate that the user can expand in place. This closes the silent-hiding
+// gap (invariant I2 spirit): every child at a level is either a real node or a
+// visible member of one of these aggregates.
+export interface AggregateNode {
+  // Stable id embedding the drill level and grouped type so expansion state
+  // never leaks across levels: `__agg__<drillLevel|root>__<type>`.
+  id: string;
+  kind: "aggregate";
+  // The component type grouped here (e.g. "module").
+  aggregateType: string;
+  // Human label, e.g. "12 modules".
+  label: string;
+  members: Component[];
+  memberCount: number;
+  // The drill level this aggregate belongs to (null at root, unused there).
+  parentDrillLevel: string | null;
+}
+
 export interface Relationship {
   source: string;
   target: string;
