@@ -9,6 +9,14 @@ requires-python = ">=3.10"
 models = [
     "pydantic>=2.5",
 ]
+# The MCP server (analyzer.mcp) ships in this package and needs no third-party
+# dependency: it speaks the MCP stdio JSON-RPC transport directly (invariant I7,
+# local-first zero-dependency). This group reserves the official SDK as a
+# documented upgrade path (see analyzer/mcp/server.py); installing it does not
+# change the shipped server, which uses its own transport.
+mcp = [
+    "mcp>=1.0",
+]
 incremental = [
     "gitpython>=3.1",
 ]
@@ -38,6 +46,7 @@ dev = [
 
 [project.scripts]
 solution-explorer = "analyzer.cli:main"
+solution-explorer-mcp = "analyzer.mcp:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "analyzer.__version__"}

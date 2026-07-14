@@ -405,6 +405,63 @@ On a large repository the engine holds up: analyzing the VS Code codebase (about
 
 The legacy **v1** single-pass scanner is still available with `--engine v1` for rollback. It is scheduled for removal at a later gate. Rollback is a flag flip; nothing else changes.
 
+## MCP Server (for AI agents)
+
+The v2 fact store doubles as a query surface for AI coding agents. `solution-explorer-mcp` is an [MCP](https://modelcontextprotocol.io) server that answers architectural questions directly from the store, so an agent stops re-reading whole files. It ships in the same package (`analyzer.mcp`), speaks the MCP stdio transport with no extra dependency, and only reads the store: no writes, no model calls at query time.
+
+Every answer is compact structured text (pass `json: true` on any tool for a machine-readable payload), and every fact carries its evidence (`file:line`), its confidence tier (`certain` for parse facts, `inferred` for heuristics, `ai` for AI-discovered), and a staleness marker on any AI content whose code has changed since it was written.
+
+### Build a store, then start the server
+
+```bash
+# 1. Build (or refresh) the fact store for a repo
+solution-explorer /path/to/repo --engine v2 --split --store /path/to/repo/.solution-explorer/index.db
+
+# 2. Serve it over stdio (agents launch this for you; run it by hand only to smoke-test)
+solution-explorer-mcp --store /path/to/repo/.solution-explorer/index.db
+```
+
+A missing store is a clean error, not a crash: the server exits with a message telling you to build one first.
+
+### Register with Claude Code
+
+```bash
+claude mcp add solution-explorer -- solution-explorer-mcp --store /path/to/repo/.solution-explorer/index.db
+```
+
+### Register with any MCP client
+
+Add this to the client's MCP config (for example Claude Desktop's `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "solution-explorer": {
+      "command": "solution-explorer-mcp",
+      "args": ["--store", "/path/to/repo/.solution-explorer/index.db"]
+    }
+  }
+}
+```
+
+If `solution-explorer-mcp` is not on the client's `PATH`, use `"command": "python"` with `"args": ["-m", "analyzer.mcp", "--store", "..."]` instead.
+
+### The nine tools
+
+| Tool | Answers |
+|---|---|
+| `se_overview` | What is this system? Component counts and roles, capability counts, entity/rule/concern/finding counts, coverage, enrichment freshness, AI narrative. |
+| `se_search` | Where is the thing named or described like X? Ranked full-text search over names, paths, docs, and AI help text. |
+| `se_component` | The full card for one component: role, files, capabilities, entities touched, rules, edges in/out with evidence and verdicts, enrichment, activity. |
+| `se_symbol` | One symbol: signature, doc, preview, `file:line`, containing component, and enclosing parent chain. |
+| `se_refs` | Who uses this and what does it use? Importers and importees, at component granularity, with confidence. |
+| `se_impact` | What breaks if this changes? The transitive blast radius, ranked nearest-first, with the per-hop evidence chain. |
+| `se_coverage` | The coverage ledger: the disposition summary, or the file rows for one disposition. |
+| `se_rules` | The business and validation rules, filterable by component, entity, or kind, with plain-language names when enrichment provides them. |
+| `se_findings` | Ranked correlations (duplication, orphans, inconsistencies, intent violations) with verification status always shown and unverified findings marked. |
+
+List responses are bounded: each takes a `limit` and appends an explicit "N more" notice rather than truncating silently.
+
 ## AI Enhancement
 
 Solution Explorer supports optional AI-powered enhancement of architecture data. The `/ai-assist` Claude Code skill analyzes source files and enriches the architecture JSON with:
