@@ -12,6 +12,8 @@ import { ReviewSummary } from "./components/ReviewSummary";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { CoverageBadge } from "./components/CoverageBadge";
+import { FindingsEntry } from "./components/FindingsEntry";
+import { FindingsSurface } from "./components/FindingsSurface";
 import { LensSwitcher } from "./components/LensSwitcher";
 import { FlowPanel } from "./components/FlowPanel";
 import { ActivityPanel } from "./components/ActivityPanel";
@@ -661,6 +663,10 @@ export function App() {
       {/* Coverage ledger badge and drill-in panel (P4-4, invariant I2) */}
       <CoverageBadge />
 
+      {/* Findings surface entry point (P6-8), near the coverage badge; present
+          whenever the dataset carries findings or concerns. */}
+      <FindingsEntry />
+
       {/* Review mode banner */}
       {reviewMode && (
         <div className={`
@@ -875,6 +881,9 @@ export function App() {
 
       {/* Search overlay */}
       <SearchOverlay />
+
+      {/* Findings and concerns surface overlay (P6-8) */}
+      <FindingsSurface />
 
       {/* Admin dashboard */}
       {adminOpen && <AdminDashboard />}
