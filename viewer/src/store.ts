@@ -13,6 +13,9 @@ import type {
   Relationship,
   AggregateNode,
   CoverageRow,
+  ActivityData,
+  ActivityComponent,
+  ActivityFile,
   LiveConfig,
   LiveVersion,
   StatusOverlay,
@@ -243,6 +246,26 @@ interface ArchStore {
   coverageRowsLoading: boolean;
   coverageRowsError: string | null;
   loadCoverageRows: () => Promise<CoverageRow[] | null>;
+
+  // Git-activity data (P5-4 / P6-5 Activity lens). The full ranked hotspot list,
+  // per-component knowledge, coupling, and per-file detail live in activity.json
+  // (split) or inline under architecture.activity (monolith). Loaded lazily on
+  // first Activity-lens use or first rationale-strip render, so author/last-
+  // change/churn flow into the rationale strip everywhere (I13). Reset on reload.
+  activityData: ActivityData | null;
+  activityLoading: boolean;
+  activityError: string | null;
+  loadActivity: () => Promise<ActivityData | null>;
+  // Ranked hotspot list (the I11 landing view), already ordered by hotspot score
+  // by the projection. Empty until activity data is loaded.
+  getHotspots: () => ActivityComponent[];
+  getActivityComponent: (componentId: string) => ActivityComponent | null;
+  // Change coupling reached FROM a component ("what changes with this"): the
+  // cross-component partners, ranked by co-change count. Never a standalone
+  // hairball; always anchored to a component id (LENS-DESIGN L5).
+  getCouplingForComponent: (componentId: string) => Array<{ partnerId: string; partnerName: string; count: number }>;
+  // A component's per-file hotspot detail, ranked (drill-in from a hotspot).
+  getComponentActivityFiles: (componentId: string) => Array<ActivityFile & { path: string }>;
 
   // Precomputed per-component connection counts, derived from relationships and
   // refreshed only when the architecture's relationships change. Held stable
@@ -544,6 +567,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   coverageRows: null,
   coverageRowsLoading: false,
   coverageRowsError: null,
+  activityData: null,
+  activityLoading: false,
+  activityError: null,
   connectionCounts: {},
 
   reviewMode: false,
@@ -590,6 +616,11 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       coverageRows: null,
       coverageRowsLoading: false,
       coverageRowsError: null,
+      // Drop activity data fetched for a previous scan; the Activity lens or the
+      // rationale strip refetches (or reads the new inline data) on next use.
+      activityData: null,
+      activityLoading: false,
+      activityError: null,
       // Refresh precomputed connection counts for the new relationship set
       // (F-VW-6). Status overlays reuse this map since they never touch
       // relationships.
@@ -1111,6 +1142,89 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       });
       return null;
     }
+  },
+
+  loadActivity: async () => {
+    // Already loaded for this architecture.
+    const existing = get().activityData;
+    if (existing) return existing;
+
+    const arch = get().architecture;
+    if (!arch || arch.activity == null) return null;
+
+    // Monolith mode: the full ActivityData rides inline under architecture.activity
+    // (distinguished from the manifest summary by its `components` array). No fetch.
+    const inline = arch.activity;
+    if ("components" in inline && Array.isArray(inline.components)) {
+      const data = inline as ActivityData;
+      set({ activityData: data });
+      return data;
+    }
+
+    // Do not refire while a fetch is in flight or after one failed; the next
+    // architecture load resets these.
+    if (get().activityLoading) return null;
+    if (get().activityError) return null;
+
+    set({ activityLoading: true });
+    // Capture the architecture this request belongs to so a live refresh that
+    // swaps the architecture mid-flight does not repopulate the fresh state.
+    const requestArch = arch;
+    try {
+      const res = await fetch("./architecture/activity.json");
+      if (get().architecture !== requestArch) return null;
+      // Guard against a Vite SPA HTML fallback returning 200 with text/html.
+      const isJson = res.ok && (res.headers.get("content-type")?.includes("json") ?? false);
+      if (isJson) {
+        const data = (await res.json()) as ActivityData;
+        if (get().architecture !== requestArch) return null;
+        set({ activityData: data, activityLoading: false });
+        return data;
+      }
+      set({ activityError: `HTTP ${res.status}`, activityLoading: false });
+      return null;
+    } catch (err) {
+      if (get().architecture !== requestArch) return null;
+      set({
+        activityError: err instanceof Error ? err.message : "Fetch failed",
+        activityLoading: false,
+      });
+      return null;
+    }
+  },
+
+  // The ranked hotspot list is the Activity lens landing view (I11). The
+  // projection already sorts components by descending hotspot score, so this is
+  // "look here first" with no client-side reshuffle.
+  getHotspots: () => get().activityData?.components ?? [],
+
+  getActivityComponent: (componentId) =>
+    get().activityData?.components.find((c) => c.id === componentId) ?? null,
+
+  getCouplingForComponent: (componentId) => {
+    const data = get().activityData;
+    if (!data) return [];
+    const arch = get().architecture;
+    const nameOf = (cid: string) =>
+      (arch ? findComponent(arch.components, cid)?.name : null) ?? cid;
+    // component_coupling is cross-component and pre-sorted by co-change count;
+    // filtering to the anchor id preserves that order, so this is always the
+    // "what changes with this" list, never a standalone graph.
+    return data.component_coupling
+      .filter((p) => p.a === componentId || p.b === componentId)
+      .map((p) => {
+        const partnerId = p.a === componentId ? p.b : p.a;
+        return { partnerId, partnerName: nameOf(partnerId), count: p.cochange_count };
+      });
+  },
+
+  getComponentActivityFiles: (componentId) => {
+    const data = get().activityData;
+    if (!data) return [];
+    return Object.entries(data.files)
+      .filter(([, f]) => f.component_ids.includes(componentId))
+      .map(([path, f]) => ({ ...f, path }))
+      .sort((a, b) => b.hotspot_score - a.hotspot_score || a.path.localeCompare(b.path));
   },
 
   getComponentById: (id) => {

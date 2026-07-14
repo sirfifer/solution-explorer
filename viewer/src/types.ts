@@ -356,6 +356,98 @@ export interface Coverage {
   rows?: CoverageRow[];
 }
 
+// Git-activity data (optional, present only when the P5-4 activity pass read git
+// history). Language-agnostic, derived entirely from git log. The manifest
+// carries the lightweight summary; the full data lives in activity.json (split
+// mode) or inline under architecture.activity (monolith). The Activity lens
+// (P6-5) consumes it; presence gates the lens and old datasets omit it entirely.
+export interface ActivityAuthor {
+  author_key: string;
+  author_name: string;
+  commits: number;
+  share: number;
+}
+
+export interface ActivityProvenance {
+  git: boolean;
+  shallow: boolean;
+  head: string | null;
+  commits: number;
+  first_commit: string | null;
+  last_commit: string | null;
+}
+
+// A component ranked in the hotspot list, with its knowledge map. hotspot_score
+// is change frequency times size (commit_count times lines, summed over member
+// files); knowledge_island marks a top-author share >= 95%; bus_factor is the
+// fewest authors covering >= 50% of commits.
+export interface ActivityComponent {
+  id: string;
+  name: string;
+  files: number;
+  commit_count: number;
+  lines_added: number;
+  lines_removed: number;
+  churn: number;
+  lines: number;
+  hotspot_score: number;
+  first_seen: string | null;
+  last_modified: string | null;
+  author_count: number;
+  top_author_share: number;
+  knowledge_island: boolean;
+  bus_factor: number;
+  authors: ActivityAuthor[];
+}
+
+// A co-change pair. component_coupling pairs are cross-component by construction
+// (same-component pairs are excluded by the projection). a < b.
+export interface ActivityCoupling {
+  a: string;
+  b: string;
+  cochange_count: number;
+}
+
+export interface ActivityFile {
+  commit_count: number;
+  lines_added: number;
+  lines_removed: number;
+  churn: number;
+  lines: number;
+  hotspot_score: number;
+  first_seen: string | null;
+  last_modified: string | null;
+  component_ids: string[];
+  authors: ActivityAuthor[];
+}
+
+// The full activity dataset (activity.json in split mode; inline under
+// architecture.activity in monolith mode). Distinguished from the manifest
+// summary by the presence of the `components` array.
+export interface ActivityData {
+  provenance: ActivityProvenance;
+  components: ActivityComponent[];
+  component_coupling: ActivityCoupling[];
+  file_coupling: ActivityCoupling[];
+  files: Record<string, ActivityFile>;
+}
+
+// The lightweight slice that rides in the manifest. Its presence alone gates the
+// Activity lens (no activity.json fetch needed to decide availability).
+export interface ActivityManifestSummary {
+  provenance: ActivityProvenance;
+  top_hotspots: Array<{
+    id: string;
+    name: string;
+    hotspot_score: number;
+    commit_count: number;
+    knowledge_island: boolean;
+    bus_factor: number;
+  }>;
+  component_count: number;
+  coupling_count: number;
+}
+
 export interface ArchitectureStats {
   total_files: number;
   total_lines: number;
@@ -392,6 +484,10 @@ export interface Architecture {
   // "coverage unavailable for this dataset" message. Old datasets omit it and
   // degrade silently.
   coverage?: Coverage;
+  // Git-activity data (optional; P5-4). Manifest summary in split mode, full
+  // ActivityData inline in monolith mode. Presence gates the Activity lens
+  // (P6-5); old datasets omit it and the lens does not appear.
+  activity?: ActivityManifestSummary | ActivityData;
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
   live_status?: {
     statuses?: Record<string, ArchitectureStatus>;

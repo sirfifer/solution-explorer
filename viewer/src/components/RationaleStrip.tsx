@@ -1,6 +1,7 @@
-import type { Component } from "../types";
+import { useEffect } from "react";
+import type { Component, ActivityComponent } from "../types";
 import { useArchStore } from "../store";
-import { ROLE_META, getRoleBadgeColors } from "../utils/layout";
+import { ROLE_META, getRoleBadgeColors, formatRelativeTime } from "../utils/layout";
 
 // The rationale layer (invariant I13): the "colleague stand-in" context a reader
 // with no colleague to ask would want. It surfaces whatever of ownership, last
@@ -19,7 +20,10 @@ export interface RationaleView {
   aiEnhancedAt?: string;
 }
 
-export function buildRationale(component: Component): RationaleView | null {
+export function buildRationale(
+  component: Component,
+  activity?: ActivityComponent | null,
+): RationaleView | null {
   const r = component.rationale;
   const ai = component.ai_enhance;
   const view: RationaleView = {};
@@ -30,6 +34,22 @@ export function buildRationale(component: Component): RationaleView | null {
   if (typeof r?.churn === "number") view.churn = r.churn;
   if (r?.commit) view.commit = r.commit;
   if (r?.pr) view.pr = r.pr;
+
+  // Git-activity data (P5-4) fills in author, last change, and churn wherever the
+  // explicit rationale did not already carry them, so the "how alive is this,
+  // who touched it" strip is populated for every element when activity exists
+  // (I13). The lead author is the top contributor by commit share.
+  if (activity) {
+    if (view.author === undefined && activity.authors.length > 0) {
+      view.author = activity.authors[0].author_name;
+    }
+    if (view.lastChange === undefined && activity.last_modified) {
+      view.lastChange = formatRelativeTime(activity.last_modified);
+    }
+    if (view.churn === undefined && typeof activity.churn === "number") {
+      view.churn = activity.churn;
+    }
+  }
 
   if (ai?.architectural_role) view.role = ai.architectural_role;
   if (ai?.help_text) view.hasAiIntent = true;
@@ -49,7 +69,19 @@ export function buildRationale(component: Component): RationaleView | null {
 
 export function RationaleStrip({ component }: { component: Component }) {
   const darkMode = useArchStore((s) => s.darkMode);
-  const r = buildRationale(component);
+  const archHasActivity = useArchStore((s) => s.architecture?.activity != null);
+  const activityData = useArchStore((s) => s.activityData);
+  const loadActivity = useArchStore((s) => s.loadActivity);
+
+  // Pull git-activity data into the strip for every element when the dataset
+  // carries it (I13), independent of the active lens. Lazy and guarded, so it
+  // fetches at most once and is a no-op when there is no activity data.
+  useEffect(() => {
+    if (archHasActivity) void loadActivity();
+  }, [archHasActivity, loadActivity]);
+
+  const activityComponent = activityData?.components.find((c) => c.id === component.id) ?? null;
+  const r = buildRationale(component, activityComponent);
   if (!r) return null;
 
   const chip = darkMode
