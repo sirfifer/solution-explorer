@@ -1,5 +1,7 @@
 # UI Actions, Source Code Linking, and Deep Navigation
 
+> **Historical snapshot (banner added 2026-07-13).** This is the original implementation plan for the Wave 2 features. All four phases below have since shipped: source code linking, UI action detection in the analyzer, the actions surfaces in the viewer, and bidirectional `?file=&line=` deep links. The document is kept for its design rationale. File paths, line numbers, and "will" and "Phase N" framing describe the plan as written, not the current code. See CHANGELOG.md and PROJECT-OVERVIEW.md for what ships today.
+
 ## Vision
 
 Make the architecture viewer a fully navigable, code-connected tool. Three layers:
