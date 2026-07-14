@@ -289,6 +289,41 @@ class FactStore:
              _dumps(evidence), confidence),
         )
 
+    def add_concern(
+        self,
+        concern_id: str,
+        kind: str,
+        title: Optional[str] = None,
+        basis: Optional[str] = None,
+        members: Any = None,
+        detail: Any = None,
+    ) -> None:
+        self._conn.execute(
+            "INSERT INTO concerns(id, kind, title, basis, members_json, detail_json) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (concern_id, kind, title, basis, _dumps(members), _dumps(detail)),
+        )
+
+    def add_finding(
+        self,
+        finding_id: str,
+        kind: str,
+        summary: Optional[str] = None,
+        members: Any = None,
+        evidence: Any = None,
+        confidence: Optional[str] = None,
+        verification_status: str = "unverified",
+        rank_score: float = 0.0,
+        detail: Any = None,
+    ) -> None:
+        self._conn.execute(
+            "INSERT INTO findings(id, kind, summary, members_json, evidence_json, "
+            "confidence, verification_status, rank_score, detail_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (finding_id, kind, summary, _dumps(members), _dumps(evidence),
+             confidence, verification_status, float(rank_score), _dumps(detail)),
+        )
+
     def add_enrichment(
         self,
         target_kind: str,
@@ -470,6 +505,33 @@ class FactStore:
             d = dict(r)
             d["detail"] = _loads(d.pop("detail_json"))
             d["evidence"] = _loads(d.pop("evidence_json"))
+            out.append(d)
+        return out
+
+    def concerns(self) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM concerns ORDER BY id"
+        ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["members"] = _loads(d.pop("members_json"))
+            d["detail"] = _loads(d.pop("detail_json"))
+            out.append(d)
+        return out
+
+    def findings(self) -> list[dict]:
+        # Ranked surface (invariant I11): highest rank_score first, id as the
+        # deterministic tie-break so repeated reads are byte-identical (I4).
+        rows = self._conn.execute(
+            "SELECT * FROM findings ORDER BY rank_score DESC, id"
+        ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["members"] = _loads(d.pop("members_json"))
+            d["evidence"] = _loads(d.pop("evidence_json"))
+            d["detail"] = _loads(d.pop("detail_json"))
             out.append(d)
         return out
 

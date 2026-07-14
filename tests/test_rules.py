@@ -470,12 +470,15 @@ def test_projection_carries_rules_and_old_viewer_ignores(tmp_path):
 # 4. Schema migration v2 -> v3 (the rules table's home)
 # ===========================================================================
 
-def test_schema_is_at_v3():
+def test_schema_includes_rules_table():
+    # The rules table (introduced at v3) exists in the current schema. The store
+    # opens at the current SCHEMA_VERSION (>= 3 since P5-5 added the rules table).
     store = FactStore(":memory:")
-    assert store.get_meta("schema_version") == str(SCHEMA_VERSION) == "3"
+    assert int(store.get_meta("schema_version")) == SCHEMA_VERSION >= 3
+    assert store.rules() == []
 
 
-def test_migration_v2_to_v3_is_additive(tmp_path):
+def test_migration_v2_to_current_is_additive(tmp_path):
     # Simulate a warm v2 store: drop the rules table and stamp version 2, with a
     # pre-existing row that must survive the migration.
     path = tmp_path / "warm.db"
@@ -487,9 +490,10 @@ def test_migration_v2_to_v3_is_additive(tmp_path):
     store.commit()
     store.close()
 
-    # Reopening with current code migrates v2 -> v3 additively.
+    # Reopening with current code migrates v2 -> current additively (through the
+    # v3 rules table and any later migration).
     store2 = FactStore(str(path))
-    assert store2.get_meta("schema_version") == "3"
+    assert int(store2.get_meta("schema_version")) == SCHEMA_VERSION
     assert any(c["id"] == "c1" for c in store2.components())  # row survived
     # the rules table exists and is usable.
     store2.add_rule("rule:c1:policy:x-abc", "c1", "policy", summary="s",

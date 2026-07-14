@@ -121,6 +121,9 @@ def test_http_edge_evidence_points_at_the_real_call_site():
 #   D8 rules: typed rules (validation/calculation/policy/io) are a NEW optional
 #      key on the arch dict and on owning component dicts (P5-5), masked like D6;
 #      the rules themselves are asserted directly in tests/test_rules.py.
+#   D9 correlations: concerns/findings flat indexes and the per-component
+#      concerns/findings id-reference lists are NEW optional keys (P5-6), masked
+#      like D6; they are asserted directly in tests/test_correlations.py.
 
 _JUSTIFIED_COMPONENT_KEYS = {"testing"}          # D4
 _JUSTIFIED_REL_KEYS = {"evidence", "confidence", "origin"}  # D3
@@ -143,11 +146,15 @@ def _strip_capabilities(arch: dict) -> None:
     arch.pop("data_entities", None)
     arch.pop("entity_access", None)
     arch.pop("rules", None)
+    arch.pop("concerns", None)
+    arch.pop("findings", None)
 
     def strip(c):
         c.pop("capabilities", None)
         c.pop("data_entities", None)
         c.pop("rules", None)
+        c.pop("concerns", None)
+        c.pop("findings", None)
         for ch in c.get("children", []):
             strip(ch)
 
