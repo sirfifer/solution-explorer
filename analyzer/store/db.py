@@ -361,6 +361,38 @@ class FactStore:
                     (ref, "", help_text),
                 )
 
+    def set_finding_verification(self, finding_id: str, status: str) -> None:
+        """Update a finding's verification_status in place (P7-4 sub-pass 3).
+
+        Additive helper. Note the derivation ``_flush`` rewrites the findings
+        table every run and resets rows to 'unverified', so this is a
+        same-session convenience for direct readers; the durable, provenance-
+        stamped record of a verdict is the enrichment overlay (see
+        analyzer/enrich/verdicts.py). A no-op when the finding id is absent.
+        """
+        self._conn.execute(
+            "UPDATE findings SET verification_status = ? WHERE id = ?",
+            (status, finding_id),
+        )
+
+    def delete_enrichment(self, target_kind: str, target_id: str) -> None:
+        """Delete an enrichment row (and its FTS entry) if present.
+
+        Used when a Phase 7 pass supersedes a prior verdict: a declared intent
+        that is now satisfied removes its stale violation finding rather than
+        leaving stale data (no silent anything).
+        """
+        self._conn.execute(
+            "DELETE FROM enrichment WHERE target_kind = ? AND target_id = ?",
+            (target_kind, target_id),
+        )
+        if self.with_fts:
+            ref = f"{target_kind}:{target_id}"
+            self._conn.execute(
+                "DELETE FROM fts_docs WHERE ref_kind = 'enrichment' AND ref_id = ?",
+                (ref,),
+            )
+
     def add_coverage(self, path: str, disposition: str, reason: Optional[str] = None) -> None:
         self._conn.execute(
             "INSERT INTO coverage(path, disposition, reason) VALUES (?, ?, ?) "

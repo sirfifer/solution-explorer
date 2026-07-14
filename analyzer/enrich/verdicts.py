@@ -1,19 +1,25 @@
-"""Projection overlay for AI verdicts (P7-3).
+"""Projection overlay for AI verdicts and names (P7-3, P7-4).
 
-The deterministic tiers (extract/derive) produce edges with a confidence tier.
-The Phase 7 edge-verification pass (P7-3) produces, as a provenance-stamped
-enrichment row, a ``{confirmed, refuted, uncertain}`` verdict per inferred edge:
+The deterministic tiers (extract/derive) produce edges with a confidence tier,
+concerns with mechanical slugs, and findings marked ``unverified``. The Phase 7
+verification passes produce, as provenance-stamped enrichment rows:
 
-    edge-verdict   keyed by ``source|target|type``, payload ``{status, reason}``.
+    edge-verdict   (P7-3)  a {confirmed, refuted, uncertain} verdict per inferred
+                           edge, keyed by ``source|target|type``.
+    concern        (P7-4)  a domain-language {name, description} per concern,
+                           keyed by concern id.
+    finding        (P7-4)  an AI-generated intent-violation finding record, keyed
+                           by finding id (deterministic findings are NOT stored
+                           here; they live in the findings table).
+    finding-verdict (P7-4) a {verification_status, reason} per finding (any kind),
+                           keyed by finding id.
 
 This module applies those rows onto the projected architecture dict at projection
 time, the same shape and no-op-when-empty discipline as
 ``overlay.apply_enrichment_overlay``. It runs AFTER that overlay so it can read
 enriched component help text if needed. Staleness is computed at read time from
-the digest index and travels with each verdict (I5); a REFUTED edge is MARKED and
-de-emphasized, never deleted (the Phase 7 gate line; LENS-DESIGN I15).
-
-P7-4 extends this module with concern names and finding verdicts.
+the digest index and travels with each verdict (I5); a REFUTED edge or finding is
+MARKED and de-emphasized, never deleted (the Phase 7 gate line, LENS-DESIGN I15).
 """
 
 from __future__ import annotations
@@ -25,7 +31,9 @@ from .staleness import staleness_of
 
 __all__ = ["apply_verdict_overlay"]
 
-_VERDICT_KINDS = frozenset({"edge-verdict"})
+_VERDICT_KINDS = frozenset(
+    {"edge-verdict", "concern", "finding", "finding-verdict"}
+)
 
 
 def _stale_marker(
@@ -41,11 +49,11 @@ def _stale_marker(
 def apply_verdict_overlay(
     arch: dict, store, *, digest_index: Optional[DigestIndex] = None
 ) -> dict:
-    """Overlay edge verdicts onto ``arch``.
+    """Overlay edge verdicts, concern names, and finding verdicts onto ``arch``.
 
-    In place; returns ``arch``. A complete no-op when the store carries no
-    verdict enrichment kinds, so a non-verified projection (and every parity
-    fixture) is byte-identical to before.
+    In place; returns ``arch``. A complete no-op when the store carries none of
+    the verdict/name enrichment kinds, so a non-verified projection (and every
+    parity fixture) is byte-identical to before.
     """
     if store is None:
         return arch
@@ -56,9 +64,20 @@ def apply_verdict_overlay(
     index = digest_index or DigestIndex.from_store(store)
 
     edge_verdicts: dict[str, dict] = {}
+    concern_names: dict[str, dict] = {}
+    ai_findings: dict[str, dict] = {}
+    finding_verdicts: dict[str, dict] = {}
     for row in rows:
-        if row["target_kind"] == "edge-verdict":
-            edge_verdicts[row["target_id"]] = row
+        kind = row["target_kind"]
+        tid = row["target_id"]
+        if kind == "edge-verdict":
+            edge_verdicts[tid] = row
+        elif kind == "concern":
+            concern_names[tid] = row
+        elif kind == "finding":
+            ai_findings[tid] = row
+        elif kind == "finding-verdict":
+            finding_verdicts[tid] = row
 
     def staleness(row: dict) -> Optional[bool]:
         current = index.for_target(row["target_kind"], row["target_id"])
@@ -82,5 +101,59 @@ def apply_verdict_overlay(
         # Refuted edges are marked and de-emphasized, NEVER deleted (gate line).
         if payload.get("status") == "refuted":
             rel["de_emphasized"] = True
+
+    # --- concern names (P7-4 sub-pass 1) -------------------------------------
+    if concern_names:
+        for concern in arch.get("concerns", []) or []:
+            row = concern_names.get(concern.get("id"))
+            if row is None:
+                continue
+            payload = row.get("payload") or {}
+            if payload.get("name"):
+                concern["name"] = payload.get("name")
+            if payload.get("description"):
+                concern["description"] = payload.get("description")
+            marker = _stale_marker({}, staleness(row), row.get("commit_sha"))
+            if marker:
+                concern["name_stale"] = True
+
+    # --- AI-generated intent-violation findings (P7-4 sub-pass 2) ------------
+    findings = arch.get("findings")
+    if ai_findings:
+        if findings is None:
+            findings = []
+            arch["findings"] = findings
+        existing_ids = {f.get("id") for f in findings}
+        for tid, row in sorted(ai_findings.items()):
+            if tid in existing_ids:
+                continue
+            payload = row.get("payload") or {}
+            record = dict(payload)
+            record.setdefault("id", tid)
+            record.setdefault("verification_status", "unverified")
+            marker = _stale_marker({}, staleness(row), row.get("commit_sha"))
+            if marker:
+                record["stale"] = True
+            findings.append(record)
+        # Keep the ranked order (I11): rank_score desc, id.
+        findings.sort(key=lambda f: (-float(f.get("rank_score") or 0.0), f.get("id") or ""))
+
+    # --- finding verdicts (P7-4 sub-pass 3) ----------------------------------
+    if finding_verdicts and findings is not None:
+        by_id = {f.get("id"): f for f in findings}
+        for tid, row in finding_verdicts.items():
+            finding = by_id.get(tid)
+            if finding is None:
+                continue
+            payload = row.get("payload") or {}
+            status = payload.get("verification_status")
+            if status:
+                finding["verification_status"] = status
+            verdict = {"reason": payload.get("reason")}
+            _stale_marker(verdict, staleness(row), row.get("commit_sha"))
+            finding["verdict"] = verdict
+            # Refuted findings are retained and de-emphasized, never dropped.
+            if status == "refuted":
+                finding["de_emphasized"] = True
 
     return arch

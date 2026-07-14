@@ -1,17 +1,19 @@
-"""Phase 7 verification passes over the store (P7-3; extended by P7-4).
+"""Phase 7 verification and naming passes over the store (P7-3, P7-4).
 
-The passes share one harness (invoker, provenance stamping, staleness scoping,
+Four passes share one harness (invoker, provenance stamping, staleness scoping,
 projection-overlay storage, cost controls, dry-run, exit codes), exactly the
-P7-2 pattern. P7-3 ships the first pass:
+P7-2 pattern:
 
     verify_edges     (P7-3)        verdict per inferred edge.
-
-P7-4 adds name_concerns, check_intents, and verify_findings alongside it.
+    name_concerns    (P7-4 sub 1)  domain-language name per concern.
+    check_intents    (P7-4 sub 2)  declared-intent conformance -> violation
+                                    findings; optional candidate proposals.
+    verify_findings  (P7-4 sub 3)  adversarial refutation of every finding.
 
 All model output lands as provenance-stamped enrichment rows (see verdicts.py for
 the target kinds and the projection overlay). Nothing is written unless it
-validates (never junk). Refuted edges are marked and de-emphasized, never deleted
-(the Phase 7 gate line; LENS-DESIGN.md I15).
+validates (never junk). Refuted edges and findings are marked and de-emphasized,
+never deleted (the Phase 7 gate line; LENS-DESIGN.md I15).
 """
 
 from __future__ import annotations
@@ -32,9 +34,16 @@ from .engine import (
     InvokeResult,
     _parse_json_object,
 )
+from .intents import IntentFileError, find_intents_file, load_intents
 from .overlay import apply_enrichment_overlay
 from .partition import flatten_components
-from .prompts import build_edge_verify_prompt
+from .prompts import (
+    build_concern_name_prompt,
+    build_edge_verify_prompt,
+    build_finding_verify_prompt,
+    build_intent_conformance_prompt,
+    build_intent_proposal_prompt,
+)
 from .provenance import Clock, current_commit_sha, iso_now, stamp_enrichment
 from .staleness import staleness_of
 
@@ -43,9 +52,13 @@ __all__ = [
     "TargetOutcome",
     "PassReport",
     "verify_edges",
+    "name_concerns",
+    "check_intents",
+    "verify_findings",
 ]
 
 _EDGE_STATUSES = frozenset({"confirmed", "refuted", "uncertain"})
+_FINDING_VERDICTS = frozenset({"verified", "refuted", "uncertain"})
 
 
 @dataclass
@@ -188,8 +201,9 @@ def _endpoint_summary(index: dict[str, dict], node_id: str) -> dict:
 def _prepare(store: FactStore, config: VerifyConfig) -> tuple[dict, DigestIndex]:
     """Derive the arch, build the digest index, and overlay existing enrichment.
 
-    Overlaying existing enrichment gives endpoint summaries the AI help text where
-    it exists (richer grounding). Derivation reads the store only.
+    Overlaying existing enrichment gives endpoint summaries and finding context
+    the AI help text where it exists (richer grounding). Derivation reads the
+    store only.
     """
     _, arch = derive_all(store, config.root.name, root_path=str(config.root))
     index = DigestIndex.from_store(store)
@@ -304,6 +318,374 @@ def verify_edges(
                 )
                 outcome.status = "done"
                 outcome.verdict = obj["status"]
+            report.outcomes.append(outcome)
+        report.total_cost_usd = sum(o.cost_usd for o in report.outcomes)
+        store.commit()
+        return _finalize(report, config)
+    finally:
+        store.close()
+
+
+# --- P7-4 sub-pass 1: concern naming -----------------------------------------
+
+
+def name_concerns(
+    config: VerifyConfig, *, invoker: Optional[Invoker] = None, clock: Clock = iso_now
+) -> PassReport:
+    """Give each mechanical concern a domain-language name and description (P7-4)."""
+    if invoker is None:
+        invoker = ClaudeCliInvoker(model=config.model)
+    store = FactStore(str(config.store_path))
+    try:
+        arch, index = _prepare(store, config)
+        comp_index = _component_index(arch)
+        commit_sha = current_commit_sha(str(config.root))
+
+        concerns = sorted(arch.get("concerns", []) or [], key=lambda c: c.get("id", ""))
+        mode = "update" if config.update else "full"
+        targets = [
+            c for c in concerns
+            if not (config.update and not _missing_or_stale(store, index, "concern", c["id"]))
+        ]
+        if config.max_targets is not None:
+            targets = targets[: config.max_targets]
+
+        report = PassReport(
+            pass_name="name-concerns", mode=mode, dry_run=config.dry_run,
+            target_count=len(targets),
+        )
+        report.notes.append(f"{len(concerns)} concern(s); {len(targets)} to name")
+
+        def member_facts(concern: dict) -> list[dict]:
+            facts = []
+            for m in concern.get("members", []) or []:
+                cid = m.get("component_id")
+                comp = comp_index.get(cid, {})
+                facts.append({
+                    "component_id": cid,
+                    "name": comp.get("name"),
+                    "type": comp.get("type"),
+                    "language": comp.get("language"),
+                    "files": (m.get("files") or [])[:5],
+                    "evidence": (m.get("evidence") or [])[:3],
+                })
+            return facts
+
+        def validate(obj: dict) -> list[str]:
+            if not (obj.get("name") or "").strip():
+                return ["name must be a non-empty domain-language label"]
+            return []
+
+        if config.dry_run:
+            for c in targets:
+                prompt = build_concern_name_prompt(c, member_facts(c))
+                report.plan_preview.append({"id": c["id"], "prompt_chars": len(prompt)})
+            return _finalize(report, config)
+
+        for c in targets:
+            prompt = build_concern_name_prompt(c, member_facts(c))
+            obj, cost, errs = _invoke_json(invoker, prompt, validate)
+            outcome = TargetOutcome(id=c["id"], status="failed", cost_usd=cost)
+            if obj is None:
+                outcome.errors = errs
+            else:
+                payload = {
+                    "name": obj["name"].strip(),
+                    "description": (obj.get("description") or "").strip(),
+                }
+                stamp_enrichment(
+                    store, "concern", c["id"], payload,
+                    digest_index=index, commit_sha=commit_sha, clock=clock,
+                )
+                outcome.status = "done"
+                outcome.verdict = "named"
+            report.outcomes.append(outcome)
+        report.total_cost_usd = sum(o.cost_usd for o in report.outcomes)
+        store.commit()
+        return _finalize(report, config)
+    finally:
+        store.close()
+
+
+# --- P7-4 sub-pass 2: intent conformance -------------------------------------
+
+
+def _intent_scope_facts(intent: dict, arch: dict, comp_index: dict[str, dict]) -> dict:
+    """Select the store facts relevant to one intent (its scope slice).
+
+    Scope hints (component-id substrings, concern kinds, or keywords) select
+    matching components; when no hint matches, the whole (bounded) model is sent
+    so the intent is still evaluable. Concerns, capabilities, entities, and edges
+    are filtered to the selected components.
+    """
+    hints = [h.lower() for h in (intent.get("scope") or [])]
+
+    def matches(comp: dict) -> bool:
+        if not hints:
+            return True
+        hay = " ".join(str(comp.get(k, "")) for k in ("id", "name", "type", "language", "description")).lower()
+        return any(h in hay for h in hints)
+
+    selected = [c for c in comp_index.values() if matches(c)]
+    if not selected:
+        selected = list(comp_index.values())
+    selected_ids = {c["id"] for c in selected}
+    # Bound the payload.
+    selected = sorted(selected, key=lambda c: c["id"])[:60]
+
+    concerns = [
+        {"id": c.get("id"), "kind": c.get("kind"),
+         "members": [m.get("component_id") for m in (c.get("members") or [])]}
+        for c in (arch.get("concerns") or [])
+        if (not hints) or any(h in (c.get("kind") or "").lower() for h in hints)
+        or any(m.get("component_id") in selected_ids for m in (c.get("members") or []))
+    ]
+    capabilities = [
+        {"kind": c.get("kind"), "name": c.get("name"), "component_id": c.get("component_id")}
+        for c in (arch.get("capabilities") or [])
+        if c.get("component_id") in selected_ids
+    ][:60]
+    entities = [
+        {"name": e.get("name"), "kind": e.get("kind"), "component_id": e.get("component_id")}
+        for e in (arch.get("data_entities") or [])
+        if e.get("component_id") in selected_ids
+    ][:60]
+    edges = [
+        {"source": r.get("source"), "target": r.get("target"), "type": r.get("type")}
+        for r in (arch.get("relationships") or [])
+        if r.get("source") in selected_ids or r.get("target") in selected_ids
+    ][:80]
+    return {
+        "components": [
+            {"id": c["id"], "name": c.get("name"), "type": c.get("type"),
+             "language": c.get("language"), "description": c.get("description") or None}
+            for c in selected
+        ],
+        "concerns": concerns,
+        "capabilities": capabilities,
+        "data_entities": entities,
+        "edges": edges,
+    }
+
+
+def _intent_violation_id(intent_id: str) -> str:
+    return f"finding:intent-violation:{intent_id}"
+
+
+def check_intents(
+    config: VerifyConfig, *, invoker: Optional[Invoker] = None, clock: Clock = iso_now
+) -> PassReport:
+    """Evaluate declared intents against the model; emit violation findings (P7-4).
+
+    A satisfied intent removes any prior violation finding for it (no stale data).
+    A violated intent emits a ``finding`` enrichment row (kind intent-violation)
+    with the violating members and evidence, marked unverified for sub-pass 3.
+    """
+    if invoker is None:
+        invoker = ClaudeCliInvoker(model=config.model)
+    store = FactStore(str(config.store_path))
+    try:
+        arch, index = _prepare(store, config)
+        comp_index = _component_index(arch)
+        commit_sha = current_commit_sha(str(config.root))
+
+        report = PassReport(
+            pass_name="check-intents", mode="update" if config.update else "full",
+            dry_run=config.dry_run, target_count=0,
+        )
+
+        intents_file = find_intents_file(config.root, config.intents_path)
+        if config.intents_path is not None and not config.intents_path.is_file():
+            report.notes.append(f"intents file not found: {config.intents_path}")
+            return _finalize(report, config)
+        intents: list = []
+        if intents_file is not None:
+            try:
+                intents = load_intents(intents_file)
+            except IntentFileError as exc:
+                report.notes.append(f"intents file error: {exc}")
+                report.outcomes.append(TargetOutcome(id=str(intents_file), status="failed", errors=[str(exc)]))
+                return _finalize(report, config)
+            report.notes.append(f"{len(intents)} declared intent(s) from {intents_file.name}")
+        else:
+            report.notes.append("no declared-intents file; nothing to check")
+        report.target_count = len(intents)
+
+        def validate(obj: dict) -> list[str]:
+            if not isinstance(obj.get("satisfied"), bool):
+                return ["'satisfied' must be a boolean"]
+            if not (obj.get("reason") or "").strip():
+                return ["reason must be non-empty"]
+            return []
+
+        # Optional proposal pass (advisory; never auto-adopted).
+        if config.propose_intents and not config.dry_run:
+            observed = {
+                "name": arch.get("name"),
+                "description": arch.get("description"),
+                "components": [
+                    {"id": c["id"], "name": c.get("name"), "type": c.get("type"),
+                     "description": c.get("description") or None}
+                    for c in sorted(comp_index.values(), key=lambda c: c["id"])[:80]
+                ],
+                "concerns": [{"id": c.get("id"), "kind": c.get("kind")} for c in (arch.get("concerns") or [])],
+            }
+            pobj, pcost, _ = _invoke_json(
+                invoker, build_intent_proposal_prompt(observed),
+                lambda o: [] if isinstance(o.get("candidates"), list) else ["'candidates' must be a list"],
+            )
+            report.total_cost_usd += pcost
+            report.extra["proposed_intents"] = (pobj or {}).get("candidates", [])
+
+        if config.dry_run:
+            for intent in intents:
+                prompt = build_intent_conformance_prompt(
+                    intent, _intent_scope_facts(intent, arch, comp_index)
+                )
+                report.plan_preview.append({"id": intent.id, "prompt_chars": len(prompt)})
+            return _finalize(report, config)
+
+        for intent in intents:
+            scope = _intent_scope_facts(intent, arch, comp_index)
+            prompt = build_intent_conformance_prompt(intent, scope)
+            obj, cost, errs = _invoke_json(invoker, prompt, validate)
+            outcome = TargetOutcome(id=intent.id, status="failed", cost_usd=cost)
+            vid = _intent_violation_id(intent.id)
+            if obj is None:
+                outcome.errors = errs
+                report.outcomes.append(outcome)
+                continue
+            if obj["satisfied"]:
+                # Remove any prior violation finding (and its verdict) for this intent.
+                store.delete_enrichment("finding", vid)
+                store.delete_enrichment("finding-verdict", vid)
+                outcome.status = "done"
+                outcome.verdict = "satisfied"
+            else:
+                members = []
+                for vm in obj.get("violating_members", []) or []:
+                    if isinstance(vm, dict) and vm.get("component_id"):
+                        members.append({
+                            "kind": "component", "id": vm["component_id"],
+                            "component_id": vm["component_id"], "why": vm.get("why"),
+                        })
+                record = {
+                    "id": vid,
+                    "kind": "intent-violation",
+                    "summary": obj["reason"].strip(),
+                    "members": members,
+                    "evidence": [
+                        {"intent": intent.statement},
+                        {"reason": obj["reason"].strip()},
+                    ],
+                    "confidence": obj.get("confidence", "medium"),
+                    "verification_status": "unverified",
+                    "rank_score": 50.0 + float(len(members)),
+                    "intent_id": intent.id,
+                }
+                index.register_finding(vid, "intent-violation", members)
+                stamp_enrichment(
+                    store, "finding", vid, record,
+                    digest_index=index, commit_sha=commit_sha, clock=clock,
+                )
+                outcome.status = "done"
+                outcome.verdict = "violation"
+            report.outcomes.append(outcome)
+        report.total_cost_usd += sum(o.cost_usd for o in report.outcomes)
+        store.commit()
+        return _finalize(report, config)
+    finally:
+        store.close()
+
+
+# --- P7-4 sub-pass 3: finding verification -----------------------------------
+
+
+def _all_findings(store: FactStore) -> list[dict]:
+    """Deterministic findings (findings table) plus AI intent-violation findings
+    (enrichment 'finding' rows). Deterministic order by id."""
+    out: list[dict] = list(store.findings())
+    seen = {f.get("id") for f in out}
+    for row in store.enrichment():
+        if row["target_kind"] == "finding":
+            payload = row.get("payload") or {}
+            fid = payload.get("id") or row["target_id"]
+            if fid not in seen:
+                rec = dict(payload)
+                rec.setdefault("id", fid)
+                out.append(rec)
+                seen.add(fid)
+    out.sort(key=lambda f: f.get("id") or "")
+    return out
+
+
+def verify_findings(
+    config: VerifyConfig, *, invoker: Optional[Invoker] = None, clock: Clock = iso_now
+) -> PassReport:
+    """Adversarially verify every finding against its own evidence (P7-4 sub 3)."""
+    if invoker is None:
+        invoker = ClaudeCliInvoker(model=config.model)
+    store = FactStore(str(config.store_path))
+    try:
+        arch, index = _prepare(store, config)
+        # Register AI-finding digests so their verdicts can be stamped/staleness-checked.
+        for f in _all_findings(store):
+            if f.get("kind") == "intent-violation":
+                index.register_finding(f["id"], f.get("kind", ""), f.get("members"))
+        commit_sha = current_commit_sha(str(config.root))
+
+        findings = _all_findings(store)
+        mode = "update" if config.update else "full"
+        targets = [
+            f for f in findings
+            if _missing_or_stale(store, index, "finding-verdict", f["id"])
+        ]
+        # On a full run, verify every finding lacking a verdict; on --update also
+        # re-verify stale ones (both captured by _missing_or_stale, which returns
+        # True for missing always and for stale only matters when a row exists).
+        if config.max_targets is not None:
+            targets = targets[: config.max_targets]
+
+        report = PassReport(
+            pass_name="verify-findings", mode=mode, dry_run=config.dry_run,
+            target_count=len(targets),
+        )
+        report.notes.append(f"{len(findings)} finding(s); {len(targets)} to verify")
+
+        def validate(obj: dict) -> list[str]:
+            if obj.get("verdict") not in _FINDING_VERDICTS:
+                return [f"verdict must be one of {sorted(_FINDING_VERDICTS)}"]
+            if not (obj.get("reason") or "").strip():
+                return ["reason must be non-empty"]
+            return []
+
+        if config.dry_run:
+            for f in targets:
+                report.plan_preview.append(
+                    {"id": f["id"], "prompt_chars": len(build_finding_verify_prompt(f))}
+                )
+            return _finalize(report, config)
+
+        status_map = {"verified": "verified", "refuted": "refuted", "uncertain": "unverified"}
+        for f in targets:
+            obj, cost, errs = _invoke_json(invoker, build_finding_verify_prompt(f), validate)
+            outcome = TargetOutcome(id=f["id"], status="failed", cost_usd=cost)
+            if obj is None:
+                outcome.errors = errs
+            else:
+                verdict = obj["verdict"]
+                new_status = status_map[verdict]
+                payload = {"verification_status": new_status, "reason": obj["reason"].strip()}
+                stamp_enrichment(
+                    store, "finding-verdict", f["id"], payload,
+                    digest_index=index, commit_sha=commit_sha, clock=clock,
+                )
+                # Same-session convenience: reflect the verdict on the findings
+                # table for a deterministic finding (a re-derive resets it; the
+                # enrichment overlay is the durable, authoritative record).
+                store.set_finding_verification(f["id"], new_status)
+                outcome.status = "done"
+                outcome.verdict = verdict
             report.outcomes.append(outcome)
         report.total_cost_usd = sum(o.cost_usd for o in report.outcomes)
         store.commit()

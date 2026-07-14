@@ -1,15 +1,16 @@
-"""The `verify` subcommand: Phase 7 edge verification (P7-3; extended by P7-4).
+"""The `verify` and `name` subcommands: Phase 7 verification and naming (P7-3/P7-4).
 
-Entry shape (recorded in TASKS.md), dispatched from ``analyzer/cli.py:main`` on
+Entry shapes (recorded in TASKS.md), dispatched from ``analyzer/cli.py:main`` on
 the first CLI token so ``analyze.py`` stays the single entrypoint:
 
-    analyze.py verify <edges> [root] --store <db> [options]
+    analyze.py verify <edges|intents|findings|all> [root] --store <db> [options]
+    analyze.py name <concerns|all> [root] --store <db> [options]
 
-`verify edges` runs the inferred-edge verification pass (P7-3). P7-4 adds the
-`intents` and `findings` verify targets and a sibling `name concerns` command.
-The pass honors the P7-2 cost-control patterns: ``--max-targets`` bounds
-invocations, ``--dry-run`` invokes nothing, the exit code reflects failure, and
-nothing is written unless it validates.
+`verify` runs the verification passes (P7-3 edges; P7-4 intent conformance and
+finding verification). `name` runs concern naming (P7-4 sub-pass 1). Both honor
+the P7-2 cost-control patterns: ``--max-targets`` bounds invocations, ``--dry-run``
+invokes nothing, the exit code reflects failure, and nothing is written unless it
+validates.
 """
 
 from __future__ import annotations
@@ -19,11 +20,18 @@ import sys
 from pathlib import Path
 
 from .engine import DEFAULT_MODEL
-from .passes import VerifyConfig, verify_edges
+from .passes import (
+    VerifyConfig,
+    check_intents,
+    name_concerns,
+    verify_edges,
+    verify_findings,
+)
 
 DEFAULT_STORE_RELPATH = Path(".solution-explorer") / "index.db"
 
-_VERIFY_TARGETS = ("edges",)
+_VERIFY_TARGETS = ("edges", "intents", "findings", "all")
+_NAME_TARGETS = ("concerns", "all")
 
 
 def _base_parser(prog: str, targets: tuple[str, ...], target_help: str) -> argparse.ArgumentParser:
@@ -70,6 +78,8 @@ def _print_report(report) -> None:
     tally = report.tally()
     if tally:
         print("  verdicts: " + ", ".join(f"{k}={v}" for k, v in sorted(tally.items())))
+    if report.extra.get("proposed_intents"):
+        print(f"  proposed {len(report.extra['proposed_intents'])} candidate intent(s) (advisory; edit the intents file to adopt)")
     print(f"  done: {report.done}, failed: {len(report.failed)}")
     if report.total_cost_usd:
         print(f"  cost: ${report.total_cost_usd:.4f}")
@@ -102,7 +112,29 @@ def _preflight(args) -> tuple[Path, Path]:
 
 def verify_main(argv: list[str]) -> int:
     parser = _base_parser("analyze.py verify", _VERIFY_TARGETS, "what to verify")
+    parser.add_argument("--intents", default=None, help="Path to the declared-intents file (default: <root>/solution-explorer-intents.json).")
+    parser.add_argument("--propose-intents", action="store_true", help="Also propose candidate intents from docs and observed architecture (advisory).")
     args = parser.parse_args(argv)
     root, store_path = _preflight(args)
-    reports = [verify_edges(_config(args, root, store_path))]
+    intents_path = Path(args.intents).resolve() if args.intents else None
+
+    reports = []
+    want = args.target
+    if want in ("edges", "all"):
+        reports.append(verify_edges(_config(args, root, store_path)))
+    if want in ("intents", "all"):
+        reports.append(check_intents(_config(
+            args, root, store_path, intents_path=intents_path,
+            propose_intents=args.propose_intents,
+        )))
+    if want in ("findings", "all"):
+        reports.append(verify_findings(_config(args, root, store_path)))
+    return _run_and_report(reports)
+
+
+def name_main(argv: list[str]) -> int:
+    parser = _base_parser("analyze.py name", _NAME_TARGETS, "what to name")
+    args = parser.parse_args(argv)
+    root, store_path = _preflight(args)
+    reports = [name_concerns(_config(args, root, store_path))]
     return _run_and_report(reports)

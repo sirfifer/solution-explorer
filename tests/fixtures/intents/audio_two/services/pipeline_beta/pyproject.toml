@@ -1,0 +1,3 @@
+[project]
+name = "pipeline-beta"
+description = "Second, independent audio pipeline added later: decode and resample audio."
