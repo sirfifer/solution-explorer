@@ -30,6 +30,14 @@ from ..models import Component
 from ..utils import _name_from_server_script
 from .context import Deriver
 
+# Content-exclusion inversion (P5-2; TARGET-ARCHITECTURE.md section 5). The Data
+# lens is sourced from models/migrations/schemas directories, so on the v2 path
+# they participate fully in derivation and are NOT classified content-only. v1
+# (scanner.py) still reads the shared CONTENT_DIR_NAMES unchanged, so its output
+# is byte-stable (parity snapshots green); the inversion lives only here.
+_DATA_LENS_DIRS = {"models", "migrations", "schemas"}
+_V2_CONTENT_DIR_NAMES = CONTENT_DIR_NAMES - _DATA_LENS_DIRS
+
 
 def _safe_iterdir(fs_dir) -> list:
     try:
@@ -87,7 +95,7 @@ def promote_component_types(d: Deriver) -> None:
 
 def _is_content_only(d: Deriver, comp: Component, rel_path: str) -> bool:
     dir_name = os.path.basename(rel_path).lower()
-    if dir_name in CONTENT_DIR_NAMES:
+    if dir_name in _V2_CONTENT_DIR_NAMES:
         code_exts = set(LANGUAGE_MAP.keys()) - CONTENT_EXTENSIONS
         code_files = [f for f in comp.files if os.path.splitext(f)[1].lower() in code_exts]
         total = len(comp.files)

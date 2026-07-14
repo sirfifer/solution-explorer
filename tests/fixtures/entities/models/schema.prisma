@@ -1,0 +1,16 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id    Int    @id @default(autoincrement())
+  name  String
+  price Float
+  sku   String @unique
+}
+
+model Category {
+  id   Int    @id @default(autoincrement())
+  name String
+}
