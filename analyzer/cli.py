@@ -72,6 +72,13 @@ def main():
              "extract/derive/project tiers). v2 does not change any v1 default.",
     )
     parser.add_argument(
+        "--store",
+        default=None,
+        help="v2 only: path to the persistent fact-store database that is the "
+             "incremental baseline (default: <root>/.solution-explorer/index.db). "
+             "Ignored by the v1 engine.",
+    )
+    parser.add_argument(
         "--validate",
         action="store_true",
         help="Validate architecture data and report issues (requires pydantic)",
@@ -99,9 +106,24 @@ def main():
 
     args = parser.parse_args()
 
-    # Reject silently-ignored flag combinations. Previously the --incremental
-    # branch returned before split handling (so --split was dropped) and
-    # --config took precedence over --incremental with no warning (F-AN-9).
+    # Opt-in v2 engine (EXPERIMENTAL). Routed before any v1 setup or v1-only
+    # flag validation so it cannot change a v1 default and owns its own flag
+    # semantics. v2 is incremental by construction (P4-6): the persistent fact
+    # store is the baseline, hash comparison decides what re-parses, and
+    # --incremental / --base-sha / --head-sha / --baseline are accepted as
+    # compatibility no-ops (the v2 engine is always incremental, so they change
+    # nothing). Unlike v1, --engine v2 --incremental --split is allowed, because
+    # v2 incremental works in split mode.
+    if args.engine == "v2":
+        from .project.run import run_v2
+
+        run_v2(args)
+        return
+
+    # Reject silently-ignored flag combinations on the v1 path. Previously the
+    # --incremental branch returned before split handling (so --split was
+    # dropped) and --config took precedence over --incremental with no warning
+    # (F-AN-9). These guards are v1-only; v2 owns its own flag handling above.
     if args.incremental and args.split:
         parser.error(
             "--incremental cannot be combined with --split; incremental mode "
@@ -112,17 +134,6 @@ def main():
             "--config (multi-repo) cannot be combined with --incremental; "
             "run one mode at a time"
         )
-
-    # Opt-in v2 engine (EXPERIMENTAL). Routed before any v1 setup so it cannot
-    # change a v1 default. Incremental v2 is P4-6; until then --engine v2 runs
-    # the full extract/derive/project pipeline (no incremental path).
-    if args.engine == "v2":
-        if args.incremental:
-            parser.error("--engine v2 does not support --incremental yet (P4-6)")
-        from .project.run import run_v2
-
-        run_v2(args)
-        return
 
     # Determine max_symbols default based on mode
     if args.max_symbols is None:

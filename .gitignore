@@ -22,5 +22,9 @@ packages/cli/dist/
 # architecture.json` and re-run /ai-assist to restore AI enhancements.
 .arch-baseline/
 
+# v2 engine (--engine v2) persistent fact store; the incremental baseline lives
+# here by default (<root>/.solution-explorer/index.db). Generated, never tracked.
+.solution-explorer/
+
 # Cloudflare Worker
 infrastructure/cloudflare/worker/.wrangler/

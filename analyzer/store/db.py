@@ -557,12 +557,23 @@ class FactStore:
         Extraction is content-addressed and idempotent: a re-run rebuilds
         ``files``, ``symbols``, ``signals``, and ``coverage`` from the cache
         (no re-parse for unchanged files, invariant I6) rather than appending
-        duplicates. The extraction_cache and any derivation tables are left
-        intact. Symbols are deleted before files to respect the FK.
+        duplicates. The extraction_cache is left intact (it is the incremental
+        baseline). Symbols and signals are deleted before files to respect the
+        FK.
+
+        ``component_files`` is cleared too: on a WARM store (P4-6) it was
+        populated by the previous run's Tier 3 flush and its ``file_id`` FK
+        would otherwise block ``DELETE FROM files`` when extraction reassigns
+        file ids. Derivation's ``_flush`` rebuilds ``component_files`` (and
+        ``components``/``edges``) from scratch on the same run, and extraction
+        always precedes derivation, so clearing it here is safe and keeps a
+        warm re-extraction from stranding memberships that point at stale file
+        ids. On a cold (fresh) store the table is empty and this is a no-op.
         """
         self._conn.execute("DELETE FROM symbols")
         self._conn.execute("DELETE FROM signals")
         self._conn.execute("DELETE FROM coverage")
+        self._conn.execute("DELETE FROM component_files")
         self._conn.execute("DELETE FROM files")
         if self.with_fts:
             self._conn.execute("DELETE FROM fts_docs WHERE ref_kind = 'symbol'")

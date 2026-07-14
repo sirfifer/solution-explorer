@@ -25,6 +25,19 @@ sorted path order; symbol IDs come from analyzer/store/ids.assign_symbol_ids
 never set iteration (invariant I4; TASKS.md Discovered 2026-07-13). The parser
 tier is encoded in parser_version so cache entries from the tree-sitter and
 regex tiers never mix.
+
+Incremental (P4-6, invariant I6). This runner is incremental by construction:
+``clear_extraction_facts`` rebuilds the per-file rows this tier owns (files,
+symbols, signals, coverage) while KEEPING the content-hash extraction cache, so
+a warm store re-parses only files whose content (or parser tier) changed and
+reuses cached facts for the rest. The fact rows are fully rebuilt every run, so
+deleted, renamed, and modified files leave no stale rows and a warm-store run
+over a given tree state produces the same store contents (modulo the cache's
+retained historical entries, which are content-addressed and never re-served for
+different content) as a fresh-store cold run. That is what makes a full rescan
+and an incremental run project byte-identically. Reading and hashing each file
+once per run is the single read invariant 4.1 allows and the only way to know a
+file changed; parsing, the dominant cost, is what the cache elides.
 """
 
 from __future__ import annotations

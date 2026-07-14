@@ -2,8 +2,21 @@
 
 Wired into analyzer/cli.py behind ``--engine v2`` (default stays ``v1``, the old
 engine; no default behavior changes). This runs the full Program 2 pipeline:
-Tier 1 extraction into an in-memory fact store, Tier 3 derivation, then Tier 4
+Tier 1 extraction into a persistent fact store, Tier 3 derivation, then Tier 4
 projection to the same delivery artifacts the viewer already loads.
+
+Incremental by construction (P4-6, invariant I6). The fact store is a durable
+file (default ``<root>/.solution-explorer/index.db``). On a warm store the
+content-hash extraction cache means unchanged files are never re-parsed: cost
+tracks the size of the change, not the size of the repo. The store itself is the
+incremental baseline, so the v2 path never reads or writes the old engine's
+``.arch-baseline/file-index.json`` or ``import-graph.json`` caches. The
+``--incremental`` / ``--base-sha`` / ``--head-sha`` / ``--baseline`` flags are
+accepted as compatibility no-ops (existing CI invocations keep working); v2 is
+always incremental, so they change nothing. Derivation re-runs in full each pass
+because it is cheap store queries whose correctness is global (component
+membership and relationship joins can change anywhere when any file changes); it
+never re-reads source (P4-3), so full re-derivation over a warm store stays fast.
 
 EXPERIMENTAL. The v2 engine is not the default and is not yet the cutover path
 (that is P4-7). It exists so the projection tier can be driven end to end and
@@ -22,13 +35,39 @@ from ..extract import extract_repo
 from ..store import FactStore
 from .pipeline import project_monolith, project_split
 
+DEFAULT_STORE_RELPATH = Path(".solution-explorer") / "index.db"
+
+
+def default_store_path(root: Path) -> Path:
+    """The default persistent-store location for a single-repo v2 scan.
+
+    Under ``<root>/.solution-explorer/`` so the store is discoverable next to
+    the code it indexes. The directory is a dot-directory, so extraction prunes
+    it (one ``excluded:skipped_directory`` ledger row) and never scans the
+    database file. Creating it before enumeration keeps that ledger row present
+    on both cold and warm runs, so a fresh-store rescan and a warm-store
+    incremental run over the same tree project byte-identically (P4-6 parity).
+    """
+    return Path(root) / DEFAULT_STORE_RELPATH
+
 
 def run_v2(args) -> None:
     """Run the v2 pipeline from parsed CLI args (analyzer/cli.py ``main``)."""
     generated_at = datetime.now(timezone.utc).isoformat()
     indent = None if args.compact else 2
 
+    # v2 is incremental by construction; the legacy incremental flags are
+    # accepted so existing workflow invocations keep running unmodified, but
+    # they select nothing (there is no separate full/incremental mode here).
+    if getattr(args, "incremental", False) or getattr(args, "base_sha", ""):
+        print(
+            "Note: engine=v2 is incremental by construction "
+            "(the fact store is the baseline); --incremental/--base-sha are "
+            "accepted as no-ops."
+        )
+
     store = None
+    store_owned = False
     root = None
     if args.config:
         config_path = Path(args.config).resolve()
@@ -36,34 +75,52 @@ def run_v2(args) -> None:
             print(f"Error: Config file not found: {config_path}", file=sys.stderr)
             sys.exit(1)
         print(f"Multi-repo mode (engine=v2): {config_path}")
+        # Multi-repo assembles per-repo stores internally; a unified persistent
+        # incremental store for a merged multi-repo run is P4-7 territory.
         arch = derive_multi_from_config(config_path)
     else:
         root = Path(args.path).resolve()
         if not root.is_dir():
             print(f"Error: {root} is not a directory", file=sys.stderr)
             sys.exit(1)
-        print(f"Scanning {root} (engine=v2)...")
-        store = FactStore(":memory:")
+
+        store_path = Path(args.store).resolve() if args.store else default_store_path(root)
+        store_path.parent.mkdir(parents=True, exist_ok=True)
+        warm = store_path.exists() and store_path.stat().st_size > 0
+        print(
+            f"Scanning {root} (engine=v2, {'warm' if warm else 'cold'} store: "
+            f"{store_path})..."
+        )
+        store = FactStore(str(store_path))
+        store_owned = True
         max_file_size = args.max_file_size if args.max_file_size else None
-        extract_repo(root, store, max_file_size=max_file_size)
+        extraction = extract_repo(root, store, max_file_size=max_file_size)
+        print(
+            f"  Extraction: {extraction.files_parsed} parsed, "
+            f"{extraction.files_cached} cached (unchanged)"
+        )
         _, arch = derive_all(store, root.name, root_path=str(root))
 
-    if args.split:
-        output_dir = (
-            Path(args.output) if args.output != "architecture.json" else Path("architecture")
-        )
-        result = project_split(
-            arch, output_dir, store=store, root=root,
-            generated_at=generated_at, analyzer_version=__version__, indent=indent,
-        )
-        output_label = f"{output_dir}/"
-    else:
-        output_path = Path(args.output)
-        result = project_monolith(
-            arch, output_path, store=store, root=root,
-            generated_at=generated_at, analyzer_version=__version__, indent=indent,
-        )
-        output_label = str(output_path)
+    try:
+        if args.split:
+            output_dir = (
+                Path(args.output) if args.output != "architecture.json" else Path("architecture")
+            )
+            result = project_split(
+                arch, output_dir, store=store, root=root,
+                generated_at=generated_at, analyzer_version=__version__, indent=indent,
+            )
+            output_label = f"{output_dir}/"
+        else:
+            output_path = Path(args.output)
+            result = project_monolith(
+                arch, output_path, store=store, root=root,
+                generated_at=generated_at, analyzer_version=__version__, indent=indent,
+            )
+            output_label = str(output_path)
+    finally:
+        if store_owned and store is not None:
+            store.close()
 
     stats = arch.get("stats", {})
     print("\nAnalysis complete (engine=v2):")
