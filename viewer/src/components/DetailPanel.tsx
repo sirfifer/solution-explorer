@@ -15,6 +15,7 @@ import { parseUrlState, replaceUrlState } from "../utils/urlState";
 import { CodePreview } from "./CodePreview";
 import { VirtualList } from "./VirtualList";
 import { RationaleStrip } from "./RationaleStrip";
+import { findingsForComponent } from "../findings/model";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, getPatternRef, getProtocolRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
@@ -186,6 +187,17 @@ function ComponentDetail({
   // one-shot request and clear it so it does not re-fire on unrelated re-renders.
   const pendingDetailTab = useArchStore((s) => s.pendingDetailTab);
   const clearPendingDetailTab = useArchStore((s) => s.clearPendingDetailTab);
+
+  // Contextual findings badge (P6-8). The findings touching this component,
+  // derived from finding members (robust). Clicking opens the Findings surface
+  // filtered to this element. Selecting the raw array and memoizing avoids the
+  // reference churn a computed selector would cause on every store update.
+  const allFindings = useArchStore((s) => s.architecture?.findings);
+  const openFindingsSurface = useArchStore((s) => s.openFindingsSurface);
+  const componentFindings = useMemo(
+    () => findingsForComponent(allFindings ?? [], component.id),
+    [allFindings, component.id],
+  );
   useEffect(() => {
     if (pendingDetailTab && (TAB_KEYS as string[]).includes(pendingDetailTab)) {
       setActiveTab(pendingDetailTab as Tab);
@@ -385,6 +397,29 @@ function ComponentDetail({
       {/* Rationale strip (I13): ownership, last change, churn, and AI intent
           where present; renders nothing when the dataset carries none. */}
       <RationaleStrip component={component} />
+
+      {/* Contextual findings badge (P6-8): when this component is a member of any
+          finding, a click opens the Findings surface filtered to it. */}
+      {componentFindings.length > 0 && (
+        <div className={`px-4 py-2 border-b ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
+          <button
+            type="button"
+            data-testid="component-findings-badge"
+            onClick={() => openFindingsSurface({ elementFilter: component.id })}
+            className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-lg font-medium ${
+              darkMode
+                ? "bg-amber-500/15 text-amber-300 hover:bg-amber-500/25"
+                : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+            }`}
+            title="Open the Findings surface filtered to this component"
+          >
+            <span>{"\u{1F50E}"}</span>
+            <span>
+              {componentFindings.length} finding{componentFindings.length !== 1 ? "s" : ""} here
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className={`flex border-b ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>

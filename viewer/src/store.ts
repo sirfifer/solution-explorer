@@ -19,6 +19,8 @@ import type {
   Capability,
   DataEntity,
   EntityAccess,
+  Finding,
+  Concern,
   Rule,
   Finding,
   SelectionSet,
@@ -43,6 +45,11 @@ import {
   walkFlow,
   rankEntryFlows,
 } from "./lenses";
+import {
+  sortFindings,
+  findingsForComponent,
+  representativeComponentId,
+} from "./findings/model";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
 import {
@@ -367,6 +374,53 @@ interface ArchStore {
   getCouplingForComponent: (componentId: string) => Array<{ partnerId: string; partnerName: string; count: number }>;
   // A component's per-file hotspot detail, ranked (drill-in from a hotspot).
   getComponentActivityFiles: (componentId: string) => Array<ActivityFile & { path: string }>;
+
+  // Findings surface (P6-8, LENS-DESIGN sections 8-10). A globally reachable
+  // ranked overlay, available whenever the dataset carries findings or concerns.
+  // Transient UI state like SearchOverlay/AdminDashboard (not URL-synced); reset
+  // on architecture reload. `elementFilter` scopes the findings list to one
+  // component when the contextual detail-panel badge opens the surface.
+  findingsSurface: {
+    open: boolean;
+    tab: "findings" | "concerns";
+    kindFilter: string | null;
+    elementFilter: string | null;
+  };
+  openFindingsSurface: (opts?: {
+    tab?: "findings" | "concerns";
+    kindFilter?: string | null;
+    elementFilter?: string | null;
+  }) => void;
+  closeFindingsSurface: () => void;
+  setFindingsSurfaceTab: (tab: "findings" | "concerns") => void;
+  setFindingsKindFilter: (kind: string | null) => void;
+  // Ranked findings (rank_score desc; I11) and concerns from the projection.
+  getFindings: () => Finding[];
+  getConcerns: () => Concern[];
+  // The findings touching a component (contextual badge; derived from members).
+  getFindingsForComponent: (componentId: string) => Finding[];
+  getConcernById: (id: string) => Concern | null;
+
+  // Selection-set seam for set-level actions (P6-9, LENS-DESIGN section 10).
+  // Staging a finding's members records the intended addressable set; true
+  // set-level annotation and the structured directive export are P6-9. Today the
+  // annotate affordance stages the set and attaches a single-element annotation on
+  // the representative component (as far as single-element annotation allows).
+  stagedFindingSet: {
+    findingId: string;
+    label: string;
+    memberComponentIds: string[];
+    memberCount: number;
+  } | null;
+  stageFindingSet: (finding: Finding) => void;
+  clearStagedSet: () => void;
+  // The "annotate the set" affordance (I15). Stages the member set (the P6-9
+  // seam), navigates to the finding's representative component, enters review
+  // mode, and opens the annotation input there. Single-element annotation is as
+  // far as the review model reaches today; the staged set records the full
+  // intended membership for true set annotation in P6-9. Returns the representative
+  // component id (or null when the finding has no component member).
+  annotateFindingSet: (finding: Finding) => string | null;
 
   // Precomputed per-component connection counts, derived from relationships and
   // refreshed only when the architecture's relationships change. Held stable
@@ -722,6 +776,8 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   activityLoading: false,
   activityError: null,
   connectionCounts: {},
+  findingsSurface: { open: false, tab: "findings", kindFilter: null, elementFilter: null },
+  stagedFindingSet: null,
 
   reviewMode: false,
   annotations: [],
@@ -794,6 +850,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       // Rules lens selection belongs to a specific dataset; reset on reload (P6-6).
       selectedRuleId: null,
       pendingDetailTab: null,
+      // The findings overlay and any staged selection set belong to a specific
+      // dataset; reset on reload so a new scan starts closed (P6-8).
+      findingsSurface: { open: false, tab: "findings", kindFilter: null, elementFilter: null },
+      stagedFindingSet: null,
     });
   },
   setLoading: (loading) => set({ loading }),
@@ -1750,6 +1810,72 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       .filter(([, f]) => f.component_ids.includes(componentId))
       .map(([path, f]) => ({ ...f, path }))
       .sort((a, b) => b.hotspot_score - a.hotspot_score || a.path.localeCompare(b.path));
+  },
+
+  // Findings surface (P6-8). Opening starts from a clean kind filter unless one is
+  // explicitly passed, so a stale filter from a prior session never hides the
+  // findings the caller meant to show (e.g. the contextual badge opening filtered
+  // to an element whose findings are all of a kind the stale filter excludes). The
+  // element filter (from the contextual detail badge) implies the findings tab.
+  openFindingsSurface: (opts) =>
+    set((s) => ({
+      findingsSurface: {
+        open: true,
+        tab: opts?.tab ?? (opts?.elementFilter ? "findings" : s.findingsSurface.tab),
+        kindFilter: opts?.kindFilter ?? null,
+        elementFilter: opts?.elementFilter ?? null,
+      },
+    })),
+  closeFindingsSurface: () =>
+    set((s) => ({ findingsSurface: { ...s.findingsSurface, open: false } })),
+  setFindingsSurfaceTab: (tab) =>
+    set((s) => ({ findingsSurface: { ...s.findingsSurface, tab } })),
+  setFindingsKindFilter: (kind) =>
+    set((s) => ({ findingsSurface: { ...s.findingsSurface, kindFilter: kind } })),
+
+  // Ranked by rank_score desc, ties by id (I11): "look here first" holds even if
+  // the projection emitted them unordered.
+  getFindings: () => sortFindings(get().architecture?.findings ?? []),
+  getConcerns: () => get().architecture?.concerns ?? [],
+  getFindingsForComponent: (componentId) =>
+    findingsForComponent(get().architecture?.findings ?? [], componentId),
+  getConcernById: (id) =>
+    (get().architecture?.concerns ?? []).find((c) => c.id === id) ?? null,
+
+  // The P6-9 seam (section 10). Record the finding's members as an addressable
+  // selection set. True set-level annotation and directive export are P6-9; today
+  // this stage plus a single-element annotation on the representative component is
+  // as far as the review model reaches.
+  stageFindingSet: (finding) => {
+    const memberComponentIds = [
+      ...new Set(
+        finding.members
+          .map((m) => m.component_id)
+          .filter((cid): cid is string => typeof cid === "string" && cid.length > 0),
+      ),
+    ];
+    set({
+      stagedFindingSet: {
+        findingId: finding.id,
+        label: finding.summary,
+        memberComponentIds,
+        memberCount: finding.members.length,
+      },
+    });
+  },
+  clearStagedSet: () => set({ stagedFindingSet: null }),
+
+  annotateFindingSet: (finding) => {
+    get().stageFindingSet(finding);
+    const rep = representativeComponentId(finding);
+    if (!rep) return null;
+    // Close the overlay, focus the representative component so the reviewer sees
+    // it, enter review mode, and open the annotation input on it.
+    set((s) => ({ findingsSurface: { ...s.findingsSurface, open: false } }));
+    get().navigateToComponent(rep);
+    if (!get().reviewMode) get().toggleReviewMode();
+    get().setAnnotatingComponent(rep);
+    return rep;
   },
 
   getComponentById: (id) => {

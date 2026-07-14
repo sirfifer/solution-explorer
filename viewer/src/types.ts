@@ -461,6 +461,13 @@ export interface Component {
   // Rules this component enforces (P5-5). Set only when non-empty; a component
   // with no rules carries no key. The flat index lives at architecture.rules.
   rules?: Rule[];
+  // Concern id-references this component belongs to (P5-6 / P6-8). Set only when
+  // non-empty; old datasets omit it. Slugs resolve against architecture.concerns.
+  concerns?: string[];
+  // Finding id-references touching this component (P5-6 / P6-8). Set only when
+  // non-empty; the contextual findings badge derives its set from the finding
+  // members (robust), so this ref list is advisory. Old datasets omit it.
+  findings?: string[];
 }
 
 // Aggregation node (P6-4). At a drill level, components that the hero filter
@@ -686,6 +693,83 @@ export interface Architecture {
   };
   changelog?: ChangelogEntry[];
   changelog_serial?: number;
+  // Correlation surfaces (P5-6 / P6-8). Flat indexes of the concerns and findings
+  // the derivation produced. Optional; old datasets omit them and the Findings
+  // surface degrades to nothing (no entry point, byte-identical legacy render).
+  concerns?: Concern[];
+  findings?: Finding[];
+}
+
+// ---------------------------------------------------------------------------
+// Correlations: concerns and findings (P5-6 extraction, P6-8 surface).
+// LENS-DESIGN.md section 9. All deterministic derivations over the store,
+// AI-verified before surfacing, never AI-invented (I1). A finding carries
+// evidence, confidence, and a verification status; an unverified finding is
+// marked and never presented as established fact (I15, the DeepWiki lesson).
+// ---------------------------------------------------------------------------
+
+// One member of a finding: a code fragment (duplication) or a whole component
+// (orphan). File and line fields are present for fragment members; component
+// members carry the component id and null line fields.
+export interface FindingMember {
+  id: string;
+  kind: string; // "fragment" | "component"
+  component_id?: string | null;
+  file?: string | null;
+  line_start?: number | null;
+  line_end?: number | null;
+  symbol?: string | null;
+}
+
+// Evidence for a finding. Fragment evidence points at file:line(:symbol);
+// orphan evidence describes the component (path, type, owned files).
+export interface FindingEvidence {
+  file?: string | null;
+  line?: number | null;
+  end_line?: number | null;
+  symbol?: string | null;
+  component_id?: string;
+  path?: string;
+  type?: string;
+  files?: string[];
+}
+
+export interface Finding {
+  id: string;
+  kind: string; // "duplication" | "orphan" | "inconsistency"
+  summary: string;
+  members: FindingMember[];
+  evidence: FindingEvidence[];
+  confidence: string; // "inferred" today
+  // "unverified" until the Phase 7 verification pass (P7-4) flips it. An
+  // unverified finding is visibly marked and never presented as fact (I15).
+  verification_status: string;
+  rank_score: number;
+  detail?: Record<string, unknown>;
+}
+
+export interface ConcernEvidence {
+  file: string;
+  line?: number | null;
+  signal?: string;
+}
+
+export interface ConcernMember {
+  component_id: string;
+  evidence: ConcernEvidence[];
+  files: string[];
+  markers: string[];
+}
+
+export interface Concern {
+  id: string;
+  kind: string;
+  // The mechanical title (e.g. "Logging"). The Phase 7 (P7-4) plain-language
+  // name is a separate, currently-absent slot the surface shapes but leaves empty.
+  title: string;
+  basis: string; // mechanical detection basis
+  members: ConcernMember[];
+  detail?: Record<string, unknown>;
 }
 
 // Changelog types for architecture change notifications
