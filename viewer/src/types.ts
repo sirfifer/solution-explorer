@@ -296,6 +296,30 @@ export interface Relationship {
   ai_enhance?: RelationshipAIEnhance;
 }
 
+// Coverage ledger (optional, present only for v2 single-repo projections).
+// TARGET-ARCHITECTURE.md section 7 / invariant I2: every file under the scan
+// root has exactly one disposition (parsed, excluded:<rule>, failed, binary).
+// The manifest carries the summary; the full rows live in coverage.json (split
+// mode) or inline in the monolithic architecture.json.
+export interface CoverageRow {
+  path: string;
+  disposition: string;
+  reason: string | null;
+}
+
+export interface Coverage {
+  // Counts keyed by disposition string (e.g. "parsed", "binary",
+  // "excluded:node_modules", "failed"). This is the pruned-directory reading of
+  // I2: an excluded directory is a single row/count whose rule explains
+  // everything beneath it; failed/binary/oversize are per file.
+  summary: Record<string, number>;
+  total: number;
+  parsed: number;
+  // Full ledger rows. Present in coverage.json and the monolith; absent from the
+  // manifest summary (fetched lazily by the panel in split mode).
+  rows?: CoverageRow[];
+}
+
 export interface ArchitectureStats {
   total_files: number;
   total_lines: number;
@@ -327,6 +351,11 @@ export interface Architecture {
   stats: ArchitectureStats;
   repositories?: RepositoryInfo[];
   ai_enhance?: ArchitectureAIEnhance;
+  // Coverage ledger summary (optional; v2 single-repo projections only). Multi-
+  // repo projections omit it and are detected via `repositories` for the
+  // "coverage unavailable for this dataset" message. Old datasets omit it and
+  // degrade silently.
+  coverage?: Coverage;
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
   live_status?: {
     statuses?: Record<string, ArchitectureStatus>;

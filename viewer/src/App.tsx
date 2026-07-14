@@ -11,6 +11,7 @@ import { AnnotationInput } from "./components/AnnotationInput";
 import { ReviewSummary } from "./components/ReviewSummary";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { StatusDashboard } from "./components/StatusDashboard";
+import { CoverageBadge } from "./components/CoverageBadge";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useBottomSheet } from "./hooks/useBottomSheet";
@@ -647,6 +648,9 @@ export function App() {
           )}
         </div>
       )}
+
+      {/* Coverage ledger badge and drill-in panel (P4-4, invariant I2) */}
+      <CoverageBadge />
 
       {/* Review mode banner */}
       {reviewMode && (

@@ -11,6 +11,7 @@ import type {
   Symbol,
   FileInfo,
   Relationship,
+  CoverageRow,
   LiveConfig,
   LiveVersion,
   StatusOverlay,
@@ -219,6 +220,14 @@ interface ArchStore {
   loadComponentDetail: (componentId: string) => Promise<{ symbols: Symbol[]; files: FileInfo[] } | null>;
   retryComponentDetail: (componentId: string) => Promise<{ symbols: Symbol[]; files: FileInfo[] } | null>;
 
+  // Coverage ledger drill-in rows (P4-4). The badge reads the summary directly
+  // from `architecture.coverage`; the panel needs the full rows, which live in
+  // the monolith inline but are fetched lazily from coverage.json in split mode.
+  coverageRows: CoverageRow[] | null;
+  coverageRowsLoading: boolean;
+  coverageRowsError: string | null;
+  loadCoverageRows: () => Promise<CoverageRow[] | null>;
+
   // Precomputed per-component connection counts, derived from relationships and
   // refreshed only when the architecture's relationships change. Held stable
   // across status-overlay polls so ComponentNode selectors do not fire on every
@@ -393,6 +402,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   componentDetailCache: {},
   componentDetailLoading: {},
   componentDetailErrors: {},
+  coverageRows: null,
+  coverageRowsLoading: false,
+  coverageRowsError: null,
   connectionCounts: {},
 
   reviewMode: false,
@@ -431,6 +443,11 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       // error state keyed to the old scan.
       componentDetailLoading: {},
       componentDetailErrors: {},
+      // Drop any coverage rows fetched for a previous scan; the panel refetches
+      // (or reads the new inline rows) on next open.
+      coverageRows: null,
+      coverageRowsLoading: false,
+      coverageRowsError: null,
       // Refresh precomputed connection counts for the new relationship set
       // (F-VW-6). Status overlays reuse this map since they never touch
       // relationships.
@@ -845,6 +862,56 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       return { componentDetailErrors: errors, componentDetailLoading: loading };
     });
     return get().loadComponentDetail(componentId);
+  },
+
+  loadCoverageRows: async () => {
+    // Already loaded for this architecture.
+    const existing = get().coverageRows;
+    if (existing) return existing;
+
+    const arch = get().architecture;
+    if (!arch) return null;
+
+    // Monolith mode: the full rows ride inline in architecture.coverage.rows, so
+    // no fetch is needed.
+    const inline = arch.coverage?.rows;
+    if (inline && inline.length > 0) {
+      set({ coverageRows: inline });
+      return inline;
+    }
+
+    // Nothing to load if the dataset carries no coverage summary at all.
+    if (!arch.coverage) return null;
+
+    // Do not refire while a fetch is already in flight or after one failed; the
+    // panel surfaces the error and the next architecture load resets it.
+    if (get().coverageRowsLoading) return null;
+    if (get().coverageRowsError) return null;
+
+    set({ coverageRowsLoading: true });
+    // Capture the architecture this request belongs to so a live refresh that
+    // swaps the architecture mid-flight does not repopulate the fresh state.
+    const requestArch = arch;
+    try {
+      const res = await fetch("./architecture/coverage.json");
+      if (get().architecture !== requestArch) return null;
+      if (res.ok) {
+        const data = await res.json();
+        if (get().architecture !== requestArch) return null;
+        const rows: CoverageRow[] = Array.isArray(data?.rows) ? data.rows : [];
+        set({ coverageRows: rows, coverageRowsLoading: false });
+        return rows;
+      }
+      set({ coverageRowsError: `HTTP ${res.status}`, coverageRowsLoading: false });
+      return null;
+    } catch (err) {
+      if (get().architecture !== requestArch) return null;
+      set({
+        coverageRowsError: err instanceof Error ? err.message : "Fetch failed",
+        coverageRowsLoading: false,
+      });
+      return null;
+    }
   },
 
   getComponentById: (id) => {
