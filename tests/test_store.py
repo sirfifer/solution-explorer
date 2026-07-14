@@ -177,32 +177,42 @@ def test_schema_version_newer_than_code_raises(tmp_path, monkeypatch):
         FactStore(db_path)
 
 
-def test_schema_migration_v1_to_v2_is_additive(tmp_path):
-    # A v1 store (no activity tables) opened by v2 code gains the activity
-    # tables additively, keeps its existing rows, and bumps schema_version.
+def test_schema_migration_v1_to_current_is_additive(tmp_path):
+    # A v1 store (no activity tables from v2, no rules table from v3) opened by
+    # current code gains every later table additively, keeps its existing rows,
+    # and bumps schema_version to the current SCHEMA_VERSION.
     db_path = tmp_path / "index.db"
     with FactStore(db_path) as s:
-        # Simulate a store created under schema v1: activity tables absent,
-        # version stamped 1, and a pre-existing fact row to prove it survives.
+        # Simulate a store created under schema v1: the v2 activity tables and
+        # the v3 rules table absent, version stamped 1, and a pre-existing fact
+        # row to prove it survives.
         s._conn.executescript(
             "DROP TABLE IF EXISTS file_activity;"
             "DROP TABLE IF EXISTS file_activity_period;"
             "DROP TABLE IF EXISTS file_author;"
             "DROP TABLE IF EXISTS cochange_pair;"
+            "DROP TABLE IF EXISTS rules;"
         )
         s.set_meta("schema_version", "1")
         s.add_file("src/a.py", "python", 10, 100, "ha", "parsed")
         s.commit()
-    # Re-open with current code: migration runs.
+    # Re-open with current code: migrations 2 (activity) and 3 (rules) run.
     with FactStore(db_path) as s:
-        assert s.get_meta("schema_version") == "2"
+        assert s.get_meta("schema_version") == str(SCHEMA_VERSION) == "3"
         # Pre-existing row intact.
         assert [f["path"] for f in s.files()] == ["src/a.py"]
-        # New tables exist and are usable.
+        # The v2 activity tables exist and are usable.
         assert s.file_activity() == []
         s.merge_file_activity([("src/a.py", 2, 5, 1, "2020-01-01", "2020-02-01")])
         s.commit()
         assert s.file_activity()[0]["commit_count"] == 2
+        # The v3 rules table exists and is usable.
+        assert s.rules() == []
+        s.add_component("c", "C", type="service")
+        s.add_rule("rule:c:policy:x-1", "c", "policy", summary="s",
+                   detail={"anchor": "match"}, evidence=[], confidence="inferred")
+        s.commit()
+        assert len(s.rules()) == 1
 
 
 def test_activity_merge_is_additive(tmp_path):

@@ -21,6 +21,7 @@ from . import entities as entities_pass
 from . import flow as flow_pass
 from . import relationships as rel_pass
 from . import roles as roles_pass
+from . import rules as rules_pass
 from . import testing as testing_pass
 from .context import Deriver
 from .storeview import StoreView
@@ -53,6 +54,7 @@ def derive_all(
     docs_pass.extract_component_docs(d)
     capabilities_pass.derive_capabilities(d)
     entities_pass.derive_entities(d)
+    rules_pass.derive_rules(d)
 
     arch = _assemble(d, root_name, root_path, arch_description)
     _flush(store, d)
@@ -110,6 +112,7 @@ def _assemble(d: Deriver, root_name: str, root_path: str, description: str) -> d
     components = _build_component_tree(d)
     _attach_capabilities(components, d._capabilities_by_component)
     _attach_entities(components, d._entities_by_component)
+    _attach_rules(components, d._rules_by_component)
     relationships = _relationship_dicts(d)
     return {
         "name": root_name,
@@ -124,6 +127,7 @@ def _assemble(d: Deriver, root_name: str, root_path: str, description: str) -> d
         "capabilities": d.capabilities,   # flat index (P5-1); optional key
         "data_entities": d.data_entities, # flat index (P5-2); optional key
         "entity_access": d.entity_access, # flat index (P5-2); optional key
+        "rules": d.rules,                 # flat index (P5-5); optional key
         "symbols": [to_dict(s) for s in d._all_symbols],
         "files": [_file_dict(fi) for fi in d._all_files],
         "stats": _stats(d, relationships),
@@ -155,6 +159,19 @@ def _attach_entities(components: list, by_component: dict[str, list[dict]]) -> N
         if ents:
             comp["data_entities"] = ents
         _attach_entities(comp.get("children", []), by_component)
+
+
+def _attach_rules(components: list, by_component: dict[str, list[dict]]) -> None:
+    """Attach the optional per-component ``rules`` key in place (P5-5).
+
+    Set only when non-empty, so a component with no rules carries no key
+    (the ai_enhance optional-key precedent; the viewer ignores it).
+    """
+    for comp in components:
+        rls = by_component.get(comp.get("id"))
+        if rls:
+            comp["rules"] = rls
+        _attach_rules(comp.get("children", []), by_component)
 
 
 def _file_dict(fi) -> dict:
@@ -225,6 +242,7 @@ def _flush(store: FactStore, d: Deriver) -> None:
     the projection tier (P4-5) reads a complete component from the store.
     """
     store._conn.execute("DELETE FROM edges")
+    store._conn.execute("DELETE FROM rules")           # FK -> components
     store._conn.execute("DELETE FROM entity_access")   # FK -> data_entities
     store._conn.execute("DELETE FROM data_entities")   # FK -> components
     store._conn.execute("DELETE FROM capabilities")  # FK -> components; drop before components
@@ -305,5 +323,18 @@ def _flush(store: FactStore, d: Deriver) -> None:
         store.add_entity_access(
             accessor_id=acc["accessor_id"], entity_id=acc["entity_id"],
             mode=acc["mode"], evidence=acc["evidence"], confidence=acc["confidence"],
+        )
+
+    # Rules land in the store (system of record, P5-5). Written after components
+    # so the FK to components(id) holds; ids are content-derived so a re-derive
+    # is idempotent. The enclosing-symbol, trigger-capability, entity-link, and
+    # constrained-field detail rides inside detail_json (the additive
+    # payload-column pattern capabilities/entities use; no migration beyond the
+    # v2 -> v3 rules table itself, I3/I4).
+    for rule in d.rules:
+        store.add_rule(
+            rule_id=rule["id"], component_id=rule["component_id"],
+            kind=rule["kind"], summary=rule["summary"], detail=rule["detail"],
+            evidence=rule["evidence"], confidence=rule["confidence"],
         )
     store.commit()

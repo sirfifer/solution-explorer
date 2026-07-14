@@ -22,7 +22,9 @@ from __future__ import annotations
 #   2  P5-4: git-activity tables (file_activity, file_activity_period,
 #            file_author, cochange_pair) for the Activity lens (LENS-DESIGN L5).
 #            Additive; see MIGRATIONS below.
-SCHEMA_VERSION = 2
+#   3  P5-5: rules table (typed rule entities) for the Rules lens (LENS-DESIGN
+#            L6). Additive; see MIGRATIONS below.
+SCHEMA_VERSION = 3
 
 # ---------------------------------------------------------------------------
 # Core tables. Foreign keys are declared for documentation and optional
@@ -215,12 +217,39 @@ CREATE INDEX IF NOT EXISTS idx_cochange_a ON cochange_pair(path_a);
 CREATE INDEX IF NOT EXISTS idx_cochange_b ON cochange_pair(path_b);
 """
 
+# ---------------------------------------------------------------------------
+# Rules table (schema v3, P5-5; LENS-DESIGN.md L6). Typed rule entities are
+# derived (Tier 3) from `rule` signals the extraction tier emits. A rule is a
+# discrete unit of decision or constraint logic, kinded validation | calculation
+# | policy | io, with a MECHANICAL summary (condition text and outcome, never a
+# natural-language explanation: that is Phase 7 enrichment, invariant I1). The
+# inputs/outputs, anchor, framework, enclosing-symbol, trigger-capability,
+# entity-link and constrained-field detail rides in detail_json (the additive
+# payload-column pattern capabilities/data_entities use). Ids are content-derived
+# so a re-derive is idempotent; the deterministic reader in db.py sorts by id (I4).
+# ---------------------------------------------------------------------------
+
+_RULES_DDL = """
+CREATE TABLE IF NOT EXISTS rules (
+    id            TEXT PRIMARY KEY,
+    component_id  TEXT REFERENCES components(id),
+    kind          TEXT NOT NULL,     -- validation | calculation | policy | io
+    summary       TEXT,              -- mechanical condition + outcome
+    detail_json   TEXT,              -- inputs, outputs, anchor, framework, trigger, symbol, entity, field
+    evidence_json TEXT,
+    confidence    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_rules_component ON rules(component_id);
+CREATE INDEX IF NOT EXISTS idx_rules_kind ON rules(kind);
+"""
+
 # Migration registry: MIGRATIONS[v] is the DDL that upgrades a store at version
 # v-1 to version v. Each script is idempotent (IF NOT EXISTS), so re-running is
 # safe. A cold store gets every table from schema_statements in one shot; a warm
 # store at an older version runs the gap scripts in order (db.py._create_schema).
 MIGRATIONS: dict[int, str] = {
     2: _ACTIVITY_DDL,  # v1 -> v2: add the git-activity tables (P5-4)
+    3: _RULES_DDL,     # v2 -> v3: add the rules table (P5-5)
 }
 
 # ---------------------------------------------------------------------------
@@ -247,4 +276,4 @@ FTS_AVAILABLE_PROBE = "CREATE VIRTUAL TABLE temp.__fts_probe USING fts5(x);"
 
 def schema_statements(with_fts: bool = True) -> str:
     """Return the full DDL script. FTS can be omitted if the build lacks it."""
-    return _CORE_DDL + _ACTIVITY_DDL + (_FTS_DDL if with_fts else "")
+    return _CORE_DDL + _ACTIVITY_DDL + _RULES_DDL + (_FTS_DDL if with_fts else "")

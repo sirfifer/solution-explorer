@@ -272,6 +272,23 @@ class FactStore:
         )
         return int(cur.lastrowid)
 
+    def add_rule(
+        self,
+        rule_id: str,
+        component_id: Optional[str],
+        kind: str,
+        summary: Optional[str] = None,
+        detail: Any = None,
+        evidence: Any = None,
+        confidence: Optional[str] = None,
+    ) -> None:
+        self._conn.execute(
+            "INSERT INTO rules(id, component_id, kind, summary, detail_json, "
+            "evidence_json, confidence) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (rule_id, component_id, kind, summary, _dumps(detail),
+             _dumps(evidence), confidence),
+        )
+
     def add_enrichment(
         self,
         target_kind: str,
@@ -440,6 +457,18 @@ class FactStore:
         out = []
         for r in rows:
             d = dict(r)
+            d["evidence"] = _loads(d.pop("evidence_json"))
+            out.append(d)
+        return out
+
+    def rules(self) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM rules ORDER BY id"
+        ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["detail"] = _loads(d.pop("detail_json"))
             d["evidence"] = _loads(d.pop("evidence_json"))
             out.append(d)
         return out

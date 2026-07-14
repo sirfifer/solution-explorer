@@ -117,6 +117,10 @@ def test_http_edge_evidence_points_at_the_real_call_site():
 #      optional key on the arch dict and on owning component dicts (P5-1). They
 #      did not exist when the snapshot was frozen, so they are masked here; the
 #      capabilities themselves are asserted directly in tests/test_capabilities.py.
+#   D7 data entities: data_entities/entity_access (P5-2), masked like D6.
+#   D8 rules: typed rules (validation/calculation/policy/io) are a NEW optional
+#      key on the arch dict and on owning component dicts (P5-5), masked like D6;
+#      the rules themselves are asserted directly in tests/test_rules.py.
 
 _JUSTIFIED_COMPONENT_KEYS = {"testing"}          # D4
 _JUSTIFIED_REL_KEYS = {"evidence", "confidence", "origin"}  # D3
@@ -138,10 +142,12 @@ def _strip_capabilities(arch: dict) -> None:
     arch.pop("capabilities", None)
     arch.pop("data_entities", None)
     arch.pop("entity_access", None)
+    arch.pop("rules", None)
 
     def strip(c):
         c.pop("capabilities", None)
         c.pop("data_entities", None)
+        c.pop("rules", None)
         for ch in c.get("children", []):
             strip(ch)
 

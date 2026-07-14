@@ -36,6 +36,7 @@ from ..constants import (
 from .entities import extract_entities, extract_schema_entities
 from .facts import SignalRecord
 from .frameworks import extract_cli, extract_endpoints, extract_jobs
+from .rules import extract_rules
 
 
 def _line_of(content: str, pos: int) -> int:
@@ -298,6 +299,25 @@ def _framework(content: str, parser) -> list[SignalRecord]:
     if fw:
         return [SignalRecord("framework", {"name": fw}, None)]
     return []
+
+
+def extract_rule_signals(content: str, language: str, path: str) -> list[SignalRecord]:
+    """Extract ``rule`` signals from one file (P5-5, Rules lens L6).
+
+    Parser-independent: rule-bearing code (validation clusters, domain
+    conditionals, calculations with domain anchors, decision-shaped branching,
+    declarative field constraints) is detected by the per-language rules in
+    rules.py over ``content`` directly. Called from the runner alongside
+    ``extract_signals``/``extract_entity_signals`` so a file is still read once.
+    Each signal carries the match line so derivation (Tier 3) can attach
+    evidence, resolve the enclosing symbol, and cross-link to capabilities and
+    entities. Detection is conservative (precision over recall): ordinary
+    control flow never becomes a rule (see the noise test in test_rules.py).
+    """
+    out: list[SignalRecord] = []
+    for value, start in extract_rules(content, language, path):
+        out.append(SignalRecord("rule", value, _line_of(content, start)))
+    return out
 
 
 def extract_entity_signals(content: str, language: str, path: str) -> list[SignalRecord]:
