@@ -19,6 +19,12 @@ pattern, and deploy the interactive architecture viewer.
 - `path-to-codebase`: absolute path to the project/repo to analyze
 - `--update`: skip re-analysis, enhance only new/changed components (see Step 1b)
 
+> **Working directory.** Run the commands in this skill from the root of your
+> local `solution-explorer` checkout. All solution-explorer paths below
+> (`analyze.py`, `viewer/`, `scripts/`, `DEPLOYMENTS.md`) are relative to that
+> root. The `<codebase-path>` argument is the separate absolute path to the
+> project you are analyzing.
+
 ## Pipeline Overview
 
 The enhancement pipeline uses four phases that scale from 10-component projects
@@ -37,8 +43,8 @@ Run the static analyzer with the `--split` flag. Split mode is required for the
 DPEA pipeline.
 
 ```bash
-python3 /Users/ramerman/dev/solution-explorer/analyze.py <codebase-path> \
-  --split -o /Users/ramerman/dev/solution-explorer/viewer/public/architecture --pretty
+python3 analyze.py <codebase-path> \
+  --split -o viewer/public/architecture --pretty
 ```
 
 This produces `architecture/manifest.json` + per-component `data/detail-{id}.json`
@@ -439,7 +445,7 @@ output reads as if one expert wrote it.
 Before the agent pass, validate each `result-{n}.json`:
 
 ```bash
-python3 /Users/ramerman/dev/solution-explorer/scripts/score-ai-enhancement-quality.py \
+python3 scripts/score-ai-enhancement-quality.py \
   --partitions-dir enhancement/
 ```
 
@@ -506,7 +512,7 @@ A Python script performs the actual merge:
 7. Write the final `manifest.json`
 
 ```bash
-python3 /Users/ramerman/dev/solution-explorer/scripts/score-ai-enhancement-quality.py \
+python3 scripts/score-ai-enhancement-quality.py \
   --architecture viewer/public/architecture/manifest.json
 ```
 
@@ -529,7 +535,7 @@ Verify the output is valid and loadable:
 ```bash
 python3 -c "
 import json
-d = json.load(open('/Users/ramerman/dev/solution-explorer/viewer/public/architecture/manifest.json'))
+d = json.load(open('viewer/public/architecture/manifest.json'))
 print(f'OK: {len(d[\"components\"])} components, {len(d[\"relationships\"])} relationships')
 "
 ```
@@ -537,8 +543,8 @@ print(f'OK: {len(d[\"components\"])} components, {len(d[\"relationships\"])} rel
 Then run the full quality scoring:
 
 ```bash
-python3 /Users/ramerman/dev/solution-explorer/scripts/score-ai-enhancement-quality.py \
-  --architecture /Users/ramerman/dev/solution-explorer/viewer/public/architecture/manifest.json
+python3 scripts/score-ai-enhancement-quality.py \
+  --architecture viewer/public/architecture/manifest.json
 ```
 
 If any components are missing `ai_enhance` or quality is below threshold, go back
@@ -551,7 +557,7 @@ After the enhanced JSON is validated, build locally and deploy to production.
 ### 6a. Build locally for validation
 
 ```bash
-cd /Users/ramerman/dev/solution-explorer/viewer && npm run build
+cd viewer && npm run build
 ```
 
 If the build fails, fix the issue before proceeding.
@@ -559,7 +565,7 @@ If the build fails, fix the issue before proceeding.
 ### 6b. Start local preview
 
 ```bash
-cd /Users/ramerman/dev/solution-explorer/viewer && npx vite preview --port 4173
+cd viewer && npx vite preview --port 4173
 ```
 
 Do NOT tell the user the preview is ready yet. Run validation first.
@@ -567,7 +573,7 @@ Do NOT tell the user the preview is ready yet. Run validation first.
 ### 6c. Validate the preview
 
 ```bash
-sleep 2 && bash /Users/ramerman/dev/solution-explorer/scripts/validate-preview.sh http://localhost:4173
+sleep 2 && bash scripts/validate-preview.sh http://localhost:4173
 ```
 
 This script verifies:
@@ -596,7 +602,7 @@ cd <codebase-path> && git remote get-url origin
 
 Extract `owner/repo` from the URL (handles both HTTPS and SSH formats).
 
-Read `/Users/ramerman/dev/solution-explorer/DEPLOYMENTS.md` and find the row
+Read `DEPLOYMENTS.md` and find the row
 matching the GitHub repo. Extract the deployment URL.
 
 If no matching installation is found, tell the user and skip deployment.
@@ -607,7 +613,7 @@ Copy the enhanced architecture output to the target codebase and push:
 
 ```bash
 # For split mode, copy the entire architecture directory
-cp -r /Users/ramerman/dev/solution-explorer/viewer/public/architecture \
+cp -r viewer/public/architecture \
   <codebase-path>/architecture
 cd <codebase-path>
 git add architecture/

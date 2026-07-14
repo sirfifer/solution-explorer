@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **v2 analysis engine (now the default)**: An extract, derive, project pipeline over a persistent content-hash fact store. It parses each file once, derives components and relationships from the store without re-reading source, and projects the same `architecture.json` or split output the viewer already renders. Incremental by construction (the store is the baseline), so `--incremental` and its sibling flags are accepted as no-ops. No symbol cap.
+- **Coverage ledger**: The v2 engine accounts for every file under the root exactly once (parsed, skipped for a stated reason, or inside a pruned directory recorded as a single row) and writes a `coverage.json` the viewer surfaces as a coverage badge, so a silent gap is not possible.
+- **Inbound deep links**: `?file=&line=` URLs drill to the owning component and select the symbol at that line, with graceful handling of ambiguous and missing targets.
+- **Annotation persistence**: Review annotations persist to localStorage under the architecture's stable identity and survive a hard reload.
+- **`--engine v1` rollback flag**: The legacy single-pass scanner remains selectable for rollback and is scheduled for removal at a later gate.
+
+### Changed
+
+- Default single-repo and multi-repo paths (`npx`, `build.sh`, the GitHub Action, the workflows) emit uncapped `--split` output; single-file mode still warns loudly when it truncates, naming the count and the flags that lift the cap.
+
+### Fixed
+
+- Browser back and forward no longer corrupt drill state or grow the history stack.
+- Live refresh no longer wipes the search index or serves stale detail data.
+
 ## [1.2.0] - 2026-07-11
 
 ### Added
@@ -21,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tree-sitter parsers**: Added tree-sitter parsers for all 6 supported languages with graceful fallback to regex parsers.
 - **Three-tier CLI**: `npx solution-explorer` now supports standalone run, `init` for automated setup, and `init --live` for live monitoring.
 - **Mobile UI**: Bottom sheet panel, safe area support, swipe gestures.
-- **Review mode with annotations**: Attach notes to components, files, symbols, and relationships.
+- **Review mode with annotations**: Attach notes to components (and their name, type, framework, port, purpose, and pattern), files, and symbols.
 - **Automated downstream deployment**: Push to `sirfifer/solution-explorer@main` automatically dispatches redeploy workflows for all tracked installations (see `DEPLOYMENTS.md`).
 - **Release automation**: PyPI + npm publishing workflow.
 - **Cloudflare Workers backend**: Worker + D1 + R2 infrastructure for enhanced live monitoring, plus a resource usage dashboard.
