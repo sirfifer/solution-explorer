@@ -19,6 +19,7 @@ import { FlowPanel } from "./components/FlowPanel";
 import { ActivityPanel } from "./components/ActivityPanel";
 import { CapabilityPanel } from "./components/CapabilityPanel";
 import { DataPanel } from "./components/DataPanel";
+import { RulesPanel } from "./components/RulesPanel";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useBottomSheet } from "./hooks/useBottomSheet";
@@ -751,6 +752,7 @@ export function App() {
           {lens === "activity" && <ActivityPanel />}
           {lens === "capability" && <CapabilityPanel />}
           {lens === "data" && <DataPanel />}
+          {lens === "rules" && <RulesPanel />}
           <div className="flex-1 relative">
             <ReactFlowProvider>
               <ArchitectureGraph />

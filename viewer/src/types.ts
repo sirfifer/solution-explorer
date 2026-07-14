@@ -171,6 +171,71 @@ export interface EntityAccess {
   evidence: Evidence[];
 }
 
+// The trigger context of a rule (P5-5): where in the system the rule fires. A
+// rule inside a capability's defining symbol records `capability` (the route or
+// command this rule guards, the L6 -> L2 cross-link); otherwise it records the
+// enclosing `symbol` id where resolvable. Both are optional and mutually
+// exclusive in practice.
+export interface RuleTrigger {
+  symbol?: string;
+  capability?: string;
+}
+
+// The structured detail of a rule (P5-5), riding in the rule's `detail` payload
+// (the additive pattern capabilities/entities use). `anchor` names the detector
+// that matched (guard_clause, formula, switch, if_elif_chain, sql_column,
+// pydantic_validator, ...); `inputs`/`outputs` are the extracted identifier or
+// field or branch-label names; `symbol` is the enclosing/defining symbol id;
+// `framework` is the declaring framework where known; `field` is the constrained
+// field for io rules; `entity` is the L3 Data-lens cross-link (the entity whose
+// field an io rule constrains); `trigger` is the L2 Capability cross-link context.
+export interface RuleDetail {
+  anchor?: string;
+  inputs?: string[];
+  outputs?: string[];
+  symbol?: string;
+  framework?: string | null;
+  field?: string;
+  // The Data-lens (L3) cross-link: the data-entity id whose field this rule
+  // constrains (io rules only, where resolvable).
+  entity?: string;
+  // The Capability-lens (L2) cross-link context: the capability or symbol this
+  // rule fires under.
+  trigger?: RuleTrigger;
+  [key: string]: unknown;
+}
+
+// AI enrichment overlay for a rule (LENS-DESIGN L6, Phase 7). The deterministic
+// engine emits the mechanical `summary`; enrichment later adds a plain-language
+// `statement` and, per invariant I5, a `stale` marker when the cited code has
+// drifted from the statement's provenance. Optional and absent until Phase 7, so
+// the viewer renders the mechanical summary now and a clearly-shaped slot for the
+// statement that lights up when enrichment lands.
+export interface RuleAIEnhance {
+  statement?: string;
+  stale?: boolean;
+}
+
+// A discrete unit of decision or constraint logic (P5-5, LENS-DESIGN L6). Kind
+// is validation (an input/precondition check), calculation (a domain formula),
+// policy (a permission gate or decision-table-shaped branch), or io (a declared
+// field bound or format constraint). Confidence is certain for declared/schema-
+// anchored facts, inferred for shape-matched ones (invariant I3). `summary` is a
+// MECHANICAL rendering of the code (never a natural-language explanation, which
+// is Phase 7 enrichment, invariant I1). Evidence drills to the exact lines.
+export interface Rule {
+  id: string;
+  component_id: string | null;
+  kind: "validation" | "calculation" | "policy" | "io";
+  summary: string;
+  detail: RuleDetail;
+  evidence: Evidence[];
+  confidence: "certain" | "inferred";
+  // Phase 7 enrichment overlay (plain-language statement + staleness). Absent
+  // until enrichment runs; the Rules lens renders a slot for it.
+  ai_enhance?: RuleAIEnhance;
+}
+
 // AI enhancement data (optional, present only when AI assist has been run)
 export interface ComponentAIEnhance {
   // Core fields
@@ -393,6 +458,9 @@ export interface Component {
   // Data entities owned by this component (P5-2). Set only when non-empty; gates
   // the Data tab. The access edges themselves live at architecture.entity_access.
   data_entities?: DataEntity[];
+  // Rules this component enforces (P5-5). Set only when non-empty; a component
+  // with no rules carries no key. The flat index lives at architecture.rules.
+  rules?: Rule[];
   // Concern id-references this component belongs to (P5-6 / P6-8). Set only when
   // non-empty; old datasets omit it. Slugs resolve against architecture.concerns.
   concerns?: string[];
@@ -607,6 +675,10 @@ export interface Architecture {
   // Data tab reads this both directions: what a component touches, and who else
   // touches an entity this component owns.
   entity_access?: EntityAccess[];
+  // Flat rule index (P5-5). Optional; old datasets omit it. Presence gates the
+  // Rules lens (P6-6). The per-component `rules` key is the per-component slice;
+  // this index is the whole-system list the Rules lens ranks.
+  rules?: Rule[];
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
   live_status?: {
     statuses?: Record<string, ArchitectureStatus>;

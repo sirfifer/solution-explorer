@@ -27,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from ..enrich import apply_enrichment_overlay
 from .activity import build_activity
 from .changelog import apply_changelog
 from .coverage import build_coverage
@@ -128,6 +129,10 @@ def project_split(
     prepared = prepare_arch(
         arch, root=root, generated_at=generated_at, analyzer_version=analyzer_version
     )
+    # Store enrichment is canonical: overlay it (with staleness markers) before
+    # the changelog, manifest, and search shards read the arch (I5). No-op when
+    # the store carries no enrichment, so non-enriched projections are unchanged.
+    apply_enrichment_overlay(prepared, store)
     coverage = build_coverage(store)
     activity = build_activity(store)
     serial = _finish_changelog(
@@ -188,6 +193,10 @@ def project_monolith(
     prepared = prepare_arch(
         arch, root=root, generated_at=generated_at, analyzer_version=analyzer_version
     )
+    # Store enrichment is canonical: overlay it (with staleness markers) before
+    # the changelog and monolith read the arch (I5). No-op when the store carries
+    # no enrichment, so non-enriched projections are unchanged.
+    apply_enrichment_overlay(prepared, store)
     coverage = build_coverage(store)
     activity = build_activity(store)
     serial = _finish_changelog(
