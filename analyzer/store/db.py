@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import __version__ as store_version
-from .schema import SCHEMA_VERSION, schema_statements
+from .schema import MIGRATIONS, SCHEMA_VERSION, schema_statements
 
 __all__ = ["FactStore", "fts5_available"]
 
@@ -71,17 +71,34 @@ class FactStore:
     # -- lifecycle ---------------------------------------------------------
 
     def _create_schema(self) -> None:
-        """Create tables if absent (migrate from empty) and record versions."""
+        """Create tables if absent and apply version-gap migrations.
+
+        A cold store gets every table from ``schema_statements`` in one shot and
+        is stamped at the current ``SCHEMA_VERSION``. A warm store at an older
+        version runs each migration script in ``schema.MIGRATIONS`` from its
+        recorded version up to the current one, in order, then bumps its
+        ``schema_version`` (P5-4 added the migration path; before it any version
+        mismatch raised). A store from a newer code version than this one is a
+        hard error: we will not silently truncate future data.
+        """
         self._conn.executescript(schema_statements(with_fts=self.with_fts))
         existing = self.get_meta("schema_version")
         if existing is None:
             self.set_meta("schema_version", str(SCHEMA_VERSION))
             self.set_meta("store_version", store_version)
-        elif int(existing) != SCHEMA_VERSION:
-            raise ValueError(
-                f"store schema_version {existing} != code SCHEMA_VERSION "
-                f"{SCHEMA_VERSION}; a migration is required"
-            )
+        else:
+            ev = int(existing)
+            if ev > SCHEMA_VERSION:
+                raise ValueError(
+                    f"store schema_version {ev} is newer than code "
+                    f"SCHEMA_VERSION {SCHEMA_VERSION}; upgrade the analyzer"
+                )
+            if ev < SCHEMA_VERSION:
+                for target in range(ev + 1, SCHEMA_VERSION + 1):
+                    ddl = MIGRATIONS.get(target)
+                    if ddl:
+                        self._conn.executescript(ddl)
+                self.set_meta("schema_version", str(SCHEMA_VERSION))
         self._conn.commit()
 
     def commit(self) -> None:
@@ -548,6 +565,183 @@ class FactStore:
         )
         rows = self._conn.execute(sql, (start_id, max_depth, start_id)).fetchall()
         return [{"id": r["node"], "depth": r["depth"]} for r in rows]
+
+    # -- git activity (schema v2, P5-4) ------------------------------------
+    #
+    # All merges are additive: each commit contributes independently, so
+    # processing a commit range and adding to existing counts equals a full
+    # reprocess (invariant I6, cache-by-range). first_seen/last_modified fold
+    # with MIN/MAX. Callers accumulate per-range deltas in memory and write once.
+
+    def merge_file_activity(self, rows: Iterable[tuple]) -> None:
+        """Upsert (path, commit_count, lines_added, lines_removed, first_seen,
+        last_modified); counts add, first_seen folds MIN, last_modified MAX."""
+        self._conn.executemany(
+            "INSERT INTO file_activity(path, commit_count, lines_added, "
+            "lines_removed, first_seen, last_modified) VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(path) DO UPDATE SET "
+            "commit_count = commit_count + excluded.commit_count, "
+            "lines_added = lines_added + excluded.lines_added, "
+            "lines_removed = lines_removed + excluded.lines_removed, "
+            "first_seen = MIN(first_seen, excluded.first_seen), "
+            "last_modified = MAX(last_modified, excluded.last_modified)",
+            rows,
+        )
+
+    def merge_file_activity_periods(self, rows: Iterable[tuple]) -> None:
+        """Upsert (path, period, commit_count, lines_added, lines_removed)."""
+        self._conn.executemany(
+            "INSERT INTO file_activity_period(path, period, commit_count, "
+            "lines_added, lines_removed) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(path, period) DO UPDATE SET "
+            "commit_count = commit_count + excluded.commit_count, "
+            "lines_added = lines_added + excluded.lines_added, "
+            "lines_removed = lines_removed + excluded.lines_removed",
+            rows,
+        )
+
+    def merge_file_authors(self, rows: Iterable[tuple]) -> None:
+        """Upsert (path, author_key, author_name, commit_count, lines_added,
+        lines_removed); counts add, author_name updates to the latest seen."""
+        self._conn.executemany(
+            "INSERT INTO file_author(path, author_key, author_name, "
+            "commit_count, lines_added, lines_removed) VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(path, author_key) DO UPDATE SET "
+            "author_name = excluded.author_name, "
+            "commit_count = commit_count + excluded.commit_count, "
+            "lines_added = lines_added + excluded.lines_added, "
+            "lines_removed = lines_removed + excluded.lines_removed",
+            rows,
+        )
+
+    def merge_cochange_pairs(self, rows: Iterable[tuple]) -> None:
+        """Upsert (path_a, path_b, cochange_count) with path_a < path_b."""
+        self._conn.executemany(
+            "INSERT INTO cochange_pair(path_a, path_b, cochange_count) "
+            "VALUES (?, ?, ?) ON CONFLICT(path_a, path_b) DO UPDATE SET "
+            "cochange_count = cochange_count + excluded.cochange_count",
+            rows,
+        )
+
+    def clear_activity(self) -> None:
+        """Drop all git-activity rows and provenance (a full reprocess).
+
+        Used when the recorded HEAD is not an ancestor of the new HEAD
+        (rebase / force-push / shallow-boundary shift), where an additive merge
+        would double-count. A cold store's tables are already empty (no-op).
+        """
+        self._conn.execute("DELETE FROM file_activity")
+        self._conn.execute("DELETE FROM file_activity_period")
+        self._conn.execute("DELETE FROM file_author")
+        self._conn.execute("DELETE FROM cochange_pair")
+        self._conn.execute(
+            "DELETE FROM meta WHERE key LIKE 'activity_%'"
+        )
+
+    def file_activity(self) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM file_activity ORDER BY path"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def file_activity_periods(self) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM file_activity_period ORDER BY path, period"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def file_authors(self) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM file_author ORDER BY path, author_key"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def cochange_pairs(self, min_support: int = 1) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM cochange_pair WHERE cochange_count >= ? "
+            "ORDER BY path_a, path_b",
+            (min_support,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def has_activity(self) -> bool:
+        """True if the store carries any git-activity rows."""
+        row = self._conn.execute(
+            "SELECT 1 FROM file_activity LIMIT 1"
+        ).fetchone()
+        return row is not None
+
+    def apply_activity_renames(self, mapping: dict[str, str]) -> None:
+        """Migrate already-stored activity rows from old paths to new paths.
+
+        Used on an incremental (fast-forward) run when a rename happened inside
+        the newly processed commit range: history accumulated under the old path
+        must move to the current path so an incremental run matches a full
+        reprocess (which canonicalizes the whole history to current names). Rows
+        are pulled into memory, remapped, deleted, and re-merged through the
+        additive helpers, so a collision with an existing new-path row folds
+        correctly. Self-pairs that a co-change remap collapses are dropped.
+        """
+        mapping = {o: n for o, n in mapping.items() if o != n}
+        if not mapping:
+            return
+        old_paths = set(mapping)
+
+        def remap(p: str) -> str:
+            return mapping.get(p, p)
+
+        # file_activity
+        rows = [dict(r) for r in self._conn.execute("SELECT * FROM file_activity")]
+        moved = [r for r in rows if r["path"] in old_paths]
+        for r in moved:
+            self._conn.execute("DELETE FROM file_activity WHERE path = ?", (r["path"],))
+        self.merge_file_activity(
+            (remap(r["path"]), r["commit_count"], r["lines_added"],
+             r["lines_removed"], r["first_seen"], r["last_modified"]) for r in moved
+        )
+
+        # file_activity_period
+        rows = [dict(r) for r in self._conn.execute("SELECT * FROM file_activity_period")]
+        moved = [r for r in rows if r["path"] in old_paths]
+        for r in moved:
+            self._conn.execute(
+                "DELETE FROM file_activity_period WHERE path = ? AND period = ?",
+                (r["path"], r["period"]),
+            )
+        self.merge_file_activity_periods(
+            (remap(r["path"]), r["period"], r["commit_count"],
+             r["lines_added"], r["lines_removed"]) for r in moved
+        )
+
+        # file_author
+        rows = [dict(r) for r in self._conn.execute("SELECT * FROM file_author")]
+        moved = [r for r in rows if r["path"] in old_paths]
+        for r in moved:
+            self._conn.execute(
+                "DELETE FROM file_author WHERE path = ? AND author_key = ?",
+                (r["path"], r["author_key"]),
+            )
+        self.merge_file_authors(
+            (remap(r["path"]), r["author_key"], r["author_name"],
+             r["commit_count"], r["lines_added"], r["lines_removed"]) for r in moved
+        )
+
+        # cochange_pair: remap both endpoints, re-sort, drop self-pairs
+        rows = [dict(r) for r in self._conn.execute("SELECT * FROM cochange_pair")]
+        moved = [r for r in rows if r["path_a"] in old_paths or r["path_b"] in old_paths]
+        for r in moved:
+            self._conn.execute(
+                "DELETE FROM cochange_pair WHERE path_a = ? AND path_b = ?",
+                (r["path_a"], r["path_b"]),
+            )
+        new_pairs = []
+        for r in moved:
+            a, b = remap(r["path_a"]), remap(r["path_b"])
+            if a == b:
+                continue
+            lo, hi = (a, b) if a < b else (b, a)
+            new_pairs.append((lo, hi, r["cochange_count"]))
+        self.merge_cochange_pairs(new_pairs)
 
     # -- extraction reset (additive helper for the Tier 1 runner) ----------
 

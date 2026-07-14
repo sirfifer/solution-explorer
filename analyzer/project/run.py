@@ -31,7 +31,7 @@ from pathlib import Path
 
 from .. import __version__
 from ..derive import derive_all, derive_multi_from_config
-from ..extract import extract_repo
+from ..extract import extract_activity, extract_repo
 from ..store import FactStore
 from .pipeline import project_monolith, project_split
 
@@ -136,6 +136,15 @@ def run_v2(args) -> None:
             f"  Extraction: {extraction.files_parsed} parsed, "
             f"{extraction.files_cached} cached (unchanged)"
         )
+        # Git-activity extraction (P5-4): extraction-adjacent, reads git not
+        # source, cached by commit range. Graceful no-op on a non-git root.
+        activity = extract_activity(root, store)
+        if activity.git:
+            print(
+                f"  Activity: {activity.commits_processed} commits processed "
+                f"({activity.mode}"
+                f"{', shallow' if activity.shallow else ''})"
+            )
         _, arch = derive_all(store, root.name, root_path=str(root))
 
     try:

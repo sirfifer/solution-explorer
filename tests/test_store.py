@@ -166,13 +166,68 @@ def test_wal_mode_enabled_on_disk(tmp_path):
     assert mode.lower() == "wal"
 
 
-def test_schema_version_mismatch_raises(tmp_path, monkeypatch):
+def test_schema_version_newer_than_code_raises(tmp_path, monkeypatch):
+    # A store written by a newer analyzer must not be silently truncated: open
+    # is a hard error (P5-4 added migration for OLDER stores; newer still errors).
     db_path = tmp_path / "index.db"
     with FactStore(db_path) as s:
         s.set_meta("schema_version", "999")
         s.commit()
-    with pytest.raises(ValueError, match="migration"):
+    with pytest.raises(ValueError, match="newer than code"):
         FactStore(db_path)
+
+
+def test_schema_migration_v1_to_v2_is_additive(tmp_path):
+    # A v1 store (no activity tables) opened by v2 code gains the activity
+    # tables additively, keeps its existing rows, and bumps schema_version.
+    db_path = tmp_path / "index.db"
+    with FactStore(db_path) as s:
+        # Simulate a store created under schema v1: activity tables absent,
+        # version stamped 1, and a pre-existing fact row to prove it survives.
+        s._conn.executescript(
+            "DROP TABLE IF EXISTS file_activity;"
+            "DROP TABLE IF EXISTS file_activity_period;"
+            "DROP TABLE IF EXISTS file_author;"
+            "DROP TABLE IF EXISTS cochange_pair;"
+        )
+        s.set_meta("schema_version", "1")
+        s.add_file("src/a.py", "python", 10, 100, "ha", "parsed")
+        s.commit()
+    # Re-open with current code: migration runs.
+    with FactStore(db_path) as s:
+        assert s.get_meta("schema_version") == "2"
+        # Pre-existing row intact.
+        assert [f["path"] for f in s.files()] == ["src/a.py"]
+        # New tables exist and are usable.
+        assert s.file_activity() == []
+        s.merge_file_activity([("src/a.py", 2, 5, 1, "2020-01-01", "2020-02-01")])
+        s.commit()
+        assert s.file_activity()[0]["commit_count"] == 2
+
+
+def test_activity_merge_is_additive(tmp_path):
+    # Two merges over the same path add counts, fold first_seen MIN / last MAX.
+    with FactStore(":memory:") as s:
+        s.merge_file_activity([("f.py", 3, 30, 10, "2020-02-01", "2020-03-01")])
+        s.merge_file_activity([("f.py", 2, 20, 5, "2020-01-01", "2020-04-01")])
+        row = s.file_activity()[0]
+        assert row["commit_count"] == 5
+        assert row["lines_added"] == 50
+        assert row["lines_removed"] == 15
+        assert row["first_seen"] == "2020-01-01"
+        assert row["last_modified"] == "2020-04-01"
+
+
+def test_clear_activity_removes_rows_and_meta(tmp_path):
+    with FactStore(":memory:") as s:
+        s.merge_file_activity([("f.py", 1, 1, 0, "2020-01-01", "2020-01-01")])
+        s.merge_cochange_pairs([("a.py", "b.py", 3)])
+        s.set_meta("activity_head", "abc123")
+        s.commit()
+        s.clear_activity()
+        assert s.file_activity() == []
+        assert s.cochange_pairs() == []
+        assert s.get_meta("activity_head") is None
 
 
 # ---------------------------------------------------------------------------
