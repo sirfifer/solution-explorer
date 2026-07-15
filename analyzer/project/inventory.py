@@ -208,7 +208,7 @@ _DOC_EXTS = frozenset({
 _DOC_NAMES = frozenset({
     "license", "license.txt", "license.md", "licence", "notice", "copying",
     "authors", "contributors", "changelog", "changelog.md", "readme",
-    "readme.md", "readme.txt", "code_of_conduct.md", "codeowners",
+    "readme.md", "readme.txt", "code_of_conduct.md",
 })
 
 _LOCALIZATION_EXTS = frozenset({".strings", ".stringsdict", ".xcstrings", ".po", ".pot", ".mo"})
@@ -331,7 +331,7 @@ def classify_row(path: str, disposition: str, reason: Optional[str] = None) -> s
     # 6. Version control and CI infrastructure.
     if partset & _VCS_DIR_TOKENS:
         return "vcs_ci"
-    if filename in {".gitignore", ".gitattributes", ".gitmodules", ".mailmap", ".gitkeep"}:
+    if filename in {".gitignore", ".gitattributes", ".gitmodules", ".mailmap", ".gitkeep", "codeowners"}:
         return "vcs_ci"
 
     # 7. Vendored dependencies (per-file rows, when a vendored dir was walked).

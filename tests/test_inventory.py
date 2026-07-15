@@ -21,10 +21,9 @@ same bucket, which the context assertions reject.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
-
-import json
 
 from analyzer.derive import derive_all
 from analyzer.extract import extract_repo
@@ -37,7 +36,6 @@ from analyzer.project.inventory import (
 from analyzer.project.pipeline import project_split
 from analyzer.store import FactStore
 
-
 # ---------------------------------------------------------------------------
 # Classifier: context rules (path + extension together, never extension alone)
 # ---------------------------------------------------------------------------
@@ -49,6 +47,14 @@ def test_markdown_context_decides_documentation_vs_agent_content():
     assert classify_row(".claude/skills/x.md", "excluded:skipped_directory", ".claude") == "agent_content"
     assert classify_row("App/CLAUDE.md", "excluded:unsupported_extension", None) == "agent_content"
     assert classify_row("some/where/x.instructions.md", "excluded:unsupported_extension", None) == "agent_content"
+
+
+def test_codeowners_is_vcs_infrastructure_not_documentation():
+    # CODEOWNERS is review-routing configuration, not prose docs, wherever it
+    # lives (root, .github, or docs). Review finding on the P6-10 PR.
+    assert classify_row("CODEOWNERS", "excluded:unsupported_extension", None) == "vcs_ci"
+    assert classify_row(".github/CODEOWNERS", "excluded:unsupported_extension", None) == "vcs_ci"
+    assert classify_row("docs/CODEOWNERS", "excluded:unsupported_extension", None) == "vcs_ci"
 
 
 def _ext_only(path: str) -> str:

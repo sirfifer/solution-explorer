@@ -270,8 +270,12 @@ export function InventoryPanel({ open, onClose }: { open: boolean; onClose: () =
   const groups = inventory?.groups ?? [];
   const dominantId = inventory?.dominant?.id ?? null;
   const nonSourceTotal = inventory?.non_source_total ?? 0;
+  // The cue only fires when at least one source file was analyzed: with zero
+  // analyzed source the ratio is undefined and "N to 1" would be misleading.
   const disproportionate =
-    dominantId != null && nonSourceTotal > sourceAnalyzed * DISPROPORTION_RATIO;
+    dominantId != null &&
+    sourceAnalyzed > 0 &&
+    nonSourceTotal > sourceAnalyzed * DISPROPORTION_RATIO;
   const dominantGroup = dominantId ? groups.find((g) => g.id === dominantId) ?? null : null;
 
   return (

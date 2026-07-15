@@ -244,6 +244,23 @@ describe("inventory panel rendering and ranking", () => {
     expect(banner.textContent).toContain("build and test output");
   });
 
+  it("suppresses the disproportion cue when zero source was analyzed", async () => {
+    // With no analyzed source the ratio is undefined, so the banner must not
+    // fire even though a dominant group exists. Review finding on the P6-10 PR:
+    // the pre-fix cue treated 0 as a valid denominator and always fired.
+    stubCoverageFetch(true);
+    const coverage: Coverage = {
+      summary: { binary: 11, "excluded:unsupported_extension": 1 },
+      total: 12,
+      parsed: 0,
+    };
+    setArch(makeArchitecture({ coverage }));
+    render(<CoverageBadge />);
+    await openBadgeAndLoad();
+    fireEvent.click(await screen.findByTestId("inventory-explore"));
+    expect(screen.queryByTestId("inventory-disproportion")).toBeNull();
+  });
+
   it("expands a group to its files and extension breakdown", async () => {
     await openPanel();
     const buildCard = screen
