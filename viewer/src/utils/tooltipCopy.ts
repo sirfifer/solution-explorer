@@ -47,6 +47,27 @@ export const TOOLTIP_COPY = {
     },
   },
 
+  // The non-source inventory (P6-10). Reached from the coverage drill-in's
+  // NON-SOURCE ACCOUNTED family. Every line explains itself in plain language.
+  inventory: {
+    explore:
+      "Open the non-source inventory: what every non-source file is, why it is probably here, and what to do about it.",
+    group: "A category of non-source files, ranked by how many there are.",
+    recommendation: "A high-level suggestion for this whole group. No AI required.",
+    count: "How many non-source files fell into this category.",
+    bytes: "Total size of this group's files on disk, when the tree was available to measure.",
+    securitySensitive:
+      "Shaped like a certificate, key, or credential. Verify none of these are real secrets.",
+    likelyUnwanted: "Probably should not be in version control. See the recommendation.",
+    gitignoreCandidate: "Not yet covered by .gitignore, and probably should be.",
+    directoryRows:
+      "One row here stands for a whole pruned directory, not a single file. Its full contents are not enumerated.",
+    dominant:
+      "This one group is most of your non-source files. When it dwarfs your source, that is itself worth a look.",
+    sample:
+      "A sample of this group's files. Open any path to jump to it. The complete list is in the coverage ledger.",
+  },
+
   // The findings entry bar and each finding's badges.
   findings: {
     entry:
@@ -144,6 +165,10 @@ export const SWEPT_SURFACES = [
   "coverage.percent",
   "coverage.families",
   "coverage.dispositions",
+  "inventory.explore",
+  "inventory.group",
+  "inventory.recommendation",
+  "inventory.securitySensitive",
   "findings.entry",
   "findings.kind",
   "findings.verification",

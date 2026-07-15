@@ -19,17 +19,25 @@ from __future__ import annotations
 
 from typing import Optional
 
+from .inventory import build_inventory
+
 __all__ = ["build_coverage"]
 
 
-def build_coverage(store) -> Optional[dict]:
-    """Return ``{"summary", "total", "parsed", "rows"}`` from the store ledger.
+def build_coverage(store, root=None) -> Optional[dict]:
+    """Return ``{"summary", "total", "parsed", "rows", "inventory?"}`` from the ledger.
 
     Returns ``None`` when the store has no coverage rows (for example a
     projection assembled from an arch dict with no backing store), so the
     projection can omit the key entirely and the viewer degrades to its
     pre-ledger behavior. Rows are ordered by path (the store reader sorts), so
     the output is deterministic.
+
+    ``root`` is passed through to the non-source inventory (P6-10), which may
+    stat files for their size when the tree is available. The ``inventory`` key
+    is additive and versioned: an older dataset without it degrades to exactly
+    the pre-inventory coverage panel. It is omitted entirely when there are no
+    non-source rows to classify.
     """
     if store is None:
         return None
@@ -38,12 +46,16 @@ def build_coverage(store) -> Optional[dict]:
     if not rows:
         return None
     total = sum(summary.values())
-    return {
+    coverage = {
         "summary": summary,
         "total": total,
         "parsed": summary.get("parsed", 0),
         "rows": rows,
     }
+    inventory = build_inventory(rows, root=root)
+    if inventory is not None:
+        coverage["inventory"] = inventory
+    return coverage
 
 
 def coverage_manifest_summary(coverage: Optional[dict]) -> Optional[dict]:

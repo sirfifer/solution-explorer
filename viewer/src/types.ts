@@ -531,6 +531,70 @@ export interface Coverage {
   // Full ledger rows. Present in coverage.json and the monolith; absent from the
   // manifest summary (fetched lazily by the panel in split mode).
   rows?: CoverageRow[];
+  // Non-source inventory (P6-10). Present in coverage.json and the monolith,
+  // absent from the manifest summary. Optional and versioned: an older dataset
+  // without it degrades to exactly the pre-inventory coverage panel.
+  inventory?: Inventory;
+}
+
+// Non-source inventory (P6-10; repo totality). The analyzer classifies every
+// non-source ledger row into a category group, each carrying a plain-language
+// explanation, a high-level recommendation, and bounded evidence, all computed
+// deterministically without any AI. The viewer ranks the groups by count and
+// bytes and names the dominant group when non-source dwarfs source.
+export interface InventoryGroupFlags {
+  security_sensitive: boolean;
+  likely_unwanted: boolean;
+  gitignore_candidate: boolean;
+}
+
+export interface InventoryExtension {
+  ext: string;
+  count: number;
+}
+
+export interface InventoryTopDirectory {
+  dir: string;
+  count: number;
+}
+
+export interface InventoryGroup {
+  id: string;
+  label: string;
+  explanation: string;
+  recommendation: string;
+  count: number;
+  // Total bytes when the tree was available to stat, else null. Directory rows
+  // (one row standing for a pruned subtree) contribute no bytes.
+  bytes: number | null;
+  // How many of this group's rows are pruned-directory rows, each standing in
+  // for everything beneath it rather than a single file.
+  directory_rows: number;
+  extensions: InventoryExtension[];
+  top_directories: InventoryTopDirectory[];
+  // A bounded sample of member paths. The complete enumeration lives in the
+  // coverage ledger rows; this is enough to see what the group holds.
+  samples: string[];
+  flags: InventoryGroupFlags;
+}
+
+export interface InventoryDominant {
+  id: string;
+  count: number;
+  share: number;
+}
+
+export interface Inventory {
+  version: number;
+  // Non-source rows classified into groups (the NON-SOURCE ACCOUNTED family).
+  non_source_total: number;
+  // Source gaps (failed, oversized) not classified here; they live in the
+  // coverage gaps family. Carried so the panel can be honest about scope.
+  source_gap_total: number;
+  groups: InventoryGroup[];
+  // The dominant group when it is more than half of all non-source rows, else
+  // null. The viewer turns this into the disproportion cue.
+  dominant: InventoryDominant | null;
 }
 
 // Git-activity data (optional, present only when the P5-4 activity pass read git

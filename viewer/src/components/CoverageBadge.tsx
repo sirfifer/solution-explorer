@@ -1,8 +1,9 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, type ReactNode } from "react";
 import { useArchStore } from "../store";
 import type { CoverageRow } from "../types";
 import { Tooltip } from "./Tooltip";
 import { TOOLTIP_COPY, dispositionTooltip } from "../utils/tooltipCopy";
+import { InventoryPanel } from "./InventoryPanel";
 
 // Coverage badge and drill-in panel (P4-4; TARGET-ARCHITECTURE.md section 7,
 // invariant I2; LENS-DESIGN.md I11 rank-don't-render).
@@ -234,6 +235,7 @@ function FamilySection({
   groups,
   darkMode,
   defaultExpandGroups,
+  footer,
 }: {
   title: string;
   tooltip: string;
@@ -243,6 +245,7 @@ function FamilySection({
   groups: Group[];
   darkMode: boolean;
   defaultExpandGroups: boolean;
+  footer?: ReactNode;
 }) {
   const dot =
     tone === "analyzed"
@@ -274,6 +277,7 @@ function FamilySection({
           ))}
         </div>
       )}
+      {footer}
     </div>
   );
 }
@@ -285,8 +289,10 @@ export function CoverageBadge() {
   const coverageRowsLoading = useArchStore((s) => s.coverageRowsLoading);
   const coverageRowsError = useArchStore((s) => s.coverageRowsError);
   const loadCoverageRows = useArchStore((s) => s.loadCoverageRows);
+  const coverageInventory = useArchStore((s) => s.coverageInventory);
 
   const [open, setOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
 
   const coverage = architecture?.coverage ?? null;
 
@@ -351,7 +357,27 @@ export function CoverageBadge() {
       ? "bg-emerald-950/20 border-b border-emerald-900/30 text-emerald-300"
       : "bg-emerald-50 border-b border-emerald-200 text-emerald-800";
 
+  const hasInventory = (coverageInventory?.groups?.length ?? 0) > 0;
+  const inventoryFooter = hasInventory ? (
+    <Tooltip content={TOOLTIP_COPY.inventory.explore}>
+      <button
+        type="button"
+        data-testid="inventory-explore"
+        onClick={() => setInventoryOpen(true)}
+        className={`mt-1.5 w-full flex items-center justify-center gap-1 rounded-md border px-2 py-1.5 text-[11px] font-medium ${
+          darkMode
+            ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800/60"
+            : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+        }`}
+      >
+        Explore inventory
+        <span aria-hidden>{"→"}</span>
+      </button>
+    </Tooltip>
+  ) : null;
+
   return (
+    <>
     <div className={`px-4 py-2 text-xs shrink-0 ${tone}`}>
       <button
         type="button"
@@ -438,6 +464,7 @@ export function CoverageBadge() {
             groups={nonSourceGroups}
             darkMode={darkMode}
             defaultExpandGroups={false}
+            footer={inventoryFooter}
           />
           {coverageRowsLoading && (
             <p className={`text-[11px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
@@ -452,5 +479,7 @@ export function CoverageBadge() {
         </div>
       )}
     </div>
+    <InventoryPanel open={inventoryOpen} onClose={() => setInventoryOpen(false)} />
+    </>
   );
 }
