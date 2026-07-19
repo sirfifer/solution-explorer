@@ -45,6 +45,7 @@ from __future__ import annotations
 import hashlib
 import os
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -66,6 +67,37 @@ from .signals import extract_entity_signals, extract_rule_signals, extract_signa
 # silent anything").
 EXTRACT_TIER = "p5-extract/3"
 INLINE_THRESHOLD = 8  # below this many cache misses, parse inline (no pool)
+
+# In-run retry for transient extraction failures (P4-8). A worker crash, an
+# OS-layer error, or a dead process pool must not cost a file for the whole run:
+# failed items are re-submitted through the same worker path up to _MAX_ATTEMPTS
+# times total. Failures were already never cached (cross-run retry by
+# construction); this bounds the retry to the current run so 100 percent is
+# reachable without a rescan. The budget is failure-kind aware: infrastructure
+# and OS-layer failures are transient candidates and get the full budget, while
+# a parser exception on stable input is deterministic and is retried only once
+# (cheap, and expected to reproduce). Either way the final ledger disposition is
+# a pure function of the input, so full-vs-incremental parity and PYTHONHASHSEED
+# determinism are preserved.
+_MAX_ATTEMPTS = 3  # total attempts for a transient candidate (1 initial + 2 retries)
+_DETERMINISTIC_ATTEMPTS = 2  # a parser error is retried once, then stands
+
+# Error payloads whose type-name prefix marks them transient. The worker reports
+# failures as "<ExceptionType>: <message>" strings (it catches everything so a
+# bad file never crashes the pool), and pool death is synthesized as a
+# BrokenProcessPool payload by _run_parse_batch, so classification is a prefix
+# match on that leading type name. MemoryError and the OS/connection errors are
+# environmental; a BrokenProcessPool means the pool itself died and the batch is
+# retried against a freshly built pool.
+_TRANSIENT_ERROR_PREFIXES = (
+    "BrokenProcessPool",
+    "OSError",
+    "MemoryError",
+    "TimeoutError",
+    "BrokenPipeError",
+    "ConnectionError",
+    "ConnectionResetError",
+)
 
 # v2-only schema formats that are not in the shared LANGUAGE_MAP (which v1
 # scanner.py reads). `.sql` and `.json` are already enumerated; `.prisma` is not,
@@ -318,6 +350,52 @@ def _worker_count(queue_size: int, max_workers: Optional[int]) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Retry (P4-8)
+# ---------------------------------------------------------------------------
+
+def _is_transient(payload: str) -> bool:
+    """True if a failure payload names a transient (retryable) error kind.
+
+    The payload is the "<ExceptionType>: <message>" string the worker returns
+    (or the synthesized BrokenProcessPool string from a dead pool). Anything
+    outside _TRANSIENT_ERROR_PREFIXES is treated as a deterministic parser
+    failure: retried once, then it stands.
+    """
+    return payload.startswith(_TRANSIENT_ERROR_PREFIXES)
+
+
+def _should_retry(payload: str, attempt: int) -> bool:
+    """Whether a file that failed on ``attempt`` should be re-submitted.
+
+    Transient candidates get the full _MAX_ATTEMPTS budget; deterministic parser
+    failures get one retry only. ``attempt`` is the 1-based number of the pass
+    just completed.
+    """
+    budget = _MAX_ATTEMPTS if _is_transient(payload) else _DETERMINISTIC_ATTEMPTS
+    return attempt < budget
+
+
+def _run_parse_batch(tasks, n_workers: int, use_pool: bool):
+    """Run one parse pass over ``tasks``; return a list of (rel, status, payload).
+
+    A live pool is built fresh for every pass, so a retry that follows a pool
+    death runs against a new pool (rebuild, do not abort). If the pool dies
+    mid-pass (BrokenProcessPool while draining the map), every task in the batch
+    is reported failed with a transient BrokenProcessPool payload; the caller's
+    retry loop then re-submits them against the rebuilt pool.
+    """
+    if not tasks:
+        return []
+    if use_pool:
+        try:
+            with ProcessPoolExecutor(max_workers=n_workers) as pool:
+                return list(pool.map(_parse_worker, tasks))
+        except BrokenProcessPool as exc:
+            return [(t[0], "failed", f"BrokenProcessPool: {exc}") for t in tasks]
+    return [_parse_worker(t) for t in tasks]
+
+
+# ---------------------------------------------------------------------------
 # Store writing
 # ---------------------------------------------------------------------------
 
@@ -415,27 +493,44 @@ def extract_repo(
     # Parse the queue (pool or inline) and collect FileFacts by rel.
     parsed: dict[str, FileFacts] = {}
     failed: dict[str, str] = {}
+    attempts: dict[str, int] = {}
     tasks = [(c.rel, c.language, c.content, c.pversion) for c in queue]
     hash_by_rel = {c.rel: c.content_hash for c in queue}
+    task_by_rel = {t[0]: t for t in tasks}
 
     n_workers = _worker_count(len(queue), max_workers)
     result.worker_count = n_workers
-
-    if queue and n_workers > 1 and len(queue) >= INLINE_THRESHOLD:
-        with ProcessPoolExecutor(max_workers=n_workers) as pool:
-            outcomes = list(pool.map(_parse_worker, tasks))
-    else:
+    use_pool = bool(queue) and n_workers > 1 and len(queue) >= INLINE_THRESHOLD
+    if not use_pool:
         result.worker_count = 1
-        outcomes = [_parse_worker(t) for t in tasks]
 
-    for rel, status, payload in outcomes:
-        if status == "ok":
-            facts = FileFacts.from_dict(payload)
-            facts.content_hash = hash_by_rel[rel]
-            parsed[rel] = facts
-            store.cache_facts(facts.content_hash, facts.parser_version, facts.to_dict())
-        else:
-            failed[rel] = str(payload)
+    # In-run retry loop (P4-8). Each pass re-parses only the items still failing
+    # and still within their kind's budget. A file that succeeds on a retry is
+    # recorded exactly like a first-try success (it goes into ``parsed`` and its
+    # facts are cached), so retried and first-try successes are indistinguishable
+    # in the output. Only successes are cached, so failures still retry across
+    # runs by construction; this loop just bounds the retry to the current run.
+    pending = tasks
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        outcomes = _run_parse_batch(pending, n_workers, use_pool)
+        retry_next: list = []
+        for rel, status, payload in outcomes:
+            attempts[rel] = attempt
+            if status == "ok":
+                facts = FileFacts.from_dict(payload)
+                facts.content_hash = hash_by_rel[rel]
+                parsed[rel] = facts
+                store.cache_facts(
+                    facts.content_hash, facts.parser_version, facts.to_dict()
+                )
+                failed.pop(rel, None)  # a later pass may clear an earlier failure
+            else:
+                failed[rel] = str(payload)
+                if _should_retry(str(payload), attempt):
+                    retry_next.append(task_by_rel[rel])
+        pending = retry_next
+        if not pending:
+            break
 
     # Write everything in deterministic path order.
     for c in candidates:
@@ -462,7 +557,14 @@ def extract_repo(
                 content_hash=c.content_hash, parse_status="failed",
             )
             result.files_failed += 1
-            ledger_rows.append((rel, "failed", failed[rel]))
+            # Record how many attempts were spent so a permanent failure is
+            # honest about the retry effort (P4-8). The attempt count is a pure
+            # function of the input and the failure kind, so this reason is
+            # stable across a full rescan and an incremental run.
+            n = attempts.get(rel, 1)
+            ledger_rows.append(
+                (rel, "failed", f"failed after {n} attempts: {failed[rel]}")
+            )
 
     # Write the coverage ledger. Dispositions are already final:
     # parsed | excluded:<rule> | failed | binary (invariant I2).
