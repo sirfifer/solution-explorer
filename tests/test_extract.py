@@ -325,3 +325,167 @@ def test_determinism_across_process_hash_seeds():
         return out.stdout
 
     assert run("0") == run("1") == run("12345")
+
+
+# ---------------------------------------------------------------------------
+# In-run retry for transient failures (P4-8)
+# ---------------------------------------------------------------------------
+#
+# These inject failures through the REAL worker function on a REAL store and
+# real temp files. The small temp repos stay under INLINE_THRESHOLD so the
+# runner parses inline, which means monkeypatching the module-level worker in
+# the parent process reaches the code path the run actually executes (the pool
+# path runs the worker in child processes, out of monkeypatch reach; it has its
+# own pool-death test below that forces the pool branch with a stub executor).
+
+from concurrent.futures.process import BrokenProcessPool  # noqa: E402
+
+from analyzer.extract import runner as _runner  # noqa: E402
+from analyzer.extract.runner import INLINE_THRESHOLD  # noqa: E402
+
+
+def _dump_store(store) -> str:
+    return json.dumps(
+        {
+            "files": store.files(),
+            "symbols": store.symbols(),
+            "signals": store.signals(),
+            "coverage": store.coverage(),
+        },
+        sort_keys=True,
+        default=str,
+    )
+
+
+def test_transient_failure_is_retried_then_parsed(tmp_path, monkeypatch):
+    # A worker that crashes once on flaky.py (transient OSError) then succeeds.
+    # Pre-fix (no retry) this file lands failed; post-fix it lands parsed.
+    (tmp_path / "steady.py").write_text("a = 1\n")
+    (tmp_path / "flaky.py").write_text("b = 2\n")
+
+    real = _runner._parse_worker
+    calls: dict[str, int] = {}
+
+    def flaky(task):
+        rel = task[0]
+        if rel == "flaky.py":
+            calls[rel] = calls.get(rel, 0) + 1
+            if calls[rel] == 1:
+                return (rel, "failed", "OSError: transient worker crash")
+        return real(task)
+
+    monkeypatch.setattr(_runner, "_parse_worker", flaky)
+    store = FactStore(":memory:")
+    result = extract_repo(tmp_path, store)
+
+    disp = {c["path"]: c["disposition"] for c in store.coverage()}
+    assert disp["flaky.py"] == "parsed"
+    assert disp["steady.py"] == "parsed"
+    assert calls["flaky.py"] == 2  # failed once, retried once, then succeeded
+    assert result.files_failed == 0
+
+
+def test_retried_success_is_identical_to_first_try_success(tmp_path, monkeypatch):
+    # A file that succeeds on a retry must be byte-indistinguishable in the store
+    # from one that succeeded on the first try (invariant I4; parity).
+    (tmp_path / "steady.py").write_text("a = 1\n")
+    (tmp_path / "flaky.py").write_text("b = 2\n")
+
+    clean = FactStore(":memory:")
+    extract_repo(tmp_path, clean)
+    clean_dump = _dump_store(clean)
+
+    real = _runner._parse_worker
+    calls: dict[str, int] = {}
+
+    def flaky(task):
+        rel = task[0]
+        if rel == "flaky.py":
+            calls[rel] = calls.get(rel, 0) + 1
+            if calls[rel] == 1:
+                return (rel, "failed", "MemoryError: transient")
+        return real(task)
+
+    monkeypatch.setattr(_runner, "_parse_worker", flaky)
+    retried = FactStore(":memory:")
+    extract_repo(tmp_path, retried)
+
+    assert _dump_store(retried) == clean_dump
+
+
+def test_deterministic_failure_stands_with_attempts_recorded(tmp_path, monkeypatch):
+    # A parser exception on stable input is deterministic: retried once (2 total
+    # attempts) then it stands, with the attempt count in the ledger reason.
+    (tmp_path / "bad.py").write_text("x = 1\n")
+
+    def always_syntax(task):
+        return (task[0], "failed", "SyntaxError: unbalanced parens")
+
+    monkeypatch.setattr(_runner, "_parse_worker", always_syntax)
+    store = FactStore(":memory:")
+    result = extract_repo(tmp_path, store)
+
+    row = {c["path"]: c for c in store.coverage()}["bad.py"]
+    assert row["disposition"] == "failed"
+    assert "failed after 2 attempts" in row["reason"]
+    assert "SyntaxError" in row["reason"]
+    assert result.files_failed == 1
+
+
+def test_permanent_transient_failure_exhausts_the_budget(tmp_path, monkeypatch):
+    # A transient candidate that never recovers is tried the full 3 times and
+    # then lands failed with all attempts recorded.
+    (tmp_path / "gone.py").write_text("y = 2\n")
+
+    def always_oserror(task):
+        return (task[0], "failed", "OSError: disk vanished")
+
+    monkeypatch.setattr(_runner, "_parse_worker", always_oserror)
+    store = FactStore(":memory:")
+    extract_repo(tmp_path, store)
+
+    row = {c["path"]: c for c in store.coverage()}["gone.py"]
+    assert row["disposition"] == "failed"
+    assert "failed after 3 attempts" in row["reason"]
+    assert "OSError" in row["reason"]
+
+
+@pytest.mark.skipif(
+    (os.cpu_count() or 1) < 2,
+    reason="pool path needs more than one worker; single-CPU host parses inline",
+)
+def test_pool_death_is_rebuilt_not_aborted(tmp_path, monkeypatch):
+    # If the pool itself dies (BrokenProcessPool while draining the map), the run
+    # rebuilds the pool for the retry pass rather than aborting. Force the pool
+    # path with enough files, then stub the executor so its first map dies and
+    # its second succeeds.
+    for i in range(INLINE_THRESHOLD + 2):
+        (tmp_path / f"m{i}.py").write_text(f"v{i} = {i}\n")
+
+    real = _runner._parse_worker
+    state = {"n": 0}
+
+    class OneDeathPool:
+        def __init__(self, max_workers=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def map(self, fn, tasks):
+            state["n"] += 1
+            if state["n"] == 1:
+                raise BrokenProcessPool("a worker segfaulted")
+            return [real(t) for t in tasks]
+
+    monkeypatch.setattr(_runner, "ProcessPoolExecutor", OneDeathPool)
+    store = FactStore(":memory:")
+    result = extract_repo(tmp_path, store, max_workers=4)
+
+    disp = {c["path"]: c["disposition"] for c in store.coverage()}
+    assert all(d == "parsed" for d in disp.values())
+    assert result.files_failed == 0
+    assert state["n"] == 2  # pool died once, was rebuilt, then succeeded
