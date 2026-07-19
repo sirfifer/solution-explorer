@@ -33,6 +33,7 @@ from .. import __version__
 from ..derive import derive_all, derive_multi_from_config
 from ..extract import extract_activity, extract_repo
 from ..store import FactStore
+from .coverage import coverage_families, format_source_percent
 from .pipeline import project_monolith, project_split
 
 DEFAULT_STORE_RELPATH = Path(".solution-explorer") / "index.db"
@@ -183,5 +184,19 @@ def run_v2(args) -> None:
     print(f"  Relationships: {stats.get('total_relationships', 0)}")
     if result.coverage is not None:
         cov = result.coverage
-        print(f"  Coverage: {cov['parsed']}/{cov['total']} parsed")
+        # Speak the three-family coverage semantics that the viewer badge shows,
+        # not a raw parsed/total ratio. "Percent of SOURCE analyzed" excludes the
+        # non-source files (assets, vendored, docs) from the denominator, and the
+        # non-source total is reported separately as accounted for, so a repo full
+        # of images never reads as low coverage. A real gap is never rounded up to
+        # a bare 100 (format_source_percent mirrors the viewer's formatSourcePercent).
+        fam = coverage_families(cov["summary"])
+        pct = format_source_percent(fam)
+        gap_word = "gap" if fam["gap"] == 1 else "gaps"
+        ns_word = "file" if fam["nonsource"] == 1 else "files"
+        print(
+            f"  Coverage: {pct}% of source analyzed "
+            f"({fam['analyzed']} parsed, {fam['gap']} {gap_word}); "
+            f"{fam['nonsource']} non-source {ns_word} accounted for"
+        )
     print(f"\nOutput: {output_label}")

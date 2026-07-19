@@ -1,6 +1,7 @@
 """Tests for the CLI and split output."""
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -1120,3 +1121,73 @@ class TestMaxFileSizeDefaultPerEngine:
         assert all(
             r["disposition"] != "parsed" for r in data["coverage"]["rows"]
         ), "no non-empty file may parse under an explicit zero bound"
+
+
+# ---------------------------------------------------------------------------
+# P6-11: the v2 stdout coverage line speaks three-family semantics, matching the
+# viewer badge, not a raw parsed/total ratio.
+# ---------------------------------------------------------------------------
+
+# The retired wording was "Coverage: 651/712 parsed". This pattern matches that
+# old N/M form so the fail-before check can assert it is gone in both scenarios.
+_OLD_COVERAGE_RE = re.compile(r"\d+/\d+\s+parsed")
+
+
+def _coverage_line(stdout: str) -> str:
+    """Return the single ``Coverage:`` summary line from a v2 run's stdout."""
+    for raw in stdout.splitlines():
+        if raw.strip().startswith("Coverage:"):
+            return raw.strip()
+    raise AssertionError(f"no Coverage line in output:\n{stdout}")
+
+
+class TestCoverageLineLanguage:
+    """The v2 run summary reports percent-of-source analyzed plus a gap count and
+    a non-source-accounted count, so a repo full of assets never reads as low
+    coverage and a single real gap never rounds up to a bare 100.
+    """
+
+    def test_full_coverage_reads_as_100_percent_of_source(
+        self, monkeypatch, tmp_path, capsys
+    ):
+        # A repo whose source all parses, plus a non-source asset. Coverage reads
+        # "100% of source analyzed (... 0 gaps); N non-source accounted for".
+        (tmp_path / "package.json").write_text(json.dumps({"name": "cov-lang"}))
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "main.py").write_text("def keep():\n    return 0\n")
+        (tmp_path / "logo.png").write_bytes(b"\x89PNG\r\n")
+        out = tmp_path / "out.json"
+        monkeypatch.setattr("sys.argv", ["analyze", str(tmp_path), "-o", str(out)])
+        main()
+
+        line = _coverage_line(capsys.readouterr().out)
+        assert "100% of source analyzed" in line
+        assert "0 gaps" in line
+        assert "non-source files accounted for" in line
+        # Fail-before: the retired "N/M parsed" wording must be gone.
+        assert not _OLD_COVERAGE_RE.search(line), line
+
+    def test_a_real_gap_is_not_rounded_up_to_100(
+        self, monkeypatch, tmp_path, capsys
+    ):
+        # One oversized file excluded by an explicit bound is a source gap. The
+        # percent must drop below 100 (never round up while a gap exists) and the
+        # gap noun is singular for a single gap.
+        _repo_with_large_file(tmp_path)
+        (tmp_path / "src" / "small.py").write_text("def ok():\n    return 1\n")
+        out = tmp_path / "out.json"
+        monkeypatch.setattr("sys.argv", [
+            "analyze", str(tmp_path), "--max-file-size", "1000", "-o", str(out),
+        ])
+        main()
+
+        line = _coverage_line(capsys.readouterr().out)
+        assert "1 gap" in line and "1 gaps" not in line
+        assert "100% of source analyzed" not in line
+        assert "of source analyzed" in line
+        # Exactly one non-source file in this fixture: the noun must be singular
+        # (review finding on this PR: "1 non-source accounted for" read wrong).
+        assert "1 non-source file accounted for" in line
+        assert "non-source files" not in line
+        assert not _OLD_COVERAGE_RE.search(line), line
