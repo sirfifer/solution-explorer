@@ -29,6 +29,7 @@ from analyzer.derive import derive_all
 from analyzer.extract import extract_repo
 from analyzer.project.coverage import build_coverage
 from analyzer.project.inventory import (
+    CATEGORY_META,
     INVENTORY_VERSION,
     build_inventory,
     classify_row,
@@ -105,6 +106,85 @@ def test_product_assets_and_localization_and_config():
     assert classify_row("Base.lproj/Main.strings", "excluded:unsupported_extension", None) == "localization"
     assert classify_row("config/settings.plist", "excluded:unsupported_extension", ".plist") == "config"
     assert classify_row("package-lock.json", "excluded:unsupported_extension", None) == "lockfile"
+
+
+# ---------------------------------------------------------------------------
+# P6-11 vocabulary: the unamentis-ios unknowns each land in a real category.
+# Every assertion below is a fail-before proof: before this card each of these
+# paths returned "unknown" (the extensions and tokens were in no rule set).
+# ---------------------------------------------------------------------------
+
+def test_hooks_directory_is_vcs_infrastructure():
+    # A .hooks directory (git hooks) is CI/VCS plumbing, not unknown. It usually
+    # arrives as a single pruned-directory row for the dot-directory itself.
+    assert classify_row(".hooks", "excluded:skipped_directory", ".hooks") == "vcs_ci"
+    assert classify_row(".hooks/pre-commit", "excluded:unsupported_extension", None) == "vcs_ci"
+
+
+def test_tool_config_dotfiles_are_config():
+    # Whole-name tool config dotfiles that carry no useful extension to key off.
+    assert classify_row(".swiftformat", "excluded:unsupported_extension", None) == "config"
+    assert classify_row("App/.swiftlint.yml", "excluded:unsupported_extension", ".yml") == "config"
+
+
+def test_xcframework_bundle_internals_are_vendored():
+    # A .xcframework is a third-party binary framework: every file inside the
+    # bundle is vendored regardless of its own extension.
+    assert classify_row(
+        "PocketTTS.xcframework/ios-arm64/PocketTTS.framework/PocketTTS", "binary", "null_byte"
+    ) == "vendored"
+    assert classify_row(
+        "Frameworks/PocketTTS.xcframework/Info.plist", "excluded:unsupported_extension", ".plist"
+    ) == "vendored"
+
+
+def test_xcprivacy_is_config():
+    assert classify_row("PrivacyInfo.xcprivacy", "excluded:unsupported_extension", ".xcprivacy") == "config"
+
+
+def test_interface_builder_files_are_ui_definitions_not_unknown():
+    # Storyboards and xib files are UI layout definitions. Parsing them into the
+    # graph is P4-9's job; this card only stops them being unknown.
+    assert classify_row("LaunchScreen.storyboard", "excluded:unsupported_extension", ".storyboard") == "ui_definition"
+    assert classify_row("Views/MyCell.xib", "excluded:unsupported_extension", ".xib") == "ui_definition"
+
+
+def test_core_data_model_internals_are_data():
+    # A .xcdatamodeld internal file (like the ``contents`` XML) is Core Data
+    # model data, not source; parsing it into entities is P4-9's job.
+    assert classify_row(
+        "UnaMentis.xcdatamodeld/UnaMentis.xcdatamodel/contents", "excluded:unsupported_extension", None
+    ) == "data"
+
+
+def test_backup_droppings_are_flagged_for_removal():
+    # Backup and editor-save files are stray copies. They land in a category that
+    # flags the whole group likely_unwanted and gitignore_candidate.
+    assert classify_row("kb-sample-questions.json.backup", "excluded:unsupported_extension", ".backup") == "backup_files"
+    assert classify_row("src/main.py.bak", "excluded:unsupported_extension", None) == "backup_files"
+    assert classify_row("config.orig", "excluded:unsupported_extension", ".orig") == "backup_files"
+    assert classify_row("notes.txt~", "excluded:unsupported_extension", None) == "backup_files"
+    flags = CATEGORY_META["backup_files"]["flags"]
+    assert flags["likely_unwanted"] is True and flags["gitignore_candidate"] is True
+
+
+def test_unamentis_ios_unknown_set_reaches_zero():
+    # The exact unknown set the unamentis-ios demo surfaced. Every one must land
+    # in its intended real category and NONE may remain unknown (the card's
+    # acceptance). Fail-before: before this card each of these returned "unknown".
+    cases = {
+        (".hooks", "excluded:skipped_directory"): "vcs_ci",
+        (".swiftformat", "excluded:unsupported_extension"): "config",
+        ("PocketTTS.xcframework/ios-arm64/PocketTTS.framework/PocketTTS", "binary"): "vendored",
+        ("LaunchScreen.storyboard", "excluded:unsupported_extension"): "ui_definition",
+        ("PrivacyInfo.xcprivacy", "excluded:unsupported_extension"): "config",
+        ("kb-sample-questions.json.backup", "excluded:unsupported_extension"): "backup_files",
+        ("UnaMentis.xcdatamodeld/UnaMentis.xcdatamodel/contents", "excluded:unsupported_extension"): "data",
+    }
+    for (path, disposition), expected in cases.items():
+        got = classify_row(path, disposition, None)
+        assert got != "unknown", f"{path} must not be unknown"
+        assert got == expected, f"{path} classified as {got}, expected {expected}"
 
 
 # ---------------------------------------------------------------------------
@@ -275,3 +355,47 @@ def test_gitignore_candidate_suppressed_when_already_ignored(tmp_path):
     # Both are already covered by .gitignore, so we do not nag to add them again.
     assert build["flags"]["gitignore_candidate"] is False
     assert cruft["flags"]["gitignore_candidate"] is False
+
+
+# ---------------------------------------------------------------------------
+# P6-11 acceptance end to end: a real tree mirroring the unamentis-ios unknowns
+# extracts, classifies, and yields ZERO unknown rows through build_inventory.
+# ---------------------------------------------------------------------------
+
+def _ios_unknowns_tree(tmp: Path) -> Path:
+    # One real source file so the store is not empty and coverage is meaningful.
+    (tmp / "src").mkdir()
+    (tmp / "src" / "app.swift").write_text("struct App {}\n", encoding="utf-8")
+    # A git-hooks dot-directory (pruned to one skipped-directory ledger row).
+    (tmp / ".hooks").mkdir()
+    (tmp / ".hooks" / "pre-commit").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    # A tool config dotfile with no useful extension.
+    (tmp / ".swiftformat").write_text("--indent 4\n", encoding="utf-8")
+    # A third-party binary xcframework bundle (walked, internals arrive per file).
+    fw = tmp / "Frameworks" / "PocketTTS.xcframework" / "ios-arm64" / "PocketTTS.framework"
+    fw.mkdir(parents=True)
+    (fw / "PocketTTS").write_bytes(b"\x00\x01\x02\x03binary")
+    # An Interface Builder storyboard.
+    (tmp / "LaunchScreen.storyboard").write_text("<document></document>\n", encoding="utf-8")
+    # An Apple privacy manifest.
+    (tmp / "PrivacyInfo.xcprivacy").write_text("<plist></plist>\n", encoding="utf-8")
+    # A backup dropping.
+    (tmp / "kb-sample-questions.json.backup").write_text("{}\n", encoding="utf-8")
+    # A Core Data model bundle with its inner contents XML.
+    model = tmp / "UnaMentis.xcdatamodeld" / "UnaMentis.xcdatamodel"
+    model.mkdir(parents=True)
+    (model / "contents").write_text("<model></model>\n", encoding="utf-8")
+    return tmp
+
+
+def test_ios_unknowns_tree_yields_zero_unknown_rows(tmp_path):
+    root = _ios_unknowns_tree(tmp_path)
+    store = FactStore(":memory:")
+    extract_repo(root, store)
+    coverage = build_coverage(store, root=root)
+    inv = coverage["inventory"]
+    ids = {g["id"] for g in inv["groups"]}
+    # The acceptance criterion: nothing lands in the loud unknown bucket.
+    assert "unknown" not in ids, f"unexpected unknown rows: {inv['groups']}"
+    # Each artifact reached its intended category.
+    assert {"vcs_ci", "config", "vendored", "ui_definition", "data", "backup_files"} <= ids

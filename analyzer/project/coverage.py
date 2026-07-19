@@ -17,11 +17,66 @@ the viewer badge and panel on top of what is emitted here.
 
 from __future__ import annotations
 
+import math
 from typing import Optional
 
-from .inventory import build_inventory
+from .inventory import NON_SOURCE_DISPOSITIONS, build_inventory
 
-__all__ = ["build_coverage"]
+__all__ = [
+    "build_coverage",
+    "coverage_families",
+    "format_source_percent",
+]
+
+
+def coverage_families(summary: dict) -> dict:
+    """Split a disposition->count summary into the three coverage families.
+
+    Mirrors the viewer's ``computeCoverageFamilies`` (CoverageBadge.tsx) exactly
+    so the CLI summary line and the badge agree on the same numbers. ``parsed``
+    is analyzed source; the known non-source dispositions are non-source;
+    everything else that is not ``parsed`` is a source gap (loud), including any
+    future excluded rule. The percent denominator is analyzed plus gaps only,
+    never the non-source rows.
+    """
+    analyzed = 0
+    gap = 0
+    nonsource = 0
+    for disposition, count in summary.items():
+        if disposition == "parsed":
+            analyzed += count
+        elif disposition in NON_SOURCE_DISPOSITIONS:
+            nonsource += count
+        else:
+            gap += count
+    return {
+        "analyzed": analyzed,
+        "gap": gap,
+        "nonsource": nonsource,
+        "source_total": analyzed + gap,
+    }
+
+
+def format_source_percent(fam: dict) -> str:
+    """Format the source-analyzed percent exactly as the viewer does.
+
+    Mirrors ``formatSourcePercent`` (CoverageBadge.tsx): no source or no gaps
+    reads exactly "100"; with a real gap it shows one decimal and never rounds up
+    to a bare "100" while a gap exists, so a single skipped file cannot
+    masquerade as full coverage. ``math.floor(x + 0.5)`` reproduces JavaScript
+    ``Math.round`` (round half up), not Python's banker's rounding.
+    """
+    source_total = fam["source_total"]
+    gap = fam["gap"]
+    if source_total == 0 or gap == 0:
+        return "100"
+    percent = fam["analyzed"] / source_total * 100
+    rounded = math.floor(percent * 10 + 0.5) / 10
+    if rounded >= 100:
+        rounded = 99.9
+    if rounded == int(rounded):
+        return str(int(rounded))
+    return f"{rounded:.1f}"
 
 
 def build_coverage(store, root=None) -> Optional[dict]:

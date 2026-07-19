@@ -113,6 +113,12 @@ CATEGORY_META: dict[str, dict] = {
         "recommendation": "Keep. This is translated product content.",
         "flags": {"security_sensitive": False, "likely_unwanted": False, "gitignore_candidate": False},
     },
+    "ui_definition": {
+        "label": "Interface Builder UI",
+        "explanation": "Interface Builder UI definitions such as storyboards and xib files. The tool does not parse them into screens yet.",
+        "recommendation": "Keep. These define UI layouts. Parsing them into the graph is planned.",
+        "flags": {"security_sensitive": False, "likely_unwanted": False, "gitignore_candidate": False},
+    },
     "build_test_output": {
         "label": "Build and test output",
         "explanation": "Generated artifacts from building or testing, such as test result bundles, coverage reports, and logs.",
@@ -129,6 +135,12 @@ CATEGORY_META: dict[str, dict] = {
         "label": "Operating system cruft",
         "explanation": "Files the operating system drops into folders, such as .DS_Store and Thumbs.db.",
         "recommendation": "Remove from version control and add to .gitignore. These never belong in a repository.",
+        "flags": {"security_sensitive": False, "likely_unwanted": True, "gitignore_candidate": True},
+    },
+    "backup_files": {
+        "label": "Backup and editor droppings",
+        "explanation": "Backup copies and editor save files such as .bak, .orig, .backup, and trailing-tilde files.",
+        "recommendation": "Remove from version control and add to .gitignore. These are stray local copies, not intended content.",
         "flags": {"security_sensitive": False, "likely_unwanted": True, "gitignore_candidate": True},
     },
     "vcs_ci": {
@@ -163,7 +175,7 @@ CATEGORY_META: dict[str, dict] = {
     },
     "data": {
         "label": "Data files",
-        "explanation": "Datasets, databases, and model files such as csv, sqlite, and machine-learning weights.",
+        "explanation": "Datasets, databases, and model files such as csv, sqlite, machine-learning weights, and Core Data models.",
         "recommendation": "Review. Large data files usually belong in storage or Git LFS, not the source tree.",
         "flags": {"security_sensitive": False, "likely_unwanted": False, "gitignore_candidate": False},
     },
@@ -245,7 +257,13 @@ _DATA_EXTS = frozenset({
 _CONFIG_EXTS = frozenset({
     ".json", ".yaml", ".yml", ".toml", ".plist", ".xml", ".ini", ".cfg",
     ".conf", ".properties", ".editorconfig", ".entitlements", ".xcconfig",
-    ".pbxproj", ".xcsettings", ".xcscheme",
+    ".pbxproj", ".xcsettings", ".xcscheme", ".xcprivacy",
+})
+# Tool configuration dotfiles whose whole name is the config (no useful
+# extension to key off, such as ".swiftformat"). Matched by exact filename.
+_CONFIG_NAMES = frozenset({
+    ".swiftformat", ".swiftlint.yml", ".swiftlint.yaml", ".swiftgen.yml",
+    ".prettierrc", ".stylelintrc", ".babelrc", ".clang-format", ".clang-tidy",
 })
 
 # Directory-name tokens (lowercased) that anchor a category when they appear as
@@ -260,7 +278,13 @@ _VENDOR_DIR_TOKENS = frozenset({
     "node_modules", "vendor", "pods", "bower_components", "third_party",
     "third-party", ".yarn", "packages_cache",
 })
-_VCS_DIR_TOKENS = frozenset({".git", ".github", ".circleci", ".gitlab", ".husky"})
+_VCS_DIR_TOKENS = frozenset({".git", ".github", ".circleci", ".gitlab", ".husky", ".hooks"})
+
+# Extensions and trailing markers that identify a backup or editor-save dropping.
+# A trailing tilde is matched on the whole filename because splitext keeps it on
+# the extension side (``foo.py~`` -> ext ``.py~``), so the endswith test is used
+# instead of an extension-set membership check.
+_BACKUP_EXTS = frozenset({".backup", ".bak", ".orig"})
 _AGENT_DIR_TOKENS = frozenset({".claude", "prompts", ".cursor", ".continue", ".aider"})
 _LOCALIZATION_DIR_TOKENS = frozenset({"translations", "locales", "i18n", "l10n"})
 
@@ -305,7 +329,13 @@ def classify_row(path: str, disposition: str, reason: Optional[str] = None) -> s
     if filename in {".ds_store", "thumbs.db", "desktop.ini", ".spotlight-v100", ".trashes"}:
         return "os_cruft"
 
-    # 3. IDE and workspace metadata. Xcode project bundles are directories that
+    # 3. Backup and editor droppings. Checked early so a backup of any other file
+    #    type (for example ``config.json.bak`` or ``main.py~``) reads as a stray
+    #    copy to remove, not as the thing it is a backup of.
+    if ext in _BACKUP_EXTS or filename.endswith("~"):
+        return "backup_files"
+
+    # 4. IDE and workspace metadata. Xcode project bundles are directories that
     #    are walked (not pruned), so their internals arrive as per-file rows.
     if partset & _IDE_DIR_TOKENS:
         return "ide_metadata"
@@ -335,6 +365,11 @@ def classify_row(path: str, disposition: str, reason: Optional[str] = None) -> s
         return "vcs_ci"
 
     # 7. Vendored dependencies (per-file rows, when a vendored dir was walked).
+    #    A .xcframework bundle is a third-party binary framework: everything
+    #    inside it (binaries, headers, Info.plist) is vendored code we did not
+    #    write, so the whole bundle lands here regardless of per-file extension.
+    if any(p.endswith(".xcframework") for p in parts):
+        return "vendored"
     if partset & _VENDOR_DIR_TOKENS:
         return "vendored"
 
@@ -356,30 +391,44 @@ def classify_row(path: str, disposition: str, reason: Optional[str] = None) -> s
     if ext in _ASSET_EXTS:
         return "product_assets"
 
-    # 10. Archives.
+    # 10. Interface Builder UI definitions. Storyboards and xib files describe UI
+    #     layouts; the tool does not parse them into screens yet (that is P4-9),
+    #     so this stops them landing in the loud unknown bucket in the meantime.
+    if ext in {".storyboard", ".xib"}:
+        return "ui_definition"
+
+    # 11. Core Data models. A .xcdatamodeld (or its inner .xcdatamodel) is a data
+    #     model bundle whose internals (for example the ``contents`` XML) are all
+    #     data, not source; parsing it into entities is P4-9's job.
+    if any(p.endswith(".xcdatamodeld") or p.endswith(".xcdatamodel") for p in parts):
+        return "data"
+
+    # 12. Archives.
     if ext in _ARCHIVE_EXTS:
         return "archive"
 
-    # 11. Dependency lockfiles.
+    # 13. Dependency lockfiles.
     if filename in _LOCKFILE_NAMES or ext in _LOCKFILE_EXTS:
         return "lockfile"
 
-    # 12. Documentation. A docs/ context or a doc extension, now that the
+    # 14. Documentation. A docs/ context or a doc extension, now that the
     #     agent-content rule has already claimed prompt docs.
     if "docs" in partset or "doc" in partset:
         return "documentation"
     if ext in _DOC_EXTS or filename in _DOC_NAMES:
         return "documentation"
 
-    # 13. Data files.
+    # 15. Data files.
     if ext in _DATA_EXTS:
         return "data"
 
-    # 14. Configuration the parser did not claim.
-    if ext in _CONFIG_EXTS:
+    # 16. Configuration the parser did not claim, including tool config dotfiles
+    #     whose whole name is the config (``.swiftformat``) and Apple privacy
+    #     manifests (``.xcprivacy``, a plist by any other name).
+    if ext in _CONFIG_EXTS or filename in _CONFIG_NAMES:
         return "config"
 
-    # 15. Unknown: loud, never a silent bucket.
+    # 17. Unknown: loud, never a silent bucket.
     return "unknown"
 
 
