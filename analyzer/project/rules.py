@@ -144,6 +144,17 @@ def compile_glob(pattern: str) -> re.Pattern:
     pat = pattern.replace("\\", "/").strip()
     if not pat:
         raise ValueError("empty pattern")
+    # ReDoS guard (adversarial-review finding, proven exponential): runs of
+    # adjacent stars translate to adjacent unbounded quantifiers, and 24 stars
+    # already took tens of seconds against a short non-matching path. Collapse
+    # any run of 3+ stars to the ** it means in gitignore semantics, then bound
+    # total length and wildcard count so a hallucinated or hostile pattern is
+    # rejected loudly instead of hanging every future classification run.
+    pat = re.sub(r"\*{3,}", "**", pat)
+    if len(pat) > 512:
+        raise ValueError("pattern longer than 512 characters")
+    if pat.count("*") > 32:
+        raise ValueError("pattern has more than 32 wildcard characters")
     anchored = pat.startswith("/")
     if anchored:
         pat = pat[1:]

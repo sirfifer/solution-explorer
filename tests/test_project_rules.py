@@ -454,3 +454,70 @@ def test_identify_no_unknowns_is_a_clean_noop(tmp_path):
     )
     assert report.written == []
     assert report.ok is True
+
+
+# ---------------------------------------------------------------------------
+# Adversarial-review fixes (PR #47)
+# ---------------------------------------------------------------------------
+
+
+def test_star_heavy_pattern_is_guarded_not_exponential():
+    # ReDoS guard: pre-fix, x + 24 stars + y compiled to adjacent unbounded
+    # quantifiers and took tens of seconds against a short non-matching path;
+    # 40 stars hung indefinitely. Post-fix star runs collapse to the ** they
+    # mean and the match is instant.
+    import time
+
+    from analyzer.project.rules import compile_glob
+
+    rx = compile_glob("x" + "*" * 40 + "y")
+    t0 = time.monotonic()
+    assert rx.match("a/b/" + "c" * 30) is None
+    assert time.monotonic() - t0 < 0.5, "star-heavy pattern must not backtrack"
+    # And it still means what ** means.
+    assert rx.match("xanythingy") or rx.match("x/deep/path/y") or rx.match("xy")
+
+
+def test_absurd_patterns_are_rejected_loudly():
+    import pytest as _pytest
+
+    from analyzer.project.rules import compile_glob
+
+    with _pytest.raises(ValueError):
+        compile_glob("a" * 600)
+    with _pytest.raises(ValueError):
+        compile_glob("*a" * 40)
+
+
+def test_writer_explicit_id_collision_gets_a_unique_id(tmp_path):
+    # Pre-fix: a proposed rule carrying an id that collides with an existing
+    # rule was appended as a duplicate, reported written, and then silently
+    # dropped by the loader's keep-the-first rule on reload. Post-fix the
+    # explicit id goes through the collision machinery and BOTH rules survive
+    # a round trip.
+    from analyzer.enrich.rules_writer import write_inventory_rules
+    from analyzer.project.rules import load_repo_rules_raw
+
+    root = tmp_path
+    first = write_inventory_rules(
+        root,
+        [{"id": "myrule", "pattern": "*.ai", "category": "data",
+          "source": "ai-enrichment"}],
+    )
+    assert "myrule" in first.written
+    second = write_inventory_rules(
+        root,
+        [{"id": "myrule", "pattern": "*.psd", "category": "product_assets",
+          "source": "ai-enrichment"}],
+    )
+    assert second.written, "the colliding proposal must still be written"
+    new_id = second.written[0]
+    assert new_id != "myrule", "the collision must mint a distinct id"
+
+    rules = load_repo_rules_raw(root)
+    ids = [r.id for r in rules]
+    assert ids.count("myrule") == 1
+    assert new_id in ids
+    patterns = {r.id: r.pattern for r in rules}
+    assert patterns["myrule"] == "*.ai"
+    assert patterns[new_id] == "*.psd"

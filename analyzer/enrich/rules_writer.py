@@ -167,9 +167,18 @@ def write_inventory_rules(
             # A human already ruled on this pattern; never contradict them.
             result.skipped_human.append(pattern)
             continue
-        rid = entry.get("id") or _unique_id(_slugify(f"ai-{category}-{pattern}"), taken_ids)
-        if entry.get("id"):
+        # An explicit proposed id goes through the same collision machinery as
+        # a generated one (adversarial-review finding: pre-fix a colliding
+        # explicit id was appended as a duplicate, reported written, and then
+        # silently dropped by the loader's keep-the-first rule on reload).
+        explicit = entry.get("id")
+        if explicit and explicit in taken_ids:
+            rid = _unique_id(_slugify(str(explicit)), taken_ids)
+        elif explicit:
+            rid = str(explicit)
             taken_ids.add(rid)
+        else:
+            rid = _unique_id(_slugify(f"ai-{category}-{pattern}"), taken_ids)
         rule_entry = {
             "id": rid,
             "pattern": pattern,
