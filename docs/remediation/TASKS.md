@@ -983,6 +983,21 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 
   - VERIFICATION (repo-wide): `pytest tests/ -q` -> 772 passed, 1 xfailed (pre-existing test_detect_ports); `ruff check analyzer/ tests/ scripts/` -> clean; packages/cli `npm test` -> 7 passed; viewer `npm run build` -> exit 0 (pre-existing chunk-size warning only; no viewer source changed); `actionlint .github/workflows/architecture-viz.yml` -> exit 0; conftest baseline guard green, `git status --porcelain architecture.json` empty, no stray `.solution-explorer/` store under any fixture after the suite.
 
+### P4-8: Extraction resilience (in-run retry for transient failures)
+- Status: TODO (owner-directed 2026-07-19: the ringer standard)
+- Model: Opus 4.8
+- Design intent: 100 percent is the only mode. A transient failure (worker crash, OSError, timeout) must not cost a file for the whole run; the item stays in the work queue and is retried. Deterministic parse errors (same input, same error) fail honestly and immediately stay failed. Failures were already never cached (cross-run retry by construction); this card adds bounded IN-RUN retry.
+- Scope: after the first extraction pass, re-submit failed items up to 2 more attempts (3 total). Classify failure kind: exceptions from the process pool infrastructure and OS layer (BrokenProcessPool, OSError, MemoryError in worker) are transient candidates; parser exceptions on stable input are deterministic (retry once anyway, cheap, but expect the same result). Ledger reason records attempts ("failed after 3 attempts: ..."). No external queue infrastructure; in-process re-submission. Full-vs-incremental parity and PYTHONHASHSEED determinism preserved.
+- Accept: an injected once-then-succeeds worker failure (real worker function, real store, no mocks) yields parsed post-fix and yielded failed pre-fix (fail-before proof); a deterministic parse failure still fails with attempts recorded; parity snapshots unchanged; no wall-clock regression beyond noise on this repo.
+- Verify: full pytest, ruff; PR protocol.
+
+### P4-9: Storyboard and Core Data model parsers
+- Status: TODO (owner-directed 2026-07-19: the two deep unknowns are unparsed source)
+- Model: Opus 4.8
+- Scope: (1) .storyboard/.xib parser (stdlib XML, deterministic): view controllers as symbols, segues as flow edges (feeds the Flow lens target_view machinery), custom-class bindings to Swift symbols where names match. (2) .xcdatamodeld/contents parser: Core Data entities, attributes, relationships as first-class data entities (feeds the Data lens). Both are new parser-tier entries in the existing parsers registry with the regex-tier contract (no tree-sitter dependency); ledger disposition for these files becomes parsed.
+- Accept: real fixture files lifted in shape from unamentis-ios; fail-before (previously non-source or unknown, now parsed with symbols/entities/edges); the iOS demo regeneration shows Core Data entities in the Data lens and storyboard segues contributing to Flow, browser-proven; coverage totals shift accordingly and the badge stays truthful.
+- Verify: full pytest both parser tiers, viewer suite, browser proof; PR protocol.
+
 ## Phase 5: Capabilities and data entities
 
 ### P5-1: Capability extraction (api, cli, event, job)
@@ -1618,6 +1633,26 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
   - VERIFICATION: `pytest tests/ -q` -> 993 passed, 1 xfailed (pre-existing `test_detect_ports`), 1 failed = `test_coverage_ledger.py::test_pruned_directory_row_stands_in_for_its_contents`, the known git-WORKTREE `.git`-pointer environmental failure the card flagged in advance (in a worktree `.git` is a file, not a pruned directory); it passes on a normal checkout and in CI. Viewer `npx vitest run` -> 329 passed (37 files, +10 over the 319 baseline), `npm run lint` -> 0 warnings, `npx tsc -b` -> exit 0, `npm run build` -> clean (only the pre-existing 500 kB elk-chunk advisory). Committed root `architecture.json` untouched (conftest guard green); no regenerated demo dataset committed.
   - DEVIATIONS: (1) SCOPE READING: the inventory classifies the non-source family (the badge's NON-SOURCE ACCOUNTED set), not literally every non-parsed row, because failed and oversized rows are analyzable SOURCE already surfaced loudly in the coverage gaps family; every non-source row is classified and unknown is loud, satisfying every accept criterion (the .pem, the xcresult bundle, docs vs prompts, and the loud unknown are all non-source). Recorded as the coherent reading of "repo totality" (source gaps are shown, just in their own family). (2) The full per-file enumeration of a huge group is not duplicated inline; the group carries a bounded 200-path virtualized sample and the complete list remains one panel away in the coverage ledger rows (which already carry every row), so nothing is hidden and the classifier is never re-implemented in TypeScript (the card's analyzer/viewer-must-agree caution). (3) The `ai_enhance`-per-group overlay is left as shape only (optional future key), not built, per the card.
 
+### P6-11: Coverage language and inventory vocabulary (fast-follow)
+- Status: TODO (owner-directed 2026-07-19)
+- Model: Opus 4.8
+- Scope: (1) The v2 CLI stdout summary must speak the three-family coverage semantics, matching the badge: replace the raw "Coverage: 651/712 parsed" line with source-analyzed percent plus gap count plus non-source accounted count. v1 output untouched (parity). (2) Inventory vocabulary from the unamentis-ios unknowns: .hooks (vcs_ci), .swiftformat and similar tool dotfiles (config), *.xcframework bundles (vendored, they are third-party binary frameworks), .xcprivacy (config), .storyboard/.xib (classified sensibly as UI resources with an honest explanation, not unknown; parsing them is P4-9), .xcdatamodeld internals (data; parsing is P4-9), and backup droppings (*.backup, *.bak, *.orig, trailing-tilde) flagged likely_unwanted and gitignore_candidate. (3) Acceptance: the unamentis-ios fixture set yields ZERO unknown rows; every new rule has a fail-before test; the CLI line change has a test asserting the new wording and the absence of the old.
+- Verify: full pytest, ruff; no viewer changes expected (copy comes from the analyzer only if surfaced); PR protocol.
+
+### P6-12: Project knowledge layer (.solution-explorer/rules)
+- Status: TODO (owner-directed 2026-07-19: continuous learning in the context of use)
+- Model: Opus 4.8
+- Design intent: the product self-matures per project. When an AI pass (enrichment today; merge-time automation later) figures out what an unknown artifact is, that knowledge becomes a permanent, deterministic, project-local rule. Rules are data; no AI at parse or query time (I9). The unknown bucket trends to zero per project without core-product changes.
+- Scope:
+  - Rule store: `.solution-explorer/rules/inventory.yml` in the analyzed repo. Schema per rule: pattern (gitignore-style glob), category (must be a known category id), optional label/explanation/recommendation overrides, optional flags, source (ai-enrichment | human), added (date), evidence (list of paths that motivated it), contribute (bool, scaffold for the future upstream-contribution path, no behavior yet).
+  - Loader: ordered rule sources, defaults then (future org level, scaffolded as an empty slot in the order) then repo. Repo rules win over built-ins for matching paths. Fully deterministic, bad rules rejected loudly with a clear message, never silently skipped.
+  - Linguist compatibility: honor `.gitattributes` overrides linguist-vendored, linguist-documentation, linguist-generated as classification input (the existing GitHub-ecosystem standard), mapped to vendored / documentation / build_test_output respectively. Project rules beat gitattributes beat built-ins.
+  - Provenance in the projection: inventory groups and rows record which rule id fired (project rule vs built-in vs gitattributes); the viewer shows it (tooltip through tooltipCopy: "classified by a rule this project taught itself").
+  - Enrichment writes rules: the enhance pass, when it identifies an unknown, appends a rule with source ai-enrichment and evidence to the repo rule file (dedupe on pattern+category; never overwrite human rules).
+  - KISS bound: one YAML file, one loader, glob matching with the same semantics .gitignore users expect. The parser-rules tier (tree-sitter .scm envelope) is documented in the card as the NEXT tier of this folder, not built now.
+- Accept: loader precedence proven (project rule overrides built-in for the same path; gitattributes honored; bad rule rejected loudly); enrichment writes a valid rule for a real unknown on a real store (no mocks) and a second run classifies it deterministically with zero AI; projection carries rule provenance; viewer renders it; unamentis-ios dogfood shows unknowns going to zero via generated rules; self-repo dogfood clean.
+- Verify: full pytest, viewer suite, browser proof on the regenerated iOS demo; PR protocol.
+
 ## Phase 7: AI enrichment industrialization
 
 ### P7-1: Enrichment provenance and staleness
@@ -1731,7 +1766,21 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 - Scope: define a question battery (architecture, impact, capability, data questions) over two repos; measure a grep-only agent baseline vs MCP-assisted on identical questions; publish methodology, transcripts, and token counts under docs/benchmarks/; target 50 percent reduction, misses analyzed honestly.
 - Evidence:
 
+### P8-3: AI front door for deployed projections
+- Status: TODO (owner-directed 2026-07-19: AI is a first-class interface, second in priority to humans)
+- Model: Opus 4.8
+- Design intent: an AI pointed at a deployed solution-explorer site must consume the enumeration efficiently (owner ambition: a tenth to a hundredth of the tokens of raw-repo reading) without reverse-engineering the JSON layout.
+- Scope: the projection emits a static entry document at the site root (llms.txt convention for discoverability plus a machine-readable ai.json, both versioned): what this dataset is, the endpoint map (manifest, coverage + inventory, activity, search shards, detail shards, findings, tours), the recommended walk order for common question shapes (overview first, findings first for review, search-then-detail for lookup), and the token-economy contract (fetch shards, never the whole tree). Viewer build copies it into dist so every deploy carries it.
+- Accept: DOGFOOD IS THE GATE: an agent session answers a fixed battery of real questions about unamentis-ios using ONLY the deployed site URLs (no repo access, no MCP), correctly, with fetch counts recorded; same battery on the self-repo projection; the front door document is discoverable at /llms.txt and /ai.json on both.
+- Verify: projection tests, one real deployed-site agent run per repo recorded in the card Evidence; PR protocol.
+
 ## Phase 9: Scale proof and release
+
+### P9-0: Dogfood critical-review gate (recurring)
+- Status: TODO (owner-directed 2026-07-19: dogfooding is a gate)
+- Model: fresh-eyes session (any strong model), adversarial by charter
+- Scope: a no-punches-pulled evaluation, on BOTH the self-repo projection and the unamentis-ios projection: does the projection FAIRLY REPRESENT the project (components, roles, relationships, coverage, findings)? What does the tool make easy that raw code reading does not, demonstrated with real answered questions? What does it misrepresent, hide, or get wrong? Every defect becomes a Discovered row or card; no defect may be softened. Recorded in the Phase gate records table as a recurring gate (run at least at each phase gate from now on).
+- Accept: a written gate record with concrete misrepresentations found (or the explicit finding that none were found, with the questions that probed for them), filed cards for every defect, and the owner-facing summary.
 
 ### P9-1: Large-repo public demos
 - Status: TODO (elaborate at Phase 8 gate)
