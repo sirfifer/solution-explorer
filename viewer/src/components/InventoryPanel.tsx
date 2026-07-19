@@ -90,6 +90,14 @@ function GroupCard({
   const openFileDeepLink = useArchStore((s) => s.openFileDeepLink);
   const bytesLabel = fmtBytes(group.bytes);
   const hasSamples = group.samples.length > 0;
+  // Project knowledge layer (P6-12): how many rows a project rule (one this
+  // project taught itself) classified. Drives the "learned" marker on the group
+  // and the per-row markers. Additive: absent on old datasets, so undefined here.
+  const learnedCount = Object.entries(group.rule_provenance ?? {}).reduce(
+    (sum, [source, count]) => (source.startsWith("project:") ? sum + count : sum),
+    0,
+  );
+  const sampleProvenance = group.sample_provenance ?? [];
 
   return (
     <div
@@ -126,6 +134,18 @@ function GroupCard({
           <Tooltip content={TOOLTIP_COPY.inventory.dominant}>
             <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${darkMode ? "bg-zinc-700 text-zinc-200" : "bg-zinc-800 text-white"}`}>
               dominant
+            </span>
+          </Tooltip>
+        )}
+        {learnedCount > 0 && (
+          <Tooltip content={TOOLTIP_COPY.inventory.projectRule}>
+            <span
+              data-testid="inventory-learned"
+              className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${
+                darkMode ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-100 text-emerald-700"
+              }`}
+            >
+              learned
             </span>
           </Tooltip>
         )}
@@ -210,18 +230,30 @@ function GroupCard({
                   rowHeight={SAMPLE_ROW_HEIGHT}
                   className="max-h-56 rounded border border-current/10"
                   getKey={(path) => path}
-                  renderRow={(path) => (
-                    <button
-                      type="button"
-                      onClick={() => void openFileDeepLink(path, null)}
-                      title={path}
-                      className={`w-full h-full flex items-center px-2 text-left text-[11px] font-mono truncate ${
-                        darkMode ? "text-zinc-300 hover:bg-zinc-800/60" : "text-zinc-700 hover:bg-zinc-50"
-                      }`}
-                    >
-                      {path}
-                    </button>
-                  )}
+                  renderRow={(path, index) => {
+                    const learned = (sampleProvenance[index] ?? "").startsWith("project:");
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => void openFileDeepLink(path, null)}
+                        title={path}
+                        className={`w-full h-full flex items-center gap-1.5 px-2 text-left text-[11px] font-mono ${
+                          darkMode ? "text-zinc-300 hover:bg-zinc-800/60" : "text-zinc-700 hover:bg-zinc-50"
+                        }`}
+                      >
+                        {learned && (
+                          <Tooltip content={TOOLTIP_COPY.inventory.projectRuleRow} focusable>
+                            <span
+                              data-testid="inventory-row-learned"
+                              aria-label="Classified by a learned project rule"
+                              className={`shrink-0 h-1.5 w-1.5 rounded-full ${darkMode ? "bg-emerald-400" : "bg-emerald-500"}`}
+                            />
+                          </Tooltip>
+                        )}
+                        <span className="truncate">{path}</span>
+                      </button>
+                    );
+                  }}
                 />
                 {group.count > group.samples.length && (
                   <p className={`text-[10px] mt-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>

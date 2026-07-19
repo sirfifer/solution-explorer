@@ -576,6 +576,14 @@ export interface InventoryGroup {
   // coverage ledger rows; this is enough to see what the group holds.
   samples: string[];
   flags: InventoryGroupFlags;
+  // Project knowledge layer provenance (P6-12). Present only when a non-built-in
+  // source classified at least one row in the group; absent on old datasets and
+  // rule-free repos (additive). rule_provenance maps a source to how many rows it
+  // classified ("builtin", "gitattributes", or "project:<rule-id>");
+  // sample_provenance aligns with samples so a row taught by a project rule shows
+  // a marker.
+  rule_provenance?: Record<string, number>;
+  sample_provenance?: string[];
 }
 
 export interface InventoryDominant {

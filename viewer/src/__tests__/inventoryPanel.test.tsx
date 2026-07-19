@@ -272,6 +272,83 @@ describe("inventory panel rendering and ranking", () => {
     expect(within(buildCard).getByText(/\.bin 8/)).toBeDefined();
   });
 
+  // Project knowledge layer (P6-12). The inventory below is lifted verbatim from
+  // a real v2 projection where a learned project rule ('*.qzz' -> data) and a
+  // built-in both fed the data group. The viewer must mark the group "learned"
+  // and dot the exact row the project rule classified. Fail-before: the marker
+  // and the row dot do not exist in the pre-P6-12 InventoryPanel.
+  const LEARNED_GROUP: Inventory["groups"][number] = {
+    id: "data",
+    label: "Data files",
+    explanation: "Opaque telemetry blobs from the device.",
+    recommendation: "Keep, but store large captures outside the tree.",
+    count: 2,
+    bytes: null,
+    directory_rows: 0,
+    extensions: [
+      { ext: ".csv", count: 1 },
+      { ext: ".qzz", count: 1 },
+    ],
+    top_directories: [
+      { dir: "(root)", count: 1 },
+      { dir: "data", count: 1 },
+    ],
+    samples: ["telemetry.qzz", "data/records.csv"],
+    flags: { security_sensitive: false, likely_unwanted: false, gitignore_candidate: false },
+    rule_provenance: { builtin: 1, "project:ai-data-qzz": 1 },
+    sample_provenance: ["project:ai-data-qzz", "builtin"],
+  };
+
+  async function openPanelWithLearnedGroup() {
+    const inventory: Inventory = {
+      version: 1,
+      non_source_total: 2,
+      source_gap_total: 0,
+      groups: [LEARNED_GROUP],
+      dominant: null,
+    };
+    const json = {
+      summary: { parsed: 5, "excluded:unsupported_extension": 2 },
+      total: 7,
+      parsed: 5,
+      rows: [],
+      inventory,
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => json })));
+    const coverage: Coverage = { summary: { parsed: 5, "excluded:unsupported_extension": 2 }, total: 7, parsed: 5 };
+    setArch(makeArchitecture({ coverage }));
+    render(<CoverageBadge />);
+    await openBadgeAndLoad();
+    fireEvent.click(await screen.findByTestId("inventory-explore"));
+  }
+
+  it("marks a group learned when a project rule classified some of its rows", async () => {
+    await openPanelWithLearnedGroup();
+    expect(screen.getByTestId("inventory-learned")).toBeDefined();
+    expect(screen.getByText("learned")).toBeDefined();
+  });
+
+  it("dots the exact sample row a project rule classified, not the built-in row", async () => {
+    await openPanelWithLearnedGroup();
+    const dataCard = screen
+      .getAllByTestId("inventory-group")
+      .find((c) => c.getAttribute("data-group-id") === "data")!;
+    fireEvent.click(within(dataCard).getAllByRole("button")[0]); // expand
+    // Exactly one row (telemetry.qzz) carries the learned marker; the built-in
+    // row (data/records.csv) does not.
+    const dots = within(dataCard).getAllByTestId("inventory-row-learned");
+    expect(dots.length).toBe(1);
+    expect(within(dataCard).getByText("telemetry.qzz")).toBeDefined();
+    expect(within(dataCard).getByText("data/records.csv")).toBeDefined();
+  });
+
+  it("shows no learned marker for a group with only built-in provenance", async () => {
+    // The default REAL_INVENTORY groups carry no project provenance.
+    await openPanel();
+    expect(screen.queryByTestId("inventory-learned")).toBeNull();
+    expect(screen.queryByTestId("inventory-row-learned")).toBeNull();
+  });
+
   it("drills into a file path through the real store navigation", async () => {
     await openPanel();
     const buildCard = screen

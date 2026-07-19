@@ -138,3 +138,52 @@ def name_main(argv: list[str]) -> int:
     root, store_path = _preflight(args)
     reports = [name_concerns(_config(args, root, store_path))]
     return _run_and_report(reports)
+
+
+_IDENTIFY_TARGETS = ("unknowns",)
+
+
+def identify_main(argv: list[str]) -> int:
+    """`analyze.py identify unknowns`: learn rules for unknown non-source files (P6-12).
+
+    Reads the store's coverage ledger, asks the model to classify the still-unknown
+    non-source files, and writes learned rules to the project knowledge layer
+    (``.solution-explorer/rules/inventory.yml``). A second projection then
+    classifies those files deterministically with zero AI.
+    """
+    from .identify import IdentifyConfig, identify_unknowns
+
+    parser = argparse.ArgumentParser(prog="analyze.py identify")
+    parser.add_argument("target", choices=_IDENTIFY_TARGETS, help="what to identify")
+    parser.add_argument("root", nargs="?", default=".", help="Repository root the store indexes (default: current directory).")
+    parser.add_argument("--store", default=None, help="Path to the v2 fact store (default: <root>/.solution-explorer/index.db).")
+    parser.add_argument("--max-targets", type=int, default=None, help="Cap the number of unknown paths sent to the model (cost control).")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Model for the pass (default: {DEFAULT_MODEL}).")
+    parser.add_argument("--dry-run", action="store_true", help="Print the plan without invoking the model.")
+    parser.add_argument("--report", default=None, help="Write the machine-readable run report to this JSON file.")
+    args = parser.parse_args(argv)
+    root, store_path = _preflight(args)
+
+    report = identify_unknowns(IdentifyConfig(
+        store_path=store_path,
+        root=root,
+        max_targets=args.max_targets,
+        model=args.model,
+        dry_run=args.dry_run,
+        report_path=Path(args.report).resolve() if args.report else None,
+    ))
+
+    print(f"identify {args.target} ({report.unknown_count} unknown path(s))")
+    for note in report.notes:
+        print(f"  note: {note}")
+    if report.written:
+        print(f"  wrote rules: {report.written}")
+    if report.skipped_duplicate:
+        print(f"  skipped duplicates: {len(report.skipped_duplicate)}")
+    if report.skipped_human:
+        print(f"  protected human rules: {report.skipped_human}")
+    if report.rejected:
+        print(f"  rejected proposals: {report.rejected}")
+    if report.total_cost_usd:
+        print(f"  cost: ${report.total_cost_usd:.4f}")
+    return 0 if report.ok else 1
