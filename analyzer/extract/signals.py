@@ -33,6 +33,7 @@ from ..constants import (
     URL_EXTRACTION_PATTERNS,
     WEBSOCKET_PATTERNS,
 )
+from ..parsers.storyboard import parse_storyboard, segue_edge_type
 from .entities import extract_entities, extract_schema_entities
 from .facts import SignalRecord
 from .frameworks import extract_cli, extract_endpoints, extract_jobs
@@ -78,8 +79,46 @@ def extract_signals(content: str, language: str, parser) -> list[SignalRecord]:
     out.extend(_cli_commands(content, language))
     out.extend(_jobs(content, language))
     out.extend(_ui_actions(content, language))
+    out.extend(_storyboard_flow(content, language))
     out.extend(_env_vars(content, parser))
     out.extend(_framework(content, parser))
+    return out
+
+
+def _storyboard_flow(content: str, language: str) -> list[SignalRecord]:
+    """Scene and segue signals from a storyboard/xib (P4-9, Flow lens).
+
+    Runs only for storyboard/xib documents. Emits a ``storyboard_scene`` signal
+    per view controller (carrying its custom-class binding so Tier 3 can match
+    it to a Swift symbol by name) and a ``storyboard_segue`` signal per segue
+    (source controller, destination controller, kind, and the pre-resolved Flow
+    edge type). The Tier 3 storyboard pass turns these into screen components and
+    navigation/modal edges, feeding the Flow lens like SwiftUI nav targets.
+    Malformed XML raises ``ElementTree.ParseError``, which the worker records as
+    a failed file (never a crash).
+    """
+    if language != "storyboard":
+        return []
+    model = parse_storyboard(content)
+    out: list[SignalRecord] = []
+    for scene in model.scenes:
+        out.append(SignalRecord("storyboard_scene", {
+            "controller_id": scene.controller_id,
+            "name": scene.name,
+            "custom_class": scene.custom_class,
+            "storyboard_id": scene.storyboard_id,
+            "tag": scene.tag,
+            "is_initial": scene.controller_id == model.initial_controller_id,
+        }, scene.line))
+    for segue in model.segues:
+        out.append(SignalRecord("storyboard_segue", {
+            "segue_id": segue.segue_id,
+            "source_id": segue.source_id,
+            "destination_id": segue.destination_id,
+            "kind": segue.kind,
+            "identifier": segue.identifier,
+            "edge_type": segue_edge_type(segue.kind),
+        }, segue.line))
     return out
 
 

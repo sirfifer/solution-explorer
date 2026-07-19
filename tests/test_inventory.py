@@ -143,15 +143,20 @@ def test_xcprivacy_is_config():
 
 
 def test_interface_builder_files_are_ui_definitions_not_unknown():
-    # Storyboards and xib files are UI layout definitions. Parsing them into the
-    # graph is P4-9's job; this card only stops them being unknown.
+    # Storyboards and xib files are UI layout definitions. As of P4-9 a
+    # well-formed storyboard is PARSED source and never reaches the inventory;
+    # this rule now covers only the fallback (a storyboard that fails to parse
+    # keeps its "excluded:unsupported_extension" disposition and classifies here
+    # rather than landing in the loud unknown bucket).
     assert classify_row("LaunchScreen.storyboard", "excluded:unsupported_extension", ".storyboard") == "ui_definition"
     assert classify_row("Views/MyCell.xib", "excluded:unsupported_extension", ".xib") == "ui_definition"
 
 
 def test_core_data_model_internals_are_data():
-    # A .xcdatamodeld internal file (like the ``contents`` XML) is Core Data
-    # model data, not source; parsing it into entities is P4-9's job.
+    # A .xcdatamodeld internal file (the ``contents`` XML) is Core Data model
+    # data. As of P4-9 a well-formed model is PARSED into entities and leaves the
+    # inventory; this rule now covers only the fallback (a malformed model that
+    # fails to parse still classifies as data, not unknown).
     assert classify_row(
         "UnaMentis.xcdatamodeld/UnaMentis.xcdatamodel/contents", "excluded:unsupported_extension", None
     ) == "data"
@@ -397,5 +402,20 @@ def test_ios_unknowns_tree_yields_zero_unknown_rows(tmp_path):
     ids = {g["id"] for g in inv["groups"]}
     # The acceptance criterion: nothing lands in the loud unknown bucket.
     assert "unknown" not in ids, f"unexpected unknown rows: {inv['groups']}"
-    # Each artifact reached its intended category.
-    assert {"vcs_ci", "config", "vendored", "ui_definition", "data", "backup_files"} <= ids
+    # The still-non-source artifacts reach their intended categories.
+    assert {"vcs_ci", "config", "vendored", "backup_files"} <= ids
+    # P4-9 changed the reality for two of these: storyboards and Core Data model
+    # contents are now PARSED source, so they leave the non-source inventory
+    # entirely (their disposition is "parsed", not "excluded:*"). The
+    # ui_definition and data classifier rules stay in place (they still catch a
+    # storyboard that fails to parse or an exotic variant), but on this tree with
+    # well-formed files they contribute no inventory rows.
+    assert "ui_definition" not in ids
+    assert "data" not in ids
+    parse_status = dict(store._conn.execute(
+        "SELECT path, parse_status FROM files"
+    ).fetchall())
+    assert parse_status["LaunchScreen.storyboard"] == "parsed"
+    assert parse_status[
+        "UnaMentis.xcdatamodeld/UnaMentis.xcdatamodel/contents"
+    ] == "parsed"
