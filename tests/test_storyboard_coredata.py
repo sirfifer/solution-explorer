@@ -307,3 +307,66 @@ def test_extraction_and_derivation_are_deterministic():
         )
 
     assert run() == run()
+
+
+# ---------------------------------------------------------------------------
+# Adversarial-review fixes (PR #48)
+# ---------------------------------------------------------------------------
+
+
+def test_placeholder_scene_is_skipped_not_a_phantom_screen():
+    # A viewControllerPlaceholder references a scene in ANOTHER storyboard. It
+    # must not become a screen (pre-fix it did, named by its raw IB id), and a
+    # segue pointing at it must drop harmlessly rather than draw a junk edge.
+    content = """<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0">
+  <scenes>
+    <scene sceneID="s1">
+      <objects>
+        <viewController id="vc1" customClass="HomeController" sceneMemberID="viewController">
+          <connections>
+            <segue destination="ph1" kind="show" id="sg1"/>
+          </connections>
+        </viewController>
+      </objects>
+    </scene>
+    <scene sceneID="s2">
+      <objects>
+        <viewControllerPlaceholder storyboardName="Other" id="ph1" sceneMemberID="viewController"/>
+      </objects>
+    </scene>
+  </scenes>
+</document>
+"""
+    from analyzer.parsers.storyboard import parse_storyboard
+
+    model = parse_storyboard(content)
+    names = [s.name for s in model.scenes]
+    assert names == ["HomeController"], names
+    assert all(s.controller_id != "ph1" for s in model.scenes)
+
+
+def test_coredata_entity_line_anchors_on_the_entity_element():
+    # An attribute elsewhere named like the entity must not steal the entity's
+    # reported position (pre-fix: content.find('name="Session"') matched the
+    # attribute on an earlier line).
+    content = """<?xml version="1.0" encoding="UTF-8"?>
+<model type="com.apple.IDECoreDataModeler.DataModel">
+  <entity name="Account" syncable="YES">
+    <attribute name="Session" attributeType="String"/>
+  </entity>
+  <entity name="Session" syncable="YES">
+    <attribute name="startedAt" attributeType="Date"/>
+  </entity>
+</model>
+"""
+    from analyzer.extract.entities import _coredata_entities
+
+    out = _coredata_entities(content)
+    by_name = {e["name"]: start for e, start in out}
+    assert "Session" in by_name
+    marker = content.find('<entity name="Session"')
+    assert by_name["Session"] == marker, (
+        "the Session entity must anchor on its own <entity> element, "
+        f"expected offset {marker}, got {by_name['Session']}"
+    )

@@ -108,10 +108,17 @@ def _scene_controller(scene: ET.Element) -> Optional[ET.Element]:
     resolve. Returns None for a scene that owns no controller (a placeholder).
     """
     for el in scene.iter():
+        # A viewControllerPlaceholder is a REFERENCE to a scene in another
+        # storyboard, not a screen of this one. Emitting it would create a
+        # phantom screen named by its raw Interface Builder id (review
+        # finding); cross-storyboard resolution is out of scope (card bound),
+        # so placeholders are skipped and segues to them drop harmlessly.
+        if el.tag == "viewControllerPlaceholder":
+            continue
         if el.get("sceneMemberID") == "viewController" and el.get("id"):
             return el
     for el in scene.iter():
-        if _is_controller(el.tag) and el.get("id"):
+        if el.tag != "viewControllerPlaceholder" and _is_controller(el.tag) and el.get("id"):
             return el
     return None
 

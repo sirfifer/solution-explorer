@@ -540,7 +540,10 @@ def _coredata_entities(content: str) -> list[tuple[dict, int]]:
                 to_many = child.get("toMany") == "YES"
                 ftype = f"[{dest}]" if (dest and to_many) else dest
                 fields.append({"name": fname, "type": ftype})
-        start = content.find(f'name="{ename}"')
+        # Anchor on the entity ELEMENT, not any name="..." occurrence: attributes,
+        # relationships, and layout elements all carry name= too, so a bare name
+        # search can report an entity at an unrelated line (review finding).
+        start = content.find(f'<entity name="{ename}"')
         out.append((
             {"name": ename, "kind": "model", "framework": "coredata",
              "fields": fields},
