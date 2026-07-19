@@ -1164,7 +1164,7 @@ class TestCoverageLineLanguage:
         line = _coverage_line(capsys.readouterr().out)
         assert "100% of source analyzed" in line
         assert "0 gaps" in line
-        assert "non-source accounted for" in line
+        assert "non-source files accounted for" in line
         # Fail-before: the retired "N/M parsed" wording must be gone.
         assert not _OLD_COVERAGE_RE.search(line), line
 
@@ -1186,5 +1186,8 @@ class TestCoverageLineLanguage:
         assert "1 gap" in line and "1 gaps" not in line
         assert "100% of source analyzed" not in line
         assert "of source analyzed" in line
-        assert "non-source accounted for" in line
+        # Exactly one non-source file in this fixture: the noun must be singular
+        # (review finding on this PR: "1 non-source accounted for" read wrong).
+        assert "1 non-source file accounted for" in line
+        assert "non-source files" not in line
         assert not _OLD_COVERAGE_RE.search(line), line

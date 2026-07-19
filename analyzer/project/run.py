@@ -193,9 +193,10 @@ def run_v2(args) -> None:
         fam = coverage_families(cov["summary"])
         pct = format_source_percent(fam)
         gap_word = "gap" if fam["gap"] == 1 else "gaps"
+        ns_word = "file" if fam["nonsource"] == 1 else "files"
         print(
             f"  Coverage: {pct}% of source analyzed "
             f"({fam['analyzed']} parsed, {fam['gap']} {gap_word}); "
-            f"{fam['nonsource']} non-source accounted for"
+            f"{fam['nonsource']} non-source {ns_word} accounted for"
         )
     print(f"\nOutput: {output_label}")
