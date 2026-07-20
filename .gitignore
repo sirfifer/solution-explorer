@@ -24,7 +24,11 @@ packages/cli/dist/
 
 # v2 engine (--engine v2) persistent fact store; the incremental baseline lives
 # here by default (<root>/.solution-explorer/index.db). Generated, never tracked.
-.solution-explorer/
+# The store stays ignored via .solution-explorer/.gitignore (sidecar); the
+# learned rules in .solution-explorer/rules/ travel with the repo (P6-12).
+.solution-explorer/index.db
+.solution-explorer/*.db-wal
+.solution-explorer/*.db-shm
 
 # Cloudflare Worker
 infrastructure/cloudflare/worker/.wrangler/

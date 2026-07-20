@@ -121,6 +121,52 @@ def _validate_proposed(entry: dict) -> Optional[str]:
     return None
 
 
+def _ensure_rules_committable(root: Path, tool_dir: Path, warn) -> None:
+    """Make the learned rules commitable: sidecar gitignore plus shadow check.
+
+    Knowledge must travel with the repo, but the store must not, so a sidecar
+    .gitignore inside the tool directory ignores everything except rules/.
+    CRITICAL git semantics (review finding, empirically proven): git never
+    descends into a directory excluded by a PARENT gitignore, so a repo-level
+    ".solution-explorer/" line makes this sidecar unreachable and the rules
+    stay buried. The writer cannot silently edit the user's root .gitignore,
+    so when such a shadowing line exists it warns loudly with the exact edit:
+    delete the directory line and let the sidecar own the ignoring.
+    """
+    sidecar = tool_dir / ".gitignore"
+    if not sidecar.exists():
+        sidecar.write_text(
+            "# Managed by solution-explorer: keep the store out of version\n"
+            "# control while the learned rules travel with the repo.\n"
+            "*\n"
+            "!.gitignore\n"
+            "!rules/\n"
+            "!rules/**\n",
+            encoding="utf-8",
+        )
+    root_ignore = root / ".gitignore"
+    if not root_ignore.is_file():
+        return
+    try:
+        lines = root_ignore.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return
+    shadowing = [
+        ln.strip() for ln in lines
+        if ln.strip() in (".solution-explorer", ".solution-explorer/",
+                          "/.solution-explorer", "/.solution-explorer/",
+                          ".solution-explorer/*", ".solution-explorer/**")
+    ]
+    if shadowing:
+        warn(
+            "the learned rules cannot be committed: the repo .gitignore line "
+            f"'{shadowing[0]}' excludes the whole .solution-explorer/ directory, "
+            "and git never reads the sidecar .gitignore inside an excluded "
+            "directory. Delete that line; the sidecar keeps the store ignored "
+            "while .solution-explorer/rules/ becomes commitable."
+        )
+
+
 def write_inventory_rules(
     root: Path,
     proposed: list[dict],
@@ -138,6 +184,13 @@ def write_inventory_rules(
     """
     path = Path(root) / PROJECT_RULES_RELPATH
     result = WriteResult(path=path)
+
+    # A rules file written before the sidecar existed still deserves one, and
+    # the shadow warning must fire even on a run that adds no new rules
+    # (review finding: the scaffold previously ran only when a rule was
+    # actually appended).
+    if path.exists():
+        _ensure_rules_committable(Path(root), path.parent.parent, warn)
 
     if _yaml is None:
         warn(
@@ -206,23 +259,7 @@ def write_inventory_rules(
 
     all_entries = list(existing_raw) + new_entries
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Knowledge must travel with the repo, but users gitignore the whole
-    # .solution-explorer/ directory for the store (dogfood finding: the learned
-    # rules were unignorable). Scaffold a sidecar .gitignore INSIDE the tool
-    # directory that ignores everything except rules/, so index.db stays out of
-    # version control while the rules commit by default. Never overwrite one
-    # the user has edited.
-    sidecar = path.parent.parent / ".gitignore"
-    if not sidecar.exists():
-        sidecar.write_text(
-            "# Managed by solution-explorer: keep the store out of version\n"
-            "# control while the learned rules travel with the repo.\n"
-            "*\n"
-            "!.gitignore\n"
-            "!rules/\n"
-            "!rules/**\n",
-            encoding="utf-8",
-        )
+    _ensure_rules_committable(Path(root), path.parent.parent, warn)
     header = (
         "# Project knowledge layer (P6-12): learned non-source inventory rules.\n"
         "# Rules are data; no AI runs at parse or query time. Rules with\n"
