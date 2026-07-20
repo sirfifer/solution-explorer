@@ -87,6 +87,26 @@ _CVD_SECTION_RE = re.compile(
     re.IGNORECASE,
 )
 # The Supported Versions heading (support/EOL statement) in SECURITY.md.
+# Placeholder / template language that must never count as a real contact or
+# statement (adversarial-review: TODO stubs were claimed present).
+# A line that names a CONCRETE disclosure channel, not just a section heading.
+# A bare "## Reporting a Vulnerability" heading with a TODO under it is a
+# template; a line that names email/advisory/private-reporting is a real
+# channel. Combined with the placeholder guard, this accepts a genuine
+# reporting section (GitHub Security Advisory, "email the maintainer") and
+# rejects a stub.
+_CHANNEL_RE = re.compile(
+    r"(github\s+security\s+advisor|security\s+advisor|"
+    r"private\s+vulnerability\s+report|report\s+(a\s+)?vulnerabilit\w*\s+"
+    r"(to|at|via|through|by)|email\s+(the|us|to|at|the\s+maintainer)|"
+    r"contact\s+(us|the|:))",
+    re.IGNORECASE,
+)
+_PLACEHOLDER_RE = re.compile(
+    r"\b(TODO|TBD|FIXME|coming\s+soon|to\s+be\s+(determined|added|written)|"
+    r"placeholder|describe\s+how|fill\s+in|xxx+)\b",
+    re.IGNORECASE,
+)
 _SUPPORTED_VERSIONS_RE = re.compile(r"^\s{0,3}#{1,6}\s*supported\s+versions", re.IGNORECASE | re.MULTILINE)
 # security.txt Contact field (RFC 9116).
 _SECURITY_TXT_CONTACT_RE = re.compile(r"^\s*Contact\s*:\s*(\S.*)$", re.IGNORECASE | re.MULTILINE)
@@ -109,7 +129,7 @@ def build_cra_readiness(
     root = Path(root)
     security_md = _find_first(root, _SECURITY_MD_CANDIDATES)
     items = [
-        _check_security_md(security_md),
+        _check_security_md(security_md, root),
         _check_cvd_contact(root, security_md),
         _check_sbom(supply_chain),
         _check_update_config(root),
@@ -123,8 +143,11 @@ def build_cra_readiness(
 # individual checks
 # ---------------------------------------------------------------------------
 
-def _check_security_md(security_md: Optional[str]) -> CraItem:
-    if security_md is not None:
+def _check_security_md(security_md: Optional[str], root: Path) -> CraItem:
+    # Existence alone is not enough: an empty or whitespace-only SECURITY.md is
+    # not a security policy (adversarial-review over-claim). Require some real
+    # content before reporting present.
+    if security_md is not None and _has_content(root / security_md):
         return CraItem(
             id="security_md",
             label="Security policy (SECURITY.md)",
@@ -146,16 +169,21 @@ def _check_security_md(security_md: Optional[str]) -> CraItem:
 def _check_cvd_contact(root: Path, security_md: Optional[str]) -> CraItem:
     """A coordinated-disclosure contact: security.txt, or a contact in SECURITY.md."""
     # security.txt (RFC 9116) is the most explicit machine-readable contact.
+    # A security.txt counts ONLY when it carries a real Contact field. RFC 9116
+    # makes Contact mandatory; a contactless security.txt gives no disclosure
+    # contact, so it must not report present or suppress the gap finding
+    # (adversarial-review over-claim). Falls through to SECURITY.md / absent.
     txt = _find_first(root, _SECURITY_TXT_CANDIDATES)
     if txt is not None:
         contact_line = _first_match_line(root / txt, _SECURITY_TXT_CONTACT_RE)
-        return CraItem(
-            id="cvd_contact",
-            label="Vulnerability disclosure contact",
-            status=STATUS_PRESENT,
-            cra_clause=_CLAUSE_CVD_CONTACT,
-            evidence={"path": txt, "detail": contact_line},
-        )
+        if contact_line is not None:
+            return CraItem(
+                id="cvd_contact",
+                label="Vulnerability disclosure contact",
+                status=STATUS_PRESENT,
+                cra_clause=_CLAUSE_CVD_CONTACT,
+                evidence={"path": txt, "detail": contact_line},
+            )
     # A contact named in SECURITY.md: a literal email/URL, or a reporting section.
     if security_md is not None:
         text = _read_text(root / security_md)
@@ -262,7 +290,7 @@ def _check_support_statement(root: Path, security_md: Optional[str]) -> CraItem:
                 evidence={"path": security_md, "detail": line},
             )
     doc = _find_first(root, _SUPPORT_DOC_CANDIDATES)
-    if doc is not None:
+    if doc is not None and _has_content(root / doc):
         return CraItem(
             id="support_statement",
             label="Support or end-of-life statement",
@@ -332,6 +360,18 @@ def _find_first(root: Path, candidates) -> Optional[str]:
     return None
 
 
+def _has_content(path: Path) -> bool:
+    """True when a file carries more than trivial whitespace (adversarial-review:
+    an empty SECURITY.md or SUPPORT.md must not report present). A low bar on
+    purpose: presence of a real policy is judged by a human, but a zero-content
+    file is objectively not one.
+    """
+    try:
+        return len(_read_text(path).strip()) >= 16
+    except OSError:
+        return False
+
+
 def _read_text(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8", errors="replace")
@@ -354,7 +394,17 @@ def _first_contact_line(text: str) -> Optional[str]:
         line = raw.strip()
         if not line:
             continue
-        if _EMAIL_RE.search(line) or _URL_RE.search(line) or _CVD_SECTION_RE.search(line):
+        if _PLACEHOLDER_RE.search(line):
+            # A template stub (TODO, TBD, coming soon, "describe how to report")
+            # is not a real contact (adversarial-review over-claim): skip it so
+            # it neither reports present nor suppresses the gap finding.
+            continue
+        # A concrete channel is an actual email or URL, or a real
+        # reporting/disclosure section that named a channel (a GitHub Security
+        # Advisory section is a legitimate coordinated-disclosure channel with
+        # no inline email). The placeholder guard above already rejected the
+        # template forms of the section language.
+        if _EMAIL_RE.search(line) or _URL_RE.search(line) or _CHANNEL_RE.search(line):
             # Collapse a heading marker so the evidence line reads cleanly.
             return line.lstrip("#").strip()
     return None

@@ -152,7 +152,10 @@ def test_absent_findings_carry_kind_clause_and_scope(tmp_path):
 def test_security_md_found_in_github_dir(tmp_path):
     gh = tmp_path / ".github"
     gh.mkdir()
-    (gh / "SECURITY.md").write_text("# Security\n", encoding="utf-8")
+    (gh / "SECURITY.md").write_text(
+        "# Security Policy\n\nReport vulnerabilities to security@example.com.\n",
+        encoding="utf-8",
+    )
     items = _items_by_id(build_cra_readiness(tmp_path))
     assert items["security_md"].status == STATUS_PRESENT
     assert items["security_md"].evidence["path"] == ".github/SECURITY.md"
@@ -358,3 +361,56 @@ def test_self_repo_reports_security_md_and_sbom_present():
     assert items["dependency_update_config"].status == STATUS_ABSENT
     gap_items = {f["detail"]["item_id"] for f in build_cra_readiness(REPO_ROOT, supply_chain=section).findings()}
     assert "dependency_update_config" in gap_items
+
+# ---------------------------------------------------------------------------
+# Detection-honesty negative fixtures (adversarial-review findings 1-3, 5):
+# an item must NOT report present on evidence that provides no real substance,
+# and the gap finding must not be suppressed.
+# ---------------------------------------------------------------------------
+
+
+def test_contactless_security_txt_does_not_over_claim_cvd(tmp_path):
+    (tmp_path / ".well-known").mkdir()
+    (tmp_path / ".well-known" / "security.txt").write_text(
+        "Expires: 2027-01-01T00:00:00Z\nEncryption: https://example.com/pgp\n"
+    )
+    readiness = build_cra_readiness(tmp_path, supply_chain=None)
+    items = _items_by_id(readiness)
+    assert items["cvd_contact"].status == STATUS_ABSENT, (
+        "a security.txt with no Contact field is not a disclosure contact"
+    )
+    gaps = {f["detail"]["item_id"] for f in readiness.findings()}
+    assert "cvd_contact" in gaps
+
+
+def test_template_security_md_does_not_over_claim_cvd(tmp_path):
+    (tmp_path / "SECURITY.md").write_text(
+        "# Security\n\n## Reporting a vulnerability\n\nTODO: describe how to report.\n"
+    )
+    items = _items_by_id(build_cra_readiness(tmp_path, supply_chain=None))
+    assert items["cvd_contact"].status == STATUS_ABSENT, (
+        "a TODO template line is not a real contact"
+    )
+
+
+def test_real_contact_in_security_md_still_reports_present(tmp_path):
+    (tmp_path / "SECURITY.md").write_text(
+        "# Security\n\nReport vulnerabilities to security@example.com.\n"
+    )
+    items = _items_by_id(build_cra_readiness(tmp_path, supply_chain=None))
+    assert items["cvd_contact"].status == STATUS_PRESENT
+    assert "security@example.com" in (items["cvd_contact"].evidence or {}).get("detail", "")
+
+
+def test_empty_security_md_is_not_a_policy(tmp_path):
+    (tmp_path / "SECURITY.md").write_text("   \n\n")
+    items = _items_by_id(build_cra_readiness(tmp_path, supply_chain=None))
+    assert items["security_md"].status == STATUS_ABSENT, (
+        "an empty SECURITY.md is not a security policy"
+    )
+
+
+def test_empty_support_doc_is_not_a_statement(tmp_path):
+    (tmp_path / "SUPPORT.md").write_text("\n")
+    items = _items_by_id(build_cra_readiness(tmp_path, supply_chain=None))
+    assert items["support_statement"].status == STATUS_ABSENT
