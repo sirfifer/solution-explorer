@@ -240,6 +240,10 @@ export interface Rule {
 export interface ComponentAIEnhance {
   // Core fields
   help_text?: string;
+  // One-line summary the tree renders. The projection also copies this up to the
+  // top-level Component.description when the mechanical description is empty (D7),
+  // so existing description surfaces render it without change.
+  description?: string;
   architectural_role?: string;
   data_handled?: string;
   criticality?: "critical" | "important" | "supporting";

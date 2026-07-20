@@ -1981,9 +1981,56 @@ Filled by the phase-gate review session per WORK-PLAN.md section 6.3.
 | D4 | Orphan finding reads as dead-code on core modules | Gate on real reachability or reframe; suppress for high-symbol high-churn components |
 | D5 | Code-level edge extraction too sparse (iOS: 93 edges / 190 components, nearly all UI nav) | Extract symbol-reference edges; root cause of D4 |
 | D6 | Fixture endpoints/models presented as product capabilities/entities | Tag or exclude tests/fixtures from product surfaces |
-| D7 | iOS enrichment leaves role and description empty on all nodes | Align the DPEA payload with the viewer fields or hide the dependent surfaces |
+| D7 | iOS enrichment leaves role and description empty on all nodes | RESOLVED (branch program2/d-wave-c). See D7 evidence below. |
 | D8 | Duplication findings dominated by test-helper boilerplate | Separate or de-weight test-file clones |
 | D9 | Activity churn ranks vendored and data files coverage excludes | Apply the coverage exclusion set to churn ranking |
 | D10 | CLOSED (CDN timing, live site verified current) | none |
 | D11 | Warm-store incremental activity wrongly reports unchanged | Fix the HEAD-comparison skip in extract_activity |
+
+#### D7 evidence (RESOLVED 2026-07-19, branch program2/d-wave-c)
+
+Investigated the full payload chain against the real iOS store
+(scratchpad/ios-demo/index.db, 190 component enrichment rows) rather than
+trusting the gate summary. Two independent findings, one per half:
+
+- ROLE was NOT actually dropped or misnamed. The enhance pass writes
+  `architectural_role` (155/190 non-null; the other 35 are legitimate model
+  nulls for leaf/supporting components), the projection overlay carries it into
+  `component.ai_enhance.architectural_role`, and the viewer reads that exact key
+  (viewer/src/types.ts, ComponentNode.tsx, DetailPanel.tsx). The prompt
+  vocabulary matches the viewer's ROLE_META keys one for one, so the badge
+  renders. Both a fresh projection and the deployed artifact carry the role. The
+  "role empty" reading was the legitimate nulls plus conflation with the
+  genuinely-empty description surface. Locked with a regression assertion so a
+  future rename at the projection boundary fails loudly. No stored data renamed.
+- DESCRIPTION was genuinely never produced. The enhance prompt/schema had no
+  `description` field, so all 190 rows carried help_text (long-form) but no
+  one-line summary. The viewer tree and detail panel render the top-level
+  `component.description` (`docs.purpose || component.description`), which the
+  mechanical projection leaves empty for ~96% of components, so enriched nodes
+  showed a blank summary line.
+
+Fix (all in this executor's territory plus the enrich-owned scorer script):
+1. Added `description` to the enhance prompt schema and rules
+   (analyzer/enrich/prompts.py) and to the scorer's OPTIONAL_COMPONENT_FIELDS
+   (scripts/score-ai-enhancement-quality.py) so future runs request, validate,
+   and retain a one-line summary distinct from help_text.
+2. At the projection boundary (analyzer/enrich/overlay.py) the overlay now
+   copies the payload's `description` up to `component.description` when the
+   mechanical description is empty, never overwriting an existing one and never
+   inventing one when enrichment omitted it. This aligns the projection to the
+   existing viewer contract (the tree already renders component.description); the
+   viewer needed no rendering change, only a `description?` field added to
+   ComponentAIEnhance in types.ts for contract honesty.
+3. Existing 190 rows are NOT backfilled: they predate the description field and
+   stay blank until the next `enhance --update` (staleness machinery already
+   flags them). No fabricated descriptions.
+
+Tests: tests/test_enrich_d7_role_description.py (5 tests, real FactStore built
+from the polyglot fixture through the real extractor and the real enrichment
+writer, no mocks). Includes a fail-before that fails on the pre-fix overlay
+(description stays inside ai_enhance and never reaches component.description).
+Full suite: 1077 passed, 1 xfailed, 1 known worktree-environmental failure
+(test_coverage_ledger .git-as-file). Viewer suite: 333 passed, lint + tsc +
+build clean. ruff clean on touched files.
 
