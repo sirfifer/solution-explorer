@@ -18,6 +18,54 @@ def _should_skip_dir(name: str) -> bool:
     return False
 
 
+def _is_generated_projection(raw: bytes) -> bool:
+    """True when ``raw`` is a solution-explorer architecture projection (D1).
+
+    The tool emits its own datasets (the monolith ``architecture.json`` and the
+    split ``manifest.json`` / detail shards). When such a dataset is committed
+    into a repository (for example a demo dataset under ``viewer/public/``) the
+    v1 path counted it as source, inflating the line and language stats by the
+    tool's own output. This is a cheap, deterministic content check: a JSON
+    object whose header declares the generator keys the projection always writes
+    (``analyzer_version`` and ``generated_at``) plus a ``components`` collection.
+    Only the head of the file is inspected because those keys are written at the
+    top of the object, so the check stays O(1) regardless of dataset size. A
+    hand-written config JSON (package.json, tsconfig.json) never carries all
+    three markers, and no test fixture declares them, so fixtures stay parsed.
+    """
+    head = raw[:4096].lstrip()
+    if not head.startswith(b"{"):
+        return False
+    return (
+        b'"analyzer_version"' in head
+        and b'"generated_at"' in head
+        and b'"components"' in head
+    )
+
+
+def _is_generated_dataset_dir(dirpath: str) -> bool:
+    """True when ``dirpath`` is the tool's own emitted projection dataset (D1).
+
+    Recognized by a projection ``manifest.json`` or ``architecture.json`` sitting
+    directly in the directory (the split-output shape puts ``manifest.json`` next
+    to a ``data/`` shard directory). The whole subtree is generated output, so it
+    is pruned and ledgered as one ``excluded:skipped_directory`` row rather than
+    parsed as hundreds of source files. Only the manifest head is read.
+    """
+    for name in ("manifest.json", "architecture.json"):
+        p = Path(dirpath) / name
+        if not p.is_file():
+            continue
+        try:
+            with open(p, "rb") as fh:
+                head = fh.read(4096)
+        except OSError:
+            continue
+        if _is_generated_projection(head):
+            return True
+    return False
+
+
 def _is_vendored_repo(dirpath: str) -> bool:
     """Detect vendored third-party source repositories.
 

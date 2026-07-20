@@ -56,6 +56,65 @@ def is_route_path(path: Optional[str], *, allow_bare: bool = False) -> bool:
     return False
 
 
+def in_string_literal(content: str, pos: int) -> bool:
+    """True when offset ``pos`` falls inside a string literal (D3).
+
+    A pattern/detector tool defines its own detection patterns as string
+    constants (for example a job rule written as a compiled regex over the token
+    a celery task decorator uses), so scanning such a repo makes the detectors
+    fire on their own definitions: the token appears inside the pattern string
+    and is reported as real usage. It also appears inside module docstrings that
+    document those patterns. A code anchor (a decorator, a method call, an
+    import) never lives inside a string literal in real usage, so a match whose
+    START is inside a quoted string is a definition or a documentation example,
+    not real usage, and is suppressed.
+
+    The scan runs from the start of the file to ``pos`` and understands
+    triple-quoted strings (Python docstrings, multi-line), single- and
+    double-quoted strings (terminated by their quote or the line end), and
+    backtick template literals (multi-line), all with backslash-escape
+    awareness. Route paths and URLs, whose *value* lives in a string but whose
+    match *anchor* is real code before the quote, are unaffected because the
+    anchor offset is not inside a string.
+    """
+    if pos <= 0:
+        return False
+    length = len(content)
+    i = 0
+    while i < pos:
+        # Triple-quoted strings first: they can span many lines (docstrings).
+        if content.startswith('"""', i) or content.startswith("'''", i):
+            q = content[i:i + 3]
+            end = content.find(q, i + 3)
+            if end == -1:
+                return True  # unterminated triple quote: pos is inside it
+            close = end + 3
+            if pos < close:
+                return True
+            i = close
+            continue
+        ch = content[i]
+        if ch in "\"'`":
+            j = i + 1
+            while j < length:
+                c = content[j]
+                if c == "\\":
+                    j += 2
+                    continue
+                if c == ch:
+                    j += 1
+                    break
+                if c == "\n" and ch != "`":
+                    break  # an unterminated single-line string ends at the line
+                j += 1
+            if pos < j:  # pos falls within [i, j), the string span
+                return True
+            i = j
+            continue
+        i += 1
+    return False
+
+
 def _hint(content: str, *markers: str) -> bool:
     return any(m in content for m in markers)
 
@@ -381,6 +440,8 @@ def extract_cli(content: str, language: str) -> tuple[list[tuple[dict, int]], li
     cmd_matches: list[tuple[dict, int, int]] = []
     for pat, name_group, framework in _CLI_COMMAND_RULES.get(language, []):
         for m in pat.finditer(content):
+            if in_string_literal(content, m.start()):
+                continue  # a pattern definition, not a real command anchor (D3)
             name = None
             if name_group is not None and m.lastindex and name_group <= m.lastindex:
                 name = m.group(name_group)
@@ -390,6 +451,8 @@ def extract_cli(content: str, language: str) -> tuple[list[tuple[dict, int]], li
     opt_matches: list[tuple[dict, int, int]] = []
     for pat, framework in _CLI_OPTION_RULES:
         for m in pat.finditer(content):
+            if in_string_literal(content, m.start()):
+                continue  # a pattern definition, not a real option anchor (D3)
             opt_matches.append(
                 ({"flag": m.group(1), "framework": framework}, m.start(), m.end())
             )
@@ -438,6 +501,8 @@ def extract_jobs(content: str, language: str) -> list[tuple[dict, int]]:
     seen: set = set()
     for pat, group, framework in _JOB_RULES.get(language, []):
         for m in pat.finditer(content):
+            if in_string_literal(content, m.start()):
+                continue  # a pattern definition or docstring example, not usage (D3)
             value: dict = {"framework": framework}
             if group is not None and m.lastindex and group <= m.lastindex:
                 token = m.group(group)

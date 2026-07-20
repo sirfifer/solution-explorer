@@ -25,7 +25,7 @@ import re
 from typing import Optional
 
 from .context import Deriver
-from .testing import _is_test_file
+from .testing import _is_test_file, is_fixture_path
 
 __all__ = ["derive_capabilities"]
 
@@ -73,7 +73,7 @@ class _Cap:
     """A capability under construction, merged across evidence occurrences."""
 
     __slots__ = ("id", "component_id", "kind", "name", "detail",
-                 "evidence", "confidence", "symbol_id")
+                 "evidence", "confidence", "symbol_id", "fixture")
 
     def __init__(self, cap_id, component_id, kind, name, detail, confidence):
         self.id = cap_id
@@ -84,12 +84,21 @@ class _Cap:
         self.evidence: list[dict] = []
         self.confidence = confidence
         self.symbol_id: Optional[str] = None
+        # D6: fixture origin. True only while EVERY evidence file is under a test
+        # or fixture directory; a single product-file occurrence clears it, so a
+        # capability declared in real code is never mislabeled. None until the
+        # first evidence is added.
+        self.fixture: Optional[bool] = None
+
+    def note_origin(self, file: str) -> None:
+        is_fix = is_fixture_path(file)
+        self.fixture = is_fix if self.fixture is None else (self.fixture and is_fix)
 
     def to_dict(self) -> dict:
         detail = dict(self.detail)
         if self.symbol_id:
             detail["symbol"] = self.symbol_id
-        return {
+        out = {
             "id": self.id,
             "component_id": self.component_id,
             "kind": self.kind,
@@ -100,6 +109,9 @@ class _Cap:
             ),
             "confidence": self.confidence,
         }
+        if self.fixture:
+            out["fixture"] = True
+        return out
 
 
 def derive_capabilities(d: Deriver) -> None:
@@ -117,6 +129,7 @@ def derive_capabilities(d: Deriver) -> None:
         if cap is None:
             cap = _Cap(cap_id, component_id, kind, name, detail, confidence)
             caps[cap_id] = cap
+        cap.note_origin(file)
         cap.evidence.append({"file": file, "line": line, "snippet": _snippet(content, line)})
         if cap.symbol_id is None:
             sym = _resolve_symbol(symbols_by_file.get(file, []), line)

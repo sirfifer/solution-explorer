@@ -85,6 +85,11 @@ export function rankEntitiesByAccess(
     items: entities
       .filter((e) => e.kind === kind)
       .sort((a, b) => {
+        // D6: fixture-origin entities rank behind product ones (kept, not
+        // dropped), so real product data is not buried under test scaffolding.
+        const fa = a.fixture ? 1 : 0;
+        const fb = b.fixture ? 1 : 0;
+        if (fa !== fb) return fa - fb;
         const ca = count(a.id);
         const cb = count(b.id);
         if (ca !== cb) return cb - ca;

@@ -64,6 +64,11 @@ export function groupCapabilitiesByKind(caps: Capability[]): CapabilityGroup[] {
     items: caps
       .filter((c) => c.kind === kind)
       .sort((a, b) => {
+        // D6: fixture-origin capabilities rank behind product ones (kept, not
+        // dropped). Product items always precede test scaffolding within a kind.
+        const fa = a.fixture ? 1 : 0;
+        const fb = b.fixture ? 1 : 0;
+        if (fa !== fb) return fa - fb;
         if (kind === "api") {
           const pa = a.detail.path ?? a.name;
           const pb = b.detail.path ?? b.name;

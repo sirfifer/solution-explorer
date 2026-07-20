@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 import re
 from typing import Optional
+from urllib.parse import urlsplit
 
 from ..constants import (
     AUTH_PATTERNS,
@@ -34,6 +35,11 @@ from ..models import Relationship
 from .context import Deriver
 
 CLIENT_TYPES = {"ios-client", "android-client", "web-client", "mobile-client", "watch-app"}
+
+# Component types that genuinely declare a network endpoint another component can
+# call. An http edge to a target that is neither of these and binds no port is
+# fabricated (D2), so it is never drawn from a name match alone.
+SERVER_TYPES = {"api-server", "service", "infrastructure"}
 
 
 def _evidence(file: str, line: Optional[int], snippet: str = "") -> list[dict]:
@@ -123,17 +129,30 @@ def derive_relationships(d: Deriver) -> None:
         source_comp = d._find_component_for_file(fi.path)
         if not source_comp or source_comp.id in content_ids:
             continue
-        refs = _url_signals(d, fi.path) + _service_signals(d, fi.path)
-        for service_name, target_comp in service_name_map.items():
-            if target_comp.id == source_comp.id or len(service_name) < 4:
+        # Only full URL references (with a scheme) can resolve to a callable
+        # host. Bare service tokens (a `service:port` fragment captured from a
+        # code string) stay per-component signals, never edges (D2): they are
+        # exactly the fuzzy evidence that fabricated cross-fixture edges.
+        refs = _url_signals(d, fi.path)
+        for ref, line in refs:
+            # D2: an http edge is drawn only when the URL host authority resolves
+            # EXACTLY to a component that actually declares an endpoint (a bound
+            # port or a server-type component). A component name appearing as a
+            # substring somewhere inside an arbitrary URL (a github.com path, a
+            # docs link, a token inside a test string) is not a call: the
+            # url_reference stays a per-component signal, never an edge (external
+            # cloud domains are captured by _external_services below).
+            host = _url_host(ref)
+            if not host or len(host) < 4:
                 continue
-            for ref, line in refs:
-                low = ref.lower()
-                if re.search(rf'(?:^|[/@.:]){re.escape(service_name)}(?:[:/."]|$)', low):
-                    add(source_comp.id, target_comp.id, "http",
-                        _evidence(fi.path, line, ref), "inferred", "static",
-                        protocol="HTTP", label=f"calls {service_name}", bidirectional=True)
-                    break
+            target_comp = service_name_map.get(host)
+            if target_comp is None or target_comp.id == source_comp.id:
+                continue
+            if not _declares_endpoint(target_comp):
+                continue
+            add(source_comp.id, target_comp.id, "http",
+                _evidence(fi.path, line, ref), "inferred", "static",
+                protocol="HTTP", label=f"calls {host}", bidirectional=True)
 
     # -- client -> api-server via http_client signal -----------------------
     api_servers = [c for c in d._component_map.values()
@@ -307,14 +326,41 @@ def _url_signals(d: Deriver, path: str) -> list[tuple[str, Optional[int]]]:
     return out
 
 
-def _service_signals(d: Deriver, path: str) -> list[tuple[str, Optional[int]]]:
-    out = []
-    for s in d.view.signals(path):
-        if s["kind"] == "url_reference":
-            v = s["value"] or {}
-            if v.get("service"):
-                out.append((v["service"], s["line"]))
-    return out
+def _declares_endpoint(comp) -> bool:
+    """True when ``comp`` genuinely exposes a network endpoint (D2 gate).
+
+    Either it binds a port (a declared listen address) or it is a server-type
+    component. A plain library/module named like a URL path segment declares no
+    endpoint and never becomes an http target from a name match.
+    """
+    return comp.port is not None or comp.type in SERVER_TYPES
+
+
+def _url_host(ref: str) -> Optional[str]:
+    """The host authority of a URL/service reference, lowercased (D2).
+
+    Full URLs are parsed for their netloc; a bare ``host:port`` (no scheme) and a
+    plain service token (from a service signal) resolve to the host itself. Any
+    path, query, userinfo, and port are stripped, so only the authority that a
+    server actually answers on is returned. Returns None when the reference is
+    not host-shaped. The resolution is exact by design: a component name found
+    anywhere else in a URL (a path segment, a longer public domain) is not a host
+    match and yields no edge.
+    """
+    r = ref.strip()
+    if "://" in r:
+        netloc = urlsplit(r).netloc
+    elif "/" in r or "?" in r:
+        return None
+    elif ":" in r:
+        netloc = r  # host:port with no scheme, e.g. api:8000
+    elif "." not in r:
+        netloc = r  # a bare service token, e.g. api
+    else:
+        return None
+    netloc = netloc.rsplit("@", 1)[-1]
+    host = netloc.rsplit(":", 1)[0] if ":" in netloc else netloc
+    return host.lower() or None
 
 
 def _locate(d: Deriver, path: str, needle: str) -> Optional[int]:

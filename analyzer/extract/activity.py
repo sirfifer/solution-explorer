@@ -306,8 +306,19 @@ def extract_activity(root, store: FactStore) -> ActivityResult:
     result.shallow = _is_shallow(root)
 
     prev_head = store.get_meta("activity_head")
+    prev_shallow = store.get_meta("activity_shallow") == "1"
 
-    if prev_head == head and store.has_activity():
+    # The prior pass is only COMPLETE (safe to trust as-is on an unchanged HEAD)
+    # when it recorded activity AND was not shallow. A shallow pass recorded only
+    # partial history behind the clone's shallow boundary; the clone may since
+    # have been deepened or unshallowed (a common CI pattern: build the store in a
+    # depth-1 checkout, reuse it in a fuller one), revealing ancestor commits that
+    # were never processed even though HEAD did not move. Treating that as
+    # "unchanged" strands the newly available history, so a prior shallow pass is
+    # never trusted as complete (D11).
+    prior_complete = store.has_activity() and not prev_shallow
+
+    if prev_head == head and prior_complete:
         # Nothing changed since the last pass: process zero commits (I6).
         store.set_meta("activity_shallow", "1" if result.shallow else "0")
         store.commit()
@@ -315,7 +326,16 @@ def extract_activity(root, store: FactStore) -> ActivityResult:
         result.commits_processed = 0
         return result
 
-    incremental = bool(prev_head) and _is_ancestor(root, prev_head, head)
+    # A fast-forward incremental extends a COMPLETE prior pass over the new range.
+    # An incomplete (shallow) prior pass cannot be extended additively: the range
+    # ``prev_head..head`` would be empty on an unchanged HEAD while leaving the
+    # partial history unrepaired, so it is rebuilt in full instead (D11).
+    incremental = (
+        bool(prev_head)
+        and prev_head != head
+        and prior_complete
+        and _is_ancestor(root, prev_head, head)
+    )
     log_args = ["log", "--no-merges", "-M", "--numstat", f"--format={_LOG_FORMAT}"]
     if incremental:
         log_args.append(f"{prev_head}..{head}")

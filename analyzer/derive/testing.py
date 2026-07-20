@@ -91,6 +91,26 @@ def _detect_component_testing(d: Deriver, comp, comp_dir: str, file_lookup) -> d
     }
 
 
+# Directory-name tokens that mark a path as test or fixture origin. Reuses the
+# shared TEST_DIR_NAMES and adds the fixture directory names, so a product
+# surface is never confused with a test scaffold (D6).
+_FIXTURE_DIR_NAMES = TEST_DIR_NAMES | {"fixtures", "fixture", "__fixtures__", "testdata"}
+
+
+def is_fixture_path(rel_path: str) -> bool:
+    """True when ``rel_path`` lives under a test or fixture directory (D6).
+
+    Capabilities and data entities derived from files under ``tests/``,
+    ``fixtures/``, ``__tests__/`` and the like are test scaffolding, not product
+    surfaces. They are marked (never deleted, so 100 percent accounting holds)
+    so the viewer can rank them behind real product items. Any path component
+    matching a known test or fixture directory name makes the path fixture
+    origin; matching is case-insensitive.
+    """
+    parts = rel_path.replace("\\", "/").split("/")[:-1]  # directory components only
+    return any(p.lower() in _FIXTURE_DIR_NAMES for p in parts)
+
+
 def _is_test_file(rel_path: str, language: str) -> bool:
     name = os.path.basename(rel_path).lower()
     # Root-bounded: only ancestors within the scan root count as test dirs.

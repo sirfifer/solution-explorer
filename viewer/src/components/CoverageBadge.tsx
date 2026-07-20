@@ -42,6 +42,8 @@ const NON_SOURCE_DISPOSITIONS = new Set([
   "excluded:empty_file",
   "excluded:skipped_directory",
   "excluded:vendored_repo",
+  // The tool's own emitted projection dataset (D1): accounted, never source.
+  "excluded:generated",
 ]);
 
 // Classify a disposition into one of the three families. `parsed` is analyzed;

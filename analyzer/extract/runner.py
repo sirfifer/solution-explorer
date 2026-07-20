@@ -53,7 +53,12 @@ from typing import Optional
 from ..constants import LANGUAGE_MAP, SKIP_EXTENSIONS
 from ..parsers import PARSERS
 from ..store import LOCAL_REPO, ROOT_COMPONENT, FactStore, assign_symbol_ids
-from ..utils import _is_vendored_repo, _should_skip_dir
+from ..utils import (
+    _is_generated_dataset_dir,
+    _is_generated_projection,
+    _is_vendored_repo,
+    _should_skip_dir,
+)
 from .clones import extract_clone_signals
 from .facts import FileFacts
 from .signals import extract_entity_signals, extract_rule_signals, extract_signals
@@ -65,7 +70,12 @@ from .signals import extract_entity_signals, extract_rule_signals, extract_signa
 # content-hash cache so a warm store is re-extracted once and never silently
 # serves cached facts that predate the new signal kind (invariant I2 / "no
 # silent anything").
-EXTRACT_TIER = "p5-extract/3"
+# p5-extract/3 -> p5-extract/4: framework/driver/job/cli signal detectors now
+# ignore matches that fall inside a string literal (D3 string-literal awareness),
+# so a pattern/detector tool no longer detects its own pattern definitions.
+# Bumping the tier invalidates the content-hash cache so a warm store re-extracts
+# once and never serves cached facts that predate the guard.
+EXTRACT_TIER = "p5-extract/4"
 INLINE_THRESHOLD = 8  # below this many cache misses, parse inline (no pool)
 
 # In-run retry for transient extraction failures (P4-8). A worker crash, an
@@ -289,6 +299,12 @@ def _enumerate(
                 ledger.append((child, "excluded:skipped_directory", d))
                 for ci_path in _ci_files_in_pruned_dir(dirpath, d):
                     add_ci_candidate(ci_path)
+            elif _is_generated_dataset_dir(os.path.join(dirpath, d)):
+                # The tool's own emitted projection dataset (D1). Prune the whole
+                # subtree and account it as one build-output row rather than
+                # parsing its manifest and detail shards as source.
+                ledger.append((child, "excluded:skipped_directory",
+                               "generated: solution-explorer projection dataset"))
             elif _is_vendored_repo(os.path.join(dirpath, d)):
                 ledger.append((child, "excluded:vendored_repo", d))
             else:
@@ -320,6 +336,13 @@ def _enumerate(
                 continue
             if b"\x00" in raw[:8192]:
                 ledger.append((rel, "binary", "null_byte"))
+                continue
+            # A standalone emitted projection file (a committed monolith
+            # architecture.json or a stray manifest) is the tool's own output,
+            # not source (D1). Account it as generated, never parse it.
+            if ext == ".json" and _is_generated_projection(raw):
+                ledger.append((rel, "excluded:generated",
+                               "generated: solution-explorer projection"))
                 continue
 
             language = LANGUAGE_MAP.get(ext) or _schema_only_language(rel, fname, ext)
