@@ -232,3 +232,58 @@ def test_build_front_door_rejects_bad_mode():
     import pytest
     with pytest.raises(ValueError):
         build_front_door({"name": "x"}, mode="nonsense")
+
+def test_monolith_walk_orders_honor_a_custom_filename(tmp_path):
+    # Review finding: walk_orders hardcoded architecture.json, lying to agents
+    # when the monolith has a custom output name.
+    from analyzer.project.frontdoor import build_front_door
+
+    ai_json, _llms = build_front_door(
+        {"name": "demo", "generated_at": "2025-01-01T00:00:00Z",
+         "analyzer_version": "1.2.0"},
+        mode="monolith",
+        monolith_filename="graph.json",
+    )
+    for order in ai_json["walk_orders"]:
+        for step in order["steps"]:
+            assert step["fetch"] == "graph.json", (order["question"], step)
+
+
+def test_llms_heading_survives_a_hostile_name(tmp_path):
+    # Review finding: a newline in the dataset name split the markdown heading
+    # and injected raw lines. The name is now collapsed to one clean line.
+    from analyzer.project.frontdoor import build_front_door
+
+    _ai, llms = build_front_door(
+        {"name": "Evil\nInjected: ](http://x)", "generated_at": "2025-01-01T00:00:00Z",
+         "analyzer_version": "1.2.0"},
+        mode="monolith",
+        monolith_filename="architecture.json",
+    )
+    first_line = llms.splitlines()[0]
+    assert first_line.startswith("# Evil Injected:"), first_line
+
+def test_legacy_split_without_search_does_not_lie(tmp_path):
+    # Review-driven gating: a legacy split dataset (manifest + data/ only, no
+    # search shards, no coverage) must not advertise search or coverage
+    # endpoints, must null the search section, and its lookup walk orders must
+    # fall back to the manifest tree. Fail-before: the pre-fix front door
+    # advertised search/manifest.json unconditionally in split mode.
+    from analyzer.project.frontdoor import build_front_door
+
+    ai_json, llms = build_front_door(
+        {"name": "legacy", "generated_at": "2025-01-01T00:00:00Z",
+         "analyzer_version": "1.0.0"},
+        mode="split",
+        coverage=None,
+        activity=None,
+        search_manifest=None,
+    )
+    paths = [e["path"] for e in ai_json["endpoints"]]
+    assert not any(p.startswith("search/") for p in paths), paths
+    assert "coverage.json" not in paths
+    assert ai_json["search"] is None
+    for order in ai_json["walk_orders"]:
+        for step in order["steps"]:
+            assert "search/" not in step["fetch"], (order["question"], step)
+    assert "search/manifest.json" not in llms

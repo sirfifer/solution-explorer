@@ -30,6 +30,7 @@ insertion-stable inputs.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -160,6 +161,7 @@ def _split_endpoints(
     *,
     coverage: Optional[dict],
     activity: Optional[dict],
+    search_present: bool = True,
 ) -> list[dict]:
     """The endpoint map for split mode, listing only files that are emitted."""
     endpoints: list[dict] = [
@@ -173,24 +175,7 @@ def _split_endpoints(
                 "per-symbol/per-file arrays (those live in the detail shards)."
             ),
         },
-        {
-            "path": "search/manifest.json",
-            "role": "search-index",
-            "contains": (
-                "Search-shard index: shard_size, total entry count, per-kind counts "
-                "(by_kind), the entry field list, and the ordered list of shard "
-                "filenames. Fetch this to size a lookup before pulling shards."
-            ),
-        },
-        {
-            "path": "search/search-<NNNN>.json",
-            "role": "search-shard",
-            "contains": (
-                "A shard of search entries {ref_kind, ref_id, name, path, component, "
-                "text}. Use to resolve a symbol/file/component name or a path to its "
-                "owning component. See `search.how_to_pick_a_shard`."
-            ),
-        },
+
         {
             "path": "data/detail-<safe_id>.json",
             "role": "detail-shard",
@@ -200,6 +185,25 @@ def _split_endpoints(
             ),
         },
     ]
+    if search_present:
+        endpoints.insert(1, {
+            "path": "search/search-<NNNN>.json",
+            "role": "search-shard",
+            "contains": (
+                "A shard of search entries {ref_kind, ref_id, name, path, component, "
+                "text}. Use to resolve a symbol/file/component name or a path to its "
+                "owning component. See `search.how_to_pick_a_shard`."
+            ),
+        })
+        endpoints.insert(1, {
+            "path": "search/manifest.json",
+            "role": "search-index",
+            "contains": (
+                "Search-shard index: shard_size, total entry count, per-kind counts "
+                "(by_kind), the entry field list, and the ordered list of shard "
+                "filenames. Fetch this to size a lookup before pulling shards."
+            ),
+        })
     if coverage is not None:
         endpoints.append({
             "path": "coverage.json",
@@ -241,32 +245,32 @@ def _monolith_endpoints(single_file: str) -> list[dict]:
     ]
 
 
-def _walk_orders(mode: str) -> list[dict]:
+def _walk_orders(mode: str, monolith_filename: str = "architecture.json") -> list[dict]:
     """Recommended fetch sequences for common question shapes."""
     if mode == "monolith":
         return [
             {
                 "question": "project overview",
                 "steps": [
-                    {"fetch": "architecture.json", "then": "Read stats for scale, then the components tree for structure. Do not re-fetch; everything is here."},
+                    {"fetch": monolith_filename, "then": "Read stats for scale, then the components tree for structure. Do not re-fetch; everything is here."},
                 ],
             },
             {
                 "question": "review findings first",
                 "steps": [
-                    {"fetch": "architecture.json", "then": "Read .findings (ranked) and .concerns. Filter by category/title/severity."},
+                    {"fetch": monolith_filename, "then": "Read .findings (ranked) and .concerns. Filter by category/title/severity."},
                 ],
             },
             {
                 "question": "look up a symbol or file",
                 "steps": [
-                    {"fetch": "architecture.json", "then": "Scan the inline .symbols / .files arrays by name or path; each file's owning component is the component whose .files contains that path."},
+                    {"fetch": monolith_filename, "then": "Scan the inline .symbols / .files arrays by name or path; each file's owning component is the component whose .files contains that path."},
                 ],
             },
             {
                 "question": "assess coverage",
                 "steps": [
-                    {"fetch": "architecture.json", "then": "Read .coverage.summary for the disposition counts and .coverage.rows for per-file dispositions."},
+                    {"fetch": monolith_filename, "then": "Read .coverage.summary for the disposition counts and .coverage.rows for per-file dispositions."},
                 ],
             },
         ]
@@ -363,14 +367,14 @@ def build_front_door(
         "manifest_sections": _manifest_sections(
             arch, mode=mode, coverage=coverage, activity=activity
         ),
-        "walk_orders": _walk_orders(mode),
+        "walk_orders": _walk_orders(mode, monolith_filename),
         "token_economy": _token_economy(),
     }
 
     if mode == "split":
         ai_json["projection_root"] = "./"
         ai_json["entry"] = "manifest.json"
-        ai_json["endpoints"] = _split_endpoints(arch, coverage=coverage, activity=activity)
+        ai_json["endpoints"] = _split_endpoints(arch, coverage=coverage, activity=activity, search_present=search_manifest is not None)
         sm = search_manifest or {}
         ai_json["search"] = {
             "index": "search/manifest.json",
@@ -400,6 +404,25 @@ def build_front_door(
             "index": "component_detail_index (in manifest.json) maps component id -> {symbolCount, fileCount}",
             "contains": "{symbols: [...], files: [...]} for that one component.",
         }
+        if search_manifest is None:
+            # A legacy split dataset without search shards (pre-search committed
+            # demos). Advertising an index that does not exist is a lying
+            # contract; the search section goes null and the lookup walk orders
+            # fall back to the manifest components tree (review-driven gating).
+            ai_json["search"] = None
+            fallback = {
+                "fetch": "manifest.json",
+                "then": (
+                    "This dataset has no search index. Walk the components tree "
+                    "(names and paths) and component_detail_index, then fetch the "
+                    "matching detail shard via detail_shards.filename_rule."
+                ),
+            }
+            ai_json["walk_orders"] = [
+                order if not any("search/" in st.get("fetch", "") for st in order["steps"])
+                else {"question": order["question"], "steps": [fallback]}
+                for order in ai_json["walk_orders"]
+            ]
     else:
         ai_json["projection_root"] = "./"
         ai_json["entry"] = monolith_filename
@@ -413,6 +436,11 @@ def _render_llms_txt(ai_json: dict, *, mode: str, monolith_filename: str) -> str
     """Render the llms.txt markdown companion in a fixed line order."""
     dataset = ai_json["dataset"]
     name = dataset.get("name") or "this project"
+    # The name is interpolated into markdown: collapse any control characters
+    # and newlines to single spaces so a hostile or odd directory name cannot
+    # split the heading or inject markdown lines (review finding). ai.json is
+    # JSON-escaped and needs no such treatment.
+    name = re.sub(r"[\x00-\x1f\x7f]+", " ", name).strip() or "this project"
     lines: list[str] = []
     lines.append(f"# {name} architecture (solution-explorer projection)")
     lines.append("")
@@ -442,7 +470,8 @@ def _render_llms_txt(ai_json: dict, *, mode: str, monolith_filename: str) -> str
     lines.append("")
     if mode == "split":
         lines.append("- [manifest.json](./manifest.json): structural entry document (components, relationships, stats, findings, concerns, coverage/activity summaries). Fetch first.")
-        lines.append("- [search/manifest.json](./search/manifest.json): search-shard index; then search/search-<NNNN>.json shards resolve a name or path to its owning component.")
+        if ai_json.get("search") is not None:
+            lines.append("- [search/manifest.json](./search/manifest.json): search-shard index; then search/search-<NNNN>.json shards resolve a name or path to its owning component.")
         lines.append("- data/detail-<safe_id>.json: per-component symbols and files (fetch only the component you drill into).")
         if any(e["path"] == "coverage.json" for e in ai_json["endpoints"]):
             lines.append("- [coverage.json](./coverage.json): full per-file coverage ledger and non-source inventory.")
