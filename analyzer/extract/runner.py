@@ -67,7 +67,10 @@ from .signals import extract_entity_signals, extract_rule_signals, extract_signa
 # p4-extract/1 -> p5-extract/1: extraction now also emits `data_entity` signals
 # (P5-2). p5-extract/1 -> p5-extract/2: extraction now also emits `rule` signals
 # (P5-5). p5-extract/2 -> p5-extract/3: extraction now also emits `clone_fragment`
-# signals (token fingerprints, P5-6). Bumping the tier invalidates the
+# signals (token fingerprints, P5-6). p5-extract/5 -> p5-extract/6: Swift
+# static-member-access references (Name.member) join the symbol_reference
+# signal, so warm caches re-extract once and never serve reference sets that
+# predate the pattern. Bumping the tier invalidates the
 # content-hash cache so a warm store is re-extracted once and never silently
 # serves cached facts that predate the new signal kind (invariant I2 / "no
 # silent anything").
@@ -85,7 +88,7 @@ from .signals import extract_entity_signals, extract_rule_signals, extract_signa
 # suppressed. Bumping the tier invalidates the content-hash cache so a warm
 # store re-extracts once and never serves cached facts that predate the new
 # signal kind (one-time re-extract disclosure).
-EXTRACT_TIER = "p5-extract/5"
+EXTRACT_TIER = "p5-extract/6"
 INLINE_THRESHOLD = 8  # below this many cache misses, parse inline (no pool)
 
 # In-run retry for transient extraction failures (P4-8). A worker crash, an
