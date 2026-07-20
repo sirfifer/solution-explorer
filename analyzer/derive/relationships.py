@@ -42,7 +42,8 @@ CLIENT_TYPES = {"ios-client", "android-client", "web-client", "mobile-client", "
 # callables are never reference targets. Extensions are excluded because they
 # extend a type defined elsewhere; the base type is the real owner.
 _TYPE_DEF_KINDS = frozenset({
-    "class", "struct", "enum", "protocol", "actor", "interface", "type", "typealias",
+    "class", "struct", "enum", "protocol", "actor", "interface", "type",
+    "typealias", "record",
 })
 
 # Cap on evidence rows kept per ``uses`` edge, and on referenced names named in
