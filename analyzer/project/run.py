@@ -25,6 +25,7 @@ integration-tested against the real viewer build.
 
 from __future__ import annotations
 
+import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -200,3 +201,18 @@ def run_v2(args) -> None:
             f"{fam['nonsource']} non-source {ns_word} accounted for"
         )
     print(f"\nOutput: {output_label}")
+
+    if getattr(args, "sarif", None):
+        # Read back what was actually written (manifest.json in split mode,
+        # architecture.json in monolith mode) rather than re-deriving: that is
+        # the exact ranked, verdict-overlaid, CRA-merged findings surface the
+        # projection produced, so the SARIF log matches the delivered artifact
+        # byte-for-byte in content, not a second, possibly-diverging read.
+        from .sarif import write_sarif
+
+        source_path = (output_dir / "manifest.json") if args.split else output_path
+        with open(source_path, "r", encoding="utf-8") as fh:
+            projected = json.load(fh)
+        sarif_path = write_sarif(projected, args.sarif, analyzer_version=__version__)
+        n_results = len(projected.get("findings") or [])
+        print(f"SARIF: {sarif_path} ({n_results} result(s))")
