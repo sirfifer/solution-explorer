@@ -1,0 +1,12 @@
+[package]
+name = "cargo-fixture"
+version = "0.1.0"
+rust-version = "1.74"
+
+[dependencies]
+serde = "1.0"
+rand = { version = "0.8.5" }
+anyhow = "=1.0.80"
+
+[dev-dependencies]
+proptest = "1.4"

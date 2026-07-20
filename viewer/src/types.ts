@@ -719,6 +719,89 @@ export interface ArchitectureStats {
   total_relationships: number;
 }
 
+// ---------------------------------------------------------------------------
+// Supply chain / SBOM (P10-1). The compact, viewer-native section the projection
+// carries in the manifest (and monolith); the full CycloneDX 1.5 document lives
+// beside it in sbom.json. Optional: a dataset with no manifests omits the whole
+// section and the supply chain surface does not appear.
+// ---------------------------------------------------------------------------
+
+// A file:line evidence pointer into a manifest. line is present where cheap.
+export interface SupplyChainEvidence {
+  file: string;
+  line?: number;
+}
+
+export type PinStatus = "exact-pinned" | "range" | "unpinned";
+export type DependencyScope = "direct" | "transitive";
+
+export interface SupplyChainDependency {
+  id: string;
+  ecosystem: string;
+  name: string;
+  declared?: string;
+  version?: string;
+  pin_status: PinStatus;
+  scope: DependencyScope;
+  purl?: string;
+  evidence: SupplyChainEvidence;
+}
+
+// A language runtime or SDK version the repo targets, surfaced apart from the
+// packages (requires-python, node engines, swift-tools-version, go directive,
+// dotnet TargetFramework, ruby version).
+export interface SupplyChainTarget {
+  ecosystem: string;
+  kind: string;
+  label: string;
+  constraint: string;
+  evidence: SupplyChainEvidence;
+}
+
+export interface SupplyChainEcosystem {
+  id: string;
+  label: string;
+  manifests: string[];
+  dependency_count: number;
+  direct_count: number;
+  transitive_count: number;
+  pin_counts: Record<string, number>;
+}
+
+export interface SupplyChainWarning {
+  ecosystem: string;
+  file: string;
+  error: string;
+}
+
+export interface SupplyChainVendored {
+  path: string;
+  file_count?: number | null;
+  evidence: SupplyChainEvidence;
+}
+
+export interface SupplyChain {
+  version: number;
+  sbom_endpoint: string;
+  sbom_format: string;
+  scope_note: string;
+  ecosystems: SupplyChainEcosystem[];
+  targets: SupplyChainTarget[];
+  dependencies: SupplyChainDependency[];
+  warnings: SupplyChainWarning[];
+  vendored?: SupplyChainVendored[];
+  counts: {
+    ecosystems: number;
+    dependencies: number;
+    direct: number;
+    transitive: number;
+    targets: number;
+    warnings: number;
+    vendored: number;
+    pin_status: Record<string, number>;
+  };
+}
+
 export interface RepositoryInfo {
   name: string;
   repository?: string | null;
@@ -774,6 +857,10 @@ export interface Architecture {
   // enrichment work (Phase 7). Old datasets omit the key and the Tours entry point
   // does not appear (degrades like coverage/activity/findings).
   tours?: Tour[];
+  // Supply chain / SBOM summary (P10-1). Optional; old datasets and repos with
+  // no manifests omit it and the supply chain surface does not appear. The full
+  // CycloneDX document is sbom.json beside the manifest.
+  supply_chain?: SupplyChain;
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
   live_status?: {
     statuses?: Record<string, ArchitectureStatus>;

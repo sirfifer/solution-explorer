@@ -114,6 +114,17 @@ describe("tooltip copy quality", () => {
       "rules.inferred": [TOOLTIP_COPY.rules.inferred],
       "capability.kind": [TOOLTIP_COPY.capability.kind],
       "capability.tested": [TOOLTIP_COPY.capability.tested],
+      "supplyChain.entry": [TOOLTIP_COPY.supplyChain.entry],
+      "supplyChain.scopeNote": [TOOLTIP_COPY.supplyChain.scopeNote],
+      "supplyChain.pinStatus": [
+        TOOLTIP_COPY.supplyChain.pinExact,
+        TOOLTIP_COPY.supplyChain.pinRange,
+        TOOLTIP_COPY.supplyChain.pinUnpinned,
+      ],
+      "supplyChain.scope": [
+        TOOLTIP_COPY.supplyChain.direct,
+        TOOLTIP_COPY.supplyChain.transitive,
+      ],
       "evidence.link": [TOOLTIP_COPY.evidence.link],
       "tours.stale": [TOOLTIP_COPY.tours.stale],
       "directive.export": [TOOLTIP_COPY.directive.export],
