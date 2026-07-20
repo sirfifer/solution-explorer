@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
@@ -302,7 +303,20 @@ def _enumerate(
             elif _is_generated_dataset_dir(os.path.join(dirpath, d)):
                 # The tool's own emitted projection dataset (D1). Prune the whole
                 # subtree and account it as one build-output row rather than
-                # parsing its manifest and detail shards as source.
+                # parsing its manifest and detail shards as source. The prune is
+                # LOUD (adversarial-review fix): it names the directory and the
+                # file count it stands for, so a wrongly-identified directory
+                # can never vanish silently behind a green badge.
+                n_dropped = sum(
+                    len(fs) for _, _, fs in os.walk(os.path.join(dirpath, d))
+                )
+                print(
+                    f"NOTE: {child}/ accounted as a generated solution-explorer "
+                    f"projection dataset ({n_dropped} files under one ledger row); "
+                    "if this directory is real source, rename its manifest.json "
+                    "or report this as a misdetection.",
+                    file=sys.stderr,
+                )
                 ledger.append((child, "excluded:skipped_directory",
                                "generated: solution-explorer projection dataset"))
             elif _is_vendored_repo(os.path.join(dirpath, d)):
@@ -337,10 +351,11 @@ def _enumerate(
             if b"\x00" in raw[:8192]:
                 ledger.append((rel, "binary", "null_byte"))
                 continue
-            # A standalone emitted projection file (a committed monolith
-            # architecture.json or a stray manifest) is the tool's own output,
-            # not source (D1). Account it as generated, never parse it.
-            if ext == ".json" and _is_generated_projection(raw):
+            # A standalone emitted projection file is the tool's own output,
+            # not source (D1). Restricted to the two basenames the tool emits
+            # (adversarial-review fix: an arbitrary user .json must never be
+            # swallowed by the projection signature).
+            if fname in ("architecture.json", "manifest.json") and _is_generated_projection(raw):
                 ledger.append((rel, "excluded:generated",
                                "generated: solution-explorer projection"))
                 continue

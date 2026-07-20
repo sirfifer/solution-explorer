@@ -414,3 +414,79 @@ def test_d11_warm_shallow_store_reprocesses_deepened_history(tmp_path):
         "newly available ancestor history must be reprocessed, not skipped as "
         f"unchanged (got mode={r2.mode}, commits={r2.commits_processed})"
     )
+
+
+# ---------------------------------------------------------------------------
+# Adversarial-review fixes on this PR (the D1 signature hardening)
+# ---------------------------------------------------------------------------
+
+
+def test_lookalike_manifest_never_prunes_real_source(tmp_path):
+    # The review's exact reproduction: a legitimate user data directory whose
+    # manifest.json merely CONTAINS the generator key names (nested or as
+    # values) with real source beside it. Pre-fix the whole directory was
+    # silently pruned while the badge claimed 100 percent. Post-fix the
+    # directory is enumerated and the source parses.
+    (tmp_path / "package.json").write_text("{}")
+    d = tmp_path / "mydata"
+    d.mkdir()
+    (d / "manifest.json").write_text(json.dumps({
+        "dataset": "customer-records",
+        "meta": {"generated_at": "2024-06-01",
+                 "analyzer_version": "my-etl-1.2"},
+        "components": ["orders", "returns"],
+    }))
+    (d / "records.py").write_text("def load():\n    return 1\n")
+
+    store = FactStore(":memory:")
+    result = extract_repo(tmp_path, store)
+    cov = dict(store._conn.execute(
+        "SELECT path, disposition FROM coverage").fetchall())
+    assert cov.get("mydata/records.py") == "parsed", cov
+    assert result.files_parsed >= 1
+
+
+def test_top_level_generator_keys_still_detected_with_long_description(tmp_path):
+    # The review's false-negative case: an enriched projection whose long
+    # architecture description pushes the generator keys past the old 4 KB
+    # window. The depth-aware scan over the larger head still detects it.
+    (tmp_path / "package.json").write_text("{}")
+    d = tmp_path / "site"
+    d.mkdir()
+    (d / "data").mkdir()
+    manifest = {
+        "name": "demo",
+        "description": "x" * 6000,
+        "generated_at": "2026-01-01T00:00:00Z",
+        "analyzer_version": "1.2.0",
+        "components": [],
+    }
+    (d / "manifest.json").write_text(json.dumps(manifest))
+
+    store = FactStore(":memory:")
+    extract_repo(tmp_path, store)
+    cov = dict(store._conn.execute(
+        "SELECT path, disposition FROM coverage").fetchall())
+    assert cov.get("site") == "excluded:skipped_directory", cov
+    assert "site/manifest.json" not in cov
+
+
+def test_directory_prune_requires_the_shard_shape(tmp_path):
+    # A lone manifest that IS projection-shaped at the top level but has no
+    # data/ or search/ beside it must not prune the directory (the lone
+    # lookalike case); the standalone-file rule accounts just the manifest.
+    (tmp_path / "package.json").write_text("{}")
+    d = tmp_path / "odd"
+    d.mkdir()
+    (d / "manifest.json").write_text(json.dumps({
+        "generated_at": "2026-01-01", "analyzer_version": "1.0",
+        "components": [],
+    }))
+    (d / "real.py").write_text("a = 1\n")
+
+    store = FactStore(":memory:")
+    extract_repo(tmp_path, store)
+    cov = dict(store._conn.execute(
+        "SELECT path, disposition FROM coverage").fetchall())
+    assert cov.get("odd/real.py") == "parsed", cov
+    assert cov.get("odd/manifest.json") == "excluded:generated", cov
