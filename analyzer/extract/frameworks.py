@@ -438,7 +438,44 @@ def _swift_endpoints(content: str) -> list[tuple[dict, int]]:
     return _dedupe(out)
 
 
+_CS_MINIMAL_API = re.compile(
+    r"\.Map(Get|Post|Put|Delete|Patch)\s*\(\s*\"(/[^\"]*)\""
+)
+_CS_HTTP_ATTR = re.compile(
+    r"\[\s*Http(Get|Post|Put|Delete|Patch)\s*\(\s*\"([^\"]*)\"\s*\)\s*\]"
+)
+
+
+def _csharp_endpoints(content: str) -> list[tuple[dict, int]]:
+    # Gate on an ASP.NET Core marker so no unrelated `.MapGet(` matches.
+    if not _hint(content, "Microsoft.AspNetCore", "ControllerBase",
+                 "[ApiController]", "WebApplication.Create", "IEndpointRouteBuilder"):
+        return []
+    out: list[tuple[dict, int]] = []
+    for m in _CS_MINIMAL_API.finditer(content):
+        path = m.group(2)
+        if not is_route_path(path):
+            continue
+        out.append((
+            {"method": m.group(1).upper(), "path": path, "framework": "aspnetcore"},
+            m.start(),
+        ))
+    for m in _CS_HTTP_ATTR.finditer(content):
+        path = m.group(2)
+        # Attribute routes are relative to the controller's [Route(...)]; keep
+        # a leading slash so is_route_path accepts a bare template segment.
+        norm = path if path.startswith("/") else "/" + path
+        if not is_route_path(norm):
+            continue
+        out.append((
+            {"method": m.group(1).upper(), "path": norm, "framework": "aspnetcore"},
+            m.start(),
+        ))
+    return _dedupe(out)
+
+
 _ENDPOINT_EXTRACTORS = {
+    "csharp": _csharp_endpoints,
     "python": _python_endpoints,
     "javascript": _js_endpoints,
     "typescript": _js_endpoints,

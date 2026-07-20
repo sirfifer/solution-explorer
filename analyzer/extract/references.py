@@ -30,8 +30,8 @@ the per-file candidate scan is capped (:data:`MAX_REFERENCE_NAMES`) so a
 pathological generated file cannot blow up signal volume.
 
 Extractor maturity is honest and per-language (:data:`REFERENCE_LANGUAGES`).
-Swift, Python, TypeScript, and JavaScript have reference extractors here; Go,
-Rust, and Ruby do not yet, and the D4 orphan reframing consults this set so a
+Swift, Python, TypeScript, JavaScript, and C# have reference extractors here;
+Go, Rust, and Ruby do not yet, and the D4 orphan reframing consults this set so a
 substantial component in a weakly-scanned language is heavily de-ranked with an
 explicit blind-spot caveat instead of being asserted as unreferenced at full
 strength.
@@ -54,7 +54,7 @@ __all__ = [
 
 # Languages with a symbol-reference extractor below. The D4 orphan reframing
 # treats every OTHER language as a "weak" reference extractor (honest maturity).
-REFERENCE_LANGUAGES = frozenset({"swift", "python", "typescript", "javascript"})
+REFERENCE_LANGUAGES = frozenset({"swift", "python", "typescript", "javascript", "csharp"})
 
 # Cap on distinct referenced names emitted per file. A generated or minified
 # file can name thousands of identifiers; beyond this the marginal edge value is
@@ -151,6 +151,21 @@ _REFERENCE_RULES: dict[str, list[re.Pattern]] = {
         re.compile(r"\bnew\s+([A-Z]\w+)"),
         re.compile(r"\bextends\s+([A-Z]\w+)"),
         re.compile(r"<\s*([A-Z]\w+)"),                   # JSX open tag
+    ],
+    # C# names types in PascalCase and, like Swift, imports whole namespaces
+    # (`using X.Y;`) with no per-name form, so it stays out of
+    # PER_NAME_IMPORT_LANGUAGES and a single local definer resolves by name.
+    # The qualified-access exclusion in extract_reference_signals keeps
+    # member access (`x.Foo`) and namespaced calls (`System.Console`) from
+    # counting as local references.
+    "csharp": [
+        re.compile(r"\bnew\s+([A-Z]\w+)"),
+        re.compile(
+            r"\b(?:class|struct|interface|record(?:\s+struct)?)\s+\w+"
+            r"(?:<[^>]*>)?\s*:\s*([A-Z]\w+)"             # base type / interface
+        ),
+        re.compile(r"<\s*([A-Z]\w+)"),                   # generic argument
+        re.compile(_STATIC),
     ],
 }
 

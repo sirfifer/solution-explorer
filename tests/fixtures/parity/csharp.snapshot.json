@@ -1,0 +1,443 @@
+{
+  "components": [
+    {
+      "actions": [],
+      "children": [
+        {
+          "actions": [],
+          "children": [],
+          "config_files": [],
+          "description": null,
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [],
+            "purpose": null,
+            "readme": null,
+            "tech_stack": [
+              ".NET",
+              "Csharp"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "src/Domain/Greeting.cs",
+            "src/Domain/User.cs"
+          ],
+          "framework": ".NET",
+          "id": "src/domain",
+          "language": "csharp",
+          "metrics": {
+            "files": 2,
+            "languages": {
+              "csharp": 28
+            },
+            "lines": 28,
+            "size_bytes": 393,
+            "symbols": 6
+          },
+          "name": "Domain",
+          "path": "src/Domain",
+          "port": null,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 2,
+            "test_frameworks": [],
+            "test_lines": 28,
+            "unit_tests": 0
+          },
+          "type": "module"
+        },
+        {
+          "actions": [],
+          "children": [],
+          "config_files": [],
+          "description": null,
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [
+              {
+                "method": "GET",
+                "path": "/health"
+              },
+              {
+                "method": "GET",
+                "path": "{id}"
+              }
+            ],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [],
+            "purpose": null,
+            "readme": null,
+            "tech_stack": [
+              "ASP.NET Core",
+              "Csharp"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "src/Api/Program.cs",
+            "src/Api/UsersController.cs"
+          ],
+          "framework": "ASP.NET Core",
+          "id": "src/api",
+          "language": "csharp",
+          "metrics": {
+            "files": 2,
+            "languages": {
+              "csharp": 50
+            },
+            "lines": 50,
+            "size_bytes": 955,
+            "symbols": 6
+          },
+          "name": "Api",
+          "path": "src/Api",
+          "port": null,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 2,
+            "test_frameworks": [],
+            "test_lines": 50,
+            "unit_tests": 0
+          },
+          "type": "module"
+        }
+      ],
+      "config_files": [],
+      "description": null,
+      "docs": {
+        "api_docs": null,
+        "api_endpoints": [],
+        "architecture_notes": null,
+        "changelog": null,
+        "claude_md": null,
+        "env_vars": [],
+        "key_decisions": [],
+        "patterns": [],
+        "purpose": null,
+        "readme": "# C# parity fixture\n\nA minimal ASP.NET Core style project used to freeze C# full-parse output\n(symbols, using imports, framework, endpoints) and to exercise cross-component\nuses edges. The Api directory references types defined in the Domain directory,\neach directory becoming its own module component. See tests/test_csharp_parity.py.\n",
+        "tech_stack": [
+          "Markdown"
+        ]
+      },
+      "entry_points": [],
+      "external_services": [],
+      "files": [
+        "README.md"
+      ],
+      "framework": null,
+      "id": "root",
+      "language": "markdown",
+      "metrics": {
+        "files": 1,
+        "languages": {
+          "markdown": 7
+        },
+        "lines": 7,
+        "size_bytes": 336,
+        "symbols": 0
+      },
+      "name": "csharp",
+      "path": "",
+      "port": null,
+      "testing": {
+        "coverage_percent": null,
+        "coverage_source": null,
+        "e2e_tests": 0,
+        "has_ci_tests": true,
+        "integration_tests": 0,
+        "test_files": 1,
+        "test_frameworks": [],
+        "test_lines": 7,
+        "unit_tests": 0
+      },
+      "type": "project"
+    }
+  ],
+  "default_branch": "main",
+  "description": "A minimal ASP.NET Core style project used to freeze C# full-parse output",
+  "files": [
+    {
+      "exports": [],
+      "imports": [
+        "Demo.Domain",
+        "Microsoft.AspNetCore.Builder",
+        "System"
+      ],
+      "language": "csharp",
+      "lines": 21,
+      "module_doc": null,
+      "path": "src/Api/Program.cs",
+      "size_bytes": 434,
+      "symbols": [
+        "src/Api/Program.cs:Main:10",
+        "src/Api/Program.cs:Program:8"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [
+        "Demo.Domain",
+        "Microsoft.AspNetCore.Mvc"
+      ],
+      "language": "csharp",
+      "lines": 29,
+      "module_doc": null,
+      "path": "src/Api/UsersController.cs",
+      "size_bytes": 521,
+      "symbols": [
+        "src/Api/UsersController.cs:Create:24",
+        "src/Api/UsersController.cs:Get:17",
+        "src/Api/UsersController.cs:UsersController:12",
+        "src/Api/UsersController.cs:UsersController:6"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [
+        "System"
+      ],
+      "language": "csharp",
+      "lines": 17,
+      "module_doc": null,
+      "path": "src/Domain/Greeting.cs",
+      "size_bytes": 243,
+      "symbols": [
+        "src/Domain/Greeting.cs:Greet:12",
+        "src/Domain/Greeting.cs:Greet:7",
+        "src/Domain/Greeting.cs:GreetingService:10",
+        "src/Domain/Greeting.cs:IGreetingService:5"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "csharp",
+      "lines": 11,
+      "module_doc": null,
+      "path": "src/Domain/User.cs",
+      "size_bytes": 150,
+      "symbols": [
+        "src/Domain/User.cs:Role:6",
+        "src/Domain/User.cs:User:4"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "markdown",
+      "lines": 7,
+      "module_doc": null,
+      "path": "README.md",
+      "size_bytes": 336,
+      "symbols": []
+    }
+  ],
+  "name": "csharp",
+  "relationships": [],
+  "repositories": [],
+  "repository": null,
+  "stats": {
+    "languages": {
+      "csharp": 78,
+      "markdown": 7
+    },
+    "total_components": 3,
+    "total_files": 5,
+    "total_lines": 85,
+    "total_relationships": 0,
+    "total_size_bytes": 1684,
+    "total_symbols": 12,
+    "total_symbols_detected": 12
+  },
+  "symbols": [
+    {
+      "annotations": [],
+      "code_preview": "    [HttpGet(\"{id}\")]\n    public string Get(int id)\n    {\n        var user = new User(id, \"Ada\");\n        return _greeter.Greet(user);\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 22,
+      "file": "src/Api/UsersController.cs",
+      "id": "src/Api/UsersController.cs:Get:17",
+      "kind": "method",
+      "line": 17,
+      "name": "Get",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    [HttpPost(\"\")]\n    public void Create([FromBody] User user)\n    {\n    }\n}",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 27,
+      "file": "src/Api/UsersController.cs",
+      "id": "src/Api/UsersController.cs:Create:24",
+      "kind": "method",
+      "line": 24,
+      "name": "Create",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    public UsersController(IGreetingService greeter)\n    {\n        _greeter = greeter;\n    }\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 15,
+      "file": "src/Api/UsersController.cs",
+      "id": "src/Api/UsersController.cs:UsersController:12",
+      "kind": "method",
+      "line": 12,
+      "name": "UsersController",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    public static void Main(string[] args)\n    {\n        var builder = WebApplication.CreateBuilder(args);\n        builder.Services.AddSingleton<GreetingService>();\n        var app = builder.Build();\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 19,
+      "file": "src/Api/Program.cs",
+      "id": "src/Api/Program.cs:Main:10",
+      "kind": "method",
+      "line": 10,
+      "name": "Main",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    public string Greet(User user)\n    {\n        return $\"Hello {user.Name}\";\n    }\n}",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 15,
+      "file": "src/Domain/Greeting.cs",
+      "id": "src/Domain/Greeting.cs:Greet:12",
+      "kind": "method",
+      "line": 12,
+      "name": "Greet",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    string Greet(User user);\n}\n\npublic class GreetingService : IGreetingService\n{\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 7,
+      "file": "src/Domain/Greeting.cs",
+      "id": "src/Domain/Greeting.cs:Greet:7",
+      "kind": "method",
+      "line": 7,
+      "name": "Greet",
+      "parent": null,
+      "visibility": "internal"
+    },
+    {
+      "annotations": [],
+      "code_preview": "[ApiController]\n[Route(\"api/users\")]\npublic class UsersController : ControllerBase\n{\n    private readonly IGreetingService _greeter;\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 28,
+      "file": "src/Api/UsersController.cs",
+      "id": "src/Api/UsersController.cs:UsersController:6",
+      "kind": "class",
+      "line": 6,
+      "name": "UsersController",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "public class GreetingService : IGreetingService\n{\n    public string Greet(User user)\n    {\n        return $\"Hello {user.Name}\";\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 16,
+      "file": "src/Domain/Greeting.cs",
+      "id": "src/Domain/Greeting.cs:GreetingService:10",
+      "kind": "class",
+      "line": 10,
+      "name": "GreetingService",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "public class Program\n{\n    public static void Main(string[] args)\n    {\n        var builder = WebApplication.CreateBuilder(args);\n    ...",
+      "dependencies": [],
+      "docstring": "<summary>Application entry point.</summary>",
+      "end_line": 20,
+      "file": "src/Api/Program.cs",
+      "id": "src/Api/Program.cs:Program:8",
+      "kind": "class",
+      "line": 8,
+      "name": "Program",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "public enum Role\n{\n    Admin,\n    Guest\n}",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 10,
+      "file": "src/Domain/User.cs",
+      "id": "src/Domain/User.cs:Role:6",
+      "kind": "enum",
+      "line": 6,
+      "name": "Role",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "public interface IGreetingService\n{\n    string Greet(User user);\n}\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 8,
+      "file": "src/Domain/Greeting.cs",
+      "id": "src/Domain/Greeting.cs:IGreetingService:5",
+      "kind": "interface",
+      "line": 5,
+      "name": "IGreetingService",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "public record User(int Id, string Name);\n\npublic enum Role\n{\n    Admin,\n    ...",
+      "dependencies": [],
+      "docstring": "<summary>A registered user.</summary>",
+      "end_line": 4,
+      "file": "src/Domain/User.cs",
+      "id": "src/Domain/User.cs:User:4",
+      "kind": "record",
+      "line": 4,
+      "name": "User",
+      "parent": null,
+      "visibility": "public"
+    }
+  ]
+}

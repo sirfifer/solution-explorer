@@ -267,6 +267,10 @@ FRAMEWORK_PRIORITY = {
     "Grape": 1,         # API-only
     "Hanami": 2,        # Full framework
     "Rails": 3,         # Full framework
+    # C# / .NET
+    ".NET": 1,          # Base platform
+    "EF Core": 2,       # Entity Framework Core (data access)
+    "ASP.NET Core": 3,  # Web framework
 }
 
 # UI Flow Detection constants
@@ -348,6 +352,12 @@ TEST_FUNCTION_PATTERNS = {
     ],
     "kotlin": [
         r"@Test\b",
+    ],
+    "csharp": [
+        r"\[Fact\b",          # xUnit
+        r"\[Theory\b",        # xUnit
+        r"\[Test\b",          # NUnit
+        r"\[TestMethod\b",    # MSTest
     ],
 }
 
