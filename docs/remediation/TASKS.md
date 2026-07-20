@@ -1865,6 +1865,26 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 
 ---
 
+## Multi-repo execution
+
+Milestones from `docs/remediation/MULTI-REPO-DESIGN.md`. M1 composes the
+single-repo v2 engine over member repos; cross-repo edges (M2), solution MCP
+(M3), and solution rules/enrichment/tours (M4) build on it.
+
+### M1: Solution manifest and composed multi-repo projection
+- Status: DONE (2026-07-19, PR pending review)
+- Model: Opus 4.8
+- Scope: A solution manifest (`solution-explorer.solution/v1`, YAML) with a loud-individual-rejection loader; `analyze.py --solution <file>` composes the existing v2 engine per member (each keeps its own store under the member repo, warm and incremental exactly as standalone) into `members/<slug>/` UNCHANGED split projections plus a solution layer (member-index `manifest.json`, per-member coverage summaries never blended, a solution `ai.json`/`llms.txt` front door teaching descent into members); viewer renders a member index for a solution root and opens each member with the existing viewer experience via a `?data=` param. No cross-repo edges (explicitly out of scope for M1).
+- Evidence:
+  - NEW PACKAGE `analyzer/solution/`: `manifest.py` (loader; `solution-explorer.solution/v1`; PyYAML reused as the declared optional import with loud degradation, escalated to a hard error because the manifest is mandatory input; malformed members rejected loudly and skipped, structurally-broken files raise `SolutionManifestError`; git-URL members parsed and stored but marked unresolved with a loud note, no remote clone in M1), `compose.py` (per-member `extract_repo`/`extract_activity`/`derive_all`/`project_split` into `members/<slug>/`, one `generated_at` minted once and shared for byte-stable output, member order = manifest order), `frontdoor.py` (solution `ai.json`/`llms.txt` that reuse the per-member front-door names and teach descent into `members/<slug>/ai.json`).
+  - CLI `--solution` wired in `analyzer/cli.py` (routed before the engine dispatch); summary prints per-member coverage lines plus a solution roll-up line with NO blended denominator (per design decision 5). Example manifest at `solution-explorer.solution.example.yml`.
+  - VIEWER: `utils/dataSource.ts` resolves a sanitized `?data=` base (default `./architecture`; rejects schemes, protocol-relative, root-absolute, and `..` traversal) and is threaded through `App.tsx` (manifest fetch) and `store.ts` (detail/coverage/activity fetches). `components/SolutionIndex.tsx` renders the member index (mobile-first: single-column at phone width, responsive grid wider, finger targets, no hover-gated affordances, no horizontal scroll) with per-member coverage badges/stats; each member is an `<a href="?data=members/<slug>">` opening the standard viewer over that member's dataset. Types in `types.ts` (`SolutionManifest`, `SOLUTION_MANIFEST_KIND`).
+  - TESTS: `tests/test_solution.py` (15 tests, all through the REAL engine over synthetic member repos, no mocks): composition shape, member-projection BYTE PARITY with a standalone scan, byte-stable determinism, no-blended-denominator, solution front door; negatives: wrong schema / missing name / empty members / non-mapping hard errors, malformed member rejected loudly with rest loading, duplicate slug, PyYAML-missing loud, missing member path is a loud per-member error with rest composing, git-URL member parsed-but-unresolved. `viewer/src/__tests__/dataSource.test.ts` (6 tests: base resolution, sanitization/traversal rejection, member link building).
+  - VERIFIED: full `pytest tests/ -q` = 1107 passed, 1 xfailed, 1 failed (the known worktree-environmental `.git`-as-file coverage-ledger test, unrelated); ruff clean; viewer `tsc -b`, `vitest run` (339 passed), `eslint`, and `vite build` all green. Browser-driven end-to-end: solution root renders the member index (title, per-member badges/stats, git-URL member shown "not analyzed"); clicking a member loads the standard viewer over that member's dataset.
+  - MEMBER LINKING (KISS route, documented): the viewer keys on `manifest.kind === "solution-explorer-solution"` to render the index; a `?data=<relative-base>` query param overrides the fetch base so a member loads through the unchanged single-repo code path. The whole composed tree deploys at `./architecture/` exactly like a single repo; members live at `./architecture/members/<slug>/`.
+
+---
+
 ## Discovered during execution
 
 Add new findings here with a date and the task you were on; do not expand task scope inline.

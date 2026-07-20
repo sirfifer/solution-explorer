@@ -1011,6 +1011,65 @@ export interface SetAnnotation {
   memberNotes: SetMemberNote[];
 }
 
+// Multi-repo solution manifest (MULTI-REPO-DESIGN.md, M1). The root
+// manifest.json of a COMPOSED solution carries kind === SOLUTION_MANIFEST_KIND
+// and a member index instead of a component graph. Each resolved member is a
+// standalone projection under members/<slug>/.
+export const SOLUTION_MANIFEST_KIND = "solution-explorer-solution";
+
+export interface SolutionMemberCoverage {
+  summary: Record<string, number>;
+  families: {
+    analyzed: number;
+    gap: number;
+    nonsource: number;
+    source_total: number;
+  };
+  source_percent: string;
+  has_gaps: boolean;
+}
+
+export interface SolutionMember {
+  slug: string;
+  label: string;
+  resolved: boolean;
+  path?: string;
+  url?: string;
+  ref?: string;
+  projection?: string;
+  unresolved_reason?: string;
+  error?: string;
+  stats?: {
+    total_components: number;
+    total_files: number;
+    total_lines: number;
+    total_symbols: number;
+    total_relationships: number;
+  };
+  coverage?: SolutionMemberCoverage;
+}
+
+export interface SolutionManifest {
+  schema: string;
+  kind: typeof SOLUTION_MANIFEST_KIND;
+  name: string;
+  generated_at: string;
+  analyzer_version: string;
+  members: SolutionMember[];
+  summary: {
+    member_count: number;
+    composed_count: number;
+    unresolved_count: number;
+    error_count: number;
+    total_source_files: number;
+    total_source_analyzed: number;
+    total_nonsource_files: number;
+    total_files: number;
+    total_lines: number;
+    members_with_gaps: string[];
+  };
+}
+
 // Navigation state
 export type ViewMode = "graph" | "tree" | "list";
 export type Panel = "tree" | "detail" | "review" | null;

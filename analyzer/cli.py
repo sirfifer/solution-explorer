@@ -96,7 +96,15 @@ def main():
     parser.add_argument(
         "--config",
         default=None,
-        help="Path to solution-explorer.json for multi-repo analysis",
+        help="Path to solution-explorer.json for multi-repo analysis (legacy)",
+    )
+    parser.add_argument(
+        "--solution",
+        default=None,
+        help="Path to a solution-explorer.solution/v1 YAML manifest. Composes the "
+             "v2 engine over each member repo and writes a composed multi-repo "
+             "projection (members/<slug>/ plus a solution member index) into -o "
+             "(default: architecture/). See MULTI-REPO-DESIGN.md (M1).",
     )
     parser.add_argument(
         "--engine",
@@ -141,6 +149,14 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Multi-repo SOLUTION mode (M1, MULTI-REPO-DESIGN.md). Routed before the
+    # engine dispatch because a solution composes the v2 engine per member
+    # regardless of --engine, and emits a composed projection (members/<slug>/
+    # plus a solution member index), not a single-repo dataset.
+    if args.solution:
+        _run_solution(args)
+        return
 
     # v2 is the DEFAULT engine (P4-7 cutover). Routed before any v1 setup or
     # v1-only flag validation so it owns its own flag semantics. v2 is
@@ -334,6 +350,72 @@ def main():
 
     if scanner is not None:
         _warn_dropped_data(scanner)
+
+
+def _run_solution(args) -> None:
+    """Compose a multi-repo solution manifest into a composed projection (M1)."""
+    from .solution import compose_solution, load_solution_manifest
+    from .solution.manifest import SolutionManifestError
+
+    manifest_path = Path(args.solution).resolve()
+    try:
+        solution = load_solution_manifest(manifest_path)
+    except SolutionManifestError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    output_dir = (
+        Path(args.output) if args.output != "architecture.json" else Path("architecture")
+    )
+    indent = None if args.compact else 2
+
+    print(f"Composing solution '{solution.name}' ({len(solution.members)} members)...")
+    result = compose_solution(solution, output_dir, indent=indent)
+
+    print(f"\nSolution composed: {solution.name}")
+    for outcome in result.members:
+        member = outcome.member
+        if outcome.error is not None:
+            print(f"  - {member.slug}: ERROR ({outcome.error})")
+        elif not member.resolved:
+            print(f"  - {member.slug}: not analyzed (git URL member, deferred in M1)")
+        elif outcome.families is not None:
+            fam = outcome.families
+            gap_word = "gap" if fam["gap"] == 1 else "gaps"
+            ns_word = "file" if fam["nonsource"] == 1 else "files"
+            print(
+                f"  - {member.slug}: {outcome.source_percent}% of source analyzed "
+                f"({fam['analyzed']} parsed, {fam['gap']} {gap_word}); "
+                f"{fam['nonsource']} non-source {ns_word} accounted for"
+            )
+        else:
+            print(
+                f"  - {member.slug}: {outcome.stats.get('total_components', 0)} components, "
+                f"{outcome.stats.get('total_files', 0)} files"
+            )
+
+    summary = _solution_summary_line(result)
+    print(f"\n{summary}")
+    print(f"\nOutput: {output_dir}/")
+
+
+def _solution_summary_line(result) -> str:
+    """The single solution roll-up line (no blended coverage denominator)."""
+    composed = result.composed_members
+    gapped = [o.member.slug for o in composed if o.has_gaps]
+    total_source = sum((o.families or {}).get("source_total", 0) for o in composed)
+    total_nonsource = sum((o.families or {}).get("nonsource", 0) for o in composed)
+    parts = [
+        f"Solution: {len(composed)} of {len(result.members)} members composed",
+        f"{total_source:,} source files",
+        f"{total_nonsource:,} non-source files accounted for across members",
+    ]
+    line = "; ".join(parts)
+    if gapped:
+        line += f". Members with source gaps: {', '.join(sorted(gapped))}"
+    else:
+        line += ". No source gaps in any member"
+    return line
 
 
 def _warn_dropped_data(scanner: ArchitectureScanner) -> None:

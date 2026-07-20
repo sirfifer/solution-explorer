@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { renderHook, act, cleanup } from "@testing-library/react";
 import { useArchStore } from "../store";
 import { useUrlSync } from "../hooks/useUrlSync";
-import { parseUrlState } from "../utils/urlState";
+import { parseUrlState, pushUrlState } from "../utils/urlState";
 import { registerLens, type LensDefinition } from "../lenses";
 import type { Architecture, Component } from "../types";
 
@@ -229,5 +229,22 @@ describe("useUrlSync lens state (P6-1)", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     expect(useArchStore.getState().lens).toBe("structure");
+  });
+});
+
+describe("data param survival (M1 adversarial-review blocker)", () => {
+  it("pushUrlState preserves ?data= so member views survive navigation", () => {
+    window.history.replaceState({}, "", "/?data=./architecture/members/web");
+    pushUrlState({ component: "app", tab: null, drill: null, lens: "structure" } as never);
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get("data")).toBe("./architecture/members/web");
+    expect(params.get("component")).toBe("app");
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("pushUrlState emits no data param outside a member view", () => {
+    window.history.replaceState({}, "", "/");
+    pushUrlState({ component: "app", tab: null, drill: null, lens: "structure" } as never);
+    expect(new URLSearchParams(window.location.search).get("data")).toBeNull();
   });
 });

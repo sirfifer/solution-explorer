@@ -1,0 +1,38 @@
+# Example solution manifest (schema: solution-explorer.solution/v1).
+#
+# A "solution" is one product that spans several repositories (a server plus one
+# or more clients). Point the analyzer at this file to compose the single-repo
+# engine over every member and emit a composed multi-repo projection:
+#
+#     python3 analyze.py --solution solution-explorer.solution.yml -o architecture
+#
+# The composed projection contains members/<slug>/ (each member's UNCHANGED
+# standalone projection) plus a solution-level manifest.json, ai.json, and
+# llms.txt. Coverage stays per member and is never blended (MULTI-REPO-DESIGN.md).
+# Deploy the projection tree and open it with the viewer: the root member index
+# renders first, and tapping a member opens the full viewer over that member's
+# dataset (via a ?data= query param).
+
+schema: solution-explorer.solution/v1
+
+# Required: the human-readable solution name (shown as the member-index title).
+name: UnaMentis
+
+members:
+  # A member with a local `path` is analyzed by the engine now. `path` is
+  # relative to THIS manifest file. `label` is the display name; `slug` is
+  # optional and defaults to the path basename (used as the members/<slug>/
+  # directory and the URL).
+  - path: ../unamentis
+    label: UnaMentis Server
+
+  - path: ../unamentis-ios
+    label: UnaMentis iOS
+    slug: ios
+
+  # A member defined only by a git `url` (with an optional pinned `ref`) is
+  # parsed and recorded in the member index but NOT analyzed in M1: remote clone
+  # is out of scope. Provide a local `path` to include it in the composition.
+  - url: https://github.com/example/web-client.git
+    ref: main
+    label: Web Client
