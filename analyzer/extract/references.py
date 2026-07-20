@@ -115,6 +115,15 @@ SWIFT_COMMON_TYPE_NAMES = frozenset({
 _CTOR = r"\b([A-Z]\w+)\s*\("
 _ANNOT = r":\s*([A-Z]\w+)"          # `: Type` annotation / conformance
 _RETURN = r"->\s*([A-Z]\w+)"        # `-> Type` return type
+# Static member access `Name.member` (AudioEngine.shared, Config.value). The
+# dominant reference shape for singleton-style iOS code, and the reason the
+# core engines still read unreferenced after the ctor/annotation patterns
+# landed. Direction matters and keeps this safe against the qualified-access
+# fabrication class: the extractor separately EXCLUDES any name preceded by a
+# dot, so requests.Session and Foundation.Timer stay dead while Session.shared
+# counts. Requires a word character after the dot so a plain trailing period
+# in prose never matches.
+_STATIC = r"\b([A-Z]\w+)\.\w"
 
 _REFERENCE_RULES: dict[str, list[re.Pattern]] = {
     "swift": [
@@ -123,6 +132,7 @@ _REFERENCE_RULES: dict[str, list[re.Pattern]] = {
         re.compile(_RETURN),
         re.compile(r"\b(?:as[?!]?|is)\s+([A-Z]\w+)"),   # casts: `as Foo`, `is Foo`
         re.compile(r"<\s*([A-Z]\w+)"),                   # generic argument
+        re.compile(_STATIC),
     ],
     "python": [
         re.compile(_CTOR),
