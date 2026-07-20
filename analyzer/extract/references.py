@@ -21,10 +21,20 @@ to the resolved component (PR #55 review finding 1; see
 :data:`PER_NAME_IMPORT_LANGUAGES` and :data:`SWIFT_COMMON_TYPE_NAMES`).
 
 Only reference candidates whose START is real code are kept: a name appearing
-inside a string literal or a masked comment is not a usage (the shared
-:class:`~analyzer.extract.frameworks.StringMask` filters them), and the
-trailing member of a qualified access (``requests.Session()``) is excluded
-because it resolves in the qualifier's namespace, not locally. Extraction is
+inside a string literal is not a usage, and neither is one inside a masked
+comment. Comment masking is language-scoped in the shared
+:class:`~analyzer.extract.frameworks.StringMask`: ``#`` line comments are masked
+for :data:`~analyzer.extract.frameworks.HASH_COMMENT_LANGUAGES` (python) and
+``//`` line plus ``/* */`` block comments are masked for
+:data:`~analyzer.extract.frameworks.SLASH_COMMENT_LANGUAGES` (csharp, java, cpp),
+so the C-family bare-declaration and ``Name.member`` / ``Name::`` rules below
+never fabricate a ``uses`` edge from a type name that appears only in comment
+prose. Swift, TypeScript, and JavaScript comments are NOT masked here (their
+baselines are frozen; extending masking to them is a separate change), so a name
+inside a ``//`` comment in those languages can still be seen; their rules are
+narrower and predate this work. The trailing member of a qualified access
+(``requests.Session()``) is excluded because it resolves in the qualifier's
+namespace, not locally. Extraction is
 deterministic (invariant I4): names are emitted in first-occurrence order and
 the per-file candidate scan is capped (:data:`MAX_REFERENCE_NAMES`) so a
 pathological generated file cannot blow up signal volume.

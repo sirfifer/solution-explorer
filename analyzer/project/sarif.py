@@ -26,8 +26,9 @@ artifact has nowhere in the tree to point. GitHub requires at least one
 location per result, so the lookup falls back, in order, from a precise
 member file+line, to evidence file+line, to an evidence-named path (line 1),
 to a component's first known file resolved from the component tree (line 1),
-to the repository root marker ``.`` (line 1) as the final fallback, so every
-finding resolves to a location and no result is dropped for lack of one.
+to ``README.md`` (line 1) as the final fallback, so every finding resolves to
+a real committed file and no result is dropped for lack of a location (a
+directory uri such as ``.`` can be dropped by GitHub code scanning).
 
 Paths in ``artifactLocation.uri`` are the analyzer's own repo-relative POSIX
 paths verbatim: GitHub requires the uri to be relative to the repository root,
@@ -121,11 +122,11 @@ _DEFAULT_RULE = {
 
 # GitHub requires at least one location per result (see docs/sarif-export.md).
 # A finding with no file-level evidence anywhere (a repository-wide
-# cra_readiness gap) is anchored at the repository root; "." is a valid
-# relative-reference artifactLocation.uri per the SARIF spec (section 3.4) for
-# a directory-level artifact, so the result still displays instead of being
-# rejected for lacking a location.
-_ROOT_MARKER = "."
+# cra_readiness gap) is anchored at README.md line 1. A directory uri such as
+# "." is valid per the SARIF spec but GitHub code scanning may drop a result
+# whose only location is a directory, so we point at a real committed file that
+# every repository has, keeping the result visible.
+_FALLBACK_LOCATION = "README.md"
 
 # A duplication cluster can carry many member fragments. Cap the emitted
 # locations per result well under GitHub's 100-displayed / 1000-total limits so
@@ -221,9 +222,10 @@ def _finding_locations(
                 add(comp_files[cid], 1)
                 break
 
-    # 6. Last resort: the repository root, so every result has a location.
+    # 6. Last resort: a real committed file (README.md) at line 1, so every
+    # result has a location GitHub will keep (a directory uri may be dropped).
     if not locs:
-        add(_ROOT_MARKER, 1)
+        add(_FALLBACK_LOCATION, 1)
 
     return locs[:_MAX_LOCATIONS_PER_RESULT]
 
@@ -273,13 +275,19 @@ def _build_result(finding: dict, comp_files: dict[str, str], rule_idx: int) -> d
         "level": spec["level"],
         "message": {"text": finding.get("summary") or kind},
         "locations": [_sarif_location(p, s, e) for p, s, e in locations],
-        # A finding's own id is already content-derived (blake2b over its
-        # evidence, invariant I4), which is exactly the stability GitHub wants
-        # from a partialFingerprints value: the same underlying evidence
-        # produces the same fingerprint across commits and across runs.
-        "partialFingerprints": {"solutionExplorerFindingId/v1": finding.get("id") or ""},
         "properties": properties,
     }
+
+    # A finding's own id is already content-derived (blake2b over its evidence,
+    # invariant I4), which is exactly the stability GitHub wants from a
+    # partialFingerprints value: the same underlying evidence produces the same
+    # fingerprint across commits and across runs. When a finding has no id we
+    # OMIT partialFingerprints entirely rather than send an empty string, so
+    # GitHub falls back to computing its own fingerprint instead of collapsing
+    # every id-less result onto one shared "" fingerprint.
+    finding_id = finding.get("id")
+    if finding_id:
+        result["partialFingerprints"] = {"solutionExplorerFindingId/v1": finding_id}
 
     # A refuted finding is retained, never dropped (matching
     # analyzer/enrich/verdicts.py's own "never deleted" discipline for refuted

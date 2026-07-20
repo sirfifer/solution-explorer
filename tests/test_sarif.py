@@ -264,11 +264,13 @@ def test_intent_violation_resolves_component_to_its_file():
     assert result["level"] == "error"
 
 
-def test_cra_readiness_falls_back_to_repository_root():
+def test_cra_readiness_falls_back_to_readme():
+    # A location-less finding anchors at a real committed file (README.md), not
+    # at the directory marker ".", which GitHub code scanning may drop.
     doc = build_sarif(_arch([_CRA_READINESS]))
     result = doc["runs"][0]["results"][0]
     loc = result["locations"][0]["physicalLocation"]
-    assert loc["artifactLocation"]["uri"] == "."
+    assert loc["artifactLocation"]["uri"] == "README.md"
     assert loc["region"]["startLine"] == 1
 
 
@@ -295,6 +297,21 @@ def test_partial_fingerprint_is_the_findings_own_content_derived_id():
     doc = build_sarif(_arch([_UNREFERENCED]))
     fp = doc["runs"][0]["results"][0]["partialFingerprints"]
     assert fp["solutionExplorerFindingId/v1"] == "finding:unreferenced:comp:alpha"
+
+
+def test_finding_without_id_omits_partial_fingerprints():
+    # An id-less finding must NOT emit partialFingerprints: {"...": ""}. Sending
+    # an empty fingerprint would collapse every id-less result onto one shared
+    # fingerprint; omitting the key lets GitHub compute its own. The result must
+    # still be schema-valid and carry a location.
+    no_id = dict(_CRA_READINESS)
+    no_id.pop("id")
+    doc = build_sarif(_arch([no_id]))
+    _validate(doc)
+    result = doc["runs"][0]["results"][0]
+    assert "partialFingerprints" not in result
+    assert result["properties"]["findingId"] is None
+    assert result["locations"], "an id-less finding must still carry a location"
 
 
 def test_write_sarif_writes_valid_json_to_path(tmp_path):

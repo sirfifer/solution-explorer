@@ -122,3 +122,51 @@ jobs:
           name: npm-sbom
           path: sbom/npm-sbom.json
           retention-days: 90
+
+  cli-sbom:
+    name: npm SBOM (cli)
+    # packages/cli is the package the release publish-npm job actually ships
+    # to the registry (package.json name "solution-explorer"), so it MUST have
+    # its own SBOM. The viewer above is "private": true and never published.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/cli
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.5.0
+        with:
+          go-version: "stable"
+
+      - run: npm ci
+
+      - name: Generate CycloneDX SBOM
+        # See the viewer job above for why --ignore-npm-errors is used.
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/sbom"
+          npx --yes @cyclonedx/cyclonedx-npm@6.0.0 --ignore-npm-errors \
+            --output-format JSON --spec-version 1.6 \
+            --output-file "$GITHUB_WORKSPACE/sbom/cli-sbom.json"
+
+      - name: Score SBOM quality
+        run: |
+          SBOMQS="$(go env GOPATH)/bin/sbomqs"
+          {
+            echo "## npm SBOM Quality (cli)"
+            echo '```'
+            "$SBOMQS" score --profile ntia,interlynk --detailed "$GITHUB_WORKSPACE/sbom/cli-sbom.json"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cli-sbom
+          path: sbom/cli-sbom.json
+          retention-days: 90

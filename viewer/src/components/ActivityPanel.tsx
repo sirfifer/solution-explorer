@@ -295,9 +295,9 @@ function FocusedView({
           {formatNumber(focused.commit_count)} commits · {formatNumber(focused.churn)} churn
           {(focused.lines_added > 0 || focused.lines_removed > 0) && (
             <span>
-              {" "}(<span className={darkMode ? "text-emerald-500" : "text-emerald-600"}>+{formatNumber(focused.lines_added)}</span>
+              {" "}(<span className={darkMode ? "text-emerald-500" : "text-emerald-600"}>+{formatNumber(focused.lines_added ?? 0)}</span>
               {" / "}
-              <span className={darkMode ? "text-red-500" : "text-red-600"}>-{formatNumber(focused.lines_removed)}</span>)
+              <span className={darkMode ? "text-red-500" : "text-red-600"}>-{formatNumber(focused.lines_removed ?? 0)}</span>)
             </span>
           )}
           {" · "}{focused.files} file{focused.files !== 1 ? "s" : ""}

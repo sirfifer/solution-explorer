@@ -64,6 +64,20 @@ def is_route_path(path: Optional[str], *, allow_bare: bool = False) -> bool:
 # scanner (PR #55 review finding 3).
 HASH_COMMENT_LANGUAGES = frozenset({"python", "ruby", "shell", "bash", "yaml"})
 
+# Languages that get C-style comment masking ('//' line and '/* */' block) in
+# compute_string_spans. SCOPED DELIBERATELY to the three languages whose
+# reference extractors (analyzer/extract/references.py _REFERENCE_RULES: csharp,
+# java, cpp) are NEW in this work: their edge baselines are not yet frozen in a
+# parity snapshot or the public demo, so masking comment prose is a pure
+# correctness gain for them (it kills the comment-content reference-fabrication
+# class). Swift, TypeScript, JavaScript, Go, and Rust ALSO use C-style comments,
+# but their reference extractors predate this change and their edge baselines
+# ARE captured by shipped parity snapshots and the public iOS demo; masking
+# their comments would alter established behavior. Adding any of those languages
+# to this set is a deliberate, separate change that must re-verify those
+# baselines first, so it is intentionally NOT done here.
+SLASH_COMMENT_LANGUAGES = frozenset({"csharp", "java", "cpp"})
+
 
 def compute_string_spans(content: str, language: str | None = None) -> list[tuple[int, int]]:
     """Ordered, non-overlapping ``[start, end)`` masked spans (D3).
@@ -96,12 +110,25 @@ def compute_string_spans(content: str, language: str | None = None) -> list[tupl
     (b) commented-out code (``# x = Config()``) is masked and never read as real
     usage. For every other language (and ``language=None``) ``#`` is an ordinary
     character, byte-identical to the pre-guard scanner, so Swift ``#available``
-    / raw strings and TS/JS ``#field`` syntax stay code. ``//`` line comments
-    are deliberately NOT modeled: the guard fails toward "not in a string" (a
-    match is treated as real usage), which is the safe direction. See the
-    recorded rows in TASKS.md.
+    / raw strings and TS/JS ``#field`` syntax stay code.
+
+    C-style comments: when ``language`` is one of
+    :data:`SLASH_COMMENT_LANGUAGES` (csharp, java, cpp ONLY), an unquoted ``//``
+    opens a line comment to end-of-line and an unquoted ``/*`` opens a block
+    comment to the next ``*/`` (C block comments do not nest), and the whole
+    comment is masked. This kills the comment-content reference-fabrication class
+    (a type name mentioned only in comment prose was read as a real ``uses``
+    edge). The scoping to those three languages is deliberate: their reference
+    extractors are new and unfrozen, whereas swift/typescript/javascript/go/rust
+    also use ``//`` and ``/* */`` but have frozen baselines, so masking their
+    comments is a separate change (see :data:`SLASH_COMMENT_LANGUAGES`). A
+    ``//`` or ``/*`` that begins inside a string literal is not a comment, and a
+    ``"`` inside a comment is not a string: the single top-of-loop scan is only
+    ever reached outside a string, since string literals are consumed as whole
+    spans, so this holds by construction. See the recorded rows in TASKS.md.
     """
     hash_comments = language in HASH_COMMENT_LANGUAGES
+    slash_comments = language in SLASH_COMMENT_LANGUAGES
     spans: list[tuple[int, int]] = []
     length = len(content)
     i = 0
@@ -116,6 +143,24 @@ def compute_string_spans(content: str, language: str | None = None) -> list[tupl
             spans.append((i, end))
             i = end + 1
             continue
+        # C-style comments in SLASH_COMMENT_LANGUAGES: '//' to end-of-line, '/*'
+        # to the next '*/'. The whole comment is masked so a type name in comment
+        # prose is not read as a reference. Reached only outside a string (string
+        # literals are consumed below), so this never fires inside a string.
+        if slash_comments and ch == "/" and i + 1 < length:
+            nxt = content[i + 1]
+            if nxt == "/":
+                nl = content.find("\n", i)
+                end = length if nl == -1 else nl
+                spans.append((i, end))
+                i = end + 1
+                continue
+            if nxt == "*":
+                close = content.find("*/", i + 2)
+                end = length if close == -1 else close + 2
+                spans.append((i, end))
+                i = end
+                continue
         # Triple-quoted strings first: they can span many lines (docstrings).
         if content.startswith('"""', i) or content.startswith("'''", i):
             q = content[i:i + 3]
@@ -155,7 +200,8 @@ class StringMask:
     positions in O(log n) each via binary search, instead of the old O(n)
     rescan-from-zero per position that made whole-file signal extraction
     quadratic on match-heavy files. Masked spans are string literals plus, for
-    :data:`HASH_COMMENT_LANGUAGES`, ``#`` line comments.
+    :data:`HASH_COMMENT_LANGUAGES`, ``#`` line comments, and for
+    :data:`SLASH_COMMENT_LANGUAGES`, ``//`` line and ``/* */`` block comments.
     """
 
     __slots__ = ("_starts", "_ends")

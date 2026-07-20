@@ -4,10 +4,11 @@ on:
   push:
     tags: ['v*']
 
+# Least privilege at the top level: read only. Every job that needs more
+# (publish provenance, create the release, push moving tags) redeclares its own
+# escalated permissions block below.
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
   validate:
@@ -61,6 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      contents: read
       id-token: write
       attestations: write
     steps:
@@ -95,6 +97,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: npm
     permissions:
+      contents: read
       id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -208,6 +211,16 @@ jobs:
           npx --yes @cyclonedx/cyclonedx-npm@6.0.0 --ignore-npm-errors \
             --output-format JSON --spec-version 1.6 \
             --output-file "$GITHUB_WORKSPACE/sbom/solution-explorer-${{ needs.validate.outputs.version }}-viewer-sbom.json"
+
+      - name: Generate npm SBOM (cli)
+        # packages/cli is the published npm package (see publish-npm), so its
+        # SBOM must be a release asset alongside the Python and viewer ones.
+        working-directory: packages/cli
+        run: |
+          npm ci
+          npx --yes @cyclonedx/cyclonedx-npm@6.0.0 --ignore-npm-errors \
+            --output-format JSON --spec-version 1.6 \
+            --output-file "$GITHUB_WORKSPACE/sbom/solution-explorer-${{ needs.validate.outputs.version }}-cli-sbom.json"
 
       - name: Score SBOM quality
         run: |
