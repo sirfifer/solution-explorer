@@ -54,6 +54,9 @@ dev = [
     "pytest-cov",
     "ruff",
     "pyyaml>=6",
+    # SARIF export test (tests/test_sarif.py) validates generated output
+    # against the committed OASIS SARIF 2.1.0 JSON schema fixture.
+    "jsonschema>=4",
 ]
 
 [project.scripts]
