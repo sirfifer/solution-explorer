@@ -1945,3 +1945,27 @@ Filled by the phase-gate review session per WORK-PLAN.md section 6.3.
 | 2026-07-19 | P8-3 front door dogfood | Answering "which component owns file X" costs a full search shard fetch (636 KB for shard 0 of this repo) because search entries carry per-entry docstring/help text and there is no per-shard key range or lightweight path->component index. The front door directs the agent correctly, but the fetch is heavier than the question warrants. | Recorded optimization target, not a bug. A future emission could add a small `paths.json` (sorted file path -> owning component id, no free text) so the ownership question is a few-KB fetch; the front door's `endpoints` list would gain one entry. Deferred: the current path answers correctly and most repos fit in one shard. |
 | 2026-07-19 | P8-3 front door dogfood | On this repo the split `manifest.json` is 685 KB compact (55 components, 633 files, incl. the committed `viewer/public/architecture` demo dataset scanned as 256 files). Structural questions (overview, findings) therefore fetch a large single file; the token-economy win over raw-repo reading holds (~1.33 MB battery vs 15.7 MB source) but is nearer 10x than 100x for a heavily-documented repo. | Expected for a mid-size, docstring-dense repo; the manifest is the only place with the full component tree. The 100x ambition is realistic on 1M+ line repos where the manifest is a tiny fraction of source (P9-1 large-repo demos will measure it). No new work owed; noted so the ambition is calibrated. |
 | 2026-07-19 | P8-3 front door emission | The monolith front door's `manifest_sections[].contains` text is written for the common split layout (e.g. the coverage entry says "full ledger ... is in coverage.json"), but in monolith mode coverage/activity are embedded whole in the single file. The `endpoints` list and `walk_orders` are monolith-correct; only the section blurbs carry split-oriented wording. | Cosmetic wording nuance on the backward-compat/small-repo path; the monolith endpoint entry is explicit that everything lives in the one file and there are no separate shards, so an agent is not misdirected. Left as-is for KISS; tighten if a monolith-served deploy ever becomes a first-class target. |
+
+### P9-0 gate record (2026-07-20, first run of the recurring dogfood gate)
+
+- VERDICT: PASS-WITH-NOTES (fresh-eyes adversarial session over both projections, verified against the real repos).
+- Faithful where it matters: component trees match disk; all 13 Core Data entities exact to the model (field counts verified); SwiftUI flow edges verified as real navigations at file:line; AI help text specific and accurate against source (WatchModels enum cases, AudioRecorder presentation); component-level activity hotspots match git (unamentis/ui/session number 1, bus factor 1).
+- Six insights demonstrated that raw reading would not surface in seconds (cross-module clone cluster, full Settings nav fan-out, knowledge-island detection, complete Core Data model without Xcode, inventory naming the dominant non-source consumer).
+- TEN DEFECTS FILED (D1-D10 below). The sharpest burns: orphan findings assert unreachable about the hottest core modules (root cause: sparse code-level edge extraction, especially Swift); fabricated http and message_queue edges (a networking signal attached to an arbitrary internal target; the analyzer detecting its own detector regexes); self-repo stats inflated 5.5x by counting its own emitted JSON and dist/ as source; fixture-derived capabilities and entities presented unlabeled as product surfaces; iOS enrichment leaves role and description empty on all 190 nodes.
+- Defect 10 (stale live site) closed by timing: the spot check hit the CDN propagation window; production verified current (190 components, 93 relationships, generated 2026-07-20).
+- NEW during verification: the warm store reported "Activity: 0 commits processed (unchanged)" while the repo gained 28 commits; the incremental activity check wrongly skips (filed as D11).
+
+| # | Defect (P9-0, all owner-directed next-campaign candidates) | One-line action |
+|---|---|---|
+| D1 | Self-repo LOC/language stats inflated 5.5x by generated output | Exclude dist/ and the tool's own emitted architecture JSON from source stats |
+| D2 | Fabricated http edges in both repos | Require a resolvable URL-to-component match or downgrade to a per-component signal, never an edge |
+| D3 | Analyzer detects its own detector regexes (celery/message_queue on frameworks.py) | Self-scan guard for capability detection |
+| D4 | Orphan finding reads as dead-code on core modules | Gate on real reachability or reframe; suppress for high-symbol high-churn components |
+| D5 | Code-level edge extraction too sparse (iOS: 93 edges / 190 components, nearly all UI nav) | Extract symbol-reference edges; root cause of D4 |
+| D6 | Fixture endpoints/models presented as product capabilities/entities | Tag or exclude tests/fixtures from product surfaces |
+| D7 | iOS enrichment leaves role and description empty on all nodes | Align the DPEA payload with the viewer fields or hide the dependent surfaces |
+| D8 | Duplication findings dominated by test-helper boilerplate | Separate or de-weight test-file clones |
+| D9 | Activity churn ranks vendored and data files coverage excludes | Apply the coverage exclusion set to churn ranking |
+| D10 | CLOSED (CDN timing, live site verified current) | none |
+| D11 | Warm-store incremental activity wrongly reports unchanged | Fix the HEAD-comparison skip in extract_activity |
+
