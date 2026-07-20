@@ -113,6 +113,10 @@ def test_overview_counts_and_narrative(ctx):
     d = r.data
     assert d["components"]["total"] == 8
     assert d["capabilities"]["by_kind"].get("api") == 1
+    # D4: the five orphan findings are reframed to `unreferenced`. The two
+    # weak-language (rust/ruby) components stay VISIBLE but heavily de-ranked
+    # with an explicit weak-extractor caveat (PR #55 review finding 5: never a
+    # silent drop), so the total is still five.
     assert d["findings"]["total"] == 5
     assert d["findings"]["unverified"] == 5
     assert d["coverage"]["parsed"] == 13
@@ -208,7 +212,11 @@ def test_rules_surfaces_plain_language_name(ctx):
 
 def test_findings_always_show_verification_status(ctx):
     r = call_tool(ctx, "se_findings", {})
+    # D4/finding 5: all five reframed findings visible (weak ones de-ranked).
     assert r.data["count"] == 5
+    # The de-ranked weak-language findings carry the blind-spot caveat.
+    weak = [f for f in r.data["findings"] if "blind spot" in (f.get("summary") or "")]
+    assert len(weak) == 2, [f.get("summary") for f in r.data["findings"]]
     for f in r.data["findings"]:
         assert "verification_status" in f
         assert f["unverified"] is True

@@ -36,7 +36,8 @@ from ..constants import (
 from ..parsers.storyboard import parse_storyboard, segue_edge_type
 from .entities import extract_entities, extract_schema_entities
 from .facts import SignalRecord
-from .frameworks import extract_cli, extract_endpoints, extract_jobs, in_string_literal
+from .frameworks import StringMask, extract_cli, extract_endpoints, extract_jobs
+from .references import REFERENCE_LANGUAGES, extract_reference_signals
 from .rules import extract_rules
 
 
@@ -67,14 +68,20 @@ def extract_signals(content: str, language: str, parser) -> list[SignalRecord]:
     ports, endpoints, env vars, framework). All other signals come from the
     shared constants tables applied to ``content`` directly.
     """
+    # One string-span scan for the whole file (PR #53 nit b): the driver and
+    # symbol-reference detectors all query this shared mask instead of each
+    # rescanning the content from offset 0 per match. The language gates the
+    # hash-comment handling (PR #55 review finding 3): '#' opens a comment only
+    # where the language says so, never in Swift/TS/JS where '#' is code.
+    mask = StringMask(content, language)
     out: list[SignalRecord] = []
     out.extend(_ports(content, parser))
     out.extend(_url_references(content))
-    out.extend(_http_clients(content, language))
-    out.extend(_db_drivers(content, language))
-    out.extend(_queue_drivers(content, language))
-    out.extend(_websocket_drivers(content, language))
-    out.extend(_grpc_drivers(content, language))
+    out.extend(_http_clients(content, language, mask))
+    out.extend(_db_drivers(content, language, mask))
+    out.extend(_queue_drivers(content, language, mask))
+    out.extend(_websocket_drivers(content, language, mask))
+    out.extend(_grpc_drivers(content, language, mask))
     out.extend(_endpoints(content, language))
     out.extend(_cli_commands(content, language))
     out.extend(_jobs(content, language))
@@ -82,6 +89,10 @@ def extract_signals(content: str, language: str, parser) -> list[SignalRecord]:
     out.extend(_storyboard_flow(content, language))
     out.extend(_env_vars(content, parser))
     out.extend(_framework(content, parser))
+    # Symbol-reference signals (D5): which known type names this file names, so
+    # Tier 3 can resolve them to owning components and draw `uses` edges.
+    if language in REFERENCE_LANGUAGES:
+        out.extend(extract_reference_signals(content, language, mask))
     return out
 
 
@@ -149,11 +160,11 @@ def _url_references(content: str) -> list[SignalRecord]:
     return out
 
 
-def _http_clients(content: str, language: str) -> list[SignalRecord]:
+def _http_clients(content: str, language: str, mask: StringMask) -> list[SignalRecord]:
     out = []
     for pat in HTTP_CLIENT_PATTERNS.get(language, []):
         for m in re.finditer(pat, content):
-            if in_string_literal(content, m.start()):
+            if mask.in_string(m.start()):
                 continue  # a pattern definition, not real client usage (D3)
             out.append(SignalRecord(
                 "http_client", {"evidence": m.group(0).strip()},
@@ -162,11 +173,11 @@ def _http_clients(content: str, language: str) -> list[SignalRecord]:
     return out
 
 
-def _db_drivers(content: str, language: str) -> list[SignalRecord]:
+def _db_drivers(content: str, language: str, mask: StringMask) -> list[SignalRecord]:
     out = []
     for pat, library, engine in DATABASE_PATTERNS.get(language, []):
         for m in re.finditer(pat, content):
-            if in_string_literal(content, m.start()):
+            if mask.in_string(m.start()):
                 continue  # a pattern definition, not real driver usage (D3)
             out.append(SignalRecord(
                 "db_driver", {"library": library, "engine": engine},
@@ -176,11 +187,11 @@ def _db_drivers(content: str, language: str) -> list[SignalRecord]:
     return out
 
 
-def _queue_drivers(content: str, language: str) -> list[SignalRecord]:
+def _queue_drivers(content: str, language: str, mask: StringMask) -> list[SignalRecord]:
     out = []
     for pat, system in MESSAGE_QUEUE_PATTERNS.get(language, []):
         for m in re.finditer(pat, content):
-            if in_string_literal(content, m.start()):
+            if mask.in_string(m.start()):
                 continue  # a pattern definition, not real driver usage (D3)
             out.append(SignalRecord(
                 "queue_driver", {"system": system}, _line_of(content, m.start())
@@ -188,7 +199,7 @@ def _queue_drivers(content: str, language: str) -> list[SignalRecord]:
             break
     for pat in QUEUE_NAME_PATTERNS:
         for m in re.finditer(pat, content):
-            if in_string_literal(content, m.start()):
+            if mask.in_string(m.start()):
                 continue  # a pattern definition, not real usage (D3)
             text = m.group(0)
             if ".subscribe" in text:
@@ -206,11 +217,11 @@ def _queue_drivers(content: str, language: str) -> list[SignalRecord]:
     return out
 
 
-def _websocket_drivers(content: str, language: str) -> list[SignalRecord]:
+def _websocket_drivers(content: str, language: str, mask: StringMask) -> list[SignalRecord]:
     out = []
     for pat in WEBSOCKET_PATTERNS.get(language, []):
         for m in re.finditer(pat, content):
-            if in_string_literal(content, m.start()):
+            if mask.in_string(m.start()):
                 continue  # a pattern definition, not real driver usage (D3)
             out.append(SignalRecord(
                 "websocket_driver", {"evidence": m.group(0).strip()},
@@ -220,11 +231,11 @@ def _websocket_drivers(content: str, language: str) -> list[SignalRecord]:
     return out
 
 
-def _grpc_drivers(content: str, language: str) -> list[SignalRecord]:
+def _grpc_drivers(content: str, language: str, mask: StringMask) -> list[SignalRecord]:
     out = []
     for pat in GRPC_PATTERNS.get(language, []):
         for m in re.finditer(pat, content):
-            if in_string_literal(content, m.start()):
+            if mask.in_string(m.start()):
                 continue  # a pattern definition, not real driver usage (D3)
             out.append(SignalRecord(
                 "grpc_driver", {"evidence": m.group(0).strip()},

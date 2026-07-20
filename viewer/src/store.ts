@@ -1467,7 +1467,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
         ? `Duplication: ${finding.summary}`
         : finding.kind === "orphan"
           ? `Orphan: ${finding.summary}`
-          : finding.summary;
+          : finding.kind === "unreferenced"
+            ? `Unreferenced: ${finding.summary}`
+            : finding.summary;
     // finding.id already carries the "finding:<kind>:..." namespace, so it IS the
     // origin (no extra prefix), giving a clean `finding:duplication:...` origin.
     return get().createSet(label, finding.id, members);

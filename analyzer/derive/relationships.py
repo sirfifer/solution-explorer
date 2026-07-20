@@ -36,6 +36,20 @@ from .context import Deriver
 
 CLIENT_TYPES = {"ios-client", "android-client", "web-client", "mobile-client", "watch-app"}
 
+# Symbol kinds that a ``symbol_reference`` name can resolve to (D5). A referenced
+# name is joined only to a type-like DEFINITION: resolving to method/function
+# names would be far too ambiguous (many components define a `handle`), so
+# callables are never reference targets. Extensions are excluded because they
+# extend a type defined elsewhere; the base type is the real owner.
+_TYPE_DEF_KINDS = frozenset({
+    "class", "struct", "enum", "protocol", "actor", "interface", "type", "typealias",
+})
+
+# Cap on evidence rows kept per ``uses`` edge, and on referenced names named in
+# an edge label. Deterministic: evidence is sorted before the cap is applied.
+_MAX_USES_EVIDENCE = 10
+_MAX_USES_LABEL_NAMES = 5
+
 # Component types that genuinely declare a network endpoint another component can
 # call. An http edge to a target that is neither of these and binds no port is
 # fabricated (D2), so it is never drawn from a name match alone.
@@ -300,6 +314,9 @@ def derive_relationships(d: Deriver) -> None:
                             _evidence(fi.path, line, url), "inferred", "config",
                             protocol="HTTP", label="env config", bidirectional=True)
 
+    # -- symbol-reference `uses` edges (D5) --------------------------------
+    _symbol_reference_edges(d, add, content_ids)
+
     # -- websocket / grpc / database / queue via driver signals ------------
     _driver_edges(d, add, content_ids)
 
@@ -391,6 +408,185 @@ def _resolve_import_to_component(d: Deriver, import_name: str, source_file: str)
         if path and os.path.basename(path).lower() == import_lower:
             return comp
     return None
+
+
+def _symbol_reference_edges(d: Deriver, add, content_ids: set) -> None:
+    """Draw component-to-component ``uses`` edges from symbol-reference signals (D5).
+
+    Extraction emitted, per file, the type-like NAMES that file references
+    (references.py; qualified access like ``requests.Session()`` is already
+    excluded there). Here each name is resolved against the store's own symbol
+    table: a name that a single OTHER component defines as a type yields a
+    ``uses`` edge (source references, target defines). This is a name-based join
+    with no type inference (invariant I1), gated so a coincidental name match
+    never fabricates an edge (PR #55 review finding 1):
+
+    - An ambiguous name (several defining components) resolves only when the
+      file's imports select exactly one candidate, else it is dropped and
+      counted, never guessed.
+    - A single-definer name in a language with per-name imports
+      (:data:`PER_NAME_IMPORT_LANGUAGES`) still REQUIRES import evidence: the
+      file must import the defining component (module path or relative import).
+      Without it, ``Session()`` in a Python file must not edge to an unrelated
+      local ``session`` component.
+    - Swift has no per-name imports, so a single definer is accepted by name,
+      EXCEPT when the name is a common platform type
+      (:data:`SWIFT_COMMON_TYPE_NAMES`): then the reference counts only if the
+      same file shows another relationship with that component (a
+      non-common-name reference or a module import of it). Honest boundary
+      recorded in TASKS.md.
+
+    Edges are aggregated so one edge carries the total reference count and up to
+    :data:`_MAX_USES_EVIDENCE` file:line evidence rows. Emission is deterministic
+    (invariant I4): edges are emitted in sorted (source, target) order and every
+    evidence list is sorted before it is capped.
+    """
+    from ..extract.references import PER_NAME_IMPORT_LANGUAGES, SWIFT_COMMON_TYPE_NAMES
+
+    # name -> set of component ids that DEFINE a type-like symbol of that name.
+    defn: dict[str, set[str]] = {}
+    for sym in d._all_symbols:
+        if sym.kind not in _TYPE_DEF_KINDS:
+            continue
+        comp = d._find_component_for_file(sym.file)
+        if not comp or comp.id in content_ids:
+            continue
+        defn.setdefault(sym.name, set()).add(comp.id)
+    d._uses_ambiguous_dropped = 0
+    d._uses_unimported_dropped = 0
+    d._uses_common_name_dropped = 0
+    if not defn:
+        return
+
+    agg: dict[tuple[str, str], dict] = {}
+    for fi in d._all_files:
+        source_comp = d._find_component_for_file(fi.path)
+        if not source_comp or source_comp.id in content_ids:
+            continue
+        # First pass over this file's references: resolve names to a unique
+        # target, tracking common-name candidates separately so they can be
+        # confirmed against the file's OTHER ties to the same target.
+        confirmed: list[tuple[str, str, int, object]] = []  # (name, tgt, count, line)
+        pending_common: list[tuple[str, str, int, object]] = []
+        confirmed_targets: set[str] = set()
+        for sig in d.view.signals(fi.path):
+            if sig["kind"] != "symbol_reference":
+                continue
+            v = sig["value"] or {}
+            name = v.get("name")
+            if not name:
+                continue
+            count = v.get("count") or 1
+            targets = defn.get(name)
+            if not targets:
+                continue
+            targets = {t for t in targets if t != source_comp.id}
+            if not targets:
+                continue  # defined only in the same component: intra-component
+            if len(targets) > 1:
+                resolved = _disambiguate_by_import(d, fi, targets)
+                if resolved is None:
+                    d._uses_ambiguous_dropped += 1
+                    continue
+                tgt = resolved
+            else:
+                tgt = next(iter(targets))
+                if fi.language in PER_NAME_IMPORT_LANGUAGES:
+                    # Single definer is not enough in a language whose imports
+                    # could have proven the tie (finding 1b): no import
+                    # evidence, no edge.
+                    if not _import_evidence(d, fi, tgt):
+                        d._uses_unimported_dropped += 1
+                        continue
+                elif fi.language == "swift" and name in SWIFT_COMMON_TYPE_NAMES:
+                    # A platform-common name resolving to a user component: hold
+                    # until the file proves another tie to that component.
+                    pending_common.append((name, tgt, count, sig["line"]))
+                    continue
+            confirmed.append((name, tgt, count, sig["line"]))
+            confirmed_targets.add(tgt)
+
+        for name, tgt, count, line in pending_common:
+            if tgt in confirmed_targets or _import_evidence(d, fi, tgt):
+                confirmed.append((name, tgt, count, line))
+            else:
+                d._uses_common_name_dropped += 1
+
+        for name, tgt, count, line in confirmed:
+            info = agg.setdefault((source_comp.id, tgt),
+                                  {"count": 0, "names": set(), "ev": []})
+            info["count"] += count
+            info["names"].add(name)
+            info["ev"].append({"file": fi.path, "line": line, "snippet": name})
+
+    for (src, tgt), info in sorted(agg.items()):
+        ev = sorted(info["ev"], key=lambda e: (e["file"], e["line"] or 0, e["snippet"]))
+        ev = ev[:_MAX_USES_EVIDENCE]
+        names = sorted(info["names"])
+        shown = ", ".join(names[:_MAX_USES_LABEL_NAMES])
+        if len(names) > _MAX_USES_LABEL_NAMES:
+            shown += f", +{len(names) - _MAX_USES_LABEL_NAMES} more"
+        # The reference count rides in the label (the Relationship model has no
+        # numeric slot for it); evidence carries the resolved reference sites.
+        add(src, tgt, "uses", ev, "inferred", "static",
+            label=f"uses {shown} (x{info['count']})")
+
+
+def _disambiguate_by_import(d: Deriver, fi, targets: set) -> Optional[str]:
+    """Pick the one candidate a file's imports make available, else None (D5).
+
+    When a referenced name is defined by several components, the reference is
+    only drawn if the file's own imports resolve to EXACTLY one of them (Python
+    ``from .x import Y``, TS ``import { Y } from './x'``). Swift local types have
+    no per-name import, so an ambiguous Swift reference resolves to None here and
+    is dropped by the caller. Never guesses.
+    """
+    matched = _import_names_component(d, None, fi.path, targets, imports=fi.imports)
+    return next(iter(matched)) if len(matched) == 1 else None
+
+
+def _import_evidence(d: Deriver, fi, target_id: str) -> bool:
+    """True when one of ``fi``'s imports ties it to ``target_id`` (finding 1b).
+
+    Evidence is either a relative/name import that resolves to the target via
+    :func:`_resolve_import_to_component`, or an import whose dotted/slashed
+    segments name the target component (its normalized name or directory
+    basename), covering ``from core.engine import X`` -> component ``core`` and
+    ``import { X } from '../core/engine'`` -> component ``core``.
+    """
+    return bool(_import_names_component(
+        d, None, fi.path, {target_id}, imports=fi.imports))
+
+
+def _import_names_component(d: Deriver, imp, source_file: str, targets: set,
+                            imports=None) -> set:
+    """Component ids from ``targets`` that the import(s) name. Shared core."""
+    comp_by_id = getattr(d, "_comp_by_id_cache", None)
+    if comp_by_id is None:
+        comp_by_id = {c.id: c for c in d._component_map.values()}
+        d._comp_by_id_cache = comp_by_id
+    matched: set = set()
+    imp_list = imports if imports is not None else [imp]
+    for raw in imp_list:
+        if not raw:
+            continue
+        resolved = _resolve_import_to_component(d, raw, source_file)
+        if resolved and resolved.id in targets:
+            matched.add(resolved.id)
+            continue
+        segs = [s for s in re.split(r"[./\\]+", raw.strip().strip("\"'").lower()) if s]
+        for tid in targets:
+            comp = comp_by_id.get(tid)
+            if comp is None:
+                continue
+            names = {comp.name.lower().replace(" ", "-"),
+                     comp.name.lower().replace(" ", "_"),
+                     comp.name.lower()}
+            if comp.path:
+                names.add(os.path.basename(comp.path).lower())
+            if any(seg in names for seg in segs):
+                matched.add(tid)
+    return matched
 
 
 def _components_with_signal(d: Deriver, kind: str, content_ids: set):

@@ -81,6 +81,7 @@ export const TOOLTIP_COPY = {
     kind: {
       duplication: "Near-duplicate code the system found. A candidate for consolidation.",
       orphan: "Not reachable from any entry point. Possibly dead code.",
+      unreferenced: "No reference detected by the current extractors. Often an extractor blind spot rather than dead code; check the symbol and churn counts.",
       inconsistency: "Members of one concern that follow different patterns.",
     },
     verification: {

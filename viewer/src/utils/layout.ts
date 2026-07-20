@@ -323,6 +323,9 @@ export function getEdgeCategory(type: string): EdgeCategory {
 // Structural edges: gray, not animated, dashed to clearly differentiate
 const EDGE_STYLES: Record<string, { color: string; animated: boolean; dash: string; strokeWidth: number }> = {
   import:    { color: "#6B7280", animated: false, dash: "6 4",  strokeWidth: 1.2 },
+  // D5: component-to-component type-usage edges (a symbol reference resolved to
+  // its owning component). Structural, like import; a slate dashed line.
+  uses:      { color: "#64748B", animated: false, dash: "3 3",  strokeWidth: 1.3 },
   http:      { color: "#3B82F6", animated: true,  dash: "",     strokeWidth: 2 },
   websocket: { color: "#8B5CF6", animated: true,  dash: "",     strokeWidth: 2 },
   grpc:      { color: "#10B981", animated: true,  dash: "",     strokeWidth: 2 },
