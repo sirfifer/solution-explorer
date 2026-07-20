@@ -76,13 +76,18 @@ describe("coverage family classification (the new math)", () => {
     expect(classifyDisposition("failed:SyntaxError")).toBe("gap");
     expect(classifyDisposition("excluded:max_file_size")).toBe("gap");
     // Any unrecognized exclusion is a gap by default (exceptions stay loud).
-    expect(classifyDisposition("excluded:gitignore")).toBe("gap");
+    expect(classifyDisposition("excluded:some_future_rule")).toBe("gap");
     // Non-source: recorded, never counted against coverage.
     expect(classifyDisposition("binary")).toBe("nonsource");
     expect(classifyDisposition("excluded:unsupported_extension")).toBe("nonsource");
     expect(classifyDisposition("excluded:empty_file")).toBe("nonsource");
     expect(classifyDisposition("excluded:skipped_directory")).toBe("nonsource");
     expect(classifyDisposition("excluded:vendored_repo")).toBe("nonsource");
+    // Analyzer-honesty dispositions: workstation-local gitignored files and the
+    // tool's own state directory. Non-source, never a coverage gap. This mirror
+    // must stay in lockstep with analyzer NON_SOURCE_DISPOSITIONS (inventory.py).
+    expect(classifyDisposition("excluded:gitignored")).toBe("nonsource");
+    expect(classifyDisposition("excluded:tool_state")).toBe("nonsource");
   });
 
   it("keeps non-source files out of the percent denominator", () => {

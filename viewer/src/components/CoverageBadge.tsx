@@ -44,6 +44,11 @@ const NON_SOURCE_DISPOSITIONS = new Set([
   "excluded:vendored_repo",
   // The tool's own emitted projection dataset (D1): accounted, never source.
   "excluded:generated",
+  // Workstation-local files the repo's .gitignore excludes: never reach the
+  // central repo, so accounted (non-source), never a coverage gap.
+  "excluded:gitignored",
+  // The tool's own state directory (.solution-explorer): one pruned row.
+  "excluded:tool_state",
 ]);
 
 // Classify a disposition into one of the three families. `parsed` is analyzed;

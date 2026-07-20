@@ -348,18 +348,31 @@ def test_split_projection_writes_inventory_into_coverage_json(tmp_path):
     assert data["inventory"]["dominant"]["id"] == "build_test_output"
 
 
-def test_gitignore_candidate_suppressed_when_already_ignored(tmp_path):
+def test_gitignored_noise_becomes_workstation_ignored_not_build_output(tmp_path):
+    # With .gitignore honoring at enumeration, the TestResults.xcresult bundle and
+    # the .DS_Store are workstation-local, not repo content. They are pruned to
+    # excluded:gitignored rows and land in the workstation_ignored inventory group,
+    # NOT build_test_output / os_cruft (the enumerator never walks the bundle's
+    # blobs at all, which is the whole point of the fix).
     root = _tree_with_noise(tmp_path)
     (root / ".gitignore").write_text("TestResults.xcresult/\n.DS_Store\n", encoding="utf-8")
     store = FactStore(":memory:")
     extract_repo(root, store)
     coverage = build_coverage(store, root=root)
     inv = coverage["inventory"]
-    build = [g for g in inv["groups"] if g["id"] == "build_test_output"][0]
-    cruft = [g for g in inv["groups"] if g["id"] == "os_cruft"][0]
-    # Both are already covered by .gitignore, so we do not nag to add them again.
-    assert build["flags"]["gitignore_candidate"] is False
-    assert cruft["flags"]["gitignore_candidate"] is False
+    ids = {g["id"] for g in inv["groups"]}
+    assert "workstation_ignored" in ids
+    assert "build_test_output" not in ids
+    assert "os_cruft" not in ids
+    wi = [g for g in inv["groups"] if g["id"] == "workstation_ignored"][0]
+    # The xcresult DIRECTORY is one pruned row (not its 12 blobs), plus the
+    # .DS_Store file: two rows, never thousands.
+    assert wi["count"] == 2
+    assert any(s == "TestResults.xcresult" for s in wi["samples"])
+    assert any(s == ".DS_Store" for s in wi["samples"])
+    # Local-by-design: nothing to nag about, never flagged as unwanted.
+    assert wi["flags"]["gitignore_candidate"] is False
+    assert wi["flags"]["likely_unwanted"] is False
 
 
 # ---------------------------------------------------------------------------

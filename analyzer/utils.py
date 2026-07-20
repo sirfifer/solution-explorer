@@ -2,9 +2,134 @@
 
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from .constants import FRAMEWORK_PRIORITY, SKIP_DIR_SUFFIXES, SKIP_DIRS
+
+# ---------------------------------------------------------------------------
+# .gitignore matching for enumeration (analyzer honesty)
+# ---------------------------------------------------------------------------
+# The v2 enumerator consults .gitignore so a working-tree scan does not ledger
+# workstation-local files (a gitignored TestResults.xcresult bundle, a local
+# build output) as if they were repository content. Ignored files are recorded
+# with the ``excluded:gitignored`` disposition, which lands them in the
+# non-source accounted family with a plain explanation. Fresh clones contain no
+# ignored files, so CI output stays byte-identical.
+#
+# SEMANTICS BOUNDARY (as shipped):
+#   - Honors the repo-root ``.gitignore`` AND per-directory ``.gitignore`` files
+#     at every nested level (not just one), each pattern matched relative to its
+#     own directory (correct git anchoring).
+#   - Supports the common gitignore forms via ``compile_glob``: within-segment
+#     ``*``, cross-segment ``**``, ``?``, anchored (leading- or embedded-slash)
+#     patterns, basename-at-any-depth patterns, trailing-slash directory-only
+#     patterns, and negation (``!``) with last-match-wins across the ordered
+#     ancestor chain (root file first, then deeper files).
+#   - Ignored DIRECTORIES are pruned early (never descended into), which is why a
+#     nested negation cannot re-include a file under an already-ignored parent
+#     directory. That is exactly git's own rule, not a shortcut.
+#   - NOT supported (documented boundary): character classes (``[abc]``),
+#     trailing-whitespace backslash escaping, and other rare git edge cases.
+#     ``[`` is treated as a literal character (compile_glob escapes it), so a
+#     bracket-class pattern will not match as a class. These forms are vanishingly
+#     rare in real .gitignore files and are left out to keep one small matcher.
+
+
+@dataclass
+class _GitignoreRule:
+    """One compiled .gitignore pattern relative to its own directory."""
+
+    regex: "re.Pattern"
+    negated: bool
+    dir_only: bool
+    pattern: str  # the original pattern text, for a readable ledger reason
+
+
+class GitignoreMatcher:
+    """Deterministic, bounded .gitignore matcher used by the enumerator.
+
+    Reads per-directory ``.gitignore`` files lazily (cached), each pattern
+    anchored to its own directory, and answers :meth:`match` for one path. See
+    the module-level SEMANTICS BOUNDARY note for exactly what is and is not
+    honored. Purely local: it never reads file contents beyond the ``.gitignore``
+    files themselves, and it makes no network or model calls.
+    """
+
+    def __init__(self, root) -> None:
+        self._root = Path(root)
+        # dir_rel ("" is the repo root) -> compiled rules in file order.
+        self._cache: dict[str, list[_GitignoreRule]] = {}
+
+    def _rules_for_dir(self, dir_rel: str) -> list[_GitignoreRule]:
+        cached = self._cache.get(dir_rel)
+        if cached is not None:
+            return cached
+        # Local import keeps the gitignore-glob semantics in one place
+        # (project.rules) without a module-load cycle through this shared util.
+        from .project.rules import compile_glob
+
+        base = self._root if not dir_rel else self._root / dir_rel
+        gi_path = base / ".gitignore"
+        rules: list[_GitignoreRule] = []
+        if gi_path.is_file():
+            try:
+                text = gi_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                text = ""
+            for line in text.splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                negated = False
+                body = stripped
+                if body.startswith("!"):
+                    negated = True
+                    body = body[1:]
+                elif body.startswith(("\\#", "\\!")):
+                    body = body[1:]  # escaped leading marker is a literal char
+                dir_only = body.endswith("/")
+                try:
+                    regex = compile_glob(body)
+                except ValueError:
+                    continue  # empty or degenerate pattern: skip it, never crash
+                rules.append(_GitignoreRule(regex, negated, dir_only, stripped))
+        self._cache[dir_rel] = rules
+        return rules
+
+    def match(self, rel_path: str, is_dir: bool) -> Optional[str]:
+        """Return the deciding pattern when ``rel_path`` is ignored, else None.
+
+        ``rel_path`` is relative to the repo root. The result is the original
+        pattern text of the last matching (non-negated) rule, suitable for the
+        ledger reason; None means not ignored (either no rule matched or a
+        negation had the final say).
+        """
+        norm = rel_path.replace("\\", "/").strip("/")
+        if not norm:
+            return None
+        parts = norm.split("/")
+        # Ancestor directories that may carry a .gitignore: the root ("") plus
+        # each parent directory of this path, root-first (evaluation order).
+        ancestor_dirs = [""]
+        for i in range(len(parts) - 1):
+            ancestor_dirs.append("/".join(parts[: i + 1]))
+
+        decided: Optional[tuple[bool, str]] = None
+        for adir in ancestor_dirs:
+            rules = self._rules_for_dir(adir)
+            if not rules:
+                continue
+            subpath = norm[len(adir):].lstrip("/") if adir else norm
+            for rule in rules:
+                if rule.dir_only and not is_dir:
+                    continue  # a directory-only pattern never ignores a file
+                if rule.regex.search(subpath):
+                    decided = (not rule.negated, rule.pattern)
+        if decided is None or not decided[0]:
+            return None
+        return decided[1]
 
 
 def _should_skip_dir(name: str) -> bool:

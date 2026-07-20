@@ -364,9 +364,10 @@ def test_default_store_under_root_cold_warm_parity(tmp_path):
     """The default store location (<root>/.solution-explorer) is parity-safe.
 
     Cold and warm runs against the default store project byte-identically. The
-    store lives in a dot-directory that extraction prunes as one ledger row, and
-    the directory is created before enumeration, so the row is present on both
-    runs (no coverage drift). This exercises the default path the CLI uses.
+    store lives in the .solution-explorer state directory, which extraction
+    accounts as one honest tool_state ledger row (not scanned as source), and the
+    directory is created before enumeration, so the row is present on both runs
+    (no coverage drift). This exercises the default path the CLI uses.
     """
     root = _copy_fixture(tmp_path / "repo")
     store_path = default_store_path(root)
@@ -381,14 +382,14 @@ def test_default_store_under_root_cold_warm_parity(tmp_path):
     with FactStore(str(store_path)) as store:
         _project_run(root, store, out_warm)
 
-    # The .solution-explorer directory is accounted for exactly once as an
-    # excluded directory (honest, not silent) in both runs.
-    assert m_cold["coverage"]["summary"].get("excluded:skipped_directory", 0) >= 1
+    # The .solution-explorer directory is accounted for exactly once as the tool's
+    # own state (honest, not silent, never source) in both runs.
+    assert m_cold["coverage"]["summary"].get("excluded:tool_state", 0) == 1
     cov_rows = {
         r["path"]: r["reason"]
         for r in json.loads((out_cold / "coverage.json").read_text())["rows"]
     }
-    assert cov_rows.get(".solution-explorer") == ".solution-explorer"
+    assert cov_rows.get(".solution-explorer") == "solution-explorer tool state"
 
     _assert_dirs_identical(out_warm, out_cold, "default-store-cold-warm")
 

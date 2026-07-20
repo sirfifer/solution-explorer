@@ -44,6 +44,10 @@ export const TOOLTIP_COPY = {
       "excluded:vendored_repo": "Third-party code vendored into the tree. Not your source.",
       "excluded:generated":
         "This tool's own emitted architecture dataset committed into the tree. Machine output, not source.",
+      "excluded:gitignored":
+        "Excluded by the repo's .gitignore, so it exists only on this workstation and never reaches the central repo. Not source.",
+      "excluded:tool_state":
+        "This tool's own state directory, .solution-explorer. Accounted as one row and never scanned as source.",
       unknownExcluded:
         "Excluded by a rule. Treated as a gap until confirmed to be non-source.",
     },

@@ -72,14 +72,22 @@ NON_SOURCE_DISPOSITIONS = frozenset({
     # The tool's own emitted projection dataset (D1): a committed monolith
     # architecture.json or a stray manifest. Accounted, never counted as source.
     "excluded:generated",
+    # Workstation-local files the repo's .gitignore excludes: never reach the
+    # central repo, so accounted (non-source) rather than counted as a gap.
+    "excluded:gitignored",
+    # The tool's own state directory (.solution-explorer): one pruned row.
+    "excluded:tool_state",
 })
 
 # Dispositions whose single row stands in for a whole pruned subtree. The
 # inventory counts these as one row and never invents per-file counts beneath
-# them (the pruned-directory ruling).
+# them (the pruned-directory ruling). ``excluded:gitignored`` is NOT here: it can
+# be a single file row (bytes then counted) as well as a pruned directory row, so
+# it is treated per-row (a directory form simply reports no size, like .git).
 _DIRECTORY_DISPOSITIONS = frozenset({
     "excluded:skipped_directory",
     "excluded:vendored_repo",
+    "excluded:tool_state",
 })
 
 
@@ -193,6 +201,24 @@ CATEGORY_META: dict[str, dict] = {
         "explanation": "Third-party code checked into the tree, such as node_modules, vendor, and Pods.",
         "recommendation": "Usually keep ignored and let the package manager restore it. Vendor deliberately only when you must.",
         "flags": {"security_sensitive": False, "likely_unwanted": False, "gitignore_candidate": True},
+    },
+    "empty_files": {
+        "label": "Empty files",
+        "explanation": "Files with zero bytes. There is nothing to analyze, so they are recorded here rather than left as a mystery in the unknown bucket.",
+        "recommendation": "Remove them or fill them in. A zero-byte file is usually an accident or a leftover placeholder.",
+        "flags": {"security_sensitive": False, "likely_unwanted": False, "gitignore_candidate": False},
+    },
+    "workstation_ignored": {
+        "label": "Gitignored workstation files",
+        "explanation": "Files the repository's .gitignore excludes. They exist only on this workstation and never reach the central repository, so a clone would not contain them.",
+        "recommendation": "No action. These are local-only by design.",
+        "flags": {"security_sensitive": False, "likely_unwanted": False, "gitignore_candidate": False},
+    },
+    "tool_state": {
+        "label": "Solution Explorer state",
+        "explanation": "The tool's own store and learned rules for this repo, kept under .solution-explorer. Accounted as one row and never scanned as source.",
+        "recommendation": "Keep. The rules subdirectory travels with the repo; the store stays local.",
+        "flags": {"security_sensitive": False, "likely_unwanted": False, "gitignore_candidate": False},
     },
     "unknown": {
         "label": "Unknown",
@@ -317,6 +343,17 @@ def classify_row(path: str, disposition: str, reason: Optional[str] = None) -> s
     partset = set(parts)
     filename = parts[-1] if parts else path.lower()
     ext = os.path.splitext(filename)[1]
+
+    # Disposition-declared categories. These are decided by the enumerator, not
+    # by the path, so they short-circuit the path rules and never leak into the
+    # loud unknown bucket. An empty file lands here instead of falling through to
+    # its extension (the last self-repo unknown was an empty ``tests/__init__.py``).
+    if disposition == "excluded:empty_file":
+        return "empty_files"
+    if disposition == "excluded:gitignored":
+        return "workstation_ignored"
+    if disposition == "excluded:tool_state":
+        return "tool_state"
 
     # Generated projection output (D1): the file form carries its own
     # disposition; the pruned-directory form rides ``excluded:skipped_directory``
