@@ -225,7 +225,7 @@ function ComponentDetail({
   const docs = component.docs;
   const hasDocContent = docs && (docs.readme || docs.claude_md || docs.changelog ||
     docs.architecture_notes || docs.api_docs || docs.api_endpoints?.length ||
-    docs.env_vars?.length || docs.patterns?.length);
+    docs.env_vars?.length || docs.patterns?.length || docs.key_decisions?.length);
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: "overview", label: "Overview" },
@@ -717,7 +717,26 @@ function DocsTab({ component }: { component: Component }) {
   if (docs.api_docs) sections.push({ key: "api", label: "API Docs", content: docs.api_docs });
   if (docs.changelog) sections.push({ key: "changelog", label: "Changelog", content: docs.changelog });
 
+  const keyDecisions = docs.key_decisions && docs.key_decisions.length > 0 && (
+    <div className={`px-4 pt-3 pb-3 ${sections.length > 0 ? `border-b ${darkMode ? "border-zinc-800" : "border-zinc-100"}` : ""}`}>
+      <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+        Key Decisions
+      </h4>
+      <ul className="space-y-1">
+        {docs.key_decisions.map((decision, i) => (
+          <li key={i} className={`flex items-start gap-1.5 text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+            <span className="shrink-0 mt-0.5 text-xs">&#x2022;</span>
+            <span>{decision}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
   if (sections.length === 0) {
+    if (keyDecisions) {
+      return <div className="h-full overflow-y-auto">{keyDecisions}</div>;
+    }
     return (
       <div className={`text-center py-8 text-sm ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
         No documentation files found
@@ -729,9 +748,10 @@ function DocsTab({ component }: { component: Component }) {
 
   return (
     <div className="flex flex-col h-full">
+      {keyDecisions}
       {/* Doc section tabs */}
       {sections.length > 1 && (
-        <div className={`flex gap-1 px-3 pt-2 pb-1 flex-wrap ${darkMode ? "border-b border-zinc-800" : "border-b border-zinc-100"}`}>
+        <div className={`flex gap-1 px-3 pt-2 pb-1 flex-wrap shrink-0 ${darkMode ? "border-b border-zinc-800" : "border-b border-zinc-100"}`}>
           {sections.map((sec) => (
             <button
               key={sec.key}
@@ -1122,6 +1142,15 @@ function SymbolsTab({
                   </div>
                 )}
                 <CodePreview code={sym.code_preview} language={sym.file.split(".").pop() || ""} />
+                {sym.dependencies && sym.dependencies.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {sym.dependencies.map((dep, i) => (
+                      <span key={`${dep}-${i}`} className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+                        {dep}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className={`flex items-center justify-between mt-1`}>
                   <div className={`text-[10px] font-mono flex items-center gap-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                     {sym.file}:{sym.line}
@@ -1391,10 +1420,12 @@ function CapabilitiesTab({ capabilities }: { capabilities: Capability[] }) {
                   </div>
                 )}
 
-                {/* Event direction */}
-                {cap.kind === "event" && cap.detail.direction && (
+                {/* Event topic and direction */}
+                {cap.kind === "event" && (cap.detail.topic || cap.detail.direction) && (
                   <div className={`text-[11px] mt-1 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
-                    direction: {cap.detail.direction}
+                    {cap.detail.topic && <>topic: {cap.detail.topic}</>}
+                    {cap.detail.topic && cap.detail.direction && " · "}
+                    {cap.detail.direction && <>direction: {cap.detail.direction}</>}
                   </div>
                 )}
 
@@ -2003,7 +2034,14 @@ function RelationshipsTab({
       pubsub: darkMode ? "text-fuchsia-400" : "text-fuchsia-600",
     };
     const hasEnrichment = rel.authentication || rel.data_format || rel.api_style ||
-      rel.queue_name || rel.connection_pattern || (rel.middleware && rel.middleware.length > 0);
+      rel.queue_name || rel.connection_pattern || rel.transport ||
+      (rel.middleware && rel.middleware.length > 0);
+
+    const importanceColors: Record<string, string> = {
+      primary: darkMode ? "bg-blue-900/40 text-blue-300" : "bg-blue-100 text-blue-700",
+      secondary: darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600",
+      internal: darkMode ? "bg-zinc-900 text-zinc-600" : "bg-zinc-50 text-zinc-400",
+    };
 
     return (
       <div>
@@ -2038,6 +2076,13 @@ function RelationshipsTab({
               :{rel.port}
             </span>
           )}
+          {rel.ai_enhance?.importance && (
+            <Tooltip content="How central this link is to the system, per AI review.">
+              <span className={`text-[9px] px-1.5 py-0.5 rounded ${importanceColors[rel.ai_enhance.importance] || importanceColors.internal}`}>
+                {rel.ai_enhance.importance}
+              </span>
+            </Tooltip>
+          )}
           {rel.ai_enhance?.ai_discovered && (
             <span className={`text-[9px] px-1 py-0.5 rounded ${darkMode ? "bg-purple-900/30 text-purple-400" : "bg-purple-50 text-purple-600"}`}>
               AI
@@ -2061,6 +2106,11 @@ function RelationshipsTab({
                 {rel.api_style}
               </span>
             )}
+            {rel.transport && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+                {rel.transport}
+              </span>
+            )}
             {rel.queue_name && (
               <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
                 {rel.queue_name}
@@ -2078,15 +2128,59 @@ function RelationshipsTab({
             ))}
           </div>
         )}
+
+        {/* Per-relationship endpoints (method + path list) */}
+        {rel.endpoints && rel.endpoints.length > 0 && (
+          <div className="px-3 pb-1 space-y-0.5">
+            {rel.endpoints.map((ep, j) => (
+              <div key={j} className="flex items-center gap-1.5">
+                <MethodBadge method={ep.method} />
+                <span className={`text-[10px] font-mono truncate ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
+                  {ep.path}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {rel.ai_enhance?.data_flow_description && (
           <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             {rel.ai_enhance.data_flow_description}
+          </p>
+        )}
+        {rel.ai_enhance?.authentication_detail && (
+          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            {"\u{1F512}"} {rel.ai_enhance.authentication_detail}
           </p>
         )}
         {rel.ai_enhance?.security_notes && (
           <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             {"\u{1F512}"} {rel.ai_enhance.security_notes}
           </p>
+        )}
+        {rel.ai_enhance?.error_handling && (
+          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            error handling: {rel.ai_enhance.error_handling}
+          </p>
+        )}
+        {rel.ai_enhance?.sla_notes && (
+          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            SLA: {rel.ai_enhance.sla_notes}
+          </p>
+        )}
+        {rel.ai_enhance?.port_context && (
+          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            {rel.ai_enhance.port_context}
+          </p>
+        )}
+        {rel.ai_enhance?.payload_examples && rel.ai_enhance.payload_examples.length > 0 && (
+          <div className="px-3 pb-1.5 space-y-0.5">
+            {rel.ai_enhance.payload_examples.map((ex, j) => (
+              <div key={j} className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800/60 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}>
+                {ex}
+              </div>
+            ))}
+          </div>
         )}
       </div>
     );
@@ -2223,6 +2317,23 @@ function FileDetail({ file }: { file: FileInfo }) {
             </div>
           </div>
         )}
+        {file.exports.length > 0 && (
+          <div>
+            <h4 className={`text-xs font-semibold uppercase mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+              Exports ({file.exports.length})
+            </h4>
+            <div className="flex flex-wrap gap-1">
+              {file.exports.map((exp) => (
+                <span
+                  key={exp}
+                  className={`text-xs px-2 py-1 rounded-md font-mono ${darkMode ? "bg-emerald-900/30 text-emerald-400" : "bg-emerald-50 text-emerald-700"}`}
+                >
+                  {exp}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2272,6 +2383,20 @@ function SymbolDetail({ symbol }: { symbol: ArchSymbol }) {
           </div>
         )}
         <CodePreview code={symbol.code_preview} language={symbol.file.split(".").pop() || ""} />
+        {symbol.dependencies && symbol.dependencies.length > 0 && (
+          <div>
+            <h4 className={`text-xs font-semibold uppercase mb-2 mt-3 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+              Dependencies ({symbol.dependencies.length})
+            </h4>
+            <div className="flex flex-wrap gap-1">
+              {symbol.dependencies.map((dep, i) => (
+                <span key={`${dep}-${i}`} className={`text-xs px-2 py-1 rounded-md font-mono ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+                  {dep}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

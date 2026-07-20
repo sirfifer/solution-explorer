@@ -146,6 +146,11 @@ export function CapabilityPanel() {
                               {label}
                             </span>
                           </div>
+                          {cap.kind === "event" && cap.detail.topic && (
+                            <div className={`mt-0.5 text-[10px] font-mono truncate ${darkMode ? "text-zinc-500" : "text-zinc-400"}`} title={cap.detail.topic}>
+                              topic: {cap.detail.topic}
+                            </div>
+                          )}
                           <div className="mt-1 flex items-center justify-between gap-2">
                             <span className={`text-[10px] truncate ${darkMode ? "text-zinc-500" : "text-zinc-400"}`} title={owner}>
                               {owner}
