@@ -1834,7 +1834,7 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 - Design pass first: exact per-ecosystem sources, transitive resolution limits without running package managers, and how the supply chain view relates to the existing vendored/dependency detection.
 
 ### P10-2: Security view
-- Status: TODO (owner vision 2026-07-20; design pass first)
+- Status: DESIGN DELIVERED (2026-07-20, docs/remediation/P10-2-DESIGN.md). L9 Security lens over ranked factual panels; honest scope line (surfaces, postures, hygiene, evidence; never vulnerability/exploitability/compliance verdicts); P10-2a buildable now (auth_site signal upgrade, git-tracked secret check, hygiene checklist, network boundary panel over existing scheme-bearing url_reference signals, findings integration); P10-2b gated content extractors (crypto_primitive, secret_literal behind a mandatory self-scan test, input_sink); scores and posture gauges KILLED as theater. Owner green-lights increments.
 - Scope: a dedicated lens focused on security in every shape: secrets-shaped files (inventory already flags), authentication and crypto usage sites, network communication surfaces (what talks to what, TLS posture where detectable), data handling (entities carrying sensitive-looking fields), dependency risk (bridges to P10-1), and repo security hygiene (SECURITY.md, dependabot config, signed commits). Deterministic signals plus AI elaboration as overlay. Hard value test per VISION.md before any UI lands.
 
 ### P10-3: Stakeholder views (business and executive translation)
