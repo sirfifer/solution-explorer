@@ -40,6 +40,7 @@ class StoreView:
     all_paths: list[str]           # every enumerated file (from the ledger)
     dir_paths: set[str]            # directories inferred from file paths
     vendored_dirs: set[str]        # dirs the extraction tier marked vendored
+    activity_by_path: dict[str, int] = field(default_factory=dict)  # path -> commit_count
     _fs: StoreFS = field(init=False)
 
     def __post_init__(self) -> None:
@@ -103,6 +104,14 @@ class StoreView:
             if c["disposition"] == "excluded:vendored_repo":
                 vendored_dirs.add(c["path"])
 
+        # Per-file git churn, when the activity tier has run. Empty otherwise, so
+        # a derivation that reads it (the D4 orphan reframing's churn
+        # counter-evidence) degrades to "no churn data", never crashes.
+        activity_by_path: dict[str, int] = {}
+        if store.has_activity():
+            for row in store.file_activity():
+                activity_by_path[row["path"]] = row.get("commit_count") or 0
+
         return cls(
             files=files,
             symbols=symbols,
@@ -113,6 +122,7 @@ class StoreView:
             all_paths=sorted(set(all_paths)),
             dir_paths=dir_paths,
             vendored_dirs=vendored_dirs,
+            activity_by_path=activity_by_path,
         )
 
 

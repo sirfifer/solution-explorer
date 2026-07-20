@@ -76,7 +76,14 @@ from .signals import extract_entity_signals, extract_rule_signals, extract_signa
 # so a pattern/detector tool no longer detects its own pattern definitions.
 # Bumping the tier invalidates the content-hash cache so a warm store re-extracts
 # once and never serves cached facts that predate the guard.
-EXTRACT_TIER = "p5-extract/4"
+# p5-extract/4 -> p5-extract/5: extraction now also emits `symbol_reference`
+# signals (type-like names a file references, references.py) so Tier 3 can draw
+# component-to-component `uses` edges (D5). The string-literal guard also gained
+# `#`-comment awareness (PR #53 comment-phantom nit), which can change which
+# driver/job matches are suppressed. Bumping the tier invalidates the
+# content-hash cache so a warm store re-extracts once and never serves cached
+# facts that predate the new signal kind (one-time re-extract disclosure).
+EXTRACT_TIER = "p5-extract/5"
 INLINE_THRESHOLD = 8  # below this many cache misses, parse inline (no pool)
 
 # In-run retry for transient extraction failures (P4-8). A worker crash, an

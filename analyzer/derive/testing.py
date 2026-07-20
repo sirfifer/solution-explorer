@@ -111,6 +111,24 @@ def is_fixture_path(rel_path: str) -> bool:
     return any(p.lower() in _FIXTURE_DIR_NAMES for p in parts)
 
 
+def is_test_path(rel_path: str) -> bool:
+    """True when ``rel_path`` is test code by directory OR by filename (D8).
+
+    Combines the directory-token check (:func:`is_fixture_path`, catching
+    ``tests/``, ``fixtures/``, ``__tests__/`` and the like) with the per-language
+    filename conventions (``test_*.py``, ``*.test.ts``, ``*Test.swift``,
+    ``*_test.go``, ``*_spec.rb``), so a test helper that lives beside product
+    code is still recognized. Language is derived from the extension. Used by the
+    clone-cluster de-weighting: a clone whose every fragment is test code gets a
+    rank penalty (de-weighted, never hidden).
+    """
+    if is_fixture_path(rel_path):
+        return True
+    ext = os.path.splitext(rel_path)[1].lower()
+    lang = LANGUAGE_MAP.get(ext)
+    return bool(lang and _is_test_file(rel_path, lang))
+
+
 def _is_test_file(rel_path: str, language: str) -> bool:
     name = os.path.basename(rel_path).lower()
     # Root-bounded: only ancestors within the scan root count as test dirs.

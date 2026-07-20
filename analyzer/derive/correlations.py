@@ -10,10 +10,15 @@ Deriver's store view:
     fingerprint-set Jaccard over a document-frequency-filtered inverted index
     catches type-3 near-duplicates. Each cross-file cluster becomes a
     duplication finding with per-member file and line-range evidence.
-  - ORPHANS. Leaf components unreachable from any entry point (no incoming edge,
-    no entry-point role, no owned capability, not test code), emitted as orphan
-    findings. Symbol-level orphans are out of scope: the store has no
-    symbol-granularity reference graph, so they are not "cheaply resolvable".
+  - UNREFERENCED (D4). Leaf components with no incoming edge of ANY kind
+    (recomputed over the D5 ``uses`` edges, no entry-point role, no owned
+    capability, not test code). Emitted as ``unreferenced`` findings, NOT the old
+    dead-code-sounding "orphan": the copy says only that no reference was
+    detected by the current extractors, and each finding carries the component's
+    symbol count and git churn as counter-evidence. A substantial component in a
+    language whose reference extractor is weak is suppressed entirely rather than
+    reported as a false blind spot. Symbol-level references are out of scope: the
+    edge join is component-granularity by name (D5).
   - CONCERNS. Cross-cutting membership sets orthogonal to the hierarchy
     (logging, auth, persistence, http-client, caching, configuration) detected
     from imports, signals, rules, and entity access, plus clone-derived concerns
@@ -41,9 +46,26 @@ from __future__ import annotations
 import hashlib
 from typing import Optional
 
+from ..extract.references import REFERENCE_LANGUAGES
 from .context import Deriver
+from .testing import is_test_path
 
 __all__ = ["derive_correlations"]
+
+# ---------------------------------------------------------------------------
+# Reference-extractor maturity (D4). A component with no incoming edge is only
+# honestly "unreferenced" if the languages we CAN scan for references would have
+# found a reference. Languages with a symbol-reference extractor (D5,
+# references.py) are mature; every other language is weak (we barely look), so a
+# substantial component in a weak language is not called unreferenced at all: we
+# would just be advertising our own blind spot as dead code.
+# ---------------------------------------------------------------------------
+_MATURE_REFERENCE_LANGS = REFERENCE_LANGUAGES
+# Above this symbol count, a weak-language component's "unreferenced" status is
+# not credible, so the finding is suppressed entirely (honest silence over a
+# false dead-code claim). Small weak-language components still surface, carrying
+# the maturity caveat as counter-evidence.
+_WEAK_LANG_SUPPRESS_MIN_SYMBOLS = 5
 
 # -- clone-cluster thresholds (recorded in the P5-6 card, proven by tests) ---
 SIM_THRESHOLD = 0.80   # minimum fingerprint-set Jaccard for a type-3 near-dup
@@ -229,6 +251,11 @@ def _classify(members: list[dict]) -> str:
 
 _CLASS_WEIGHT = {"exact": 15.0, "renamed": 8.0, "similar": 3.0}
 
+# A clone whose EVERY fragment is test code (D8) is de-weighted, never hidden:
+# test-helper boilerplate duplication is real but far lower priority than
+# product duplication. A clone with any product fragment keeps full weight.
+_TEST_ONLY_CLONE_WEIGHT = 0.15
+
 
 def _build_clusters(d: Deriver) -> list[dict]:
     """Return clone clusters (cross-file), each with members and a class."""
@@ -243,6 +270,9 @@ def _build_clusters(d: Deriver) -> list[dict]:
         cls = _classify(members)
         comp_ids = sorted({m["component_id"] for m in members if m["component_id"]})
         total_tokens = sum(m["ntokens"] for m in members)
+        # Test-only when EVERY fragment lives in test code (D8). Mixed clusters
+        # (a product fragment cloned into a test) keep full weight.
+        test_only = all(is_test_path(m["file"]) for m in members)
         key = _hash8(*[f"{m['file']}:{m['line']}-{m['end_line']}" for m in members])
         clusters.append({
             "id": f"clone-{key}",
@@ -250,6 +280,7 @@ def _build_clusters(d: Deriver) -> list[dict]:
             "members": members,
             "component_ids": comp_ids,
             "total_tokens": total_tokens,
+            "test_only": test_only,
         })
     clusters.sort(key=lambda c: c["id"])
     return clusters
@@ -258,6 +289,7 @@ def _build_clusters(d: Deriver) -> list[dict]:
 def _duplication_finding(cluster: dict) -> dict:
     members = cluster["members"]
     comps = cluster["component_ids"]
+    test_only = cluster.get("test_only", False)
     rank = (
         100.0
         + len(members) * 8.0
@@ -265,6 +297,8 @@ def _duplication_finding(cluster: dict) -> dict:
         + min(cluster["total_tokens"], 1000) / 20.0
         + _CLASS_WEIGHT.get(cluster["class"], 3.0)
     )
+    if test_only:
+        rank *= _TEST_ONLY_CLONE_WEIGHT  # D8: de-weight test-helper boilerplate
     finding_members = [{
         "kind": "fragment",
         "id": f"{m['file']}:{m['line']}",
@@ -279,12 +313,13 @@ def _duplication_finding(cluster: dict) -> dict:
         "symbol": m["symbol"],
     } for m in members]
     span = f"{len(comps)} components" if len(comps) != 1 else "1 component"
+    summary = f"{cluster['class']} clone across {len(members)} fragments in {span}"
+    if test_only:
+        summary += " (test code only)"
     return {
         "id": f"finding:duplication:{cluster['id'].split('-', 1)[1]}",
         "kind": "duplication",
-        "summary": (
-            f"{cluster['class']} clone across {len(members)} fragments in {span}"
-        ),
+        "summary": summary,
         "members": finding_members,
         "evidence": evidence,
         "confidence": "inferred",
@@ -294,6 +329,7 @@ def _duplication_finding(cluster: dict) -> dict:
             "clone_class": cluster["class"],
             "component_ids": comps,
             "total_tokens": cluster["total_tokens"],
+            "test_only": test_only,
         },
     }
 
@@ -500,7 +536,20 @@ def _incoming_targets(d: Deriver) -> set[str]:
     return targets
 
 
-def _orphan_findings(d: Deriver) -> list[dict]:
+def _unreferenced_findings(d: Deriver) -> list[dict]:
+    """Components with no incoming edge of ANY kind, honestly framed (D4).
+
+    Recomputed over ALL edge kinds, including the D5 ``uses`` edges: a core
+    module that another component references by type now carries an incoming
+    edge and is no longer surfaced. What survives is reframed from the old
+    dead-code-sounding "orphan" into ``unreferenced``: the copy says only that no
+    reference was DETECTED by the current extractors, and the finding carries the
+    component's symbol count, line count, and git churn as counter-evidence
+    hints (a hot, symbol-rich module is almost certainly used; the extractors
+    just did not see it). For a component whose language has a weak reference
+    extractor (:data:`_MATURE_REFERENCE_LANGS`) and non-trivial size, the finding
+    is suppressed entirely rather than assert a false blind-spot-as-dead-code.
+    """
     incoming = _incoming_targets(d)
     cap_owners = {c.get("component_id") for c in d.capabilities if c.get("component_id")}
     child_parents = {c.id for comp in d._component_map.values()
@@ -526,19 +575,34 @@ def _orphan_findings(d: Deriver) -> list[dict]:
         if comp.id in cap_owners:
             continue
         if comp.id in incoming:
-            continue
+            continue  # has an incoming edge (import, http, uses, nav, ...)
         if d._is_under_vendored(path):
             continue
         metrics = getattr(comp, "metrics", None) or {}
         symbols = metrics.get("symbols", 0)
         lines = metrics.get("lines", 0)
         if symbols <= 0:
-            continue  # no code, not a meaningful orphan
-        rank = 20.0 + min(lines, 500) / 12.0
+            continue  # no code, not a meaningful finding
+        lang = (comp.language or "").lower()
+        mature = lang in _MATURE_REFERENCE_LANGS
+        if not mature and symbols >= _WEAK_LANG_SUPPRESS_MIN_SYMBOLS:
+            # Weak reference extractor for this language: staying silent is more
+            # honest than claiming a substantial module is dead.
+            continue
+        churn = sum(d.view.activity_by_path.get(f, 0) for f in comp.files)
+        maturity = "mature" if mature else "weak"
+        # A rich or hot module is very likely referenced despite the miss, so it
+        # ranks lower than the old orphan finding (softer, honestly uncertain).
+        rank = 12.0 + min(lines, 500) / 20.0
+        if symbols >= 5 or churn >= 3:
+            rank -= 4.0  # strong counter-evidence: de-prioritize further
         out.append({
-            "id": f"finding:orphan:{comp.id}",
-            "kind": "orphan",
-            "summary": f"component '{comp.name}' has no incoming references",
+            "id": f"finding:unreferenced:{comp.id}",
+            "kind": "unreferenced",
+            "summary": (
+                f"no reference to component '{comp.name}' was detected by the "
+                f"current extractors"
+            ),
             "members": [{
                 "kind": "component", "id": comp.id, "component_id": comp.id,
                 "file": None, "line_start": None, "line_end": None,
@@ -546,11 +610,22 @@ def _orphan_findings(d: Deriver) -> list[dict]:
             "evidence": [{
                 "component_id": comp.id, "path": comp.path,
                 "files": sorted(comp.files)[:10], "type": comp.type,
+                "symbols": symbols, "churn_commits": churn,
+                "reference_extractor": maturity,
             }],
             "confidence": "inferred",
             "verification_status": "unverified",
             "rank_score": round(rank, 4),
-            "detail": {"lines": lines, "symbols": symbols, "type": comp.type},
+            "detail": {
+                "lines": lines, "symbols": symbols, "type": comp.type,
+                "language": lang or None, "churn_commits": churn,
+                "reference_extractor": maturity,
+                "note": (
+                    "No incoming reference was detected. This is an extractor "
+                    "blind spot as often as it is dead code; the symbol and "
+                    "churn counts are counter-evidence."
+                ),
+            },
         })
     return out
 
@@ -567,7 +642,7 @@ def derive_correlations(d: Deriver) -> None:
     findings: list[dict] = []
     findings.extend(_duplication_finding(c) for c in clusters)
     findings.extend(_inconsistency_findings(concerns))
-    findings.extend(_orphan_findings(d))
+    findings.extend(_unreferenced_findings(d))
     findings.sort(key=lambda f: (-f["rank_score"], f["id"]))
 
     d.concerns = concerns

@@ -19,6 +19,7 @@ so extraction is deterministic across processes (invariant I4).
 from __future__ import annotations
 
 import re
+from bisect import bisect_left
 from typing import Optional
 
 # ---------------------------------------------------------------------------
@@ -56,8 +57,8 @@ def is_route_path(path: Optional[str], *, allow_bare: bool = False) -> bool:
     return False
 
 
-def in_string_literal(content: str, pos: int) -> bool:
-    """True when offset ``pos`` falls inside a string literal (D3).
+def compute_string_spans(content: str) -> list[tuple[int, int]]:
+    """Ordered, non-overlapping ``[start, end)`` string-literal spans (D3).
 
     A pattern/detector tool defines its own detection patterns as string
     constants (for example a job rule written as a compiled regex over the token
@@ -69,31 +70,48 @@ def in_string_literal(content: str, pos: int) -> bool:
     START is inside a quoted string is a definition or a documentation example,
     not real usage, and is suppressed.
 
-    The scan runs from the start of the file to ``pos`` and understands
-    triple-quoted strings (Python docstrings, multi-line), single- and
-    double-quoted strings (terminated by their quote or the line end), and
-    backtick template literals (multi-line), all with backslash-escape
+    A SINGLE left-to-right scan builds the span list, so callers with many match
+    positions on one file binary-search the spans (:func:`pos_in_spans`) instead
+    of rescanning from offset 0 per match (the PR #53 quadratic-rescan nit). The
+    scan understands triple-quoted strings (Python docstrings, multi-line),
+    single- and double-quoted strings (terminated by their quote or the line
+    end), and backtick template literals (multi-line), all with backslash-escape
     awareness. Route paths and URLs, whose *value* lives in a string but whose
     match *anchor* is real code before the quote, are unaffected because the
     anchor offset is not inside a string.
+
+    Language boundary: an unquoted ``#`` is treated as a line comment that runs
+    to the end of its line, so a triple-quote opener that appears after a ``#``
+    (a documentation example inside a comment) does not open a phantom,
+    never-closed string that would swallow the rest of the file (the PR #53
+    comment-phantom nit). This models ``#``-style line comments (Python, Ruby,
+    shell, YAML). It deliberately does NOT model ``//`` line comments: the guard
+    fails toward "not in a string" (a match is treated as real usage), which is
+    the safe direction, and the ``#`` case is the one the self-detection defect
+    produced. See the recorded row in TASKS.md.
     """
-    if pos <= 0:
-        return False
+    spans: list[tuple[int, int]] = []
     length = len(content)
     i = 0
-    while i < pos:
+    while i < length:
+        ch = content[i]
+        # An unquoted '#' opens a line comment (see language boundary above);
+        # skip to the newline so a '"""' inside it never opens a string.
+        if ch == "#":
+            nl = content.find("\n", i)
+            i = length if nl == -1 else nl + 1
+            continue
         # Triple-quoted strings first: they can span many lines (docstrings).
         if content.startswith('"""', i) or content.startswith("'''", i):
             q = content[i:i + 3]
             end = content.find(q, i + 3)
             if end == -1:
-                return True  # unterminated triple quote: pos is inside it
+                spans.append((i, length))  # unterminated triple quote
+                break
             close = end + 3
-            if pos < close:
-                return True
+            spans.append((i, close))
             i = close
             continue
-        ch = content[i]
         if ch in "\"'`":
             j = i + 1
             while j < length:
@@ -107,12 +125,61 @@ def in_string_literal(content: str, pos: int) -> bool:
                 if c == "\n" and ch != "`":
                     break  # an unterminated single-line string ends at the line
                 j += 1
-            if pos < j:  # pos falls within [i, j), the string span
-                return True
+            spans.append((i, j))
             i = j
             continue
         i += 1
-    return False
+    return spans
+
+
+class StringMask:
+    """Precomputed string-span index for one file's content (PR #53 nit b).
+
+    Build once per file, then query many match positions in O(log n) each via
+    binary search, instead of the old O(n) rescan-from-zero per position that
+    made whole-file signal extraction quadratic on match-heavy files.
+    """
+
+    __slots__ = ("_starts", "_ends")
+
+    def __init__(self, content: str):
+        spans = compute_string_spans(content)
+        self._starts = [s for s, _ in spans]
+        self._ends = [e for _, e in spans]
+
+    def in_string(self, pos: int) -> bool:
+        """True when ``pos`` falls strictly inside a string span (``start < pos < end``).
+
+        The opening-quote offset itself is not "inside", matching the historical
+        :func:`in_string_literal` semantics so extraction stays byte-stable.
+        """
+        if pos <= 0 or not self._starts:
+            return False
+        idx = bisect_left(self._starts, pos) - 1
+        return idx >= 0 and pos < self._ends[idx]
+
+
+def pos_in_spans(spans: list[tuple[int, int]], pos: int) -> bool:
+    """Binary-search helper: is ``pos`` strictly inside one of ``spans``?
+
+    ``spans`` must be the sorted, non-overlapping output of
+    :func:`compute_string_spans`.
+    """
+    if pos <= 0 or not spans:
+        return False
+    starts = [s for s, _ in spans]
+    idx = bisect_left(starts, pos) - 1
+    return idx >= 0 and pos < spans[idx][1]
+
+
+def in_string_literal(content: str, pos: int) -> bool:
+    """True when offset ``pos`` falls inside a string literal (D3).
+
+    Backward-compatible single-shot wrapper over :class:`StringMask`. Callers
+    that test many positions on the same content should build one
+    :class:`StringMask` and reuse it (this wrapper rescans per call).
+    """
+    return StringMask(content).in_string(pos)
 
 
 def _hint(content: str, *markers: str) -> bool:
@@ -437,10 +504,11 @@ def extract_cli(content: str, language: str) -> tuple[list[tuple[dict, int]], li
     generic commander ``.option`` rule) are suppressed so one declaration yields
     one signal.
     """
+    mask = StringMask(content)  # one scan; queried per match (PR #53 nit b)
     cmd_matches: list[tuple[dict, int, int]] = []
     for pat, name_group, framework in _CLI_COMMAND_RULES.get(language, []):
         for m in pat.finditer(content):
-            if in_string_literal(content, m.start()):
+            if mask.in_string(m.start()):
                 continue  # a pattern definition, not a real command anchor (D3)
             name = None
             if name_group is not None and m.lastindex and name_group <= m.lastindex:
@@ -451,7 +519,7 @@ def extract_cli(content: str, language: str) -> tuple[list[tuple[dict, int]], li
     opt_matches: list[tuple[dict, int, int]] = []
     for pat, framework in _CLI_OPTION_RULES:
         for m in pat.finditer(content):
-            if in_string_literal(content, m.start()):
+            if mask.in_string(m.start()):
                 continue  # a pattern definition, not a real option anchor (D3)
             opt_matches.append(
                 ({"flag": m.group(1), "framework": framework}, m.start(), m.end())
@@ -499,9 +567,10 @@ def extract_jobs(content: str, language: str) -> list[tuple[dict, int]]:
     """Return ``({"name"/"trigger", "framework"}, match_start)`` job tuples."""
     out: list[tuple[dict, int]] = []
     seen: set = set()
+    mask = StringMask(content)  # one scan; queried per match (PR #53 nit b)
     for pat, group, framework in _JOB_RULES.get(language, []):
         for m in pat.finditer(content):
-            if in_string_literal(content, m.start()):
+            if mask.in_string(m.start()):
                 continue  # a pattern definition or docstring example, not usage (D3)
             value: dict = {"framework": framework}
             if group is not None and m.lastindex and group <= m.lastindex:

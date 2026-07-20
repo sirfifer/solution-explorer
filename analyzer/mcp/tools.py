@@ -1049,12 +1049,13 @@ TOOLS: list[ToolSpec] = [
     ),
     ToolSpec(
         "se_findings",
-        "Ranked correlation findings (duplication, orphans, inconsistency, intent "
-        "violations) with verification status always shown and unverified findings "
-        "marked. Pass 'component' to also get its concern memberships.",
+        "Ranked correlation findings (duplication, unreferenced components, "
+        "inconsistency, intent violations) with verification status always shown "
+        "and unverified findings marked. Pass 'component' to also get its concern "
+        "memberships.",
         _schema(
             {
-                "kind": {"type": "string", "description": "duplication | orphan | inconsistency | ..."},
+                "kind": {"type": "string", "description": "duplication | unreferenced | inconsistency | ..."},
                 "status": {
                     "type": "string",
                     "description": "Filter by verification_status (verified | unverified | refuted | uncertain).",

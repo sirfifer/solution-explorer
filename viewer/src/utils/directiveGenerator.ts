@@ -109,8 +109,8 @@ export function suggestAcceptanceCriteria(origin: string): string[] {
   if (origin.startsWith("finding:duplication")) {
     return ["The duplicated logic is extracted into one shared implementation and every member calls it."];
   }
-  if (origin.startsWith("finding:orphan")) {
-    return ["Each orphaned member is either wired to a reachable entry point or removed with a recorded justification."];
+  if (origin.startsWith("finding:orphan") || origin.startsWith("finding:unreferenced")) {
+    return ["Each unreferenced member is either confirmed reachable (an extractor blind spot) or removed with a recorded justification."];
   }
   return [];
 }

@@ -1986,6 +1986,10 @@ Filled by the phase-gate review session per WORK-PLAN.md section 6.3.
 | 2026-07-19 | D1 gate wave A | `out/` is NOT added to SKIP_DIRS by this wave, only the already-pruned `dist/`/`build/`. The D1 spec allowed pruning `out/` "when they are build-output directories", but that is exactly the ambiguous case where blind name-based pruning would drop a legitimate `out/` source directory. The measured self-repo inflation was 100% the emitted projection dataset (handled), so `out/` was left to the inventory heuristics rather than force-pruned. | Deliberate scope bound, not a silent skip: a real `out/` build directory is still classified `build_test_output` by the inventory when its files are non-source. If a future dataset shows a build-output `out/` inflating parsed source, add it behind a build-output confirmation (presence of a sibling build manifest), not a bare name match. |
 | 2026-07-19 | D3 gate wave A | The string-literal guard is applied to the job, cli, and driver (queue/db/http_client/websocket/grpc) signal detectors, NOT to the endpoint extractors or the parser-level `detect_framework`. The gate flagged celery/message_queue self-detection specifically, and endpoint patterns require a literal quoted `/route` that pattern-definition strings do not contain, so the endpoint self-match risk is negligible today. | Low-risk future extension: route the endpoint extractors through the same `in_string_literal` guard for full generality if a repo is ever found whose endpoint patterns self-match. `detect_framework` lives on the parser and would need the guard threaded there separately. |
 | 2026-07-19 | D2 gate wave A | A fixture-origin port-resolved http edge can still be drawn (self-repo: `tests -> polyglot-api` from a test file referencing `http://api:8000`). This is a DETERMINISTIC port match, not the D2 fabricated-name class, so it is out of D2 scope. | The honest treatment is to carry the D6 fixture-origin marker onto edges and de-rank fixture edges in the viewer, which belongs with the D8 findings/edge ranking wave (edges were left untouched here to avoid colliding with D5/D8). No edge-marker work is owed by this wave. |
+| 2026-07-19 | D5 gate wave B | The `symbol_reference` reference extractor exists for swift/python/typescript/javascript only (references.REFERENCE_LANGUAGES). Go, Rust, and Ruby emit no reference signals, so intra-module `uses` edges are not drawn for them and the D4 orphan reframing treats them as weak (suppresses substantial components rather than call them dead). | Follow-up: add reference rules for go/rust/ruby (struct-literal and interface-satisfaction shapes for Go; trait/impl for Rust; constant/`.new`/`include` for Ruby), then move them into REFERENCE_LANGUAGES so their components both gain `uses` edges and become eligible for an honest `unreferenced` finding. Deliberate scope bound: the gate's sharpest orphan burns were Swift core engines, which are covered. |
+| 2026-07-19 | D5 gate wave B | Ambiguous reference resolution is import-context only (Python `from .x import Y`, TS `import { Y }`). Swift local types carry no per-name import, so a Swift type name defined in two components and referenced from a third is DROPPED (counted in `_uses_ambiguous_dropped`), never guessed. On real single-module iOS code this is rare (type names are globally unique within the app module), but a genuinely duplicated Swift type name across components yields no edge. | Follow-up if a real dataset shows meaningful Swift ambiguity: resolve by same-directory-subtree proximity or by the Swift module a file's `import` statements select. Kept KISS per the card (name-based, no inference); dropping-not-guessing is the honest default. |
+| 2026-07-19 | D5 gate wave B | Reference targets are type-like DEFINITIONS only (class/struct/enum/protocol/actor/interface/type/typealias); a file that only CALLS a free function of another component (no type reference) draws no `uses` edge. Method/function names are intentionally not reference targets (far too ambiguous: many components define `handle`/`run`). | Not a regression (the old engine drew no such edge either). A future refinement could resolve unambiguous top-level function names too, but only with a strong uniqueness guard; deferred to avoid re-introducing noise the name-based join was designed to avoid. |
+| 2026-07-19 | nit-a gate wave B | The string guard's comment awareness models `#`-style line comments only; it deliberately does NOT model `//` line comments (recorded review boundary). A `//`-comment containing a triple-quote in a C-family language could still open a phantom string, but the guard fails toward "not in a string" (a match is treated as real usage, the safe direction that never over-suppresses), and the self-detection defect the guard exists for was a `#`-comment/docstring case. | Low-risk extension: thread the file language into compute_string_spans and add `//` (and `/* */`) comment skipping for C-family languages if a real repo is ever found whose driver/job patterns self-match inside a `//` comment. Kept language-agnostic and surgical for now. |
 
 ### P9-0 gate record (2026-07-20, first run of the recurring dogfood gate)
 
@@ -2001,11 +2005,11 @@ Filled by the phase-gate review session per WORK-PLAN.md section 6.3.
 | D1 | Self-repo LOC/language stats inflated 5.5x by generated output | Exclude dist/ and the tool's own emitted architecture JSON from source stats |
 | D2 | Fabricated http edges in both repos | Require a resolvable URL-to-component match or downgrade to a per-component signal, never an edge |
 | D3 | Analyzer detects its own detector regexes (celery/message_queue on frameworks.py) | Self-scan guard for capability detection |
-| D4 | Orphan finding reads as dead-code on core modules | Gate on real reachability or reframe; suppress for high-symbol high-churn components |
-| D5 | Code-level edge extraction too sparse (iOS: 93 edges / 190 components, nearly all UI nav) | Extract symbol-reference edges; root cause of D4 |
+| D4 | Orphan finding reads as dead-code on core modules | RESOLVED (branch program2/d-wave-b). Reframed `unreferenced`, recomputed over D5 edges, weak-language suppression. See wave B evidence below. |
+| D5 | Code-level edge extraction too sparse (iOS: 93 edges / 190 components, nearly all UI nav) | RESOLVED (branch program2/d-wave-b). Symbol-reference `uses` edges. See wave B evidence below. |
 | D6 | Fixture endpoints/models presented as product capabilities/entities | Tag or exclude tests/fixtures from product surfaces |
 | D7 | iOS enrichment leaves role and description empty on all nodes | RESOLVED (branch program2/d-wave-c). See D7 evidence below. |
-| D8 | Duplication findings dominated by test-helper boilerplate | Separate or de-weight test-file clones |
+| D8 | Duplication findings dominated by test-helper boilerplate | RESOLVED (branch program2/d-wave-b). Test-only clones de-weighted, marked. See wave B evidence below. |
 | D9 | Activity churn ranks vendored and data files coverage excludes | Apply the coverage exclusion set to churn ranking |
 | D10 | CLOSED (CDN timing, live site verified current) | none |
 | D11 | Warm-store incremental activity wrongly reports unchanged | Fix the HEAD-comparison skip in extract_activity |
@@ -2128,3 +2132,90 @@ vitest 333, lint, tsc, build).
   `prev_head != head` and the prior pass was complete; an incomplete prior pass
   is rebuilt in full. Plain add-a-commit incremental is unaffected.
 
+#### P9-0 gate defects wave B: RESOLVED (2026-07-19, branch program2/d-wave-b, PR pending)
+
+D5 (edge extraction depth), D4 (honest orphans), and D8 (clone de-weighting)
+fixed, plus the two PR #53 review nits (comment-phantom string opener, quadratic
+string-span rescan). Each defect ships a fail-before test on a real fixture
+(tests/test_gate_defects_wave_b.py, 13 tests, real stores, no mocks). v1
+untouched. EXTRACT_TIER bumped p5-extract/4 -> p5-extract/5 (new
+`symbol_reference` signal kind plus the `#`-comment-aware string guard; warm
+caches re-extract once, one-time disclosure in runner.py). Verification: pytest
+1105 passed (+13 new), 1 xfailed, the one known worktree environmental failure
+(test_pruned_directory_row_stands_in_for_its_contents, `.git` is a file in a
+worktree) unchanged; ruff clean; viewer full suite green (npm ci, vitest 333,
+lint, tsc, build). Self-repo end to end (engine v2): edges 37 -> 83 (+46 `uses`
+edges; import 33, http 2, nav 1, modal 1 unchanged), orphan findings 20 -> 14
+unreferenced (six collapsed via new incoming edges or weak-language
+suppression), 1535 `symbol_reference` signals emitted; cold run 2.66s -> 2.73s
+real (negligible; the reference scan is capped and the string guard is now
+sub-linear per file).
+
+- **D5 (sparse code-level edges) RESOLVED.** Extraction now emits
+  `symbol_reference` signals (analyzer/extract/references.py): per file, the
+  type-like NAMES it references (Swift constructor/annotation/conformance/cast/
+  generic; Python instantiation/annotation/base-class; TS/JS new/extends/
+  implements/generic/JSX). Derivation resolves each name against the store's own
+  symbol table and draws component-to-component `uses` edges
+  (analyzer/derive/relationships._symbol_reference_edges): source references,
+  target defines a type-like symbol (class/struct/enum/protocol/actor/interface/
+  type/typealias). Name-based only (invariant I1, no type inference, no call
+  graph); a name matching no local type definition drops out (stdlib/framework
+  names harmlessly), and an ambiguous name defined by several components is
+  resolved by import context where the file makes it available (Python/TS) else
+  dropped and counted (`_uses_ambiguous_dropped`), never guessed. Matches inside
+  a string literal or `#` comment are not references (shared StringMask). Edges
+  aggregate the total reference count into the label and carry up to 10 sorted
+  file:line evidence rows; emission is deterministic (invariant I4, sorted
+  (source, target) with sorted evidence). Scale guard: at most
+  MAX_REFERENCE_NAMES=400 distinct names scanned per file; self-repo cold run
+  cost is within noise (2.66s -> 2.73s real over 383 files). The viewer gained a
+  `uses` edge style (slate dashed, structural category).
+- **D4 (orphan reads as dead-code) RESOLVED.** Orphan status is recomputed over
+  ALL edge kinds including the new D5 `uses` edges, so a core module another
+  component references by type now carries an incoming edge and is no longer
+  surfaced. What survives is reframed in analyzer/derive/correlations from the
+  dead-code-sounding "orphan" to `unreferenced`: the copy says only that no
+  reference was DETECTED by the current extractors, and each finding carries the
+  component's symbol count, line count, and git churn (loaded into StoreView)
+  as counter-evidence hints plus a `reference_extractor` maturity tag. A
+  reference-extractor maturity TABLE (`_MATURE_REFERENCE_LANGS`, keyed on
+  references.REFERENCE_LANGUAGES = swift/python/typescript/javascript) drives
+  honest suppression: a component in a weak-extractor language (go/rust/ruby/
+  parser-less) above `_WEAK_LANG_SUPPRESS_MIN_SYMBOLS` symbols is dropped
+  entirely rather than reported as a false blind-spot. Self-repo orphan count
+  collapsed 20 -> 14; the iOS-shaped orphan collapse is asserted on a Swift
+  fixture (three engine components with types, one UI component referencing all
+  three: pre-fix three orphans, post-fix zero, with the `uses` edges proven).
+  Finding kind renamed at the viewer surfaces too (FindingsSurface badge,
+  tooltip, directive prefix, store label) with the old "orphan" entries kept for
+  back-compat.
+- **D8 (test-helper clone noise) RESOLVED, de-weight not hide.** A clone cluster
+  whose EVERY fragment lives in test code (analyzer/derive/testing.is_test_path:
+  fixture/test directory tokens OR per-language test filename conventions) is
+  marked `test_only: true` and its rank_score multiplied by 0.15
+  (`_TEST_ONLY_CLONE_WEIGHT`); a mixed cluster with any product fragment keeps
+  full weight. The findings surface already ranks by rank_score, so no viewer
+  change was needed (verified). Fixture proof: a test-only clone pair ranks
+  strictly below a mixed product/test clone.
+- **PR #53 nit (a) comment-phantom string opener RESOLVED.** In
+  analyzer/extract/frameworks (compute_string_spans), an unquoted `#` opens a
+  line comment that runs to end-of-line, so a triple-quote opener that appears
+  after a `#` (a documentation example in a comment) no longer opens a
+  never-closed phantom string that would swallow the rest of the file and
+  over-suppress real driver/job matches. Language boundary documented: this
+  models `#`-style line comments (Python/Ruby/shell/YAML) and deliberately does
+  NOT model `//` comments; the guard fails toward "not in a string" (the safe
+  direction), and `#` is the class the self-detection defect produced. Fixture:
+  a real `@shared_task` after a `#`-comment triple-quote is still detected.
+- **PR #53 nit (b) quadratic rescan RESOLVED.** The string guard precomputes the
+  ordered string-span list ONCE per file (compute_string_spans, a single scan)
+  and each match position is a binary search (StringMask / pos_in_spans),
+  replacing the old O(matches x file-length) rescan-from-offset-0 per match. The
+  signal detectors (signals.py driver helpers, frameworks.extract_cli/
+  extract_jobs) build one StringMask per file and query it. Measured on
+  analyzer/constants.py (24,668 chars, 2,617 match positions): per-match rescan
+  2854.6 ms -> shared mask + bisect 1.5 ms (~1900x). Semantics are byte-identical
+  to the old in_string_literal (opening-quote offset excluded), asserted over
+  every offset on a match-heavy file; the single-shot in_string_literal wrapper
+  is retained for callers that test one position.

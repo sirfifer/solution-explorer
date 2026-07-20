@@ -206,15 +206,25 @@ def test_min_fragment_threshold_is_enforced(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_orphan_component_surfaces_as_finding(tmp_path):
+    # Reframed from "orphan" to "unreferenced" (D4): honest copy plus symbol and
+    # churn counter-evidence. orphanage is Python (a mature reference extractor)
+    # so it still surfaces; the kind and counter-evidence are the new contract.
     _build_repo(tmp_path)
     _, arch = _derive(tmp_path)
-    orphans = _findings_by_kind(arch, "orphan")
+    orphans = _findings_by_kind(arch, "unreferenced")
     ids = {f["members"][0]["id"] for f in orphans}
-    assert "orphanage" in ids, f"orphanage should be an orphan; got {sorted(ids)}"
+    assert "orphanage" in ids, f"orphanage should be unreferenced; got {sorted(ids)}"
     orphan = next(f for f in orphans if f["members"][0]["id"] == "orphanage")
+    assert orphan["kind"] == "unreferenced"
+    assert orphan["id"] == "finding:unreferenced:orphanage"
+    assert "detected" in orphan["summary"]
     assert orphan["confidence"] == "inferred"
     assert orphan["verification_status"] == "unverified"
     assert orphan["evidence"][0]["path"] is not None or orphan["evidence"][0]["files"]
+    # Counter-evidence hints are present and honest.
+    assert orphan["detail"]["symbols"] >= 1
+    assert "churn_commits" in orphan["detail"]
+    assert orphan["detail"]["reference_extractor"] == "mature"
 
 
 # ---------------------------------------------------------------------------

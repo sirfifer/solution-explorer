@@ -41,6 +41,7 @@ function KindBadge({ kind, darkMode }: { kind: string; darkMode: boolean }) {
   const map: Record<string, string> = {
     duplication: darkMode ? "bg-violet-500/15 text-violet-300" : "bg-violet-100 text-violet-700",
     orphan: darkMode ? "bg-sky-500/15 text-sky-300" : "bg-sky-100 text-sky-700",
+    unreferenced: darkMode ? "bg-sky-500/15 text-sky-300" : "bg-sky-100 text-sky-700",
     inconsistency: darkMode ? "bg-rose-500/15 text-rose-300" : "bg-rose-100 text-rose-700",
   };
   const cls = map[kind] ?? (darkMode ? "bg-zinc-800 text-zinc-300" : "bg-zinc-100 text-zinc-700");

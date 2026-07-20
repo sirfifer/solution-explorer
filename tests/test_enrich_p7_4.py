@@ -271,7 +271,7 @@ def test_finding_verification_flips_status_and_survives_reprojection(tmp_path):
     # Verify one finding, refute another, leave the rest uncertain.
     mock = _finding_verify_mock({
         "inconsistency": ("refuted", "the two loggers are intentional"),
-        "orphan:svc_a": ("verified", "svc_a genuinely has no inbound edges"),
+        "unreferenced:svc_a": ("verified", "svc_a genuinely has no inbound edges"),
     })
     report = verify_findings(cfg, invoker=mock, clock=FIXED_CLOCK)
     assert report.ok
@@ -284,7 +284,7 @@ def test_finding_verification_flips_status_and_survives_reprojection(tmp_path):
     _, arch = derive_all(store, "concerns", root_path=CONCERNS)
     apply_verdict_overlay(arch, store)
     by_id = {f["id"]: f for f in arch["findings"]}
-    verified = by_id["finding:orphan:svc_a"]
+    verified = by_id["finding:unreferenced:svc_a"]
     assert verified["verification_status"] == "verified"
     inconsistency = next(f for f in arch["findings"] if f["kind"] == "inconsistency")
     assert inconsistency["verification_status"] == "refuted"

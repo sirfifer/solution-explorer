@@ -113,8 +113,10 @@ def test_overview_counts_and_narrative(ctx):
     d = r.data
     assert d["components"]["total"] == 8
     assert d["capabilities"]["by_kind"].get("api") == 1
-    assert d["findings"]["total"] == 5
-    assert d["findings"]["unverified"] == 5
+    # D4: orphan findings reframed to `unreferenced`; the two weak-language
+    # (rust/ruby) components are honestly suppressed, so three remain.
+    assert d["findings"]["total"] == 3
+    assert d["findings"]["unverified"] == 3
     assert d["coverage"]["parsed"] == 13
     # One fresh + one stale + one architecture row were stamped.
     assert d["enrichment"]["stale"] >= 1
@@ -208,7 +210,7 @@ def test_rules_surfaces_plain_language_name(ctx):
 
 def test_findings_always_show_verification_status(ctx):
     r = call_tool(ctx, "se_findings", {})
-    assert r.data["count"] == 5
+    assert r.data["count"] == 3  # D4: reframed + weak-language suppression
     for f in r.data["findings"]:
         assert "verification_status" in f
         assert f["unverified"] is True
@@ -234,8 +236,8 @@ def test_findings_truncation_notice(ctx):
     r = call_tool(ctx, "se_findings", {"limit": 2})
     assert len(r.data["findings"]) == 2
     assert r.data["truncation_note"] is not None
-    assert "3 more" in r.data["truncation_note"]
-    assert "3 more" in r.text
+    assert "1 more" in r.data["truncation_note"]
+    assert "1 more" in r.text
 
 
 def test_search_truncation_notice(ctx):
