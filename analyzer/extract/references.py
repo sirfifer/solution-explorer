@@ -30,12 +30,13 @@ the per-file candidate scan is capped (:data:`MAX_REFERENCE_NAMES`) so a
 pathological generated file cannot blow up signal volume.
 
 Extractor maturity is honest and per-language (:data:`REFERENCE_LANGUAGES`).
-Swift, Python, TypeScript, JavaScript, C#, and Java have reference extractors
-here; Go, Rust, and Ruby do not yet, and the D4 orphan reframing consults this
-set so a substantial component in a weakly-scanned language is heavily de-ranked
-with an
-explicit blind-spot caveat instead of being asserted as unreferenced at full
-strength.
+Swift, Python, TypeScript, JavaScript, C#, Java, and C++ have reference
+extractors here; Go, Rust, and Ruby do not yet, and the D4 orphan reframing
+consults this set so a substantial component in a weakly-scanned language is
+heavily de-ranked with an explicit blind-spot caveat instead of being asserted
+as unreferenced at full strength. C++ is deliberately conservative (see its
+rules below): namespaces make bare-name resolution noisy, so it anchors only on
+unambiguous type-reference shapes and skips bare variable declarations.
 
 Import semantics differ by language and gate how strongly a single-definer name
 resolves (see :data:`PER_NAME_IMPORT_LANGUAGES`). Java is a per-name-import
@@ -68,7 +69,7 @@ __all__ = [
 # Languages with a symbol-reference extractor below. The D4 orphan reframing
 # treats every OTHER language as a "weak" reference extractor (honest maturity).
 REFERENCE_LANGUAGES = frozenset(
-    {"swift", "python", "typescript", "javascript", "csharp", "java"}
+    {"swift", "python", "typescript", "javascript", "csharp", "java", "cpp"}
 )
 
 # Cap on distinct referenced names emitted per file. A generated or minified
@@ -195,6 +196,27 @@ _REFERENCE_RULES: dict[str, list[re.Pattern]] = {
         # names uppercase and identifiers lowercase, so this stays precise; a
         # stdlib name (String, List) simply resolves to nothing at derive time.
         re.compile(r"\b([A-Z]\w+)(?:<[^;={}()]*>)?\s+[a-z_$]\w*"),
+    ],
+    # C++ references are deliberately conservative because namespaces make name
+    # resolution noisy (a bare `Widget obj;` variable declaration is the most
+    # common type usage but its regex would be far too broad, matching any
+    # `Foo bar` pair). We anchor only on shapes that are unambiguously a type
+    # reference: construction, `new`, scope access on the OWNING type, public/
+    # base inheritance, and template arguments. The scope-access rule captures
+    # the identifier BEFORE `::` (the type whose static member or nested name is
+    # used, e.g. `Logger` in `Logger::instance()` or `Widget` in
+    # `core::Widget::render`), never the trailing member after `::`, which lives
+    # in the qualifier's namespace and resolves elsewhere. A namespace qualifier
+    # is lowercase in idiomatic code and simply fails the uppercase anchor, and a
+    # standard-library name (`std::string`, `std::vector`) drops out for the same
+    # reason. HONEST BOUNDARY: a cross-component use expressed only as a bare
+    # variable declaration draws no uses edge (recorded in the depth-badge notes).
+    "cpp": [
+        re.compile(_CTOR),                                  # Widget(...) construction
+        re.compile(r"\bnew\s+([A-Z]\w+)"),                  # new Widget
+        re.compile(r"\b([A-Z]\w+)::"),                      # Logger::instance scope access
+        re.compile(r":\s*(?:public|protected|private|virtual)\s+([A-Z]\w+)"),  # base class
+        re.compile(r"<\s*([A-Z]\w+)"),                      # template argument
     ],
 }
 
