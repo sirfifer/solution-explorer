@@ -287,3 +287,42 @@ def test_legacy_split_without_search_does_not_lie(tmp_path):
         for step in order["steps"]:
             assert "search/" not in step["fetch"], (order["question"], step)
     assert "search/manifest.json" not in llms
+
+def test_findings_walk_orders_name_only_real_fields():
+    # Battery finding: the walk orders documented category/title/severity, but
+    # findings carry kind, summary, detail, rank_score, confidence, and
+    # verification_status. An agent filtering on the documented fields found
+    # nothing. The copy must name only real fields.
+    import json as _json
+
+    from analyzer.project.frontdoor import build_front_door
+
+    ai_json, llms = build_front_door(
+        {"name": "d", "generated_at": "2025-01-01T00:00:00Z",
+         "analyzer_version": "1.2.0"},
+        mode="split",
+        search_manifest={"shard_size": 500, "total": 1, "by_kind": {},
+                         "fields": [], "shards": ["search-0000.json"]},
+    )
+    blob = _json.dumps(ai_json) + llms
+    assert "category/title/severity" not in blob
+    assert "severity" not in blob
+    assert "rank_score" in blob and "verification_status" in blob
+
+
+def test_dataset_carries_the_enriched_flag():
+    from analyzer.project.frontdoor import build_front_door
+
+    plain, _ = build_front_door(
+        {"name": "d", "generated_at": "2025-01-01T00:00:00Z",
+         "analyzer_version": "1.2.0", "components": [{"name": "x"}]},
+        mode="monolith", monolith_filename="architecture.json",
+    )
+    assert plain["dataset"]["enriched"] is False
+    rich, _ = build_front_door(
+        {"name": "d", "generated_at": "2025-01-01T00:00:00Z",
+         "analyzer_version": "1.2.0",
+         "components": [{"name": "x", "ai_enhance": {"help_text": "h"}}]},
+        mode="monolith", monolith_filename="architecture.json",
+    )
+    assert rich["dataset"]["enriched"] is True
