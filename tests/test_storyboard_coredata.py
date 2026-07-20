@@ -370,3 +370,40 @@ def test_coredata_entity_line_anchors_on_the_entity_element():
         "the Session entity must anchor on its own <entity> element, "
         f"expected offset {marker}, got {by_name['Session']}"
     )
+
+
+def test_unnamed_scene_is_named_after_its_storyboard_file(tmp_path):
+    # A scene with no customClass and no storyboardIdentifier must read as the
+    # storyboard's own name, not a raw Interface Builder id (dogfood finding:
+    # the iOS demo's launch screen surfaced as "01J-lp-oVM").
+    (tmp_path / "package.json").write_text("{}")
+    (tmp_path / "LaunchScreen.storyboard").write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0">
+  <scenes>
+    <scene sceneID="s1">
+      <objects>
+        <viewController id="01J-lp-oVM" sceneMemberID="viewController"/>
+      </objects>
+    </scene>
+  </scenes>
+</document>
+"""
+    )
+    from analyzer.derive import derive_all
+    from analyzer.extract import extract_repo
+    from analyzer.store import FactStore
+
+    store = FactStore(":memory:")
+    extract_repo(tmp_path, store)
+    _d, arch = derive_all(store, "launch-demo")
+
+    def walk(comps):
+        for c in comps:
+            yield c
+            yield from walk(c.get("children") or [])
+
+    screens = [c for c in walk(arch["components"]) if c.get("type") == "screen"]
+    names = [c["name"] for c in screens]
+    assert "LaunchScreen" in names, names
+    assert "01J-lp-oVM" not in names, names
