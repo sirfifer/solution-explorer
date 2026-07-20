@@ -23,6 +23,7 @@ __version__ = "0.1.0"
 from .activity import build_activity
 from .changelog import apply_changelog
 from .coverage import build_coverage
+from .frontdoor import FRONT_DOOR_VERSION, build_front_door, write_front_door
 from .naming import safe_component_id
 from .pipeline import (
     ProjectionResult,
@@ -46,4 +47,7 @@ __all__ = [
     "build_search_entries",
     "shard_entries",
     "DEFAULT_SHARD_SIZE",
+    "build_front_door",
+    "write_front_door",
+    "FRONT_DOOR_VERSION",
 ]
