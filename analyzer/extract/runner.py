@@ -99,10 +99,35 @@ _TRANSIENT_ERROR_PREFIXES = (
     "ConnectionResetError",
 )
 
-# v2-only schema formats that are not in the shared LANGUAGE_MAP (which v1
-# scanner.py reads). `.sql` and `.json` are already enumerated; `.prisma` is not,
-# so it is recognized here on the v2 path only, leaving v1 output byte-stable.
-_SCHEMA_ONLY_EXTENSIONS = {".prisma": "prisma"}
+# v2-only schema/UI formats that are not in the shared LANGUAGE_MAP (which v1
+# scanner.py reads). `.sql` and `.json` are already enumerated; these are not,
+# so they are recognized here on the v2 path only, leaving v1 output byte-stable.
+# `.storyboard`/`.xib` parse to view-controller symbols and segue flow edges;
+# Core Data models parse to data entities (both P4-9).
+_SCHEMA_ONLY_EXTENSIONS = {
+    ".prisma": "prisma",
+    ".storyboard": "storyboard",
+    ".xib": "storyboard",
+}
+
+
+def _schema_only_language(rel: str, fname: str, ext: str) -> Optional[str]:
+    """v2-only language for a schema/UI file, or None.
+
+    Extension-keyed formats come from ``_SCHEMA_ONLY_EXTENSIONS``. Core Data
+    models are the extension-less ``contents`` XML inside a ``*.xcdatamodel``
+    version directory, so they are matched by path component instead. Recognized
+    on the v2 path only (v1 scanner.py never sees them), keeping parity snapshots
+    byte-identical.
+    """
+    lang = _SCHEMA_ONLY_EXTENSIONS.get(ext)
+    if lang:
+        return lang
+    if fname == "contents":
+        parts = rel.replace("\\", "/").split("/")
+        if any(p.endswith(".xcdatamodel") for p in parts):
+            return "coredata"
+    return None
 
 
 def _hash_bytes(raw: bytes) -> str:
@@ -297,7 +322,7 @@ def _enumerate(
                 ledger.append((rel, "binary", "null_byte"))
                 continue
 
-            language = LANGUAGE_MAP.get(ext) or _SCHEMA_ONLY_EXTENSIONS.get(ext)
+            language = LANGUAGE_MAP.get(ext) or _schema_only_language(rel, fname, ext)
             if not language:
                 ledger.append((rel, "excluded:unsupported_extension", ext or fname))
                 continue

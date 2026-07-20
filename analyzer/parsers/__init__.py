@@ -5,6 +5,7 @@ from .go import GoParser
 from .python_lang import PythonParser
 from .ruby import RubyParser
 from .rust import RustParser
+from .storyboard import StoryboardParser
 from .swift import SwiftParser
 from .typescript import TypeScriptParser
 
@@ -17,6 +18,9 @@ PARSERS = {
     "javascript": TypeScriptParser(),
     "go": GoParser(),
     "ruby": RubyParser(),
+    # Storyboards/xibs are XML, always regex-tier (no tree-sitter). Recognized
+    # v2-only via runner._SCHEMA_ONLY_EXTENSIONS, so v1 output is untouched.
+    "storyboard": StoryboardParser(),
 }
 
 # Upgrade to tree-sitter parsers when available.
@@ -63,5 +67,5 @@ except ImportError:
 __all__ = [
     "BaseParser", "PARSERS",
     "SwiftParser", "PythonParser", "RustParser",
-    "TypeScriptParser", "GoParser", "RubyParser",
+    "TypeScriptParser", "GoParser", "RubyParser", "StoryboardParser",
 ]

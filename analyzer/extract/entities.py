@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import re
+import xml.etree.ElementTree as ET
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -502,6 +503,55 @@ def _json_schema_entities(content: str, path: str) -> list[tuple[dict, int]]:
              "fields": fields}, 0)]
 
 
+def _coredata_entities(content: str) -> list[tuple[dict, int]]:
+    """Entities from a Core Data model's ``contents`` XML (P4-9, Data lens).
+
+    A ``.xcdatamodeld`` bundle stores its model as an extension-less ``contents``
+    XML file. Each ``<entity>`` becomes a data entity with framework
+    ``coredata``. Attributes map to ``{name, type}`` fields; relationships map to
+    fields too, typed by their destination entity (bracketed ``[Dest]`` for a
+    to-many relationship), so the Data lens shows the object graph in the same
+    field list it uses for every other source, with no schema change.
+
+    ElementTree does not resolve external entities, so parsing untrusted model
+    files is XXE-safe. A malformed document raises ``ElementTree.ParseError``,
+    which the worker turns into a ``failed`` disposition (never a crash).
+    """
+    root = ET.fromstring(content)
+    out: list[tuple[dict, int]] = []
+    for entity in root.iter():
+        if entity.tag != "entity":
+            continue
+        ename = entity.get("name")
+        if not ename:
+            continue
+        fields: list[dict] = []
+        seen: set[str] = set()
+        for child in entity:
+            fname = child.get("name")
+            if not fname or fname in seen:
+                continue
+            if child.tag == "attribute":
+                seen.add(fname)
+                fields.append({"name": fname, "type": child.get("attributeType")})
+            elif child.tag == "relationship":
+                seen.add(fname)
+                dest = child.get("destinationEntity")
+                to_many = child.get("toMany") == "YES"
+                ftype = f"[{dest}]" if (dest and to_many) else dest
+                fields.append({"name": fname, "type": ftype})
+        # Anchor on the entity ELEMENT, not any name="..." occurrence: attributes,
+        # relationships, and layout elements all carry name= too, so a bare name
+        # search can report an entity at an unrelated line (review finding).
+        start = content.find(f'<entity name="{ename}"')
+        out.append((
+            {"name": ename, "kind": "model", "framework": "coredata",
+             "fields": fields},
+            start if start >= 0 else 0,
+        ))
+    return _dedupe(out)
+
+
 def _name_from_path(path: str) -> str:
     base = path.replace("\\", "/").rsplit("/", 1)[-1]
     for suffix in (".schema.json", ".json"):
@@ -541,4 +591,6 @@ def extract_schema_entities(
         return _sql_entities(content)
     if language == "json":
         return _json_schema_entities(content, path)
+    if language == "coredata":
+        return _coredata_entities(content)
     return []

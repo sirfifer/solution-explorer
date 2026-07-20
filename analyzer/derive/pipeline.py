@@ -23,6 +23,7 @@ from . import flow as flow_pass
 from . import relationships as rel_pass
 from . import roles as roles_pass
 from . import rules as rules_pass
+from . import storyboard as storyboard_pass
 from . import testing as testing_pass
 from .context import Deriver
 from .storeview import StoreView
@@ -48,6 +49,7 @@ def derive_all(
     roles_pass.assign_server_ports(d)
     flow_pass.detect_ui_flows(d)
     flow_pass.detect_ui_actions(d)
+    storyboard_pass.derive_storyboard_flow(d)
     rel_pass.derive_relationships(d)
     _compute_metrics(d)
     testing_pass.detect_testing(d)
