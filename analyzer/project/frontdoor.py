@@ -56,7 +56,7 @@ _MANIFEST_SECTIONS: tuple[tuple[str, str], ...] = (
     ("stats", "Roll-up counts: total_components, total_files, total_lines, total_symbols, total_relationships, languages."),
     ("coverage", "Manifest-embedded coverage summary (counts per disposition + total + parsed). Full ledger with per-file rows and non-source inventory is in coverage.json."),
     ("activity", "Manifest-embedded activity summary (hotspots/knowledge headline). Full activity lens is in activity.json."),
-    ("findings", "Ranked flat list of findings (rule violations, duplication, intent conformance, AI-verified issues). Filter by `category`/`title`/`severity`."),
+    ("findings", "Ranked flat list of findings (rule violations, duplication, intent conformance, AI-verified issues). Each finding carries kind, summary, detail, rank_score, confidence, and verification_status; filter on those."),
     ("concerns", "Flat list of concerns (named cross-cutting groupings of findings)."),
     ("capabilities", "Flat index of detected capabilities (web/CLI frameworks and features)."),
     ("data_entities", "Flat index of data entities (models, schemas, tables)."),
@@ -103,6 +103,12 @@ def _dataset_identity(arch: dict) -> dict:
     provenance = _provenance(arch)
     if provenance is not None:
         identity["provenance"] = provenance
+    # An agent needs to know up front whether prose exists: an unenriched
+    # dataset has empty descriptions and no help text, and "what does each
+    # component do" degrades to structure-only answers (battery finding).
+    identity["enriched"] = bool(arch.get("ai_enhance")) or any(
+        c.get("ai_enhance") for c in arch.get("components", []) or []
+    )
     return identity
 
 
@@ -258,7 +264,7 @@ def _walk_orders(mode: str, monolith_filename: str = "architecture.json") -> lis
             {
                 "question": "review findings first",
                 "steps": [
-                    {"fetch": monolith_filename, "then": "Read .findings (ranked) and .concerns. Filter by category/title/severity."},
+                    {"fetch": monolith_filename, "then": "Read .findings (ranked) and .concerns. Filter on kind, rank_score, and verification_status (the real finding fields)."},
                 ],
             },
             {
@@ -284,7 +290,7 @@ def _walk_orders(mode: str, monolith_filename: str = "architecture.json") -> lis
         {
             "question": "review findings first",
             "steps": [
-                {"fetch": "manifest.json", "then": "Read .findings (already ranked) and .concerns. Filter by category/title/severity. This is one fetch; do not pull shards."},
+                {"fetch": "manifest.json", "then": "Read .findings (already ranked) and .concerns. Filter on kind, rank_score, and verification_status (the real finding fields). This is one fetch; do not pull shards."},
             ],
         },
         {
