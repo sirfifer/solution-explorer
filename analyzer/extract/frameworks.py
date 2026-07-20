@@ -64,6 +64,20 @@ def is_route_path(path: Optional[str], *, allow_bare: bool = False) -> bool:
 # scanner (PR #55 review finding 3).
 HASH_COMMENT_LANGUAGES = frozenset({"python", "ruby", "shell", "bash", "yaml"})
 
+# Languages that get C-style comment masking ('//' line and '/* */' block) in
+# compute_string_spans. SCOPED DELIBERATELY to the three languages whose
+# reference extractors (analyzer/extract/references.py _REFERENCE_RULES: csharp,
+# java, cpp) are NEW in this work: their edge baselines are not yet frozen in a
+# parity snapshot or the public demo, so masking comment prose is a pure
+# correctness gain for them (it kills the comment-content reference-fabrication
+# class). Swift, TypeScript, JavaScript, Go, and Rust ALSO use C-style comments,
+# but their reference extractors predate this change and their edge baselines
+# ARE captured by shipped parity snapshots and the public iOS demo; masking
+# their comments would alter established behavior. Adding any of those languages
+# to this set is a deliberate, separate change that must re-verify those
+# baselines first, so it is intentionally NOT done here.
+SLASH_COMMENT_LANGUAGES = frozenset({"csharp", "java", "cpp"})
+
 
 def compute_string_spans(content: str, language: str | None = None) -> list[tuple[int, int]]:
     """Ordered, non-overlapping ``[start, end)`` masked spans (D3).
@@ -96,12 +110,25 @@ def compute_string_spans(content: str, language: str | None = None) -> list[tupl
     (b) commented-out code (``# x = Config()``) is masked and never read as real
     usage. For every other language (and ``language=None``) ``#`` is an ordinary
     character, byte-identical to the pre-guard scanner, so Swift ``#available``
-    / raw strings and TS/JS ``#field`` syntax stay code. ``//`` line comments
-    are deliberately NOT modeled: the guard fails toward "not in a string" (a
-    match is treated as real usage), which is the safe direction. See the
-    recorded rows in TASKS.md.
+    / raw strings and TS/JS ``#field`` syntax stay code.
+
+    C-style comments: when ``language`` is one of
+    :data:`SLASH_COMMENT_LANGUAGES` (csharp, java, cpp ONLY), an unquoted ``//``
+    opens a line comment to end-of-line and an unquoted ``/*`` opens a block
+    comment to the next ``*/`` (C block comments do not nest), and the whole
+    comment is masked. This kills the comment-content reference-fabrication class
+    (a type name mentioned only in comment prose was read as a real ``uses``
+    edge). The scoping to those three languages is deliberate: their reference
+    extractors are new and unfrozen, whereas swift/typescript/javascript/go/rust
+    also use ``//`` and ``/* */`` but have frozen baselines, so masking their
+    comments is a separate change (see :data:`SLASH_COMMENT_LANGUAGES`). A
+    ``//`` or ``/*`` that begins inside a string literal is not a comment, and a
+    ``"`` inside a comment is not a string: the single top-of-loop scan is only
+    ever reached outside a string, since string literals are consumed as whole
+    spans, so this holds by construction. See the recorded rows in TASKS.md.
     """
     hash_comments = language in HASH_COMMENT_LANGUAGES
+    slash_comments = language in SLASH_COMMENT_LANGUAGES
     spans: list[tuple[int, int]] = []
     length = len(content)
     i = 0
@@ -116,6 +143,24 @@ def compute_string_spans(content: str, language: str | None = None) -> list[tupl
             spans.append((i, end))
             i = end + 1
             continue
+        # C-style comments in SLASH_COMMENT_LANGUAGES: '//' to end-of-line, '/*'
+        # to the next '*/'. The whole comment is masked so a type name in comment
+        # prose is not read as a reference. Reached only outside a string (string
+        # literals are consumed below), so this never fires inside a string.
+        if slash_comments and ch == "/" and i + 1 < length:
+            nxt = content[i + 1]
+            if nxt == "/":
+                nl = content.find("\n", i)
+                end = length if nl == -1 else nl
+                spans.append((i, end))
+                i = end + 1
+                continue
+            if nxt == "*":
+                close = content.find("*/", i + 2)
+                end = length if close == -1 else close + 2
+                spans.append((i, end))
+                i = end
+                continue
         # Triple-quoted strings first: they can span many lines (docstrings).
         if content.startswith('"""', i) or content.startswith("'''", i):
             q = content[i:i + 3]
@@ -155,7 +200,8 @@ class StringMask:
     positions in O(log n) each via binary search, instead of the old O(n)
     rescan-from-zero per position that made whole-file signal extraction
     quadratic on match-heavy files. Masked spans are string literals plus, for
-    :data:`HASH_COMMENT_LANGUAGES`, ``#`` line comments.
+    :data:`HASH_COMMENT_LANGUAGES`, ``#`` line comments, and for
+    :data:`SLASH_COMMENT_LANGUAGES`, ``//`` line and ``/* */`` block comments.
     """
 
     __slots__ = ("_starts", "_ends")
@@ -438,7 +484,131 @@ def _swift_endpoints(content: str) -> list[tuple[dict, int]]:
     return _dedupe(out)
 
 
+_CS_MINIMAL_API = re.compile(
+    r"\.Map(Get|Post|Put|Delete|Patch)\s*\(\s*\"(/[^\"]*)\""
+)
+_CS_HTTP_ATTR = re.compile(
+    r"\[\s*Http(Get|Post|Put|Delete|Patch)\s*\(\s*\"([^\"]*)\"\s*\)\s*\]"
+)
+
+
+def _csharp_endpoints(content: str) -> list[tuple[dict, int]]:
+    # Gate on an ASP.NET Core marker so no unrelated `.MapGet(` matches.
+    if not _hint(content, "Microsoft.AspNetCore", "ControllerBase",
+                 "[ApiController]", "WebApplication.Create", "IEndpointRouteBuilder"):
+        return []
+    out: list[tuple[dict, int]] = []
+    for m in _CS_MINIMAL_API.finditer(content):
+        path = m.group(2)
+        if not is_route_path(path):
+            continue
+        out.append((
+            {"method": m.group(1).upper(), "path": path, "framework": "aspnetcore"},
+            m.start(),
+        ))
+    for m in _CS_HTTP_ATTR.finditer(content):
+        path = m.group(2)
+        # Attribute routes are relative to the controller's [Route(...)]; keep
+        # a leading slash so is_route_path accepts a bare template segment.
+        norm = path if path.startswith("/") else "/" + path
+        if not is_route_path(norm):
+            continue
+        out.append((
+            {"method": m.group(1).upper(), "path": norm, "framework": "aspnetcore"},
+            m.start(),
+        ))
+    return _dedupe(out)
+
+
+# Java: Spring MVC mapping annotations and JAX-RS resource annotations, each
+# gated on a framework marker so no unrelated annotation becomes a route.
+_JAVA_SPRING_MARKERS = (
+    "org.springframework", "@RestController", "@Controller",
+    "@RequestMapping", "@GetMapping", "@PostMapping", "@PutMapping",
+    "@DeleteMapping", "@PatchMapping",
+)
+_JAVA_JAXRS_MARKERS = ("javax.ws.rs", "jakarta.ws.rs", "@Path")
+
+_JAVA_SPRING_MAPPING = re.compile(
+    r"@(Get|Post|Put|Delete|Patch|Request)Mapping\s*(?:\(\s*([^)]*)\))?"
+)
+_JAVA_MAPPING_VALUE = re.compile(r"(?:value|path)\s*=\s*\{?\s*\"([^\"]+)\"")
+_JAVA_MAPPING_BARE = re.compile(r"\{?\s*\"([^\"]+)\"")
+_JAVA_MAPPING_METHOD = re.compile(r"method\s*=\s*\{?\s*(?:RequestMethod\.)?(\w+)")
+_JAVA_SPRING_VERBS = {
+    "Get": "GET", "Post": "POST", "Put": "PUT",
+    "Delete": "DELETE", "Patch": "PATCH",
+}
+
+_JAVA_JAXRS_PATH = re.compile(r"@Path\s*\(\s*\"([^\"]+)\"")
+_JAVA_JAXRS_VERB = re.compile(r"@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b")
+
+
+def _java_mapping_method(verb: str, args: str) -> str:
+    if verb in _JAVA_SPRING_VERBS:
+        return _JAVA_SPRING_VERBS[verb]
+    m = _JAVA_MAPPING_METHOD.search(args)
+    return m.group(1).upper() if m else "ANY"
+
+
+def _java_mapping_path(args: str) -> Optional[str]:
+    m = _JAVA_MAPPING_VALUE.search(args)
+    if m:
+        return m.group(1)
+    m = _JAVA_MAPPING_BARE.search(args)
+    return m.group(1) if m else None
+
+
+def _java_endpoints(content: str) -> list[tuple[dict, int]]:
+    is_spring = _hint(content, *_JAVA_SPRING_MARKERS)
+    is_jaxrs = _hint(content, *_JAVA_JAXRS_MARKERS)
+    if not (is_spring or is_jaxrs):
+        return []
+    out: list[tuple[dict, int]] = []
+
+    if is_spring:
+        for m in _JAVA_SPRING_MAPPING.finditer(content):
+            args = m.group(2) or ""
+            path = _java_mapping_path(args)
+            if not path or not is_route_path(path, allow_bare=True):
+                continue
+            norm = path if path.startswith("/") else "/" + path
+            out.append((
+                {"method": _java_mapping_method(m.group(1), args),
+                 "path": norm, "framework": "spring"},
+                m.start(),
+            ))
+
+    if is_jaxrs:
+        # Pair each verb annotation with the nearest preceding @Path (its
+        # resource path); when a verb has no @Path before it, fall back to the
+        # nearest following one, else the root.
+        paths = [(m.start(), m.group(1)) for m in _JAVA_JAXRS_PATH.finditer(content)]
+        for vm in _JAVA_JAXRS_VERB.finditer(content):
+            path = _nearest_path(paths, vm.start())
+            if not is_route_path(path, allow_bare=True):
+                continue
+            norm = path if path.startswith("/") else "/" + path
+            out.append((
+                {"method": vm.group(1).upper(), "path": norm, "framework": "jaxrs"},
+                vm.start(),
+            ))
+    return _dedupe(out)
+
+
+def _nearest_path(paths: list[tuple[int, str]], pos: int) -> str:
+    """Return the @Path value nearest to ``pos`` (preferring one before it)."""
+    if not paths:
+        return "/"
+    before = [(p, v) for p, v in paths if p <= pos]
+    if before:
+        return before[-1][1]
+    return paths[0][1]
+
+
 _ENDPOINT_EXTRACTORS = {
+    "csharp": _csharp_endpoints,
+    "java": _java_endpoints,
     "python": _python_endpoints,
     "javascript": _js_endpoints,
     "typescript": _js_endpoints,

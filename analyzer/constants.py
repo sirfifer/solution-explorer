@@ -42,9 +42,29 @@ LANGUAGE_MAP = {
     ".kt": "kotlin",
     ".rb": "ruby",
     ".cpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+    ".c++": "cpp",
     ".c": "c",
-    ".h": "c",
+    # .h policy (deliberate, documented): a header ending in .h is mapped to C++,
+    # not C. This tool ships a full C++ semantic parser but no dedicated C parser,
+    # so mapping .h to "c" would leave every declaration-carrying header as
+    # metrics-only (zero symbols), which is the wrong outcome for the very common
+    # C++ pattern of declaring types in .h. The tree-sitter C++ grammar is a
+    # superset of C, so a genuine C header still parses correctly with no
+    # fabricated structure. The mapping is by extension so it stays deterministic
+    # (invariant I4) rather than sniffing content per file. Honest limitation: a
+    # pure-C project's .h files are labeled cpp and parsed by the C++ grammar
+    # (cosmetic, since the grammar handles C), while its .c sources remain
+    # metrics-only "c" (unchanged, outside the C++ task's scope).
+    ".h": "cpp",
     ".hpp": "cpp",
+    ".hh": "cpp",
+    ".hxx": "cpp",
+    ".h++": "cpp",
+    ".ipp": "cpp",
+    ".tpp": "cpp",
+    ".inl": "cpp",
     ".cs": "csharp",
     ".dart": "dart",
     ".vue": "vue",
@@ -267,6 +287,14 @@ FRAMEWORK_PRIORITY = {
     "Grape": 1,         # API-only
     "Hanami": 2,        # Full framework
     "Rails": 3,         # Full framework
+    # C# / .NET
+    ".NET": 1,          # Base platform
+    "EF Core": 2,       # Entity Framework Core (data access)
+    "ASP.NET Core": 3,  # Web framework
+    # Java
+    "Java EE": 1,       # javax.* enterprise APIs
+    "Jakarta EE": 1,    # jakarta.* enterprise APIs
+    "Spring": 2,        # Full application framework
 }
 
 # UI Flow Detection constants
@@ -348,6 +376,18 @@ TEST_FUNCTION_PATTERNS = {
     ],
     "kotlin": [
         r"@Test\b",
+    ],
+    "csharp": [
+        r"\[Fact\b",          # xUnit
+        r"\[Theory\b",        # xUnit
+        r"\[Test\b",          # NUnit
+        r"\[TestMethod\b",    # MSTest
+    ],
+    "cpp": [
+        # GoogleTest / GoogleMock test macros.
+        r"^\s*TEST(?:_F|_P)?\s*\(",
+        # Catch2 test cases.
+        r"^\s*TEST_CASE\s*\(",
     ],
 }
 

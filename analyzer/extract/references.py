@@ -21,20 +21,44 @@ to the resolved component (PR #55 review finding 1; see
 :data:`PER_NAME_IMPORT_LANGUAGES` and :data:`SWIFT_COMMON_TYPE_NAMES`).
 
 Only reference candidates whose START is real code are kept: a name appearing
-inside a string literal or a masked comment is not a usage (the shared
-:class:`~analyzer.extract.frameworks.StringMask` filters them), and the
-trailing member of a qualified access (``requests.Session()``) is excluded
-because it resolves in the qualifier's namespace, not locally. Extraction is
+inside a string literal is not a usage, and neither is one inside a masked
+comment. Comment masking is language-scoped in the shared
+:class:`~analyzer.extract.frameworks.StringMask`: ``#`` line comments are masked
+for :data:`~analyzer.extract.frameworks.HASH_COMMENT_LANGUAGES` (python) and
+``//`` line plus ``/* */`` block comments are masked for
+:data:`~analyzer.extract.frameworks.SLASH_COMMENT_LANGUAGES` (csharp, java, cpp),
+so the C-family bare-declaration and ``Name.member`` / ``Name::`` rules below
+never fabricate a ``uses`` edge from a type name that appears only in comment
+prose. Swift, TypeScript, and JavaScript comments are NOT masked here (their
+baselines are frozen; extending masking to them is a separate change), so a name
+inside a ``//`` comment in those languages can still be seen; their rules are
+narrower and predate this work. The trailing member of a qualified access
+(``requests.Session()``) is excluded because it resolves in the qualifier's
+namespace, not locally. Extraction is
 deterministic (invariant I4): names are emitted in first-occurrence order and
 the per-file candidate scan is capped (:data:`MAX_REFERENCE_NAMES`) so a
 pathological generated file cannot blow up signal volume.
 
 Extractor maturity is honest and per-language (:data:`REFERENCE_LANGUAGES`).
-Swift, Python, TypeScript, and JavaScript have reference extractors here; Go,
-Rust, and Ruby do not yet, and the D4 orphan reframing consults this set so a
-substantial component in a weakly-scanned language is heavily de-ranked with an
-explicit blind-spot caveat instead of being asserted as unreferenced at full
-strength.
+Swift, Python, TypeScript, JavaScript, C#, Java, and C++ have reference
+extractors here; Go, Rust, and Ruby do not yet, and the D4 orphan reframing
+consults this set so a substantial component in a weakly-scanned language is
+heavily de-ranked with an explicit blind-spot caveat instead of being asserted
+as unreferenced at full strength. C++ is deliberately conservative (see its
+rules below): namespaces make bare-name resolution noisy, so it anchors only on
+unambiguous type-reference shapes and skips bare variable declarations.
+
+Import semantics differ by language and gate how strongly a single-definer name
+resolves (see :data:`PER_NAME_IMPORT_LANGUAGES`). Java is a per-name-import
+language: an ``import com.example.service.UserService;`` names one specific type,
+so a reference to ``UserService`` that resolves to exactly one component still
+REQUIRES the file to import that type before an edge is drawn. This is the safe
+choice: a cross-component Java reference always carries an import (only
+same-package classes, which live in the same component, can omit it), so the
+import requirement suppresses coincidental same-name matches without losing the
+cross-component edges this whole pass exists to find. Java differs from C# here,
+whose ``using`` directive imports a whole namespace rather than a single type and
+therefore is NOT per-name evidence.
 """
 
 from __future__ import annotations
@@ -54,7 +78,9 @@ __all__ = [
 
 # Languages with a symbol-reference extractor below. The D4 orphan reframing
 # treats every OTHER language as a "weak" reference extractor (honest maturity).
-REFERENCE_LANGUAGES = frozenset({"swift", "python", "typescript", "javascript"})
+REFERENCE_LANGUAGES = frozenset(
+    {"swift", "python", "typescript", "javascript", "csharp", "java", "cpp"}
+)
 
 # Cap on distinct referenced names emitted per file. A generated or minified
 # file can name thousands of identifiers; beyond this the marginal edge value is
@@ -69,7 +95,7 @@ MAX_REFERENCE_NAMES = 400
 # `session` component just because it is the only definer). Swift is absent by
 # design: its imports are module-level with no per-name form, so it relies on
 # the qualified-access exclusion plus SWIFT_COMMON_TYPE_NAMES below.
-PER_NAME_IMPORT_LANGUAGES = frozenset({"python", "typescript", "javascript"})
+PER_NAME_IMPORT_LANGUAGES = frozenset({"python", "typescript", "javascript", "java"})
 
 # Common Swift platform type names (Foundation/UIKit/SwiftUI/stdlib). Swift has
 # no per-name imports to prove a local resolution, so when a referenced name is
@@ -151,6 +177,56 @@ _REFERENCE_RULES: dict[str, list[re.Pattern]] = {
         re.compile(r"\bnew\s+([A-Z]\w+)"),
         re.compile(r"\bextends\s+([A-Z]\w+)"),
         re.compile(r"<\s*([A-Z]\w+)"),                   # JSX open tag
+    ],
+    # C# names types in PascalCase and, like Swift, imports whole namespaces
+    # (`using X.Y;`) with no per-name form, so it stays out of
+    # PER_NAME_IMPORT_LANGUAGES and a single local definer resolves by name.
+    # The qualified-access exclusion in extract_reference_signals keeps
+    # member access (`x.Foo`) and namespaced calls (`System.Console`) from
+    # counting as local references.
+    "csharp": [
+        re.compile(r"\bnew\s+([A-Z]\w+)"),
+        re.compile(
+            r"\b(?:class|struct|interface|record(?:\s+struct)?)\s+\w+"
+            r"(?:<[^>]*>)?\s*:\s*([A-Z]\w+)"             # base type / interface
+        ),
+        re.compile(r"<\s*([A-Z]\w+)"),                   # generic argument
+        re.compile(_STATIC),
+    ],
+    "java": [
+        re.compile(r"\bnew\s+([A-Z]\w+)"),               # constructor call
+        re.compile(r"\bextends\s+([A-Z]\w+)"),
+        re.compile(r"\bimplements\s+([A-Z]\w+)"),
+        re.compile(r"\bthrows\s+([A-Z]\w+)"),
+        re.compile(r"<\s*([A-Z]\w+)"),                   # generic argument
+        re.compile(_STATIC),                             # static access Name.member
+        # A type used in a field, parameter, local, or return-type declaration:
+        # an uppercase-initial type name, an optional generic section, then a
+        # lowercase-initial variable or method name. Java convention keeps type
+        # names uppercase and identifiers lowercase, so this stays precise; a
+        # stdlib name (String, List) simply resolves to nothing at derive time.
+        re.compile(r"\b([A-Z]\w+)(?:<[^;={}()]*>)?\s+[a-z_$]\w*"),
+    ],
+    # C++ references are deliberately conservative because namespaces make name
+    # resolution noisy (a bare `Widget obj;` variable declaration is the most
+    # common type usage but its regex would be far too broad, matching any
+    # `Foo bar` pair). We anchor only on shapes that are unambiguously a type
+    # reference: construction, `new`, scope access on the OWNING type, public/
+    # base inheritance, and template arguments. The scope-access rule captures
+    # the identifier BEFORE `::` (the type whose static member or nested name is
+    # used, e.g. `Logger` in `Logger::instance()` or `Widget` in
+    # `core::Widget::render`), never the trailing member after `::`, which lives
+    # in the qualifier's namespace and resolves elsewhere. A namespace qualifier
+    # is lowercase in idiomatic code and simply fails the uppercase anchor, and a
+    # standard-library name (`std::string`, `std::vector`) drops out for the same
+    # reason. HONEST BOUNDARY: a cross-component use expressed only as a bare
+    # variable declaration draws no uses edge (recorded in the depth-badge notes).
+    "cpp": [
+        re.compile(_CTOR),                                  # Widget(...) construction
+        re.compile(r"\bnew\s+([A-Z]\w+)"),                  # new Widget
+        re.compile(r"\b([A-Z]\w+)::"),                      # Logger::instance scope access
+        re.compile(r":\s*(?:public|protected|private|virtual)\s+([A-Z]\w+)"),  # base class
+        re.compile(r"<\s*([A-Z]\w+)"),                      # template argument
     ],
 }
 

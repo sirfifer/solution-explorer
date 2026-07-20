@@ -142,14 +142,33 @@ export function ActivityPanel() {
     );
   } else {
     const focused = selectedComponentId ? getActivityComponent(selectedComponentId) : null;
+    const focusedFiles = focused ? getComponentActivityFiles(focused.id) : [];
+    const focusedFilePaths = new Set(focusedFiles.map((f) => f.path));
+    // File-level co-change pairs touching this component's files. Cross-component
+    // by construction upstream is not guaranteed here (a<b over all files), so
+    // the partner file may belong to this same component; that is still useful
+    // ("these two files always change together").
+    const fileCoupling = focused
+      ? (activityData?.file_coupling ?? [])
+          .filter((p) => focusedFilePaths.has(p.a) || focusedFilePaths.has(p.b))
+          .map((p) => {
+            const anchorIsA = focusedFilePaths.has(p.a);
+            const anchor = anchorIsA ? p.a : p.b;
+            const partner = anchorIsA ? p.b : p.a;
+            return { anchor, partner, count: p.cochange_count };
+          })
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10)
+      : [];
     body = focused ? (
       <FocusedView
         focused={focused}
         darkMode={darkMode}
         rank={getHotspots().findIndex((c) => c.id === focused.id) + 1}
-        files={getComponentActivityFiles(focused.id).slice(0, 8)}
-        maxFileScore={getComponentActivityFiles(focused.id).reduce((m, f) => Math.max(m, f.hotspot_score), 0)}
+        files={focusedFiles.slice(0, 8)}
+        maxFileScore={focusedFiles.reduce((m, f) => Math.max(m, f.hotspot_score), 0)}
         coupling={getCouplingForComponent(focused.id)}
+        fileCoupling={fileCoupling}
         onBack={() => selectComponent(null)}
       />
     ) : (
@@ -240,6 +259,7 @@ function FocusedView({
   files,
   maxFileScore,
   coupling,
+  fileCoupling,
   onBack,
 }: {
   focused: ActivityComponent;
@@ -248,6 +268,7 @@ function FocusedView({
   files: Array<{ path: string; hotspot_score: number; commit_count: number; churn: number }>;
   maxFileScore: number;
   coupling: Array<{ partnerId: string; partnerName: string; count: number }>;
+  fileCoupling: Array<{ anchor: string; partner: string; count: number }>;
   onBack: () => void;
 }) {
   return (
@@ -271,9 +292,21 @@ function FocusedView({
           )}
         </div>
         <p className={`mt-0.5 text-[11px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-          {formatNumber(focused.commit_count)} commits · {formatNumber(focused.churn)} churn · {focused.files} file
-          {focused.files !== 1 ? "s" : ""}
+          {formatNumber(focused.commit_count)} commits · {formatNumber(focused.churn)} churn
+          {(focused.lines_added > 0 || focused.lines_removed > 0) && (
+            <span>
+              {" "}(<span className={darkMode ? "text-emerald-500" : "text-emerald-600"}>+{formatNumber(focused.lines_added ?? 0)}</span>
+              {" / "}
+              <span className={darkMode ? "text-red-500" : "text-red-600"}>-{formatNumber(focused.lines_removed ?? 0)}</span>)
+            </span>
+          )}
+          {" · "}{focused.files} file{focused.files !== 1 ? "s" : ""}
         </p>
+        {focused.first_seen && (
+          <p className={`mt-0.5 text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            First seen {new Date(focused.first_seen).toLocaleDateString()}
+          </p>
+        )}
       </div>
 
       {/* Knowledge map (who knows this, what is at risk) */}
@@ -331,6 +364,27 @@ function FocusedView({
           </ul>
         )}
       </div>
+
+      {/* File-level co-change pairs (finer grain than the component coupling above) */}
+      {fileCoupling.length > 0 && (
+        <div className={`px-4 py-3 border-t ${darkMode ? "border-zinc-800" : "border-zinc-200"} space-y-2`}>
+          <SectionLabel darkMode={darkMode}>Files that change together</SectionLabel>
+          <ul className="space-y-1">
+            {fileCoupling.map((p, i) => (
+              <li key={`${p.anchor}:${p.partner}:${i}`} className="flex items-center justify-between gap-2 text-[11px]">
+                <span className={`truncate ${darkMode ? "text-zinc-300" : "text-zinc-700"}`} title={`${p.anchor} ↔ ${p.partner}`}>
+                  {p.anchor.split("/").pop()} {"↔"} {p.partner.split("/").pop()}
+                </span>
+                <span
+                  className={`shrink-0 tabular-nums px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}
+                >
+                  {p.count}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

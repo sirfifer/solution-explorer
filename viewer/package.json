@@ -3,6 +3,14 @@
   "version": "1.2.0",
   "type": "module",
   "private": true,
+  "description": "Interactive architecture viewer for solution-explorer",
+  "license": "MIT",
+  "author": "sirfifer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sirfifer/solution-explorer.git",
+    "directory": "viewer"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

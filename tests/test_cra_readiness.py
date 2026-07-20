@@ -357,10 +357,15 @@ def test_self_repo_reports_security_md_and_sbom_present():
     assert items["support_statement"].status == STATUS_PRESENT  # Supported Versions
     assert items["cvd_contact"].status == STATUS_PRESENT
 
-    # Honest gap: the self repo ships no dependabot/renovate config today.
-    assert items["dependency_update_config"].status == STATUS_ABSENT
+    # The self repo now ships a real Dependabot config (B5 supply-chain work,
+    # 2026-07-20: .github/dependabot.yml covers pip, npm, and github-actions).
+    # This item used to be an honest documented gap; closing it in the repo
+    # means this assertion has to move with it, not stay pinned to the old
+    # gap so the test keeps passing for the wrong reason.
+    assert items["dependency_update_config"].status == STATUS_PRESENT
+    assert items["dependency_update_config"].evidence["path"] == ".github/dependabot.yml"
     gap_items = {f["detail"]["item_id"] for f in build_cra_readiness(REPO_ROOT, supply_chain=section).findings()}
-    assert "dependency_update_config" in gap_items
+    assert "dependency_update_config" not in gap_items
 
 # ---------------------------------------------------------------------------
 # Detection-honesty negative fixtures (adversarial-review findings 1-3, 5):

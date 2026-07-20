@@ -4,22 +4,25 @@ on:
   push:
     tags: ['v*']
 
+# Least privilege at the top level: read only. Every job that needs more
+# (publish provenance, create the release, push moving tags) redeclares its own
+# escalated permissions block below.
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
   validate:
     name: Validate Version
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.meta.outputs.version }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
 
@@ -50,6 +53,8 @@ jobs:
     name: CI Suite
     needs: validate
     uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
 
   publish-pypi:
     name: Publish to PyPI
@@ -57,11 +62,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      contents: read
       id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
 
@@ -71,8 +78,18 @@ jobs:
       - name: Build package
         run: python -m build
 
+      - name: Generate SLSA build provenance
+        # PyPI does not have an equivalent of npm's built-in
+        # `npm publish --provenance` (used below), so this repo attests the
+        # built distributions itself. The attestation is queryable via
+        # `gh attestation verify` and shows up on the release's Attestations
+        # tab.
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: 'dist/*'
+
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1 (v1.14.1)
 
   publish-npm:
     name: Publish to npm
@@ -80,16 +97,17 @@ jobs:
     runs-on: ubuntu-latest
     environment: npm
     permissions:
+      contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
 
@@ -112,8 +130,10 @@ jobs:
     name: GitHub Release
     needs: [validate, test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Extract changelog section
         id: notes
@@ -144,12 +164,95 @@ jobs:
             --notes-file /tmp/release-notes.md \
             $FLAGS
 
+  supply-chain:
+    name: SBOM and Provenance
+    needs: [validate, test, github-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.5.0
+        with:
+          go-version: 'stable'
+
+      - name: Install project and SBOM tools
+        run: |
+          pip install -e ".[all,dev]"
+          pip install cyclonedx-bom==7.3.0
+          go install github.com/interlynk-io/sbomqs/v2@v2.0.11
+
+      - name: Generate Python SBOM
+        run: |
+          mkdir -p sbom
+          cyclonedx-py environment --pyproject pyproject.toml --sv 1.6 \
+            -o sbom/solution-explorer-${{ needs.validate.outputs.version }}-python-sbom.json
+
+      - name: Generate npm SBOM (viewer)
+        working-directory: viewer
+        run: |
+          npm ci
+          # See sbom.yml for why --ignore-npm-errors is needed: it works
+          # around a known `npm ls` false positive on packages that bundle
+          # their own optional sub-dependencies (bundleDependencies).
+          npx --yes @cyclonedx/cyclonedx-npm@6.0.0 --ignore-npm-errors \
+            --output-format JSON --spec-version 1.6 \
+            --output-file "$GITHUB_WORKSPACE/sbom/solution-explorer-${{ needs.validate.outputs.version }}-viewer-sbom.json"
+
+      - name: Generate npm SBOM (cli)
+        # packages/cli is the published npm package (see publish-npm), so its
+        # SBOM must be a release asset alongside the Python and viewer ones.
+        working-directory: packages/cli
+        run: |
+          npm ci
+          npx --yes @cyclonedx/cyclonedx-npm@6.0.0 --ignore-npm-errors \
+            --output-format JSON --spec-version 1.6 \
+            --output-file "$GITHUB_WORKSPACE/sbom/solution-explorer-${{ needs.validate.outputs.version }}-cli-sbom.json"
+
+      - name: Score SBOM quality
+        run: |
+          SBOMQS="$(go env GOPATH)/bin/sbomqs"
+          {
+            echo "## Release SBOM Quality (sbomqs, v${{ needs.validate.outputs.version }})"
+            for f in sbom/*.json; do
+              echo "### $f"
+              echo '```'
+              "$SBOMQS" score --profile ntia,interlynk --detailed "$f"
+              echo '```'
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate SLSA build provenance for the SBOMs
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: 'sbom/*.json'
+
+      - name: Attach SBOMs to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" sbom/*.json --clobber
+
   update-tags:
     name: Update Channel Tags
     needs: [validate, publish-pypi, publish-npm, github-release]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 

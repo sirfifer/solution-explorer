@@ -27,6 +27,12 @@
     "static-analysis"
   ],
   "license": "MIT",
+  "author": "sirfifer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sirfifer/solution-explorer.git",
+    "directory": "packages/cli"
+  },
   "engines": {
     "node": ">=20.0.0"
   },

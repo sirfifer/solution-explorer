@@ -147,6 +147,17 @@ def main():
         default=None,
         help="Path to previous architecture.json baseline for diff comparison",
     )
+    parser.add_argument(
+        "--sarif",
+        default=None,
+        metavar="PATH",
+        help="Write a SARIF 2.1.0 log of the analyzer's findings (duplication, "
+             "inconsistency, unreferenced, intent-violation, cra_readiness) to "
+             "PATH, for GitHub code scanning ingestion via "
+             "github/codeql-action/upload-sarif. Findings are a v2-engine "
+             "feature (--engine v1 writes an empty, still schema-valid log). "
+             "See docs/sarif-export.md for the upload workflow.",
+    )
 
     args = parser.parse_args()
 
@@ -294,6 +305,20 @@ def main():
         print(f"  Components removed: {len(diff.get('components_removed', []))}")
         print(f"\nOutput: {output_path}")
         print(f"Baseline saved: {baseline_dir}")
+
+        if args.sarif:
+            # Incremental mode runs the v1 scanner (see the module docstring in
+            # incremental.py); it never computes findings, so as in the plain
+            # v1 path below, this writes an empty but schema-valid log.
+            from .project.sarif import write_sarif
+
+            print(
+                "\nWARNING: --sarif with --incremental writes an empty log (no "
+                "findings); findings require --engine v2 (the default).",
+                file=sys.stderr,
+            )
+            sarif_path = write_sarif(arch_dict, args.sarif)
+            print(f"SARIF: {sarif_path} (0 results)")
         return
     else:
         root = Path(args.path).resolve()
@@ -350,6 +375,21 @@ def main():
 
     if scanner is not None:
         _warn_dropped_data(scanner)
+
+    if args.sarif:
+        # The v1 engine never computes findings (they are a v2/Tier-3
+        # correlation feature), so the log has zero results here. It is still
+        # written, schema-valid, so a CI step that expects the file to exist
+        # does not break when run against --engine v1.
+        from .project.sarif import write_sarif
+
+        print(
+            "\nWARNING: --sarif with --engine v1 writes an empty log (no "
+            "findings); findings require --engine v2 (the default).",
+            file=sys.stderr,
+        )
+        sarif_path = write_sarif(arch_dict, args.sarif)
+        print(f"SARIF: {sarif_path} (0 results)")
 
 
 def _run_solution(args) -> None:

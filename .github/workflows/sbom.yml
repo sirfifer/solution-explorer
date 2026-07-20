@@ -1,0 +1,172 @@
+name: SBOM
+
+# Continuous supply-chain visibility: generate a CycloneDX 1.6 SBOM for both
+# ecosystems in this repo (Python core, npm viewer) and score their quality
+# with Interlynk sbomqs. This does not gate the build. It exists so SBOM
+# drift and quality regressions show up in every PR and on every push to
+# main, not only at release time (see .github/workflows/release.yml for the
+# release-asset copy of these SBOMs plus provenance attestation).
+#
+# Actions are hash-pinned per repo supply-chain policy (see
+# docs/supply-chain-posture.md).
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: sbom-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python-sbom:
+    name: Python SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.5.0
+        with:
+          go-version: "stable"
+
+      - name: Install project (full extras, matches ci.yml)
+        run: pip install -e ".[all,dev]"
+
+      - name: Install CycloneDX SBOM generator
+        run: pip install cyclonedx-bom==7.3.0
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          mkdir -p sbom
+          cyclonedx-py environment --pyproject pyproject.toml --sv 1.6 \
+            -o sbom/python-sbom.json
+
+      - name: Install sbomqs
+        run: go install github.com/interlynk-io/sbomqs/v2@v2.0.11
+
+      - name: Score SBOM quality
+        run: |
+          SBOMQS="$(go env GOPATH)/bin/sbomqs"
+          {
+            echo "## Python SBOM Quality (sbomqs)"
+            echo '```'
+            "$SBOMQS" score --profile ntia,interlynk --detailed sbom/python-sbom.json
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: python-sbom
+          path: sbom/python-sbom.json
+          retention-days: 90
+
+  npm-sbom:
+    name: npm SBOM (viewer)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: viewer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.5.0
+        with:
+          go-version: "stable"
+
+      - run: npm ci
+
+      - name: Generate CycloneDX SBOM
+        # --ignore-npm-errors works around a known `npm ls` false positive:
+        # optional native packages that ship their sub-dependencies bundled
+        # inside their own tarball (bundleDependencies, e.g.
+        # @tailwindcss/oxide-wasm32-wasi) are reported as "missing" by
+        # `npm ls --all` even though nothing is actually missing. The tool's
+        # own stdout is still complete and valid; this flag tells it to use
+        # that output instead of failing on npm's exit code.
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/sbom"
+          npx --yes @cyclonedx/cyclonedx-npm@6.0.0 --ignore-npm-errors \
+            --output-format JSON --spec-version 1.6 \
+            --output-file "$GITHUB_WORKSPACE/sbom/npm-sbom.json"
+
+      - name: Score SBOM quality
+        run: |
+          SBOMQS="$(go env GOPATH)/bin/sbomqs"
+          {
+            echo "## npm SBOM Quality (sbomqs)"
+            echo '```'
+            "$SBOMQS" score --profile ntia,interlynk --detailed "$GITHUB_WORKSPACE/sbom/npm-sbom.json"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: npm-sbom
+          path: sbom/npm-sbom.json
+          retention-days: 90
+
+  cli-sbom:
+    name: npm SBOM (cli)
+    # packages/cli is the package the release publish-npm job actually ships
+    # to the registry (package.json name "solution-explorer"), so it MUST have
+    # its own SBOM. The viewer above is "private": true and never published.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/cli
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.5.0
+        with:
+          go-version: "stable"
+
+      - run: npm ci
+
+      - name: Generate CycloneDX SBOM
+        # See the viewer job above for why --ignore-npm-errors is used.
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/sbom"
+          npx --yes @cyclonedx/cyclonedx-npm@6.0.0 --ignore-npm-errors \
+            --output-format JSON --spec-version 1.6 \
+            --output-file "$GITHUB_WORKSPACE/sbom/cli-sbom.json"
+
+      - name: Score SBOM quality
+        run: |
+          SBOMQS="$(go env GOPATH)/bin/sbomqs"
+          {
+            echo "## npm SBOM Quality (cli)"
+            echo '```'
+            "$SBOMQS" score --profile ntia,interlynk --detailed "$GITHUB_WORKSPACE/sbom/cli-sbom.json"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cli-sbom
+          path: sbom/cli-sbom.json
+          retention-days: 90
