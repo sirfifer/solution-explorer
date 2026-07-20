@@ -59,7 +59,7 @@ REQUIRED_COMPONENT_FIELDS = frozenset({
 
 # Component ai_enhance fields that are optional but scored
 OPTIONAL_COMPONENT_FIELDS = frozenset({
-    "architectural_role", "testing_assessment",
+    "architectural_role", "description", "testing_assessment",
     "actions_summary", "key_user_flows",
     "testing_gaps", "testing_maturity",
     "external_services_assessment", "port_assessment",

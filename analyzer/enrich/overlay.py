@@ -84,7 +84,25 @@ def apply_enrichment_overlay(
         for comp in components:
             row = by_component.get(comp.get("id"))
             if row is not None:
-                comp["ai_enhance"] = marked_payload(row)
+                payload = marked_payload(row)
+                comp["ai_enhance"] = payload
+                # D7: the viewer's tree and detail panel render the top-level
+                # component.description (as "docs.purpose || component.description",
+                # see viewer/src/components/ComponentNode.tsx and DetailPanel.tsx).
+                # The enhance pass emits a one-line "description" inside the payload
+                # (help_text stays the long-form). Surface that one-liner as the
+                # component description when the mechanical projection left it empty,
+                # so an enriched component shows a summary line. Never overwrite an
+                # existing mechanical description, and never invent one when the
+                # enrichment omitted it (older rows predate the description field and
+                # simply stay blank until the next enhance --update).
+                ai_desc = payload.get("description")
+                if (
+                    isinstance(ai_desc, str)
+                    and ai_desc.strip()
+                    and not (comp.get("description") or "").strip()
+                ):
+                    comp["description"] = ai_desc.strip()
             walk(comp.get("children", []))
 
     walk(arch.get("components", []))

@@ -51,6 +51,9 @@ Return ONLY a single JSON object, no prose, no markdown fences. Shape:
       "help_text": "3-5 complete sentences explaining what this component is, what \
 it does, how it connects to its neighbours, and why it matters. Written for a \
 reviewer who has never seen the code.",
+      "description": "ONE short plain sentence (about 8 to 15 words) naming what \
+this component is. This is the one-line tree/summary label, distinct from and \
+much shorter than help_text.",
       "data_handled": "specific data types that flow through this component (not \
 just 'user data')",
       "criticality": "critical | important | supporting",
@@ -81,6 +84,8 @@ RULES:
 - Produce an entry in "components" for EVERY component id listed under COMPONENTS \
 below. Missing any is a failure.
 - help_text MUST be 3 to 5 sentences. data_handled MUST be specific.
+- description MUST be a single short sentence (the one-line tree label), NOT a \
+copy of help_text.
 - criticality MUST be exactly one of: critical, important, supporting. Use the \
 CRITICALITY GUIDANCE and the inbound/outbound edge counts to justify it.
 - architectural_role MUST be an exact value from the ROLE VOCABULARY, or null if \
