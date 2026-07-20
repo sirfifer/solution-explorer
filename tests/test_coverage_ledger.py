@@ -41,7 +41,16 @@ POLYGLOT = REPO_ROOT / "tests" / "fixtures" / "polyglot"
 MULTI = REPO_ROOT / "tests" / "fixtures" / "multi"
 
 # Dispositions whose row is a DIRECTORY standing in for everything beneath it.
-DIR_DISPOSITIONS = {"excluded:skipped_directory", "excluded:vendored_repo"}
+# ``excluded:tool_state`` is always the pruned ``.solution-explorer`` directory.
+# ``excluded:gitignored`` is USUALLY a pruned directory but can also be a single
+# gitignored file; a file row here only ever accounts for itself (its path equals
+# the tested path), so treating it as subtree-standing is safe for the count.
+DIR_DISPOSITIONS = {
+    "excluded:skipped_directory",
+    "excluded:vendored_repo",
+    "excluded:tool_state",
+    "excluded:gitignored",
+}
 
 
 def _extract(root: Path) -> FactStore:

@@ -55,6 +55,7 @@ from ..constants import LANGUAGE_MAP, SKIP_EXTENSIONS
 from ..parsers import PARSERS
 from ..store import LOCAL_REPO, ROOT_COMPONENT, FactStore, assign_symbol_ids
 from ..utils import (
+    GitignoreMatcher,
     _is_generated_dataset_dir,
     _is_generated_projection,
     _is_vendored_repo,
@@ -241,6 +242,14 @@ class _Candidate:
 
 CI_TIER = f"{EXTRACT_TIER}:ci:raw"
 
+# The tool's own state directory inside an analyzed repo (the default fact-store
+# path is ``<root>/.solution-explorer/index.db``). It is accounted as ONE pruned
+# ledger row with the ``excluded:tool_state`` disposition and never walked, so
+# the tool never scans its own store and rules as if they were repo source. The
+# committed ``rules/inventory.yml`` under it is still read by the rules loader,
+# which opens it directly by path and does not go through enumeration.
+TOOL_STATE_DIRNAME = ".solution-explorer"
+
 # Extension-less filenames cached as ci_config rows; the extension rule would
 # otherwise drop their content, which Tier 3's CI check needs (P4-3).
 _CI_BARE_FILENAMES = {"Jenkinsfile"}
@@ -287,6 +296,7 @@ def _enumerate(
     candidates: list[_Candidate] = []
     ledger: list[tuple[str, str, str]] = []
     marker_dirs: set[str] = set()
+    gitignore = GitignoreMatcher(root)
 
     def add_ci_candidate(abs_path: str) -> None:
         rel = os.path.relpath(abs_path, root)
@@ -308,7 +318,15 @@ def _enumerate(
         kept = []
         for d in sorted(dirnames):
             child = os.path.relpath(os.path.join(dirpath, d), root)
-            if _should_skip_dir(d):
+            if d == TOOL_STATE_DIRNAME:
+                # The tool's own state directory (store + learned rules). Pruned
+                # to one row and never walked; the checked-in rules file is read
+                # by the loader directly, not through enumeration. Checked before
+                # _should_skip_dir (which would otherwise prune it as a generic
+                # dot-directory) so it carries the honest tool_state disposition.
+                ledger.append((child, "excluded:tool_state",
+                               "solution-explorer tool state"))
+            elif _should_skip_dir(d):
                 ledger.append((child, "excluded:skipped_directory", d))
                 for ci_path in _ci_files_in_pruned_dir(dirpath, d):
                     add_ci_candidate(ci_path)
@@ -334,12 +352,29 @@ def _enumerate(
             elif _is_vendored_repo(os.path.join(dirpath, d)):
                 ledger.append((child, "excluded:vendored_repo", d))
             else:
-                kept.append(d)
+                # A gitignored directory is workstation-local, not repo content.
+                # Prune it to ONE row (like .git) instead of walking a possibly
+                # huge ignored subtree (the TestResults.xcresult case). Checked
+                # AFTER the existing skip rules so already-handled dirs keep their
+                # disposition and fresh-clone output stays byte-identical.
+                gi = gitignore.match(child, is_dir=True)
+                if gi is not None:
+                    ledger.append((child, "excluded:gitignored", gi))
+                else:
+                    kept.append(d)
         dirnames[:] = kept
 
         for fname in sorted(filenames):
             fpath = Path(dirpath) / fname
             rel = os.path.relpath(fpath, root)
+            # A gitignored file is workstation-local and never reaches the
+            # central repo, so it is accounted (excluded:gitignored, non-source)
+            # rather than parsed. Checked first and cheaply (no read), and it
+            # keeps a gitignored marker file from anchoring a phantom component.
+            gi = gitignore.match(rel, is_dir=False)
+            if gi is not None:
+                ledger.append((rel, "excluded:gitignored", gi))
+                continue
             if fname in COMPONENT_MARKERS:
                 marker_dirs.add(os.path.relpath(dirpath, root))
 
