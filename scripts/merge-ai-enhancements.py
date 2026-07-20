@@ -238,6 +238,14 @@ def merge(baseline, target):
     matches, comp_counts, id_map = _match_components(baseline_ai_comps, target_comps)
     for bcomp, tcomp, _strategy in matches:
         tcomp["ai_enhance"] = bcomp["ai_enhance"]
+        # Mirror the projection overlay's copy-up (D7 review finding): the
+        # one-line AI description must reach the top-level field the viewer
+        # renders, on merge-path builds too. Same rule as the overlay: only
+        # when the target's mechanical description is empty, never overwrite,
+        # never invent.
+        ai_desc = (bcomp["ai_enhance"] or {}).get("description")
+        if ai_desc and not (tcomp.get("description") or "").strip():
+            tcomp["description"] = ai_desc
 
     # Relationship-level merge. Baseline relationship endpoints are baseline
     # component IDs; translate them through id_map into the target ID space so

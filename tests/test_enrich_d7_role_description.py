@@ -207,3 +207,31 @@ def test_overlay_leaves_description_blank_when_enrichment_omits_it(tmp_path):
     comp = _find(arch["components"], cid)
     assert not (comp.get("description") or "").strip()
     store.close()
+
+def test_merge_script_carries_description_to_the_top_level(tmp_path):
+    # Review finding on this PR: the drift-tolerant merge copied ai_enhance
+    # but left the top-level description blank, so merge-path builds (preview
+    # and fallback deploys) re-blanked the summary line. The merge now mirrors
+    # the overlay copy-up with the same never-overwrite rule.
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "merge_ai", "scripts/merge-ai-enhancements.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    baseline = {"components": [{
+        "id": "app", "name": "app", "description": "AI one liner",
+        "ai_enhance": {"help_text": "long", "description": "AI one liner"},
+    }]}
+    target = {"components": [{"id": "app", "name": "app", "description": ""}]}
+    mod.merge(baseline, target)
+    comp = target["components"][0]
+    assert comp["description"] == "AI one liner"
+
+    # Never overwrite a non-empty mechanical description.
+    target2 = {"components": [{"id": "app", "name": "app",
+                               "description": "mechanical"}]}
+    mod.merge(baseline, target2)
+    assert target2["components"][0]["description"] == "mechanical"
