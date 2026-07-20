@@ -20,18 +20,28 @@ const DATA_PARAM = "data";
 
 function sanitizeBase(raw: string | null): string {
   if (!raw) return DEFAULT_DATA_BASE;
-  const value = raw.trim();
+  let value = raw.trim();
   if (!value) return DEFAULT_DATA_BASE;
-  // Reject anything that could escape the current origin: an absolute URL
-  // (has a scheme), a protocol-relative `//host`, or a root-absolute `/path`.
-  // Also reject parent-directory traversal so a member link stays inside the
-  // deployed tree.
-  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return DEFAULT_DATA_BASE; // scheme
-  if (value.startsWith("//")) return DEFAULT_DATA_BASE; // protocol-relative
-  if (value.startsWith("/")) return DEFAULT_DATA_BASE; // root-absolute
-  if (value.split("/").some((seg) => seg === "..")) return DEFAULT_DATA_BASE;
-  // Strip a trailing slash so join is unambiguous.
-  return value.replace(/\/+$/, "") || DEFAULT_DATA_BASE;
+  // Decode percent-encoding first so an encoded attack cannot slip past the
+  // shape check (%5C backslash, %2e%2e traversal). A malformed encoding is
+  // rejected outright.
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    return DEFAULT_DATA_BASE;
+  }
+  // ALLOWLIST, not blocklist (adversarial-review blocker: a leading backslash
+  // is normalized by the WHATWG URL parser into a protocol-relative
+  // cross-origin URL, and encoded traversal escaped the deployed tree). The
+  // only shapes a solution ever emits are the default base and member bases
+  // beneath it, so only those shapes are accepted:
+  //   ./architecture
+  //   ./architecture/members/<slug>[/members/<slug>...]
+  // with slugs restricted to the slugify alphabet [a-z0-9-].
+  const m = value.replace(/\/+$/, "");
+  if (m === DEFAULT_DATA_BASE) return DEFAULT_DATA_BASE;
+  if (/^\.\/architecture(\/members\/[a-z0-9-]+)+$/.test(m)) return m;
+  return DEFAULT_DATA_BASE;
 }
 
 // The current data base, resolved from `?data=` (default `./architecture`).

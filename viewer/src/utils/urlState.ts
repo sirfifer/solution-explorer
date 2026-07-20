@@ -72,6 +72,13 @@ export function pushUrlState(state: UrlState): void {
 
 function buildUrl(state: UrlState): string {
   const params = new URLSearchParams();
+  // The data-source override (a member open inside a solution, M1) is
+  // orthogonal to nav state and must survive every URL rewrite; dropping it
+  // broke member drill-in on the first click and killed shareable member
+  // links (adversarial-review blocker). Carry it verbatim when present.
+  const existing = new URLSearchParams(window.location.search);
+  const dataBase = existing.get("data");
+  if (dataBase) params.set("data", dataBase);
   if (state.component) params.set("component", state.component);
   if (state.tab) params.set("tab", state.tab);
   if (state.drill) params.set("drill", state.drill);

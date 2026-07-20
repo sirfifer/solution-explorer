@@ -434,7 +434,7 @@ export function App() {
                 {architecture.repositories.length} repos
               </span>
             )}
-            {architecture.repository && (
+            {architecture.repository && /^https?:/i.test(architecture.repository) && (
               <a
                 href={architecture.repository}
                 target="_blank"

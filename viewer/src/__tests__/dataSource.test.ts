@@ -51,3 +51,33 @@ describe("memberDataUrl", () => {
     expect(params.get("data")).toBe("./architecture/members/web");
   });
 });
+
+describe("sanitizer battery (adversarial-review blocker: allowlist shape)", () => {
+  const hostile = [
+    "\\\\evil.com",
+    "\\/evil.com",
+    "%5C%5Cevil.com",
+    "%5C/evil.com",
+    "..%2fsecret",
+    "%2e%2e/secret",
+    "..%5csecret",
+    "jAvAsCrIpT:alert(1)",
+    "data:text/html,x",
+    "blob:https://x",
+    "./architecture/../secret",
+    "./architecture/members/UPPER",
+    "./architecture/members/a b",
+    "members/web",
+    "architecture/members/web",
+  ];
+  it.each(hostile)("rejects %s", (value) => {
+    expect(getDataBase(`?data=${encodeURIComponent(value)}`)).toBe("./architecture");
+    expect(getDataBase(`?data=${value}`)).toBe("./architecture");
+  });
+
+  it("accepts exactly the solution member shapes", () => {
+    expect(getDataBase("?data=./architecture/members/web")).toBe("./architecture/members/web");
+    expect(getDataBase("?data=./architecture/members/ios-app/")).toBe("./architecture/members/ios-app");
+    expect(getDataBase("?data=./architecture")).toBe("./architecture");
+  });
+});

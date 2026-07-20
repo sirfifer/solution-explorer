@@ -41,10 +41,19 @@ function renderInline(text: string): string {
   result = result.replace(/\*(.+?)\*/g, "<em>$1</em>");
   result = result.replace(/_(.+?)_/g, "<em>$1</em>");
 
-  // Links
+  // Links. Scheme-filtered: dataset content can be attacker-influenced (a
+  // hostile dataset loaded through any path), and this HTML lands in
+  // dangerouslySetInnerHTML, so only http, https, and mailto targets become
+  // anchors; anything else (javascript:, data:, vbscript:) renders as text.
   result = result.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener" class="md-link">$1</a>'
+    (_full: string, label: string, target: string) => {
+      const t = target.trim();
+      if (/^(https?:|mailto:)/i.test(t) || /^[.#/]/.test(t)) {
+        return `<a href="${t}" target="_blank" rel="noopener" class="md-link">${label}</a>`;
+      }
+      return `${label} (${t})`;
+    }
   );
 
   // Strikethrough
