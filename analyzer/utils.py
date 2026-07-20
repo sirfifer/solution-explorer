@@ -18,6 +18,114 @@ def _should_skip_dir(name: str) -> bool:
     return False
 
 
+def _top_level_keys(head: bytes) -> set:
+    """Top-level JSON object keys found in ``head``, string-and-depth aware.
+
+    A tiny scanner, not a parser: tracks string state (with escapes) and brace
+    or bracket depth, and records only keys that open at depth 1. Substring
+    checks were the adversarial-review blocker: a user file merely CONTAINING
+    the generator key names anywhere (nested, or as values) was pruned as
+    generated while the tool still claimed 100 percent coverage. Depth
+    awareness closes that; the head window covers enriched projections whose
+    long architecture description pushes the generator keys deep into the file.
+    """
+    keys: set = set()
+    depth = 0
+    in_str = False
+    esc = False
+    token = bytearray()
+    expecting_key = False
+    for b in head:
+        c = chr(b)
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+                if depth == 1 and expecting_key:
+                    keys.add(token.decode("utf-8", "replace"))
+            else:
+                token.append(b)
+            continue
+        if c == '"':
+            in_str = True
+            token = bytearray()
+            continue
+        if c == "{":
+            depth += 1
+            expecting_key = True
+        elif c == "}":
+            depth -= 1
+        elif c == "[":
+            depth += 1
+            expecting_key = False
+        elif c == "]":
+            depth -= 1
+        elif c == ":":
+            if depth == 1:
+                expecting_key = False
+        elif c == ",":
+            if depth == 1:
+                expecting_key = True
+    return keys
+
+
+# The head window for projection detection. 256 KB covers an enriched
+# projection whose architecture-level description precedes the generator keys
+# (the adversarial review proved 4 KB was escapable by a long description).
+_PROJECTION_HEAD_BYTES = 262144
+
+
+def _is_generated_projection(raw: bytes) -> bool:
+    """True when ``raw`` is a solution-explorer architecture projection (D1).
+
+    The tool emits its own datasets (the monolith ``architecture.json`` and the
+    split ``manifest.json`` and detail shards). When such a dataset is
+    committed into a repository the stats counted the tool's own output as
+    source. The check requires the generator keys the projection always writes
+    (``analyzer_version``, ``generated_at``, ``components``) as TOP-LEVEL keys
+    of the JSON object, via a string-and-depth-aware scan of the head window.
+    A user file that merely mentions those names nested or as values is NOT a
+    projection and stays parsed (adversarial-review fix: the previous substring
+    check silently pruned such files while claiming full coverage).
+    """
+    head = raw[:_PROJECTION_HEAD_BYTES].lstrip()
+    if not head.startswith(b"{"):
+        return False
+    keys = _top_level_keys(head)
+    return {"analyzer_version", "generated_at", "components"} <= keys
+
+
+def _is_generated_dataset_dir(dirpath: str) -> bool:
+    """True when ``dirpath`` is the tool's own emitted projection dataset (D1).
+
+    Recognized by a projection ``manifest.json`` or ``architecture.json``
+    sitting directly in the directory AND the split-output shard shape beside
+    it (a ``data/`` or ``search/`` directory). Requiring the shard shape is the
+    adversarial-review fix: a lone lookalike manifest must never prune a
+    directory of real user source. The whole subtree is generated output, so
+    it is pruned and ledgered as one ``excluded:skipped_directory`` row. Only
+    the manifest head is read.
+    """
+    d = Path(dirpath)
+    if not ((d / "data").is_dir() or (d / "search").is_dir()):
+        return False
+    for name in ("manifest.json", "architecture.json"):
+        p = d / name
+        if not p.is_file():
+            continue
+        try:
+            with open(p, "rb") as fh:
+                head = fh.read(_PROJECTION_HEAD_BYTES)
+        except OSError:
+            continue
+        if _is_generated_projection(head):
+            return True
+    return False
+
+
 def _is_vendored_repo(dirpath: str) -> bool:
     """Detect vendored third-party source repositories.
 

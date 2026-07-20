@@ -78,6 +78,26 @@ def build_activity(store) -> Optional[dict]:
     comp_files = store.component_files()
     components = {c["id"]: c for c in store.components()}
 
+    # D9: file-level churn must apply the SAME exclusion set as the coverage
+    # ledger. Git history touches vendored, generated, and non-source files (a
+    # PocketTTS.xcframework internal, a committed dataset, a doc), but those are
+    # not analyzed source and must not rank in the file hotspot or coupling
+    # lists. The parsed-source universe is the files table's ``parsed`` rows
+    # (equivalently the ledger's ``parsed`` disposition); component-level
+    # activity is unaffected because it aggregates over ``component_files``,
+    # which already contains only parsed, component-owned files. The filter is
+    # skipped when no source universe is known (an activity-only store with no
+    # extraction pass) so such a store still reports, backward compatible.
+    source_paths = {f["path"] for f in files if f.get("parse_status") == "parsed"}
+    if not source_paths:
+        source_paths = {
+            c["path"] for c in store.coverage() if c["disposition"] == "parsed"
+        }
+    filter_source = bool(source_paths)
+
+    def is_source(path: str) -> bool:
+        return not filter_source or path in source_paths
+
     lines_by_path = {f["path"]: (f["lines"] or 0) for f in files}
     act_by_path = {r["path"]: r for r in activity_rows}
 
@@ -94,6 +114,8 @@ def build_activity(store) -> Optional[dict]:
     files_detail: dict[str, dict] = {}
     for r in activity_rows:
         path = r["path"]
+        if not is_source(path):
+            continue  # D9: non-source churn does not rank at the file level
         total = sum(a["commit_count"] for a in authors_by_path.get(path, []))
         authors = [
             {
@@ -200,9 +222,12 @@ def build_activity(store) -> Optional[dict]:
 
     # ---- coupling ---------------------------------------------------------
     pairs = store.cochange_pairs(min_support=MIN_COCHANGE_SUPPORT)
+    # D9: a coupling pair ranks only when BOTH files are analyzed source; a pair
+    # touching a vendored or generated file is not a source coupling.
     file_coupling = [
         {"a": p["path_a"], "b": p["path_b"], "cochange_count": p["cochange_count"]}
         for p in sorted(pairs, key=lambda p: (-p["cochange_count"], p["path_a"], p["path_b"]))
+        if is_source(p["path_a"]) and is_source(p["path_b"])
     ][:MAX_FILE_COUPLING]
 
     # Cross-component coupling: sum file-pair counts across component boundaries.

@@ -1963,6 +1963,9 @@ Filled by the phase-gate review session per WORK-PLAN.md section 6.3.
 | 2026-07-19 | P8-3 front door dogfood | Answering "which component owns file X" costs a full search shard fetch (636 KB for shard 0 of this repo) because search entries carry per-entry docstring/help text and there is no per-shard key range or lightweight path->component index. The front door directs the agent correctly, but the fetch is heavier than the question warrants. | Recorded optimization target, not a bug. A future emission could add a small `paths.json` (sorted file path -> owning component id, no free text) so the ownership question is a few-KB fetch; the front door's `endpoints` list would gain one entry. Deferred: the current path answers correctly and most repos fit in one shard. |
 | 2026-07-19 | P8-3 front door dogfood | On this repo the split `manifest.json` is 685 KB compact (55 components, 633 files, incl. the committed `viewer/public/architecture` demo dataset scanned as 256 files). Structural questions (overview, findings) therefore fetch a large single file; the token-economy win over raw-repo reading holds (~1.33 MB battery vs 15.7 MB source) but is nearer 10x than 100x for a heavily-documented repo. | Expected for a mid-size, docstring-dense repo; the manifest is the only place with the full component tree. The 100x ambition is realistic on 1M+ line repos where the manifest is a tiny fraction of source (P9-1 large-repo demos will measure it). No new work owed; noted so the ambition is calibrated. |
 | 2026-07-19 | P8-3 front door emission | The monolith front door's `manifest_sections[].contains` text is written for the common split layout (e.g. the coverage entry says "full ledger ... is in coverage.json"), but in monolith mode coverage/activity are embedded whole in the single file. The `endpoints` list and `walk_orders` are monolith-correct; only the section blurbs carry split-oriented wording. | Cosmetic wording nuance on the backward-compat/small-repo path; the monolith endpoint entry is explicit that everything lives in the one file and there are no separate shards, so an agent is not misdirected. Left as-is for KISS; tighten if a monolith-served deploy ever becomes a first-class target. |
+| 2026-07-19 | D1 gate wave A | `out/` is NOT added to SKIP_DIRS by this wave, only the already-pruned `dist/`/`build/`. The D1 spec allowed pruning `out/` "when they are build-output directories", but that is exactly the ambiguous case where blind name-based pruning would drop a legitimate `out/` source directory. The measured self-repo inflation was 100% the emitted projection dataset (handled), so `out/` was left to the inventory heuristics rather than force-pruned. | Deliberate scope bound, not a silent skip: a real `out/` build directory is still classified `build_test_output` by the inventory when its files are non-source. If a future dataset shows a build-output `out/` inflating parsed source, add it behind a build-output confirmation (presence of a sibling build manifest), not a bare name match. |
+| 2026-07-19 | D3 gate wave A | The string-literal guard is applied to the job, cli, and driver (queue/db/http_client/websocket/grpc) signal detectors, NOT to the endpoint extractors or the parser-level `detect_framework`. The gate flagged celery/message_queue self-detection specifically, and endpoint patterns require a literal quoted `/route` that pattern-definition strings do not contain, so the endpoint self-match risk is negligible today. | Low-risk future extension: route the endpoint extractors through the same `in_string_literal` guard for full generality if a repo is ever found whose endpoint patterns self-match. `detect_framework` lives on the parser and would need the guard threaded there separately. |
+| 2026-07-19 | D2 gate wave A | A fixture-origin port-resolved http edge can still be drawn (self-repo: `tests -> polyglot-api` from a test file referencing `http://api:8000`). This is a DETERMINISTIC port match, not the D2 fabricated-name class, so it is out of D2 scope. | The honest treatment is to carry the D6 fixture-origin marker onto edges and de-rank fixture edges in the viewer, which belongs with the D8 findings/edge ranking wave (edges were left untouched here to avoid colliding with D5/D8). No edge-marker work is owed by this wave. |
 
 ### P9-0 gate record (2026-07-20, first run of the recurring dogfood gate)
 
@@ -2033,4 +2036,75 @@ writer, no mocks). Includes a fail-before that fails on the pre-fix overlay
 Full suite: 1077 passed, 1 xfailed, 1 known worktree-environmental failure
 (test_coverage_ledger .git-as-file). Viewer suite: 333 passed, lint + tsc +
 build clean. ruff clean on touched files.
+
+#### P9-0 gate defects wave A: RESOLVED (2026-07-19, branch program2/d-wave-a, PR pending)
+
+D1, D2, D3, D6, D9, D11 fixed under the surgical analyzer wave (D5 relationship
+extraction depth, D8 findings ranking, and D7 enrichment are owned by other
+waves and untouched here). Each fix ships a fail-before test on a real fixture
+or real git repo (tests/test_gate_defects_wave_a.py, 11 tests); no mocks. v1
+untouched throughout. Verification: pytest 1083 passed (+11 new), the one known
+worktree environmental failure (test_pruned_directory_row_stands_in_for_its_contents,
+`.git` is a file in a worktree) unchanged; ruff clean; parity suites
+(test_engine_parity.py) green with NO snapshot regeneration (the parity fixtures
+carry no generated projection and no string-literal pattern-definition false
+positives, so extraction is byte-stable); viewer full suite green (npm ci,
+vitest 333, lint, tsc, build).
+
+- **D1 (stats inflation) RESOLVED.** The tool's own emitted datasets are no
+  longer parsed as source. In the v2 enumeration (`analyzer/extract/runner.py`):
+  a projection dataset directory (a `manifest.json`/`architecture.json` whose
+  header carries the generator keys, per `analyzer/utils._is_generated_projection`
+  /`_is_generated_dataset_dir`) is pruned to one `excluded:skipped_directory`
+  row with a `generated:` reason; a standalone monolith projection file is
+  ledgered `excluded:generated`. A dedicated `generated` inventory category and
+  the `excluded:generated` non-source disposition were added (analyzer +
+  viewer `CoverageBadge`). `dist/`/`build/` were already pruned via SKIP_DIRS
+  (unchanged). tests/fixtures/** stay parsed (verified). Self-repo effect:
+  total lines 317,441 -> 103,437 (67% of the count was the tool's own JSON);
+  coverage stays 100% of source, ledger stays complete.
+- **D2 (fabricated http edges) RESOLVED.** The service-name http-edge block in
+  `analyzer/derive/relationships.py` now requires the URL HOST authority to
+  resolve EXACTLY to a target that declares an endpoint (a bound port or a
+  server-type component), via `_url_host`/`_declares_endpoint`, and only full
+  URL references (with a scheme) are considered (bare service tokens stay
+  per-component signals). Self-repo: five fabricated edges removed (viewer to
+  the github.com "solution-explorer" path, to a learn.microsoft.com "core"
+  segment, to a cloudflare.com domain, plus two cross-fixture name matches);
+  the two legitimate port-resolved polyglot edges remain. Change kept surgical
+  so it does not collide with the D5 extraction-depth wave.
+- **D3 (self-detection) RESOLVED, general fix.** Chose string-literal awareness
+  over a self-scan guard, since ANY pattern/detector tool repo triggers the same
+  class. `analyzer/extract/frameworks.in_string_literal` (triple-quote,
+  single-line, and backtick aware) suppresses a match whose START is inside a
+  string literal or docstring; applied to the job, cli, and driver detectors
+  (jobs/queue/db/http_client/websocket/grpc). Route paths and URLs are
+  unaffected because their match anchor is real code before the quote. Self-repo:
+  frameworks.py/signals.py/constants.py now yield zero self-detections; real
+  celery/click/requests usage still fires. EXTRACT_TIER bumped p5-extract/3 ->
+  p5-extract/4 (warm caches re-extract once).
+- **D6 (fixture pollution) RESOLVED.** `analyzer/derive/testing.is_fixture_path`
+  marks capabilities and data entities whose evidence/declaring files all live
+  under a test or fixture directory with `fixture: true` (kept, never deleted,
+  so 100% accounting holds). The viewer change was trivial: capability and data
+  lens default ranking places fixture items behind product items
+  (`viewer/src/lenses/capability.ts`, `data.ts`; `fixture?` added to the types).
+  Self-repo: 26/28 capabilities and 48/56 entities correctly marked fixture,
+  matching the gate's "24 of 28 entities were fixtures" observation.
+- **D9 (churn exclusions) RESOLVED.** `analyzer/project/activity.build_activity`
+  now filters the file-level hotspot detail and file coupling to the parsed-source
+  universe (the files table's `parsed` rows, equivalently the ledger's `parsed`
+  disposition), so vendored (.xcframework internals) and generated files never
+  rank in churn. Component-level activity is unchanged (it already aggregates
+  over `component_files`, which is parsed source only), as the gate required.
+- **D11 (warm-store incremental skip) RESOLVED.** The reproduced mechanism is a
+  warm store built from a SHALLOW clone (CI checkouts default to depth 1): it
+  recorded partial history, and after the clone is unshallowed the ancestor
+  commits become available while HEAD is unchanged, so the old
+  `prev_head == head` fast-path reported "unchanged, 0 commits" and stranded 28
+  commits of newly available history. `analyzer/extract/activity.extract_activity`
+  now trusts the unchanged fast-path only when the prior pass was COMPLETE (had
+  activity and was not shallow) and takes a fast-forward incremental only when
+  `prev_head != head` and the prior pass was complete; an incomplete prior pass
+  is rebuilt in full. Plain add-a-commit incremental is unaffected.
 

@@ -36,7 +36,7 @@ from ..constants import (
 from ..parsers.storyboard import parse_storyboard, segue_edge_type
 from .entities import extract_entities, extract_schema_entities
 from .facts import SignalRecord
-from .frameworks import extract_cli, extract_endpoints, extract_jobs
+from .frameworks import extract_cli, extract_endpoints, extract_jobs, in_string_literal
 from .rules import extract_rules
 
 
@@ -153,6 +153,8 @@ def _http_clients(content: str, language: str) -> list[SignalRecord]:
     out = []
     for pat in HTTP_CLIENT_PATTERNS.get(language, []):
         for m in re.finditer(pat, content):
+            if in_string_literal(content, m.start()):
+                continue  # a pattern definition, not real client usage (D3)
             out.append(SignalRecord(
                 "http_client", {"evidence": m.group(0).strip()},
                 _line_of(content, m.start()),
@@ -164,6 +166,8 @@ def _db_drivers(content: str, language: str) -> list[SignalRecord]:
     out = []
     for pat, library, engine in DATABASE_PATTERNS.get(language, []):
         for m in re.finditer(pat, content):
+            if in_string_literal(content, m.start()):
+                continue  # a pattern definition, not real driver usage (D3)
             out.append(SignalRecord(
                 "db_driver", {"library": library, "engine": engine},
                 _line_of(content, m.start()),
@@ -176,12 +180,16 @@ def _queue_drivers(content: str, language: str) -> list[SignalRecord]:
     out = []
     for pat, system in MESSAGE_QUEUE_PATTERNS.get(language, []):
         for m in re.finditer(pat, content):
+            if in_string_literal(content, m.start()):
+                continue  # a pattern definition, not real driver usage (D3)
             out.append(SignalRecord(
                 "queue_driver", {"system": system}, _line_of(content, m.start())
             ))
             break
     for pat in QUEUE_NAME_PATTERNS:
         for m in re.finditer(pat, content):
+            if in_string_literal(content, m.start()):
+                continue  # a pattern definition, not real usage (D3)
             text = m.group(0)
             if ".subscribe" in text:
                 direction = "consume"
@@ -202,6 +210,8 @@ def _websocket_drivers(content: str, language: str) -> list[SignalRecord]:
     out = []
     for pat in WEBSOCKET_PATTERNS.get(language, []):
         for m in re.finditer(pat, content):
+            if in_string_literal(content, m.start()):
+                continue  # a pattern definition, not real driver usage (D3)
             out.append(SignalRecord(
                 "websocket_driver", {"evidence": m.group(0).strip()},
                 _line_of(content, m.start()),
@@ -214,6 +224,8 @@ def _grpc_drivers(content: str, language: str) -> list[SignalRecord]:
     out = []
     for pat in GRPC_PATTERNS.get(language, []):
         for m in re.finditer(pat, content):
+            if in_string_literal(content, m.start()):
+                continue  # a pattern definition, not real driver usage (D3)
             out.append(SignalRecord(
                 "grpc_driver", {"evidence": m.group(0).strip()},
                 _line_of(content, m.start()),

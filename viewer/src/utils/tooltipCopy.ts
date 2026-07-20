@@ -42,6 +42,8 @@ export const TOOLTIP_COPY = {
       "excluded:skipped_directory":
         "Inside a pruned directory such as node_modules or .git. Not your source.",
       "excluded:vendored_repo": "Third-party code vendored into the tree. Not your source.",
+      "excluded:generated":
+        "This tool's own emitted architecture dataset committed into the tree. Machine output, not source.",
       unknownExcluded:
         "Excluded by a rule. Treated as a gap until confirmed to be non-source.",
     },

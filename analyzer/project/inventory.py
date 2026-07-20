@@ -69,6 +69,9 @@ NON_SOURCE_DISPOSITIONS = frozenset({
     "excluded:empty_file",
     "excluded:skipped_directory",
     "excluded:vendored_repo",
+    # The tool's own emitted projection dataset (D1): a committed monolith
+    # architecture.json or a stray manifest. Accounted, never counted as source.
+    "excluded:generated",
 })
 
 # Dispositions whose single row stands in for a whole pruned subtree. The
@@ -124,6 +127,12 @@ CATEGORY_META: dict[str, dict] = {
         "explanation": "Generated artifacts from building or testing, such as test result bundles, coverage reports, and logs.",
         "recommendation": "Remove from version control and add to .gitignore. These are regenerated on every build.",
         "flags": {"security_sensitive": False, "likely_unwanted": True, "gitignore_candidate": True},
+    },
+    "generated": {
+        "label": "Generated architecture data",
+        "explanation": "Datasets this tool emits, such as the architecture projection JSON, its manifest, and detail shards. Machine output regenerated on every analysis run, not hand-written source.",
+        "recommendation": "Keep if you serve it, but do not treat it as source. Regenerate it rather than editing it by hand.",
+        "flags": {"security_sensitive": False, "likely_unwanted": False, "gitignore_candidate": False},
     },
     "ide_metadata": {
         "label": "IDE and workspace metadata",
@@ -308,6 +317,15 @@ def classify_row(path: str, disposition: str, reason: Optional[str] = None) -> s
     partset = set(parts)
     filename = parts[-1] if parts else path.lower()
     ext = os.path.splitext(filename)[1]
+
+    # Generated projection output (D1): the file form carries its own
+    # disposition; the pruned-directory form rides ``excluded:skipped_directory``
+    # with a ``generated:`` reason. Both classify as generated data, never as an
+    # unknown or build-tool bucket, so the inventory names the tool's own output.
+    if disposition == "excluded:generated":
+        return "generated"
+    if reason and reason.startswith("generated:"):
+        return "generated"
 
     # Vendored repos are declared by the ledger disposition itself.
     if disposition == "excluded:vendored_repo":

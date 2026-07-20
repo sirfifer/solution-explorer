@@ -134,6 +134,10 @@ export interface Capability {
   detail: CapabilityDetail;
   evidence: Evidence[];
   confidence: "certain" | "inferred";
+  // D6: true when every occurrence is under a test or fixture directory. Such
+  // items are test scaffolding, not product surfaces, and rank behind product
+  // capabilities in the default view (they are kept, never dropped).
+  fixture?: boolean;
 }
 
 // A named field on a data entity, with its declared type where parseable.
@@ -158,6 +162,10 @@ export interface DataEntity {
   table?: string;
   symbol?: string;
   inferred?: boolean;
+  // D6: true when every declaring file is under a test or fixture directory.
+  // Kept for full accounting but ranked behind product entities in the default
+  // view.
+  fixture?: boolean;
 }
 
 // A read/write access edge from a component (accessor_id) to a data entity

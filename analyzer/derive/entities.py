@@ -26,6 +26,7 @@ from typing import Optional
 
 from .capabilities import _resolve_symbol, _slug, _snippet, _symbols_by_file
 from .context import Deriver
+from .testing import is_fixture_path
 
 __all__ = ["derive_entities"]
 
@@ -121,6 +122,11 @@ class _Entity:
             d["symbol"] = self.symbol_id
         if self.inferred:
             d["inferred"] = True
+        # D6: fixture origin when every declaring file is under a test or fixture
+        # directory. Marked (never dropped, so totality holds) so the viewer ranks
+        # fixture entities behind product entities.
+        if self.decl_files and all(is_fixture_path(f) for f in self.decl_files):
+            d["fixture"] = True
         return d
 
 
