@@ -536,6 +536,10 @@ Return ONLY a single JSON object, no prose, no fences:
 RULES:
 - Use the BROADEST honest pattern (an extension glob or a directory glob) so one
   rule retires many unknowns, but never so broad it would swallow unrelated files.
+- When an unknown path IS a directory (a pruned directory row like '.venv' or
+  '.wrangler', no file extension, accounted as one row), the pattern must match
+  that directory path itself: write '.venv', not '.venv/**'. A contents-only
+  glob never matches the directory row and the unknown survives.
 - 'category' MUST be one of the ids in CATEGORIES. Do not invent a category.
 - Only emit a rule when you are confident what the file is. It is correct to
   return fewer rules than paths, or an empty list, rather than guess.

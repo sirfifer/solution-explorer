@@ -521,3 +521,75 @@ def test_writer_explicit_id_collision_gets_a_unique_id(tmp_path):
     patterns = {r.id: r.pattern for r in rules}
     assert patterns["myrule"] == "*.ai"
     assert patterns[new_id] == "*.psd"
+
+
+def _git(cwd, *args):
+    import subprocess
+
+    return subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, check=False
+    )
+
+
+def test_sidecar_makes_rules_commitable_in_a_real_git_repo(tmp_path):
+    # The real behavior, in a real git repo (review finding: the previous test
+    # asserted file bytes, not git semantics): with NO repo-level directory
+    # ignore, the sidecar keeps the store ignored while the learned rules are
+    # addable. An existing sidecar is never overwritten.
+    from analyzer.enrich.rules_writer import write_inventory_rules
+
+    _git(tmp_path, "init", "-q")
+    write_inventory_rules(
+        tmp_path,
+        [{"pattern": "*.xyz", "category": "data", "source": "ai-enrichment"}],
+    )
+    (tmp_path / ".solution-explorer" / "index.db").write_bytes(b"x")
+
+    rules_rel = ".solution-explorer/rules/inventory.yml"
+    assert _git(tmp_path, "check-ignore", "-q", rules_rel).returncode == 1, (
+        "the learned rules must NOT be ignored"
+    )
+    assert _git(
+        tmp_path, "check-ignore", "-q", ".solution-explorer/index.db"
+    ).returncode == 0, "the store must stay ignored"
+
+    sidecar = tmp_path / ".solution-explorer" / ".gitignore"
+    sidecar.write_text("# user edited\n")
+    write_inventory_rules(
+        tmp_path,
+        [{"pattern": "*.abc", "category": "data", "source": "ai-enrichment"}],
+    )
+    assert sidecar.read_text() == "# user edited\n", "never overwrite a user sidecar"
+
+
+def test_repo_level_directory_ignore_triggers_the_shadow_warning(tmp_path):
+    # Git never descends into an excluded directory, so a repo-level
+    # ".solution-explorer/" line makes the sidecar unreachable (review finding,
+    # empirically proven with git check-ignore). The writer cannot edit the
+    # user's .gitignore, so it must warn loudly with the exact fix, and the
+    # warning fires even when the run adds no new rules.
+    from analyzer.enrich.rules_writer import write_inventory_rules
+
+    _git(tmp_path, "init", "-q")
+    (tmp_path / ".gitignore").write_text(".solution-explorer/\n")
+
+    warnings: list = []
+    write_inventory_rules(
+        tmp_path,
+        [{"pattern": "*.xyz", "category": "data", "source": "ai-enrichment"}],
+        warn=warnings.append,
+    )
+    assert any("cannot be committed" in w for w in warnings), warnings
+    # Git agrees the rules file is still buried by the parent-directory ignore.
+    assert _git(
+        tmp_path, "check-ignore", "-q", ".solution-explorer/rules/inventory.yml"
+    ).returncode == 0
+
+    # A second run that adds nothing new must still warn (the shadow is live).
+    warnings.clear()
+    write_inventory_rules(
+        tmp_path,
+        [{"pattern": "*.xyz", "category": "data", "source": "ai-enrichment"}],
+        warn=warnings.append,
+    )
+    assert any("cannot be committed" in w for w in warnings), warnings

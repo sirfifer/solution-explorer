@@ -1,0 +1,6 @@
+# Managed by solution-explorer: keep the store out of version
+# control while the learned rules travel with the repo.
+*
+!.gitignore
+!rules/
+!rules/**

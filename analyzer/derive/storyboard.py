@@ -25,6 +25,8 @@ and the Interface Builder controller id, never order-derived.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from ..models import Component, Relationship
 from .capabilities import _slug
 from .context import Deriver
@@ -47,6 +49,7 @@ def derive_storyboard_flow(d: Deriver) -> None:
         # controller id -> the screen component built for that scene, so segue
         # destinations (Interface Builder ids) resolve within this file.
         node_by_controller: dict[str, Component] = {}
+        unnamed_seen = 0
         for sig in scenes:
             value = sig.get("value") or {}
             controller_id = value.get("controller_id")
@@ -54,6 +57,20 @@ def derive_storyboard_flow(d: Deriver) -> None:
                 continue
             name = value.get("name") or controller_id
             custom_class = value.get("custom_class")
+            # A scene with no customClass and no storyboardIdentifier falls back
+            # to its raw Interface Builder id (like "01J-lp-oVM"), which is
+            # meaningless to a reader. Name such scenes after the storyboard
+            # file itself (LaunchScreen.storyboard's lone scene reads
+            # "LaunchScreen"), suffixed by position when a file has several
+            # unnamed scenes so names stay unique and deterministic.
+            if name == controller_id:
+                stem = Path(path).name
+                for suffix in (".storyboard", ".xib"):
+                    if stem.endswith(suffix):
+                        stem = stem[: -len(suffix)]
+                        break
+                unnamed_seen += 1
+                name = stem if unnamed_seen == 1 else f"{stem} scene {unnamed_seen}"
             node_id = f"{owner.id}/__ui__/{_slug(path)}/{controller_id}"
             screen = Component(
                 id=node_id,
