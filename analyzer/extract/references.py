@@ -30,11 +30,23 @@ the per-file candidate scan is capped (:data:`MAX_REFERENCE_NAMES`) so a
 pathological generated file cannot blow up signal volume.
 
 Extractor maturity is honest and per-language (:data:`REFERENCE_LANGUAGES`).
-Swift, Python, TypeScript, and JavaScript have reference extractors here; Go,
-Rust, and Ruby do not yet, and the D4 orphan reframing consults this set so a
-substantial component in a weakly-scanned language is heavily de-ranked with an
+Swift, Python, TypeScript, JavaScript, and Java have reference extractors here;
+Go, Rust, and Ruby do not yet, and the D4 orphan reframing consults this set so
+a substantial component in a weakly-scanned language is heavily de-ranked with an
 explicit blind-spot caveat instead of being asserted as unreferenced at full
 strength.
+
+Import semantics differ by language and gate how strongly a single-definer name
+resolves (see :data:`PER_NAME_IMPORT_LANGUAGES`). Java is a per-name-import
+language: an ``import com.example.service.UserService;`` names one specific type,
+so a reference to ``UserService`` that resolves to exactly one component still
+REQUIRES the file to import that type before an edge is drawn. This is the safe
+choice: a cross-component Java reference always carries an import (only
+same-package classes, which live in the same component, can omit it), so the
+import requirement suppresses coincidental same-name matches without losing the
+cross-component edges this whole pass exists to find. Java differs from C# here,
+whose ``using`` directive imports a whole namespace rather than a single type and
+therefore is NOT per-name evidence.
 """
 
 from __future__ import annotations
@@ -54,7 +66,7 @@ __all__ = [
 
 # Languages with a symbol-reference extractor below. The D4 orphan reframing
 # treats every OTHER language as a "weak" reference extractor (honest maturity).
-REFERENCE_LANGUAGES = frozenset({"swift", "python", "typescript", "javascript"})
+REFERENCE_LANGUAGES = frozenset({"swift", "python", "typescript", "javascript", "java"})
 
 # Cap on distinct referenced names emitted per file. A generated or minified
 # file can name thousands of identifiers; beyond this the marginal edge value is
@@ -69,7 +81,7 @@ MAX_REFERENCE_NAMES = 400
 # `session` component just because it is the only definer). Swift is absent by
 # design: its imports are module-level with no per-name form, so it relies on
 # the qualified-access exclusion plus SWIFT_COMMON_TYPE_NAMES below.
-PER_NAME_IMPORT_LANGUAGES = frozenset({"python", "typescript", "javascript"})
+PER_NAME_IMPORT_LANGUAGES = frozenset({"python", "typescript", "javascript", "java"})
 
 # Common Swift platform type names (Foundation/UIKit/SwiftUI/stdlib). Swift has
 # no per-name imports to prove a local resolution, so when a referenced name is
@@ -151,6 +163,20 @@ _REFERENCE_RULES: dict[str, list[re.Pattern]] = {
         re.compile(r"\bnew\s+([A-Z]\w+)"),
         re.compile(r"\bextends\s+([A-Z]\w+)"),
         re.compile(r"<\s*([A-Z]\w+)"),                   # JSX open tag
+    ],
+    "java": [
+        re.compile(r"\bnew\s+([A-Z]\w+)"),               # constructor call
+        re.compile(r"\bextends\s+([A-Z]\w+)"),
+        re.compile(r"\bimplements\s+([A-Z]\w+)"),
+        re.compile(r"\bthrows\s+([A-Z]\w+)"),
+        re.compile(r"<\s*([A-Z]\w+)"),                   # generic argument
+        re.compile(_STATIC),                             # static access Name.member
+        # A type used in a field, parameter, local, or return-type declaration:
+        # an uppercase-initial type name, an optional generic section, then a
+        # lowercase-initial variable or method name. Java convention keeps type
+        # names uppercase and identifiers lowercase, so this stays precise; a
+        # stdlib name (String, List) simply resolves to nothing at derive time.
+        re.compile(r"\b([A-Z]\w+)(?:<[^;={}()]*>)?\s+[a-z_$]\w*"),
     ],
 }
 

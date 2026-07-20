@@ -267,6 +267,10 @@ FRAMEWORK_PRIORITY = {
     "Grape": 1,         # API-only
     "Hanami": 2,        # Full framework
     "Rails": 3,         # Full framework
+    # Java
+    "Java EE": 1,       # javax.* enterprise APIs
+    "Jakarta EE": 1,    # jakarta.* enterprise APIs
+    "Spring": 2,        # Full application framework
 }
 
 # UI Flow Detection constants

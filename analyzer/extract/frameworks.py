@@ -438,6 +438,92 @@ def _swift_endpoints(content: str) -> list[tuple[dict, int]]:
     return _dedupe(out)
 
 
+# Java: Spring MVC mapping annotations and JAX-RS resource annotations, each
+# gated on a framework marker so no unrelated annotation becomes a route.
+_JAVA_SPRING_MARKERS = (
+    "org.springframework", "@RestController", "@Controller",
+    "@RequestMapping", "@GetMapping", "@PostMapping", "@PutMapping",
+    "@DeleteMapping", "@PatchMapping",
+)
+_JAVA_JAXRS_MARKERS = ("javax.ws.rs", "jakarta.ws.rs", "@Path")
+
+_JAVA_SPRING_MAPPING = re.compile(
+    r"@(Get|Post|Put|Delete|Patch|Request)Mapping\s*(?:\(\s*([^)]*)\))?"
+)
+_JAVA_MAPPING_VALUE = re.compile(r"(?:value|path)\s*=\s*\{?\s*\"([^\"]+)\"")
+_JAVA_MAPPING_BARE = re.compile(r"\{?\s*\"([^\"]+)\"")
+_JAVA_MAPPING_METHOD = re.compile(r"method\s*=\s*\{?\s*(?:RequestMethod\.)?(\w+)")
+_JAVA_SPRING_VERBS = {
+    "Get": "GET", "Post": "POST", "Put": "PUT",
+    "Delete": "DELETE", "Patch": "PATCH",
+}
+
+_JAVA_JAXRS_PATH = re.compile(r"@Path\s*\(\s*\"([^\"]+)\"")
+_JAVA_JAXRS_VERB = re.compile(r"@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b")
+
+
+def _java_mapping_method(verb: str, args: str) -> str:
+    if verb in _JAVA_SPRING_VERBS:
+        return _JAVA_SPRING_VERBS[verb]
+    m = _JAVA_MAPPING_METHOD.search(args)
+    return m.group(1).upper() if m else "ANY"
+
+
+def _java_mapping_path(args: str) -> Optional[str]:
+    m = _JAVA_MAPPING_VALUE.search(args)
+    if m:
+        return m.group(1)
+    m = _JAVA_MAPPING_BARE.search(args)
+    return m.group(1) if m else None
+
+
+def _java_endpoints(content: str) -> list[tuple[dict, int]]:
+    is_spring = _hint(content, *_JAVA_SPRING_MARKERS)
+    is_jaxrs = _hint(content, *_JAVA_JAXRS_MARKERS)
+    if not (is_spring or is_jaxrs):
+        return []
+    out: list[tuple[dict, int]] = []
+
+    if is_spring:
+        for m in _JAVA_SPRING_MAPPING.finditer(content):
+            args = m.group(2) or ""
+            path = _java_mapping_path(args)
+            if not path or not is_route_path(path, allow_bare=True):
+                continue
+            norm = path if path.startswith("/") else "/" + path
+            out.append((
+                {"method": _java_mapping_method(m.group(1), args),
+                 "path": norm, "framework": "spring"},
+                m.start(),
+            ))
+
+    if is_jaxrs:
+        # Pair each verb annotation with the nearest preceding @Path (its
+        # resource path); when a verb has no @Path before it, fall back to the
+        # nearest following one, else the root.
+        paths = [(m.start(), m.group(1)) for m in _JAVA_JAXRS_PATH.finditer(content)]
+        for vm in _JAVA_JAXRS_VERB.finditer(content):
+            path = _nearest_path(paths, vm.start())
+            if not is_route_path(path, allow_bare=True):
+                continue
+            norm = path if path.startswith("/") else "/" + path
+            out.append((
+                {"method": vm.group(1).upper(), "path": norm, "framework": "jaxrs"},
+                vm.start(),
+            ))
+    return _dedupe(out)
+
+
+def _nearest_path(paths: list[tuple[int, str]], pos: int) -> str:
+    """Return the @Path value nearest to ``pos`` (preferring one before it)."""
+    if not paths:
+        return "/"
+    before = [(p, v) for p, v in paths if p <= pos]
+    if before:
+        return before[-1][1]
+    return paths[0][1]
+
+
 _ENDPOINT_EXTRACTORS = {
     "python": _python_endpoints,
     "javascript": _js_endpoints,
@@ -446,6 +532,7 @@ _ENDPOINT_EXTRACTORS = {
     "ruby": _ruby_endpoints,
     "rust": _rust_endpoints,
     "swift": _swift_endpoints,
+    "java": _java_endpoints,
 }
 
 

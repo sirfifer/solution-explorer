@@ -1,0 +1,362 @@
+{
+  "components": [
+    {
+      "actions": [],
+      "children": [
+        {
+          "actions": [],
+          "children": [],
+          "config_files": [],
+          "description": null,
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [
+              "Service Layer"
+            ],
+            "purpose": null,
+            "readme": null,
+            "tech_stack": [
+              "Java"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "service/src/main/java/com/example/service/User.java",
+            "service/src/main/java/com/example/service/UserService.java"
+          ],
+          "framework": null,
+          "id": "service",
+          "language": "java",
+          "metrics": {
+            "files": 2,
+            "languages": {
+              "java": 25
+            },
+            "lines": 25,
+            "size_bytes": 488,
+            "symbols": 4
+          },
+          "name": "service",
+          "path": "service",
+          "port": null,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 2,
+            "test_frameworks": [],
+            "test_lines": 25,
+            "unit_tests": 0
+          },
+          "type": "package"
+        },
+        {
+          "actions": [],
+          "children": [],
+          "config_files": [],
+          "description": null,
+          "docs": {
+            "api_docs": null,
+            "api_endpoints": [
+              {
+                "method": "ANY",
+                "path": "/api"
+              },
+              {
+                "method": "GET",
+                "path": "/users/{id}"
+              },
+              {
+                "method": "POST",
+                "path": "/users"
+              }
+            ],
+            "architecture_notes": null,
+            "changelog": null,
+            "claude_md": null,
+            "env_vars": [],
+            "key_decisions": [],
+            "patterns": [],
+            "purpose": null,
+            "readme": null,
+            "tech_stack": [
+              "Java",
+              "Spring"
+            ]
+          },
+          "entry_points": [],
+          "external_services": [],
+          "files": [
+            "web/src/main/java/com/example/web/UserController.java"
+          ],
+          "framework": "Spring",
+          "id": "web",
+          "language": "java",
+          "metrics": {
+            "files": 1,
+            "languages": {
+              "java": 32
+            },
+            "lines": 32,
+            "size_bytes": 940,
+            "symbols": 4
+          },
+          "name": "web",
+          "path": "web",
+          "port": null,
+          "testing": {
+            "coverage_percent": null,
+            "coverage_source": null,
+            "e2e_tests": 0,
+            "has_ci_tests": true,
+            "integration_tests": 0,
+            "test_files": 1,
+            "test_frameworks": [],
+            "test_lines": 32,
+            "unit_tests": 0
+          },
+          "type": "package"
+        }
+      ],
+      "config_files": [],
+      "description": null,
+      "docs": {
+        "api_docs": null,
+        "api_endpoints": [],
+        "architecture_notes": null,
+        "changelog": null,
+        "claude_md": null,
+        "env_vars": [],
+        "key_decisions": [],
+        "patterns": [],
+        "purpose": null,
+        "readme": null,
+        "tech_stack": []
+      },
+      "entry_points": [],
+      "external_services": [],
+      "files": [],
+      "framework": null,
+      "id": "root",
+      "language": null,
+      "metrics": {
+        "files": 0,
+        "languages": {},
+        "lines": 0,
+        "size_bytes": 0,
+        "symbols": 0
+      },
+      "name": "java",
+      "path": "",
+      "port": null,
+      "testing": {
+        "coverage_percent": null,
+        "coverage_source": null,
+        "e2e_tests": 0,
+        "has_ci_tests": true,
+        "integration_tests": 0,
+        "test_files": 0,
+        "test_frameworks": [],
+        "test_lines": 0,
+        "unit_tests": 0
+      },
+      "type": "project"
+    }
+  ],
+  "default_branch": "main",
+  "description": "",
+  "files": [
+    {
+      "exports": [],
+      "imports": [
+        "com.example.service.User",
+        "com.example.service.UserService",
+        "org.springframework.web.bind.annotation.GetMapping",
+        "org.springframework.web.bind.annotation.PathVariable",
+        "org.springframework.web.bind.annotation.PostMapping",
+        "org.springframework.web.bind.annotation.RequestBody",
+        "org.springframework.web.bind.annotation.RequestMapping",
+        "org.springframework.web.bind.annotation.RestController"
+      ],
+      "language": "java",
+      "lines": 32,
+      "module_doc": null,
+      "path": "web/src/main/java/com/example/web/UserController.java",
+      "size_bytes": 940,
+      "symbols": [
+        "web/src/main/java/com/example/web/UserController.java:UserController:13",
+        "web/src/main/java/com/example/web/UserController.java:UserController:18",
+        "web/src/main/java/com/example/web/UserController.java:createUser:27",
+        "web/src/main/java/com/example/web/UserController.java:getUser:22"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [
+        "java.util.HashMap",
+        "java.util.Map"
+      ],
+      "language": "java",
+      "lines": 19,
+      "module_doc": null,
+      "path": "service/src/main/java/com/example/service/UserService.java",
+      "size_bytes": 369,
+      "symbols": [
+        "service/src/main/java/com/example/service/UserService.java:UserService:7",
+        "service/src/main/java/com/example/service/UserService.java:find:10",
+        "service/src/main/java/com/example/service/UserService.java:save:14"
+      ]
+    },
+    {
+      "exports": [],
+      "imports": [],
+      "language": "java",
+      "lines": 6,
+      "module_doc": "A user record in the service module.",
+      "path": "service/src/main/java/com/example/service/User.java",
+      "size_bytes": 119,
+      "symbols": [
+        "service/src/main/java/com/example/service/User.java:User:4"
+      ]
+    }
+  ],
+  "name": "java",
+  "relationships": [],
+  "repositories": [],
+  "repository": null,
+  "stats": {
+    "languages": {
+      "java": 57
+    },
+    "total_components": 3,
+    "total_files": 3,
+    "total_lines": 57,
+    "total_relationships": 0,
+    "total_size_bytes": 1428,
+    "total_symbols": 8,
+    "total_symbols_detected": 8
+  },
+  "symbols": [
+    {
+      "annotations": [],
+      "code_preview": "    @GetMapping(\"/users/{id}\")\n    public User getUser(@PathVariable long id) {\n        return service.find(id);\n    }\n",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 25,
+      "file": "web/src/main/java/com/example/web/UserController.java",
+      "id": "web/src/main/java/com/example/web/UserController.java:getUser:22",
+      "kind": "method",
+      "line": 22,
+      "name": "getUser",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    @PostMapping(\"/users\")\n    public User createUser(@RequestBody User user) {\n        return service.save(user);\n    }\n}",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 30,
+      "file": "web/src/main/java/com/example/web/UserController.java",
+      "id": "web/src/main/java/com/example/web/UserController.java:createUser:27",
+      "kind": "method",
+      "line": 27,
+      "name": "createUser",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    public User find(long id) {\n        return users.get(id);\n    }\n\n    public User save(User user) {\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 12,
+      "file": "service/src/main/java/com/example/service/UserService.java",
+      "id": "service/src/main/java/com/example/service/UserService.java:find:10",
+      "kind": "method",
+      "line": 10,
+      "name": "find",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    public User save(User user) {\n        users.put(user.id(), user);\n        return user;\n    }\n}",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 17,
+      "file": "service/src/main/java/com/example/service/UserService.java",
+      "id": "service/src/main/java/com/example/service/UserService.java:save:14",
+      "kind": "method",
+      "line": 14,
+      "name": "save",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "    public UserController(UserService service) {\n        this.service = service;\n    }\n\n    @GetMapping(\"/users/{id}\")\n    ...",
+      "dependencies": [],
+      "docstring": null,
+      "end_line": 20,
+      "file": "web/src/main/java/com/example/web/UserController.java",
+      "id": "web/src/main/java/com/example/web/UserController.java:UserController:18",
+      "kind": "method",
+      "line": 18,
+      "name": "UserController",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "@RestController\n@RequestMapping(\"/api\")\npublic class UserController {\n    private final UserService service;\n\n    ...",
+      "dependencies": [],
+      "docstring": "REST endpoints for users.",
+      "end_line": 31,
+      "file": "web/src/main/java/com/example/web/UserController.java",
+      "id": "web/src/main/java/com/example/web/UserController.java:UserController:13",
+      "kind": "class",
+      "line": 13,
+      "name": "UserController",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "public class UserService {\n    private final Map<Long, User> users = new HashMap<>();\n\n    public User find(long id) {\n        return users.get(id);\n    ...",
+      "dependencies": [],
+      "docstring": "Stores and retrieves users.",
+      "end_line": 18,
+      "file": "service/src/main/java/com/example/service/UserService.java",
+      "id": "service/src/main/java/com/example/service/UserService.java:UserService:7",
+      "kind": "class",
+      "line": 7,
+      "name": "UserService",
+      "parent": null,
+      "visibility": "public"
+    },
+    {
+      "annotations": [],
+      "code_preview": "public record User(long id, String name) {\n}\n",
+      "dependencies": [],
+      "docstring": "A user record in the service module.",
+      "end_line": 5,
+      "file": "service/src/main/java/com/example/service/User.java",
+      "id": "service/src/main/java/com/example/service/User.java:User:4",
+      "kind": "record",
+      "line": 4,
+      "name": "User",
+      "parent": null,
+      "visibility": "public"
+    }
+  ]
+}
