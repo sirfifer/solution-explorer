@@ -57,8 +57,16 @@ def is_route_path(path: Optional[str], *, allow_bare: bool = False) -> bool:
     return False
 
 
-def compute_string_spans(content: str) -> list[tuple[int, int]]:
-    """Ordered, non-overlapping ``[start, end)`` string-literal spans (D3).
+# Languages whose line comments start with an unquoted '#'. ONLY these get the
+# comment handling in compute_string_spans: applying '#' comment rules to a
+# language where '#' is code (Swift `#available` / raw strings `#"..."#`, TS/JS
+# private fields `#count`) would un-mask real strings relative to the pre-guard
+# scanner (PR #55 review finding 3).
+HASH_COMMENT_LANGUAGES = frozenset({"python", "ruby", "shell", "bash", "yaml"})
+
+
+def compute_string_spans(content: str, language: str | None = None) -> list[tuple[int, int]]:
+    """Ordered, non-overlapping ``[start, end)`` masked spans (D3).
 
     A pattern/detector tool defines its own detection patterns as string
     constants (for example a job rule written as a compiled regex over the token
@@ -80,26 +88,33 @@ def compute_string_spans(content: str) -> list[tuple[int, int]]:
     match *anchor* is real code before the quote, are unaffected because the
     anchor offset is not inside a string.
 
-    Language boundary: an unquoted ``#`` is treated as a line comment that runs
-    to the end of its line, so a triple-quote opener that appears after a ``#``
-    (a documentation example inside a comment) does not open a phantom,
-    never-closed string that would swallow the rest of the file (the PR #53
-    comment-phantom nit). This models ``#``-style line comments (Python, Ruby,
-    shell, YAML). It deliberately does NOT model ``//`` line comments: the guard
-    fails toward "not in a string" (a match is treated as real usage), which is
-    the safe direction, and the ``#`` case is the one the self-detection defect
-    produced. See the recorded row in TASKS.md.
+    Language boundary (PR #55 review findings 2 and 3): when ``language`` is one
+    of :data:`HASH_COMMENT_LANGUAGES`, an unquoted ``#`` opens a line comment
+    that runs to the end of its line and the WHOLE comment is recorded as a
+    masked span, so (a) a triple-quote opener inside a comment does not open a
+    phantom, never-closed string that would swallow the rest of the file, and
+    (b) commented-out code (``# x = Config()``) is masked and never read as real
+    usage. For every other language (and ``language=None``) ``#`` is an ordinary
+    character, byte-identical to the pre-guard scanner, so Swift ``#available``
+    / raw strings and TS/JS ``#field`` syntax stay code. ``//`` line comments
+    are deliberately NOT modeled: the guard fails toward "not in a string" (a
+    match is treated as real usage), which is the safe direction. See the
+    recorded rows in TASKS.md.
     """
+    hash_comments = language in HASH_COMMENT_LANGUAGES
     spans: list[tuple[int, int]] = []
     length = len(content)
     i = 0
     while i < length:
         ch = content[i]
-        # An unquoted '#' opens a line comment (see language boundary above);
-        # skip to the newline so a '"""' inside it never opens a string.
-        if ch == "#":
+        # An unquoted '#' opens a line comment in hash-comment languages; the
+        # whole comment is masked so neither a '"""' inside it opens a string
+        # nor commented-out code reads as usage (findings 2 and 3).
+        if ch == "#" and hash_comments:
             nl = content.find("\n", i)
-            i = length if nl == -1 else nl + 1
+            end = length if nl == -1 else nl
+            spans.append((i, end))
+            i = end + 1
             continue
         # Triple-quoted strings first: they can span many lines (docstrings).
         if content.startswith('"""', i) or content.startswith("'''", i):
@@ -133,22 +148,25 @@ def compute_string_spans(content: str) -> list[tuple[int, int]]:
 
 
 class StringMask:
-    """Precomputed string-span index for one file's content (PR #53 nit b).
+    """Precomputed masked-span index for one file's content (PR #53 nit b).
 
-    Build once per file, then query many match positions in O(log n) each via
-    binary search, instead of the old O(n) rescan-from-zero per position that
-    made whole-file signal extraction quadratic on match-heavy files.
+    Build once per file (with the file's ``language`` so hash-comment handling
+    is applied only where ``#`` really is a comment), then query many match
+    positions in O(log n) each via binary search, instead of the old O(n)
+    rescan-from-zero per position that made whole-file signal extraction
+    quadratic on match-heavy files. Masked spans are string literals plus, for
+    :data:`HASH_COMMENT_LANGUAGES`, ``#`` line comments.
     """
 
     __slots__ = ("_starts", "_ends")
 
-    def __init__(self, content: str):
-        spans = compute_string_spans(content)
+    def __init__(self, content: str, language: str | None = None):
+        spans = compute_string_spans(content, language)
         self._starts = [s for s, _ in spans]
         self._ends = [e for _, e in spans]
 
     def in_string(self, pos: int) -> bool:
-        """True when ``pos`` falls strictly inside a string span (``start < pos < end``).
+        """True when ``pos`` falls strictly inside a masked span (``start < pos < end``).
 
         The opening-quote offset itself is not "inside", matching the historical
         :func:`in_string_literal` semantics so extraction stays byte-stable.
@@ -172,14 +190,16 @@ def pos_in_spans(spans: list[tuple[int, int]], pos: int) -> bool:
     return idx >= 0 and pos < spans[idx][1]
 
 
-def in_string_literal(content: str, pos: int) -> bool:
-    """True when offset ``pos`` falls inside a string literal (D3).
+def in_string_literal(content: str, pos: int, language: str | None = None) -> bool:
+    """True when offset ``pos`` falls inside a masked span (D3).
 
-    Backward-compatible single-shot wrapper over :class:`StringMask`. Callers
-    that test many positions on the same content should build one
-    :class:`StringMask` and reuse it (this wrapper rescans per call).
+    Backward-compatible single-shot wrapper over :class:`StringMask`. With the
+    default ``language=None`` this is byte-identical to the original pre-mask
+    byte scan (no ``#`` comment handling). Callers that test many positions on
+    the same content should build one :class:`StringMask` and reuse it (this
+    wrapper rescans per call).
     """
-    return StringMask(content).in_string(pos)
+    return StringMask(content, language).in_string(pos)
 
 
 def _hint(content: str, *markers: str) -> bool:
@@ -504,7 +524,7 @@ def extract_cli(content: str, language: str) -> tuple[list[tuple[dict, int]], li
     generic commander ``.option`` rule) are suppressed so one declaration yields
     one signal.
     """
-    mask = StringMask(content)  # one scan; queried per match (PR #53 nit b)
+    mask = StringMask(content, language)  # one scan; queried per match (PR #53 nit b)
     cmd_matches: list[tuple[dict, int, int]] = []
     for pat, name_group, framework in _CLI_COMMAND_RULES.get(language, []):
         for m in pat.finditer(content):
@@ -567,7 +587,7 @@ def extract_jobs(content: str, language: str) -> list[tuple[dict, int]]:
     """Return ``({"name"/"trigger", "framework"}, match_start)`` job tuples."""
     out: list[tuple[dict, int]] = []
     seen: set = set()
-    mask = StringMask(content)  # one scan; queried per match (PR #53 nit b)
+    mask = StringMask(content, language)  # one scan; queried per match (PR #53 nit b)
     for pat, group, framework in _JOB_RULES.get(language, []):
         for m in pat.finditer(content):
             if mask.in_string(m.start()):

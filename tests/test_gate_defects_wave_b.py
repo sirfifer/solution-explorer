@@ -2,9 +2,12 @@
 
 Fail-before regression tests for the P9-0 gate defects D5, D4, and D8 plus the
 two PR #53 review nits (comment-phantom string opener, quadratic string-span
-rescan). Each test drives the REAL extract -> derive path on a real fixture tree
-(no mocks of the unit under test); clone tests need the tree-sitter token stream
-and skip loudly without it.
+rescan) and the PR #55 adversarial-review findings 1-5 (qualified-access and
+coincidental-name false edges, comment-content phantom references,
+language-blind '#' handling, tautological equivalence test, silent
+weak-language suppression). Each test drives the REAL extract -> derive path on
+a real fixture tree (no mocks of the unit under test); clone tests need the
+tree-sitter token stream and skip loudly without it.
 
   D5   intra-module type usage becomes a component-to-component `uses` edge
   D4   the orphan finding is reframed `unreferenced` and collapses under D5
@@ -16,6 +19,7 @@ and skip loudly without it.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import pytest
 
@@ -26,11 +30,54 @@ from analyzer.extract.frameworks import (
     compute_string_spans,
     in_string_literal,
 )
+from analyzer.extract.references import extract_reference_signals
 from analyzer.extract.signals import extract_signals
 from analyzer.parsers import PARSERS
 from analyzer.store import FactStore
 
 _TS = getattr(PARSERS.get("python"), "_ts_available", False)
+
+
+# FROZEN pre-mask oracle (PR #55 review finding 4): a byte-for-byte copy of the
+# ORIGINAL wave-A in_string_literal byte scan (commit bad7762), kept here so the
+# equivalence test compares the new span implementation against the OLD shipped
+# semantics, not against itself. Do not "fix" or refactor this copy.
+def _legacy_in_string_literal(content: str, pos: int) -> bool:
+    if pos <= 0:
+        return False
+    length = len(content)
+    i = 0
+    while i < pos:
+        if content.startswith('"""', i) or content.startswith("'''", i):
+            q = content[i:i + 3]
+            end = content.find(q, i + 3)
+            if end == -1:
+                return True
+            close = end + 3
+            if pos < close:
+                return True
+            i = close
+            continue
+        ch = content[i]
+        if ch in "\"'`":
+            j = i + 1
+            while j < length:
+                c = content[j]
+                if c == "\\":
+                    j += 2
+                    continue
+                if c == ch:
+                    j += 1
+                    break
+                if c == "\n" and ch != "`":
+                    break
+                j += 1
+            if pos < j:
+                return True
+            i = j
+            continue
+        i += 1
+    return False
 
 
 def _write(root, rel, text):
@@ -113,6 +160,92 @@ def test_d5_reference_inside_a_string_is_not_a_use(tmp_path):
     assert uses == [], f"a string/comment mention must not be a use, got: {uses}"
 
 
+def test_d5_qualified_access_draws_no_edge_python(tmp_path):
+    # PR #55 review finding 1 reproduction: `requests.Session()` names Session
+    # only through the `requests.` qualifier, and a local `session` component
+    # happens to define its own Session class. Pre-fix a false web->session
+    # `uses` edge was drawn (single definer, no import check); post-fix the
+    # qualified member is excluded at extraction AND the single-definer path
+    # requires import evidence, so no edge exists.
+    _write(tmp_path, "web/client.py",
+           "import requests\ndef fetch():\n    s = requests.Session()\n    return s\n")
+    _write(tmp_path, "web/other.py", "def o():\n    return 1\n")
+    _write(tmp_path, "session/store.py", "class Session:\n    pass\n")
+    _write(tmp_path, "session/aux.py", "def a():\n    return 2\n")
+
+    _, arch = _derive(tmp_path)
+    uses = _rels(arch, "uses")
+    assert uses == [], f"requests.Session() must not edge to a local component: {uses}"
+
+
+def test_d5_swift_common_platform_name_draws_no_edge(tmp_path):
+    # PR #55 review finding 1 reproduction (Swift half): `Foundation.Timer()`
+    # and a bare `Timer()` in a UI file, with a `models` component defining its
+    # own Timer class. Swift has no per-name imports to rescue this, so the
+    # common-platform-name exclusion must drop it: no ui->models edge.
+    _write(tmp_path, "ui/ClockView.swift",
+           "import Foundation\nstruct ClockView {\n    func body() {\n"
+           "        let t1 = Foundation.Timer()\n        let t2 = Timer()\n    }\n}\n")
+    _write(tmp_path, "ui/ClockAux.swift", "struct ClockAux {\n    var v = 0\n}\n")
+    _write(tmp_path, "models/Timer.swift", "class Timer {\n    var x = 1\n}\n")
+    _write(tmp_path, "models/ModelsAux.swift", "struct ModelsAux {\n    var v = 0\n}\n")
+
+    d, arch = _derive(tmp_path)
+    uses = _rels(arch, "uses")
+    assert uses == [], f"a platform-common name must not fabricate an edge: {uses}"
+    assert getattr(d, "_uses_common_name_dropped", 0) >= 1
+
+
+def test_d5_swift_common_name_counts_when_file_has_another_tie(tmp_path):
+    # The common-name exclusion applies ONLY when the file shows no other
+    # relationship with the resolved component: here the same file also uses the
+    # target's distinctive AudioClock type, so its Timer reference to the same
+    # component is corroborated and the edge carries both names.
+    _write(tmp_path, "engine/Timer.swift", "class Timer {\n    var x = 1\n}\n")
+    _write(tmp_path, "engine/AudioClock.swift", "class AudioClock {\n    var y = 2\n}\n")
+    _write(tmp_path, "ui/View.swift",
+           "struct View1 {\n    func body() {\n"
+           "        let c = AudioClock()\n        let t = Timer()\n    }\n}\n")
+    _write(tmp_path, "ui/Aux.swift", "struct UIAux {\n    var v = 0\n}\n")
+
+    _, arch = _derive(tmp_path)
+    edge = [r for r in _rels(arch, "uses")
+            if r["source"] == "ui" and r["target"] == "engine"]
+    assert len(edge) == 1, f"corroborated common name must count: {_rels(arch, 'uses')}"
+    assert "AudioClock" in edge[0]["label"] and "Timer" in edge[0]["label"]
+
+
+def test_d5_single_definer_without_import_draws_no_edge_python(tmp_path):
+    # Finding 1b: a bare `Session()` call in a Python file (no qualifier, no
+    # import of the defining component). Python HAS per-name imports, so the
+    # absence of any import tying the file to the definer means no edge, even
+    # though exactly one component defines Session.
+    _write(tmp_path, "web/client.py", "def fetch():\n    s = Session()\n    return s\n")
+    _write(tmp_path, "web/other.py", "def o():\n    return 1\n")
+    _write(tmp_path, "session/store.py", "class Session:\n    pass\n")
+    _write(tmp_path, "session/aux.py", "def a():\n    return 2\n")
+
+    d, arch = _derive(tmp_path)
+    assert _rels(arch, "uses") == []
+    assert getattr(d, "_uses_unimported_dropped", 0) >= 1
+
+
+def test_d5_commented_out_code_is_not_a_reference(tmp_path):
+    # PR #55 review finding 2 locking test: `# x = Config()` is commented-out
+    # code, not usage. The comment content is masked, so no reference signal and
+    # no edge.
+    src = "def f():\n    # x = Config()\n    return 1\n"
+    refs = extract_reference_signals(src, "python", StringMask(src, "python"))
+    assert refs == [], f"commented-out code must not be a reference: {refs}"
+
+    _write(tmp_path, "cfg/config.py", "class Config:\n    pass\n")
+    _write(tmp_path, "cfg/aux.py", "def a():\n    return 1\n")
+    _write(tmp_path, "user/main.py", "def f():\n    # x = Config()\n    return 1\n")
+    _write(tmp_path, "user/aux.py", "def b():\n    return 2\n")
+    _, arch = _derive(tmp_path)
+    assert _rels(arch, "uses") == []
+
+
 def test_d5_ambiguous_name_is_dropped_not_guessed(tmp_path):
     # Two components each define a `Config` type; a third references `Config`
     # with no disambiguating import. The reference is dropped, never guessed onto
@@ -188,10 +321,11 @@ def test_d4_unreferenced_finding_is_honestly_framed(tmp_path):
     assert "blind spot" in finding["detail"]["note"]
 
 
-def test_d4_weak_language_component_is_suppressed(tmp_path):
-    # A substantial Ruby component (no reference extractor for Ruby yet) with no
-    # incoming edge is SUPPRESSED rather than falsely reported as dead code.
-    # Pre-fix (as a plain orphan) it surfaced; post-fix it does not.
+def test_d4_weak_language_component_is_deranked_with_caveat(tmp_path):
+    # PR #55 review finding 5: a substantial Ruby component (no reference
+    # extractor for Ruby yet) with no incoming edge is NOT silently dropped (the
+    # blind spot must stay visible) but is heavily de-ranked and its summary
+    # carries an explicit weak-extractor caveat.
     _write(tmp_path, "legacy/service.rb",
            "class LegacyService\n"
            "  def a; 1; end\n  def b; 2; end\n  def c; 3; end\n"
@@ -199,15 +333,27 @@ def test_d4_weak_language_component_is_suppressed(tmp_path):
            "end\n")
     _write(tmp_path, "legacy/helper.rb",
            "module LegacyHelper\n  def self.h; 0; end\nend\n")
-    # A referenced Python component so the repo is not all-orphan.
-    _write(tmp_path, "app/main.py", "class App:\n    def run(self):\n        return 1\n")
-    _write(tmp_path, "app/x.py", "def x():\n    return 1\n")
+    # An unreferenced Python component too, so the weak one has a mature peer to
+    # rank against.
+    _write(tmp_path, "island/main.py", "class Island:\n    def run(self):\n        return 1\n")
+    _write(tmp_path, "island/x.py", "def x():\n    return 1\n")
 
     _, arch = _derive(tmp_path)
-    unreferenced = _finding_ids(arch, "unreferenced")
-    assert "legacy" not in unreferenced, (
-        "a substantial weak-language component must be suppressed, not called "
-        f"dead code; unreferenced={sorted(unreferenced)}"
+    by_id = {f["members"][0]["id"]: f for f in arch["findings"]
+             if f["kind"] == "unreferenced"}
+    assert "legacy" in by_id, (
+        "a weak-language component must stay visible (finding 5), got "
+        f"{sorted(by_id)}"
+    )
+    weak = by_id["legacy"]
+    assert weak["detail"]["reference_extractor"] == "weak"
+    assert weak["detail"]["weak_extractor_derank"] is True
+    assert "blind spot" in weak["summary"] and "ruby" in weak["summary"]
+    assert "island" in by_id, "the mature-language peer should also surface"
+    mature = by_id["island"]
+    assert mature["detail"]["weak_extractor_derank"] is False
+    assert weak["rank_score"] < mature["rank_score"], (
+        "the weak-extractor finding must rank below the mature one"
     )
 
 
@@ -317,23 +463,51 @@ def test_nit_a_comment_phantom_does_not_suppress_real_usage():
     assert jobs[0].value.get("framework") == "celery"
 
 
-def test_nit_a_triple_quote_after_hash_opens_no_span():
+def test_nit_a_triple_quote_after_hash_opens_no_string_phantom():
+    # Python: the '#' comment is masked as ONE span to end-of-line, so the
+    # triple quote inside it opens no string and line 2 is code.
     content = 'x = 1  # example: """not a docstring\ny = 2\n'
-    assert compute_string_spans(content) == []
+    spans = compute_string_spans(content, "python")
+    assert spans == [(7, 36)], spans  # exactly the comment (to the newline), nothing after
+    mask = StringMask(content, "python")
+    assert not mask.in_string(content.index("y = 2"))
     # A real (uncommented) triple quote still opens a span: [6, 17) covers the
     # opening quotes, "hello", and the closing quotes.
     real = 'doc = """hello"""\n'
-    assert compute_string_spans(real) == [(6, 17)]
+    assert compute_string_spans(real, "python") == [(6, 17)]
+
+
+def test_finding3_hash_handling_is_language_gated():
+    # PR #55 review finding 3 reproductions: '#' is CODE in Swift and TS/JS, so
+    # the comment rule must not apply there (it would un-mask real strings
+    # relative to the pre-guard scanner).
+    swift_raw = 'let r = #"http://localhost"#\n'
+    # The raw-string content must still be masked for swift (no '#' comment).
+    mask = StringMask(swift_raw, "swift")
+    assert mask.in_string(swift_raw.index("http")), "swift raw string must stay masked"
+
+    ts = 'class Foo { #count = 0; url = "http://api"; }\n'
+    mask = StringMask(ts, "typescript")
+    assert mask.in_string(ts.index("http")), "ts string after #field must stay masked"
+    assert not mask.in_string(ts.index("count")), "#count is code, not a comment"
+
+    # And in a hash-comment language the same '#' IS a comment.
+    py = '# count = 0\nurl = "http://api"\n'
+    mask = StringMask(py, "python")
+    assert mask.in_string(py.index("count")), "python '#' comment must be masked"
+    assert mask.in_string(py.index("http")), "the string literal is masked too"
 
 
 # ---------------------------------------------------------------------------
-# nit-b: precomputed spans + binary search match the old semantics and are
-# faster than rescanning from offset 0 per match on a match-heavy file.
+# nit-b: precomputed spans + binary search match the OLD byte-scan semantics
+# (frozen oracle, PR #55 review finding 4) and are faster than rescanning from
+# offset 0 per match on a match-heavy file.
 # ---------------------------------------------------------------------------
 
 def _match_heavy_content(n: int) -> str:
     # Alternating string literals and code anchors, so there are many match
-    # positions and many string spans on one file.
+    # positions and many string spans on one file. No comments: byte-identical
+    # to the legacy scan by construction.
     lines = []
     for i in range(n):
         lines.append(f's{i} = "value number {i} here"')
@@ -341,17 +515,73 @@ def _match_heavy_content(n: int) -> str:
     return "\n".join(lines) + "\n"
 
 
-def test_nit_b_mask_matches_old_semantics():
+def test_nit_b_mask_matches_frozen_legacy_oracle():
+    # The oracle is the FROZEN wave-A byte scan pinned at the top of this file,
+    # not the current implementation (finding 4: the old test compared the new
+    # code to itself). Cases:
+    # 1. The reviewer's divergence cases, which must now AGREE because '#'
+    #    handling is language-gated (finding 3).
+    swift_raw = 'let r = #"http://localhost"#\nlet x = 1\n'
+    ts = 'class Foo { #count = 0; url = "http://api"; }\nconst y = 2\n'
+    for content, lang in ((swift_raw, "swift"), (ts, "typescript"), (ts, "javascript")):
+        mask = StringMask(content, lang)
+        for pos in range(len(content)):
+            assert mask.in_string(pos) == _legacy_in_string_literal(content, pos), (
+                f"divergence from legacy oracle at {pos} in {lang}: {content[pos-5:pos+5]!r}"
+            )
+    # 2. Comment-free python: byte-identical to the oracle at every offset.
     content = _match_heavy_content(50)
-    mask = StringMask(content)
-    spans = compute_string_spans(content)
-    # Check every character offset: the mask, the span helper, and the
-    # single-shot wrapper must all agree.
+    mask = StringMask(content, "python")
+    spans = compute_string_spans(content, "python")
+    from analyzer.extract.frameworks import pos_in_spans
     for pos in range(0, len(content), 3):
-        expected = in_string_literal(content, pos)
+        expected = _legacy_in_string_literal(content, pos)
         assert mask.in_string(pos) == expected
-        from analyzer.extract.frameworks import pos_in_spans
         assert pos_in_spans(spans, pos) == expected
+        assert in_string_literal(content, pos) == expected  # default: no language
+    # 3. The default-language wrapper is oracle-identical even ON the reviewer's
+    #    divergence content (no language means no comment handling at all).
+    for content in (swift_raw, ts, 'x = 1  # d """\ny = 2\n'):
+        for pos in range(len(content)):
+            assert in_string_literal(content, pos) == _legacy_in_string_literal(content, pos)
+
+
+def test_nit_b_real_python_file_matches_oracle_outside_comments():
+    # A REAL repo file (comment- and string-heavy). The one intentional
+    # difference from the legacy scan is finding 2: python '#' comments are now
+    # masked. So: strip comments (replace their bytes with spaces) and the
+    # oracle over the sanitized text must agree with the new mask over the RAW
+    # text at every position outside a comment; inside comments the new mask is
+    # asserted True explicitly (the intentional new behavior).
+    analyzer_dir = Path(__file__).resolve().parent.parent / "analyzer"
+    for rel in ("extract/facts.py", "derive/testing.py"):
+        content = (analyzer_dir / rel).read_text(encoding="utf-8")
+        spans = compute_string_spans(content, "python")
+        comment_spans = [(s, e) for s, e in spans if content[s] == "#"]
+        assert comment_spans, f"{rel} should be a comment-bearing real file"
+
+        sanitized = list(content)
+        for s, e in comment_spans:
+            for i in range(s, e):
+                if sanitized[i] != "\n":
+                    sanitized[i] = " "
+        sanitized = "".join(sanitized)
+
+        mask = StringMask(content, "python")
+
+        def in_comment(pos: int, _spans=comment_spans) -> bool:
+            return any(s < pos < e for s, e in _spans)
+
+        for pos in range(0, len(content), 3):
+            if in_comment(pos):
+                assert mask.in_string(pos), (
+                    f"{rel}: comment content must be masked at {pos}"
+                )
+            else:
+                assert mask.in_string(pos) == _legacy_in_string_literal(sanitized, pos), (
+                    f"{rel}: string-scan divergence from legacy oracle at {pos}: "
+                    f"{content[max(0, pos - 10):pos + 10]!r}"
+                )
 
 
 def test_nit_b_shared_mask_is_faster_than_per_match_rescan():

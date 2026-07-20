@@ -70,8 +70,10 @@ def extract_signals(content: str, language: str, parser) -> list[SignalRecord]:
     """
     # One string-span scan for the whole file (PR #53 nit b): the driver and
     # symbol-reference detectors all query this shared mask instead of each
-    # rescanning the content from offset 0 per match.
-    mask = StringMask(content)
+    # rescanning the content from offset 0 per match. The language gates the
+    # hash-comment handling (PR #55 review finding 3): '#' opens a comment only
+    # where the language says so, never in Swift/TS/JS where '#' is code.
+    mask = StringMask(content, language)
     out: list[SignalRecord] = []
     out.extend(_ports(content, parser))
     out.extend(_url_references(content))

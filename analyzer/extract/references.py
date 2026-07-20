@@ -13,22 +13,28 @@ first-seen line and a reference count. Tier 3 derivation
 own symbol table and draws component-to-component ``uses`` edges. This is a
 NAME-based join, deliberately KISS (invariant I1: mechanical, no type inference,
 no call-graph): a referenced name that matches no local type definition simply
-resolves to nothing (stdlib and framework names harmlessly drop out), and an
+resolves to nothing (stdlib and framework names harmlessly drop out), an
 ambiguous name that resolves to several components is dropped at derive time
-rather than guessed.
+rather than guessed, a single-definer match in a per-name-import language
+requires import evidence, and a common Swift platform name requires another tie
+to the resolved component (PR #55 review finding 1; see
+:data:`PER_NAME_IMPORT_LANGUAGES` and :data:`SWIFT_COMMON_TYPE_NAMES`).
 
 Only reference candidates whose START is real code are kept: a name appearing
-inside a string literal or a ``#`` comment is not a usage, so the shared
-:class:`~analyzer.extract.frameworks.StringMask` filters them. Extraction is
+inside a string literal or a masked comment is not a usage (the shared
+:class:`~analyzer.extract.frameworks.StringMask` filters them), and the
+trailing member of a qualified access (``requests.Session()``) is excluded
+because it resolves in the qualifier's namespace, not locally. Extraction is
 deterministic (invariant I4): names are emitted in first-occurrence order and
 the per-file candidate scan is capped (:data:`MAX_REFERENCE_NAMES`) so a
 pathological generated file cannot blow up signal volume.
 
 Extractor maturity is honest and per-language (:data:`REFERENCE_LANGUAGES`).
 Swift, Python, TypeScript, and JavaScript have reference extractors here; Go,
-Rust, and Ruby do not yet, and the D4 orphan reframing consults this set so it
-never asserts "unreferenced" about a substantial component whose language we
-barely scan for references.
+Rust, and Ruby do not yet, and the D4 orphan reframing consults this set so a
+substantial component in a weakly-scanned language is heavily de-ranked with an
+explicit blind-spot caveat instead of being asserted as unreferenced at full
+strength.
 """
 
 from __future__ import annotations
@@ -38,7 +44,13 @@ import re
 from .facts import SignalRecord
 from .frameworks import StringMask
 
-__all__ = ["REFERENCE_LANGUAGES", "MAX_REFERENCE_NAMES", "extract_reference_signals"]
+__all__ = [
+    "REFERENCE_LANGUAGES",
+    "PER_NAME_IMPORT_LANGUAGES",
+    "SWIFT_COMMON_TYPE_NAMES",
+    "MAX_REFERENCE_NAMES",
+    "extract_reference_signals",
+]
 
 # Languages with a symbol-reference extractor below. The D4 orphan reframing
 # treats every OTHER language as a "weak" reference extractor (honest maturity).
@@ -48,6 +60,53 @@ REFERENCE_LANGUAGES = frozenset({"swift", "python", "typescript", "javascript"})
 # file can name thousands of identifiers; beyond this the marginal edge value is
 # nil and the scan cost is not worth it. Recorded scale guard (D5).
 MAX_REFERENCE_NAMES = 400
+
+# Languages whose import syntax names modules or symbols precisely enough to
+# serve as reference evidence (Python `from x import Y`, TS/JS `import { Y }
+# from './x'`). For these, derive time REQUIRES import evidence before drawing a
+# `uses` edge even when exactly one component defines the name (PR #55 review
+# finding 1: `requests.Session()` must never edge to an unrelated local
+# `session` component just because it is the only definer). Swift is absent by
+# design: its imports are module-level with no per-name form, so it relies on
+# the qualified-access exclusion plus SWIFT_COMMON_TYPE_NAMES below.
+PER_NAME_IMPORT_LANGUAGES = frozenset({"python", "typescript", "javascript"})
+
+# Common Swift platform type names (Foundation/UIKit/SwiftUI/stdlib). Swift has
+# no per-name imports to prove a local resolution, so when a referenced name is
+# on this list AND the referencing file shows no other relationship with the
+# resolved component (no non-common-name reference from the same file, no
+# module import of it), the reference is dropped rather than risk a false edge
+# to a user component that happens to share a platform type name (PR #55 review
+# finding 1: a bare `Timer()` must not edge to a component defining its own
+# `Timer`). HONEST BOUNDARY: a user type genuinely named `Timer` or `Task` used
+# from a file with no other tie to its component draws no uses edge; recorded
+# in TASKS.md (Discovered).
+SWIFT_COMMON_TYPE_NAMES = frozenset({
+    # Foundation / stdlib / concurrency
+    "Timer", "Notification", "NotificationCenter", "Data", "Date", "URL",
+    "UUID", "Error", "Result", "Task", "Session", "URLSession", "URLRequest",
+    "URLComponents", "Bundle", "FileManager", "UserDefaults", "OperationQueue",
+    "DispatchQueue", "JSONDecoder", "JSONEncoder", "Calendar", "Locale",
+    "TimeZone", "Character", "Substring", "Regex", "IndexPath", "IndexSet",
+    "Thread", "RunLoop", "Progress", "Measurement", "Decimal", "Set", "Array",
+    "Dictionary", "String", "Int", "Double", "Float", "Bool", "Optional",
+    # SwiftUI
+    "State", "Binding", "Environment", "EnvironmentObject", "ObservedObject",
+    "StateObject", "Published", "Color", "Image", "Text", "List", "Label",
+    "Link", "Button", "Toggle", "Picker", "Section", "Form", "Spacer",
+    "Divider", "Menu", "Alert", "Slider", "Stepper", "TextField",
+    "SecureField", "TextEditor", "ProgressView", "ScrollView", "VStack",
+    "HStack", "ZStack", "LazyVStack", "LazyHStack", "Grid", "Table",
+    "NavigationLink", "NavigationStack", "NavigationView", "TabView",
+    "GeometryReader", "Group", "Namespace", "Font", "Angle", "Animation",
+    "Path", "Shape", "Circle", "Rectangle", "RoundedRectangle", "Capsule",
+    "Ellipse", "App", "Scene", "View", "ViewBuilder", "Gradient",
+    "LinearGradient", "AnyView", "EmptyView",
+    # UIKit / CoreGraphics
+    "UIView", "UIViewController", "UIColor", "UIImage", "UIApplication",
+    "UIWindow", "UIScreen", "UILabel", "UIButton", "UITableView",
+    "UICollectionView", "CGFloat", "CGPoint", "CGSize", "CGRect", "NSObject",
+})
 
 # A referenced type-like name: an uppercase-initial identifier. group(1) is the
 # name in every pattern. These are intentionally simple anchors; precision comes
@@ -112,6 +171,12 @@ def extract_reference_signals(
             start = m.start(1)
             if mask.in_string(start):
                 continue  # inside a string literal or comment, not a reference
+            if start > 0 and content[start - 1] == ".":
+                # Qualified access (PR #55 review finding 1a): `requests.Session()`,
+                # `Foundation.Timer()`, Swift enum shorthand `.SomeCase(...)`. The
+                # trailing member is resolved by the QUALIFIER's namespace, not
+                # the local symbol table, so it is never a local type reference.
+                continue
             candidates.append((start, m.group(1)))
     candidates.sort()
 

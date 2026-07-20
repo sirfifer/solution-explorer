@@ -16,8 +16,9 @@ Deriver's store view:
     dead-code-sounding "orphan": the copy says only that no reference was
     detected by the current extractors, and each finding carries the component's
     symbol count and git churn as counter-evidence. A substantial component in a
-    language whose reference extractor is weak is suppressed entirely rather than
-    reported as a false blind spot. Symbol-level references are out of scope: the
+    language whose reference extractor is weak keeps its finding but heavily
+    de-ranked with an explicit blind-spot caveat, so the extractor gap stays
+    visible (never a silent drop). Symbol-level references are out of scope: the
     edge join is component-granularity by name (D5).
   - CONCERNS. Cross-cutting membership sets orthogonal to the hierarchy
     (logging, auth, persistence, http-client, caching, configuration) detected
@@ -56,16 +57,17 @@ __all__ = ["derive_correlations"]
 # Reference-extractor maturity (D4). A component with no incoming edge is only
 # honestly "unreferenced" if the languages we CAN scan for references would have
 # found a reference. Languages with a symbol-reference extractor (D5,
-# references.py) are mature; every other language is weak (we barely look), so a
-# substantial component in a weak language is not called unreferenced at all: we
-# would just be advertising our own blind spot as dead code.
+# references.py) are mature; every other language is weak (we barely look). A
+# substantial weak-language component still gets a finding, but heavily
+# de-ranked and explicitly caveated as a likely extractor blind spot (PR #55
+# review finding 5: silent suppression would hide the blind spot itself).
 # ---------------------------------------------------------------------------
 _MATURE_REFERENCE_LANGS = REFERENCE_LANGUAGES
-# Above this symbol count, a weak-language component's "unreferenced" status is
-# not credible, so the finding is suppressed entirely (honest silence over a
-# false dead-code claim). Small weak-language components still surface, carrying
-# the maturity caveat as counter-evidence.
-_WEAK_LANG_SUPPRESS_MIN_SYMBOLS = 5
+# At or above this symbol count, a weak-language component's "unreferenced"
+# status stops being credible: the finding is kept (visible blind spot) but its
+# rank is multiplied by _WEAK_LANG_DERANK and its summary carries the caveat.
+_WEAK_LANG_DERANK_MIN_SYMBOLS = 5
+_WEAK_LANG_DERANK = 0.25
 
 # -- clone-cluster thresholds (recorded in the P5-6 card, proven by tests) ---
 SIM_THRESHOLD = 0.80   # minimum fingerprint-set Jaccard for a type-3 near-dup
@@ -547,8 +549,10 @@ def _unreferenced_findings(d: Deriver) -> list[dict]:
     component's symbol count, line count, and git churn as counter-evidence
     hints (a hot, symbol-rich module is almost certainly used; the extractors
     just did not see it). For a component whose language has a weak reference
-    extractor (:data:`_MATURE_REFERENCE_LANGS`) and non-trivial size, the finding
-    is suppressed entirely rather than assert a false blind-spot-as-dead-code.
+    extractor (:data:`_MATURE_REFERENCE_LANGS`) and non-trivial size, the
+    finding is kept but heavily de-ranked and its summary carries an explicit
+    blind-spot caveat, so the extractor gap stays visible instead of silently
+    hiding a component (PR #55 review finding 5).
     """
     incoming = _incoming_targets(d)
     cap_owners = {c.get("component_id") for c in d.capabilities if c.get("component_id")}
@@ -585,10 +589,6 @@ def _unreferenced_findings(d: Deriver) -> list[dict]:
             continue  # no code, not a meaningful finding
         lang = (comp.language or "").lower()
         mature = lang in _MATURE_REFERENCE_LANGS
-        if not mature and symbols >= _WEAK_LANG_SUPPRESS_MIN_SYMBOLS:
-            # Weak reference extractor for this language: staying silent is more
-            # honest than claiming a substantial module is dead.
-            continue
         churn = sum(d.view.activity_by_path.get(f, 0) for f in comp.files)
         maturity = "mature" if mature else "weak"
         # A rich or hot module is very likely referenced despite the miss, so it
@@ -596,13 +596,24 @@ def _unreferenced_findings(d: Deriver) -> list[dict]:
         rank = 12.0 + min(lines, 500) / 20.0
         if symbols >= 5 or churn >= 3:
             rank -= 4.0  # strong counter-evidence: de-prioritize further
+        summary = (
+            f"no reference to component '{comp.name}' was detected by the "
+            f"current extractors"
+        )
+        weak_derank = not mature and symbols >= _WEAK_LANG_DERANK_MIN_SYMBOLS
+        if weak_derank:
+            # A substantial weak-language component: keep the finding visible
+            # (finding 5: never a silent drop) but heavily de-rank it and say
+            # plainly that the miss is probably ours.
+            rank *= _WEAK_LANG_DERANK
+            summary += (
+                f" (the {lang or 'unknown'} reference extractor is weak; this "
+                f"is likely an extractor blind spot, not dead code)"
+            )
         out.append({
             "id": f"finding:unreferenced:{comp.id}",
             "kind": "unreferenced",
-            "summary": (
-                f"no reference to component '{comp.name}' was detected by the "
-                f"current extractors"
-            ),
+            "summary": summary,
             "members": [{
                 "kind": "component", "id": comp.id, "component_id": comp.id,
                 "file": None, "line_start": None, "line_end": None,
@@ -620,6 +631,7 @@ def _unreferenced_findings(d: Deriver) -> list[dict]:
                 "lines": lines, "symbols": symbols, "type": comp.type,
                 "language": lang or None, "churn_commits": churn,
                 "reference_extractor": maturity,
+                "weak_extractor_derank": weak_derank,
                 "note": (
                     "No incoming reference was detected. This is an extractor "
                     "blind spot as often as it is dead code; the symbol and "
