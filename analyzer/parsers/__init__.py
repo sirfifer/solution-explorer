@@ -3,6 +3,7 @@
 from .base import BaseParser
 from .csharp import CSharpParser
 from .go import GoParser
+from .java import JavaParser
 from .python_lang import PythonParser
 from .ruby import RubyParser
 from .rust import RustParser
@@ -18,6 +19,7 @@ PARSERS = {
     "typescript": TypeScriptParser(),
     "javascript": TypeScriptParser(),
     "go": GoParser(),
+    "java": JavaParser(),
     "ruby": RubyParser(),
     "csharp": CSharpParser(),
     # Storyboards/xibs are XML, always regex-tier (no tree-sitter). Recognized
@@ -72,9 +74,15 @@ try:
 except ImportError:
     pass
 
+try:
+    from .java_ts import JavaTreeSitterParser
+    PARSERS["java"] = JavaTreeSitterParser()
+except ImportError:
+    pass
+
 __all__ = [
     "BaseParser", "PARSERS",
     "SwiftParser", "PythonParser", "RustParser",
-    "TypeScriptParser", "GoParser", "RubyParser", "StoryboardParser",
+    "TypeScriptParser", "GoParser", "JavaParser", "RubyParser", "StoryboardParser",
     "CSharpParser",
 ]

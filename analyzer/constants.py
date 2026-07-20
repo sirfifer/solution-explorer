@@ -271,6 +271,10 @@ FRAMEWORK_PRIORITY = {
     ".NET": 1,          # Base platform
     "EF Core": 2,       # Entity Framework Core (data access)
     "ASP.NET Core": 3,  # Web framework
+    # Java
+    "Java EE": 1,       # javax.* enterprise APIs
+    "Jakarta EE": 1,    # jakarta.* enterprise APIs
+    "Spring": 2,        # Full application framework
 }
 
 # UI Flow Detection constants
