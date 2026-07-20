@@ -1952,11 +1952,16 @@ here is started.
   deltas, human- and CI-readable, so a change is judged improved vs regressed.
 
 ### G2: Golden-corpus harness
-- Status: TODO (candidate)
-- Scope: a frozen local clone of a respected real-world repo (recommended:
-  FastAPI) held static, an approved baseline, a re-baseline procedure, CI
-  wiring. The clean regression signal the changing demo and dogfood cannot give.
-  Keep vscode as the separate scale proof.
+- Status: TODO (candidate; target validated 2026-07-20)
+- Scope: a frozen local clone held static, an approved baseline, a re-baseline
+  procedure, CI wiring. The clean regression signal the changing demo and
+  dogfood cannot give. TWO-CORPUS pairing (see REGRESSION-STRATEGY.md): build
+  the harness on FLASK first (stable, small, BSD, SWE-bench standard = external
+  comparability, lowest diff noise), then add FASTAPI pinned at 0.139.2+ with
+  translated docs excluded (lens breadth + demo value; pin is because 0.137.0
+  June 2026 refactored router internals). Keep vscode as the separate scale
+  proof; Django excluded (too large); NestJS/Alamofire are later language-
+  diversity options.
 
 ### G3: Two-slot retention for demo and dogfood deploys
 - Status: TODO (candidate)
