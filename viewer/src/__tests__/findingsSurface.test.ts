@@ -72,6 +72,27 @@ function orphanFinding(): Finding {
   };
 }
 
+// A CRA readiness gap: a zero-member finding of the P10-4 kind, carrying the
+// clause reference and scope caveat in its detail (matches the projection shape).
+function craFinding(): Finding {
+  return {
+    id: "finding:cra:security_md",
+    kind: "cra_readiness",
+    summary: "CRA readiness: Security policy (SECURITY.md) not found in the repository.",
+    confidence: "inferred",
+    verification_status: "unverified",
+    rank_score: 72,
+    members: [],
+    evidence: [],
+    detail: {
+      item_id: "security_md",
+      status: "absent",
+      cra_clause: "Annex I Part II(5) coordinated vulnerability disclosure policy",
+      scope: "Repo-observable CRA readiness only. It is NOT a conformity assessment.",
+    },
+  };
+}
+
 function loggingConcern(): Concern {
   return {
     id: "concern:logging",
@@ -148,6 +169,21 @@ describe("Findings ranking and filter (I11)", () => {
     expect(filterFindingsByKind(findings, "orphan").map((f) => f.kind)).toEqual(["orphan"]);
     expect(filterFindingsByKind(findings, null)).toHaveLength(2);
     expect(filterFindingsByKind(findings, "all")).toHaveLength(2);
+  });
+
+  // P10-4: a repo-observable CRA readiness gap is a zero-member finding of a new
+  // kind. The generic surface must list, rank, and filter it like any other.
+  it("handles the zero-member cra_readiness kind (P10-4)", () => {
+    const findings = [dupFinding(), craFinding()];
+    expect(findingKinds(findings)).toEqual(["cra_readiness", "duplication"]);
+    const ranked = sortFindings(findings);
+    // dupFinding ranks 300, the cra gap 72, so the cra gap sorts below it.
+    expect(ranked.map((f) => f.kind)).toEqual(["duplication", "cra_readiness"]);
+    const cra = filterFindingsByKind(findings, "cra_readiness");
+    expect(cra).toHaveLength(1);
+    const gap = cra[0]!;
+    expect(gap.members).toHaveLength(0);
+    expect((gap.detail as { scope: string }).scope).toContain("NOT a conformity assessment");
   });
 });
 

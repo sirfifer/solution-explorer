@@ -31,6 +31,7 @@ from ..enrich import apply_enrichment_overlay, apply_verdict_overlay
 from .activity import build_activity
 from .changelog import apply_changelog
 from .coverage import build_coverage
+from .cra_emit import emit_cra_readiness
 from .frontdoor import write_front_door
 from .gitinfo import apply_info_plist_names, read_git_info
 from .manifest import write_manifest_and_details
@@ -52,6 +53,7 @@ class ProjectionResult:
     coverage_path: Optional[Path] = None
     activity_path: Optional[Path] = None
     sbom_path: Optional[Path] = None
+    cra_path: Optional[Path] = None
     search_manifest_path: Optional[Path] = None
     ai_json_path: Optional[Path] = None
     llms_txt_path: Optional[Path] = None
@@ -89,6 +91,22 @@ def prepare_arch(
         prepared["default_branch"] = default_branch
         apply_info_plist_names(prepared.get("components", []), root)
     return prepared
+
+
+def _merge_cra_findings(prepared: dict, findings: list[dict]) -> None:
+    """Merge the CRA gap findings into ``prepared['findings']`` in place (P10-4).
+
+    The absent-item findings join the existing ranked findings surface (no new
+    view). The combined list is re-sorted by rank_score desc then id so the
+    "already ranked" contract the ai.json front door advertises stays true. A
+    no-op when there are no gap findings, so a fully-ready repo's projection is
+    byte-identical to one without the CRA pass.
+    """
+    if not findings:
+        return
+    merged = list(prepared.get("findings") or []) + findings
+    merged.sort(key=lambda f: (-float(f.get("rank_score", 0.0)), f.get("id", "")))
+    prepared["findings"] = merged
 
 
 def _load_previous(path: Path) -> Optional[dict]:
@@ -156,6 +174,17 @@ def project_split(
     )
     if sbom_section is not None:
         prepared["supply_chain"] = sbom_section
+    # CRA readiness (P10-4, Option C): write cra-readiness.json beside sbom.json
+    # and merge the ABSENT-item findings into the existing findings surface (no
+    # new view). Done after the SBOM (the SBOM-present check reads the section)
+    # and before the changelog so a newly-missing SECURITY.md is a recorded
+    # change. No-op (None) without a scan root, so unaffected projections are
+    # byte-identical.
+    cra_result = emit_cra_readiness(
+        output_dir, root=root, supply_chain=sbom_section, indent=indent,
+    )
+    if cra_result is not None:
+        _merge_cra_findings(prepared, cra_result.findings)
     serial = _finish_changelog(
         prepared, previous, output_dir / "manifest.json",
         commit_sha=commit_sha, now=now,
@@ -186,7 +215,8 @@ def project_split(
     ai_json_path, llms_txt_path = write_front_door(
         prepared, output_dir, mode="split",
         coverage=coverage, activity=activity,
-        search_manifest=search_manifest, supply_chain=sbom_section, indent=indent,
+        search_manifest=search_manifest, supply_chain=sbom_section,
+        cra_present=cra_result is not None, indent=indent,
     )
 
     return ProjectionResult(
@@ -196,6 +226,7 @@ def project_split(
         coverage_path=coverage_path,
         activity_path=activity_path,
         sbom_path=(output_dir / "sbom.json") if sbom_section is not None else None,
+        cra_path=cra_result.artifact_path if cra_result is not None else None,
         search_manifest_path=output_dir / "search" / "manifest.json",
         ai_json_path=ai_json_path,
         llms_txt_path=llms_txt_path,
@@ -242,6 +273,14 @@ def project_monolith(
     )
     if sbom_section is not None:
         prepared["supply_chain"] = sbom_section
+    # CRA readiness (P10-4, Option C): cra-readiness.json lands beside the single
+    # architecture.json, and the gap findings ride in the monolith .findings. See
+    # project_split for the ordering rationale.
+    cra_result = emit_cra_readiness(
+        output_path.parent, root=root, supply_chain=sbom_section, indent=indent,
+    )
+    if cra_result is not None:
+        _merge_cra_findings(prepared, cra_result.findings)
     serial = _finish_changelog(
         prepared, previous, output_path, commit_sha=commit_sha, now=now
     )
@@ -251,7 +290,8 @@ def project_monolith(
     ai_json_path, llms_txt_path = write_front_door(
         prepared, output_path.parent, mode="monolith",
         coverage=coverage, activity=activity,
-        supply_chain=sbom_section, monolith_filename=output_path.name, indent=indent,
+        supply_chain=sbom_section, cra_present=cra_result is not None,
+        monolith_filename=output_path.name, indent=indent,
     )
     return ProjectionResult(
         mode="monolith",
@@ -259,6 +299,7 @@ def project_monolith(
         ai_json_path=ai_json_path,
         llms_txt_path=llms_txt_path,
         sbom_path=(output_path.parent / "sbom.json") if sbom_section is not None else None,
+        cra_path=cra_result.artifact_path if cra_result is not None else None,
         changelog_serial=serial,
         coverage=coverage,
         activity=activity,

@@ -179,6 +179,23 @@ def _sbom_endpoint() -> dict:
     }
 
 
+def _cra_endpoint() -> dict:
+    """The cra-readiness.json endpoint, listed in both modes when emitted (P10-4)."""
+    return {
+        "path": "cra-readiness.json",
+        "role": "cra-readiness",
+        "contains": (
+            "Repo-observable EU Cyber Resilience Act readiness checklist: a "
+            "versioned, byte-stable list of presence/absence items (SECURITY.md, "
+            "vulnerability disclosure contact, SBOM, update config, support "
+            "statement, signed-commit sample), each with an evidence pointer or an "
+            "explicit gap and a short CRA-clause reference, plus a top-level "
+            "`scope` string. NOT a conformity assessment; absent items also appear "
+            "as cra_readiness findings in the manifest."
+        ),
+    }
+
+
 def _split_endpoints(
     arch: dict,
     *,
@@ -186,6 +203,7 @@ def _split_endpoints(
     activity: Optional[dict],
     search_present: bool = True,
     supply_chain: Optional[dict] = None,
+    cra_present: bool = False,
 ) -> list[dict]:
     """The endpoint map for split mode, listing only files that are emitted."""
     endpoints: list[dict] = [
@@ -251,10 +269,16 @@ def _split_endpoints(
         })
     if supply_chain is not None:
         endpoints.append(_sbom_endpoint())
+    if cra_present:
+        endpoints.append(_cra_endpoint())
     return endpoints
 
 
-def _monolith_endpoints(single_file: str, supply_chain: Optional[dict] = None) -> list[dict]:
+def _monolith_endpoints(
+    single_file: str,
+    supply_chain: Optional[dict] = None,
+    cra_present: bool = False,
+) -> list[dict]:
     endpoints = [
         {
             "path": single_file,
@@ -273,6 +297,8 @@ def _monolith_endpoints(single_file: str, supply_chain: Optional[dict] = None) -
     # sbom.json is a separate CycloneDX file beside the monolith even here.
     if supply_chain is not None:
         endpoints.append(_sbom_endpoint())
+    if cra_present:
+        endpoints.append(_cra_endpoint())
     return endpoints
 
 
@@ -294,15 +320,28 @@ def _supply_chain_walk_order(mode: str, monolith_filename: str) -> dict:
     }
 
 
+def _cra_walk_order() -> dict:
+    """The 'is this repo CRA-ready' walk order (P10-4). Same path in both modes."""
+    return {
+        "question": "is this repo CRA-ready",
+        "steps": [
+            {"fetch": "cra-readiness.json", "then": "Read .scope first (this is repo-observable readiness only, not a conformity assessment), then .items: each has id, label, status (present/absent/not_applicable), evidence (path plus matched detail, or null), and cra_clause. Absent items are the gaps; present items name the artifact that satisfies them."},
+        ],
+    }
+
+
 def _walk_orders(
     mode: str,
     monolith_filename: str = "architecture.json",
     supply_chain: Optional[dict] = None,
+    cra_present: bool = False,
 ) -> list[dict]:
     """Recommended fetch sequences for common question shapes."""
     orders = _base_walk_orders(mode, monolith_filename)
     if supply_chain is not None:
         orders.append(_supply_chain_walk_order(mode, monolith_filename))
+    if cra_present:
+        orders.append(_cra_walk_order())
     return orders
 
 
@@ -405,6 +444,7 @@ def build_front_door(
     activity: Optional[dict] = None,
     search_manifest: Optional[dict] = None,
     supply_chain: Optional[dict] = None,
+    cra_present: bool = False,
     monolith_filename: str = "architecture.json",
 ) -> tuple[dict, str]:
     """Build the ``(ai_json_dict, llms_txt_str)`` pair for a projection.
@@ -412,8 +452,8 @@ def build_front_door(
     ``mode`` is ``"split"`` or ``"monolith"``. In split mode ``search_manifest``
     is the dict returned by ``write_search_shards`` (its shard list and sizing
     feed the search section); in monolith mode it is ignored. ``coverage``,
-    ``activity``, and ``supply_chain`` presence gates the corresponding endpoints
-    (link integrity: only files that are emitted are listed).
+    ``activity``, ``supply_chain``, and ``cra_present`` gate the corresponding
+    endpoints (link integrity: only files that are emitted are listed).
     """
     if mode not in ("split", "monolith"):
         raise ValueError(f"mode must be 'split' or 'monolith', got {mode!r}")
@@ -428,7 +468,9 @@ def build_front_door(
         "manifest_sections": _manifest_sections(
             arch, mode=mode, coverage=coverage, activity=activity
         ),
-        "walk_orders": _walk_orders(mode, monolith_filename, supply_chain=supply_chain),
+        "walk_orders": _walk_orders(
+            mode, monolith_filename, supply_chain=supply_chain, cra_present=cra_present
+        ),
         "token_economy": _token_economy(),
     }
 
@@ -438,6 +480,7 @@ def build_front_door(
         ai_json["endpoints"] = _split_endpoints(
             arch, coverage=coverage, activity=activity,
             search_present=search_manifest is not None, supply_chain=supply_chain,
+            cra_present=cra_present,
         )
         sm = search_manifest or {}
         ai_json["search"] = {
@@ -490,7 +533,9 @@ def build_front_door(
     else:
         ai_json["projection_root"] = "./"
         ai_json["entry"] = monolith_filename
-        ai_json["endpoints"] = _monolith_endpoints(monolith_filename, supply_chain=supply_chain)
+        ai_json["endpoints"] = _monolith_endpoints(
+            monolith_filename, supply_chain=supply_chain, cra_present=cra_present
+        )
 
     llms_txt = _render_llms_txt(ai_json, mode=mode, monolith_filename=monolith_filename)
     return ai_json, llms_txt
@@ -543,10 +588,14 @@ def _render_llms_txt(ai_json: dict, *, mode: str, monolith_filename: str) -> str
             lines.append("- [activity.json](./activity.json): git-history activity lens (hotspots, knowledge, coupling).")
         if any(e["path"] == "sbom.json" for e in ai_json["endpoints"]):
             lines.append("- [sbom.json](./sbom.json): CycloneDX 1.5 SBOM; a quick dependency summary is in manifest.json .supply_chain.")
+        if any(e["path"] == "cra-readiness.json" for e in ai_json["endpoints"]):
+            lines.append("- [cra-readiness.json](./cra-readiness.json): repo-observable CRA readiness checklist (presence/absence items with evidence; not a conformity assessment).")
     else:
         lines.append(f"- [{monolith_filename}](./{monolith_filename}): the whole dataset in one file (components, relationships, stats, inline symbols/files, embedded coverage/activity/supply_chain). Small-repo layout with no separate shards.")
         if any(e["path"] == "sbom.json" for e in ai_json["endpoints"]):
             lines.append("- [sbom.json](./sbom.json): CycloneDX 1.5 SBOM beside the monolith; a quick dependency summary is in its .supply_chain section.")
+        if any(e["path"] == "cra-readiness.json" for e in ai_json["endpoints"]):
+            lines.append("- [cra-readiness.json](./cra-readiness.json): repo-observable CRA readiness checklist beside the monolith (presence/absence items with evidence; not a conformity assessment).")
     lines.append("")
     lines.append("## Token economy")
     lines.append("")
@@ -564,6 +613,7 @@ def write_front_door(
     activity: Optional[dict] = None,
     search_manifest: Optional[dict] = None,
     supply_chain: Optional[dict] = None,
+    cra_present: bool = False,
     monolith_filename: str = "architecture.json",
     indent=2,
 ) -> tuple[Path, Path]:
@@ -584,6 +634,7 @@ def write_front_door(
         activity=activity,
         search_manifest=search_manifest,
         supply_chain=supply_chain,
+        cra_present=cra_present,
         monolith_filename=monolith_filename,
     )
 

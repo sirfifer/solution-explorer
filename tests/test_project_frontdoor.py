@@ -99,11 +99,12 @@ def test_monolith_emits_ai_json_and_llms_txt(tmp_path):
     assert ai["mode"] == "monolith"
     assert ai["entry"] == "architecture.json"
     # Monolith lists the single dataset file, plus the separate CycloneDX
-    # sbom.json when the repo carries manifests (the polyglot fixture does). Both
-    # named endpoints exist on disk (link integrity).
+    # sbom.json when the repo carries manifests (the polyglot fixture does) and
+    # the CRA cra-readiness.json (P10-4, always emitted with a scan root). Every
+    # named endpoint exists on disk (link integrity).
     paths = [e["path"] for e in ai["endpoints"]]
     assert paths[0] == "architecture.json"
-    assert set(paths) <= {"architecture.json", "sbom.json"}
+    assert set(paths) <= {"architecture.json", "sbom.json", "cra-readiness.json"}
     for path in paths:
         assert (out.parent / path).is_file()
 

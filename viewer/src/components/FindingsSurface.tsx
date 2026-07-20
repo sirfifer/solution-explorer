@@ -43,6 +43,7 @@ function KindBadge({ kind, darkMode }: { kind: string; darkMode: boolean }) {
     orphan: darkMode ? "bg-sky-500/15 text-sky-300" : "bg-sky-100 text-sky-700",
     unreferenced: darkMode ? "bg-sky-500/15 text-sky-300" : "bg-sky-100 text-sky-700",
     inconsistency: darkMode ? "bg-rose-500/15 text-rose-300" : "bg-rose-100 text-rose-700",
+    cra_readiness: darkMode ? "bg-amber-500/15 text-amber-300" : "bg-amber-100 text-amber-700",
   };
   const cls = map[kind] ?? (darkMode ? "bg-zinc-800 text-zinc-300" : "bg-zinc-100 text-zinc-700");
   const copy = (TOOLTIP_COPY.findings.kind as Record<string, string>)[kind];
