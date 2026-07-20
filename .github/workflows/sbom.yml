@@ -45,7 +45,7 @@ jobs:
         run: pip install -e ".[all,dev]"
 
       - name: Install CycloneDX SBOM generator
-        run: pip install cyclonedx-py==7.3.0
+        run: pip install cyclonedx-bom==7.3.0
 
       - name: Generate CycloneDX SBOM
         run: |
