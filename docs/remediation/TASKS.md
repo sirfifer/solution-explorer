@@ -1838,7 +1838,7 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 - Scope: a dedicated lens focused on security in every shape: secrets-shaped files (inventory already flags), authentication and crypto usage sites, network communication surfaces (what talks to what, TLS posture where detectable), data handling (entities carrying sensitive-looking fields), dependency risk (bridges to P10-1), and repo security hygiene (SECURITY.md, dependabot config, signed commits). Deterministic signals plus AI elaboration as overlay. Hard value test per VISION.md before any UI lands.
 
 ### P10-3: Stakeholder views (business and executive translation)
-- Status: TODO (owner vision 2026-07-20; design pass first)
+- Status: DESIGN DELIVERED (2026-07-20, docs/remediation/P10-3-DESIGN.md). Verdicts: support view + audience presets + machinery door + business-verb normalization buildable now (P10-3a); business_statement enrichment overlay is P10-3b; the executive dashboard is DEFERRED as theater until a real stakeholder produces questions the presets cannot answer; error-handling density and business-risk scores KILLED. Owner green-lights increments.
 - Scope: views for non-technical stakeholders: the system translated into business rules and business logic (the Rules lens is the seed), support-oriented views (configuration surfaces, failure points), and per-audience hiding of technical detail. Needs a real design pass with the value test applied per audience.
 
 ### P10-4: EU Cyber Resilience Act evaluation
