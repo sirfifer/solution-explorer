@@ -600,3 +600,49 @@ def test_nit_b_shared_mask_is_faster_than_per_match_rescan():
     new = time.perf_counter() - t0
 
     assert new < old, f"shared mask ({new:.4f}s) should beat per-match rescan ({old:.4f}s)"
+
+def test_d5_swift_static_member_access_draws_a_uses_edge(tmp_path):
+    # The dominant singleton shape in iOS code: AudioHub.shared.play(). The
+    # ctor/annotation patterns miss it, which is why the real core engines
+    # still read unreferenced after the first wave (dogfood finding on the
+    # iOS demo). Static member access on a distinctive name now counts; the
+    # qualified-access exclusion still kills names PRECEDED by a dot, so
+    # Foundation.Timer stays dead.
+    _write(tmp_path, "AudioHub/AudioHub.swift",
+           "import Foundation\nclass AudioHub {\n    static let shared = AudioHub()\n"
+           "    func play() { print(1) }\n}\n")
+    _write(tmp_path, "AudioHub/Mixer.swift",
+           "import Foundation\nstruct Mixer { var gain = 1 }\n")
+    _write(tmp_path, "UI/PlayerView.swift",
+           "import SwiftUI\nstruct PlayerView {\n    func body() {\n"
+           "        AudioHub.shared.play()\n"
+           "        let t = Foundation.Timer.scheduledTimer\n        print(t)\n    }\n}\n")
+    _write(tmp_path, "UI/PlayerModel.swift",
+           "import Foundation\nclass PlayerModel { var x = 1 }\n")
+
+    _, arch = _derive(tmp_path)
+    uses = _rels(arch, "uses")
+    edge = [r for r in uses if r["source"] == "ui" and r["target"] == "audiohub"]
+    assert len(edge) == 1, f"expected one ui->audiohub uses edge, got: {uses}"
+    snippets = {e["snippet"] for e in edge[0]["evidence"]}
+    assert "AudioHub" in snippets
+    assert "Timer" not in snippets, "Foundation.Timer must stay excluded (dot-qualified)"
+
+
+def test_d5_swift_common_name_static_access_still_needs_corroboration(tmp_path):
+    # Session.shared where Session is on the common platform-name list must
+    # not edge without another tie to the resolved component.
+    _write(tmp_path, "Core/Session.swift",
+           "import Foundation\nclass Session {\n    static let shared = Session()\n}\n")
+    _write(tmp_path, "Core/Support.swift",
+           "import Foundation\nstruct Support { var x = 1 }\n")
+    _write(tmp_path, "Net/Client.swift",
+           "import Foundation\nclass Client {\n    func go() { _ = Session.shared }\n}\n")
+    _write(tmp_path, "Net/Helper.swift",
+           "import Foundation\nstruct Helper { var y = 2 }\n")
+
+    _, arch = _derive(tmp_path)
+    uses = _rels(arch, "uses")
+    assert not [r for r in uses if r["source"] == "net" and r["target"] == "core"], (
+        f"a common platform name without corroboration must not edge: {uses}"
+    )
