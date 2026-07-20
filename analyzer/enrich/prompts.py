@@ -29,6 +29,7 @@ __all__ = [
     "build_intent_conformance_prompt",
     "build_intent_proposal_prompt",
     "build_finding_verify_prompt",
+    "build_identify_unknowns_prompt",
 ]
 
 # The architectural role vocabulary (RESOURCES.md). Kept in sync with the
@@ -506,6 +507,56 @@ RULES:
         "",
         "FINDING:",
         json.dumps(payload, indent=2, default=str),
+        "",
+        "Return the JSON object now.",
+    ])
+
+
+def build_identify_unknowns_prompt(paths: list[str], categories: list[dict]) -> str:
+    """Prompt to identify unknown non-source files as project inventory rules (P6-12).
+
+    The model sees the repo paths that the deterministic classifier could not name
+    and the full category vocabulary, and returns gitignore-style rules mapping
+    patterns to known categories. These become permanent, deterministic,
+    project-local rules, so the unknown bucket trends to zero without any core
+    product change. The model NEVER invents a category outside the vocabulary.
+    """
+    contract = """\
+Return ONLY a single JSON object, no prose, no fences:
+
+{ "rules": [
+    { "pattern": "a gitignore-style glob that matches the file(s), for example
+      '*.pdb', 'coverage/**', or 'Fastlane/report.xml'",
+      "category": "EXACTLY one of the category ids listed below",
+      "explanation": "one sentence: what this kind of file is and why it is here",
+      "recommendation": "one sentence: what the project should do about it",
+      "evidence": ["one or more of the exact repo paths above that motivated this rule"] }
+  ] }
+
+RULES:
+- Use the BROADEST honest pattern (an extension glob or a directory glob) so one
+  rule retires many unknowns, but never so broad it would swallow unrelated files.
+- 'category' MUST be one of the ids in CATEGORIES. Do not invent a category.
+- Only emit a rule when you are confident what the file is. It is correct to
+  return fewer rules than paths, or an empty list, rather than guess.
+- No em dashes or en dashes in any text. Use commas and periods.
+"""
+    payload = {
+        "unknown_paths": paths[:200],
+        "categories": categories,
+    }
+    return "\n".join([
+        "You are teaching a codebase-analysis tool what its unrecognized "
+        "non-source files are. For each kind of file below, propose a durable "
+        "classification rule mapping a path pattern to a known category.",
+        "",
+        contract,
+        "",
+        "CATEGORIES (id: what it means):",
+        json.dumps(categories, indent=2, default=str),
+        "",
+        "UNKNOWN PATHS:",
+        json.dumps(payload["unknown_paths"], indent=2, default=str),
         "",
         "Return the JSON object now.",
     ])

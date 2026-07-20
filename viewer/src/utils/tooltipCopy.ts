@@ -66,6 +66,10 @@ export const TOOLTIP_COPY = {
       "This one group is most of your non-source files. When it dwarfs your source, that is itself worth a look.",
     sample:
       "A sample of this group's files. Open any path to jump to it. The complete list is in the coverage ledger.",
+    projectRule:
+      "Classified by a rule this project taught itself. The tool learned what this is and remembers it deterministically, no AI at read time.",
+    projectRuleRow:
+      "This file was classified by a rule this project taught itself, not a built-in guess.",
   },
 
   // The findings entry bar and each finding's badges.

@@ -516,7 +516,26 @@ def _top_directory(path: str) -> str:
     return parts[0] if len(parts) > 1 else "(root)"
 
 
-def build_inventory(rows: list[dict], root=None) -> Optional[dict]:
+def _classify_with_provenance(path, disposition, reason, ruleset):
+    """Classify one row, honoring the project knowledge layer (P6-12).
+
+    Precedence: a matching PROJECT rule wins, then a ``.gitattributes`` Linguist
+    override, then the built-in ``classify_row``. Returns
+    ``(category, provenance, rule)`` where provenance is ``"project:<rule-id>"``,
+    ``"gitattributes"``, or ``"builtin"`` and ``rule`` is the InventoryRule when a
+    project rule fired (for override resolution) else None.
+    """
+    if ruleset is not None and not ruleset.is_empty():
+        rule = ruleset.match_project(path)
+        if rule is not None:
+            return rule.category, f"project:{rule.id}", rule
+        ga = ruleset.match_gitattributes(path)
+        if ga is not None:
+            return ga, "gitattributes", None
+    return classify_row(path, disposition, reason), "builtin", None
+
+
+def build_inventory(rows: list[dict], root=None, ruleset=None) -> Optional[dict]:
     """Build the inventory section from coverage ledger rows.
 
     ``rows`` are the ledger rows (dicts with ``path``, ``disposition``,
@@ -524,9 +543,24 @@ def build_inventory(rows: list[dict], root=None) -> Optional[dict]:
     source gaps stay in the coverage gaps family where they already live.
     Returns ``None`` when there are no non-source rows, so the projection omits
     the section and the viewer degrades to the plain coverage panel.
+
+    ``ruleset`` is the project knowledge layer (P6-12): a ``RuleSet`` of learned
+    project rules plus ``.gitattributes`` Linguist overrides. When None and
+    ``root`` is available, it is loaded from ``<root>/.solution-explorer/rules/``.
+    Project rules beat gitattributes beat built-in ``classify_row``. Each row's
+    classifying source is recorded so the projection and viewer can show
+    provenance ("classified by a rule this project taught itself"). Backward
+    compatible: with no rules and no gitattributes, classification and output are
+    byte-identical to the pre-P6-12 behavior.
     """
     root_path = Path(root) if root is not None else None
     patterns = _read_gitignore_patterns(root_path)
+
+    # Lazy import to avoid a module cycle (rules.py imports CATEGORY_META here).
+    if ruleset is None and root_path is not None:
+        from .rules import load_rule_set
+
+        ruleset = load_rule_set(root_path)
 
     # Aggregate per category in a single deterministic pass over sorted rows.
     groups: dict[str, dict] = {}
@@ -542,7 +576,9 @@ def build_inventory(rows: list[dict], root=None) -> Optional[dict]:
             continue
         path = row.get("path", "")
         reason = row.get("reason")
-        category = classify_row(path, disposition, reason)
+        category, provenance, rule = _classify_with_provenance(
+            path, disposition, reason, ruleset
+        )
         non_source_total += 1
 
         g = groups.get(category)
@@ -556,11 +592,19 @@ def build_inventory(rows: list[dict], root=None) -> Optional[dict]:
                 "ext_bytes": {},
                 "dir_counts": {},
                 "samples": [],
+                "sample_provenance": [],
                 "any_gitignore_candidate": False,
+                # source -> count, for the per-group provenance breakdown.
+                "rule_provenance": {},
+                # project rules that fed this group, by id, for override resolution.
+                "override_rules": {},
             }
             groups[category] = g
 
         g["count"] += 1
+        g["rule_provenance"][provenance] = g["rule_provenance"].get(provenance, 0) + 1
+        if rule is not None:
+            g["override_rules"][rule.id] = rule
         is_dir_row = disposition in _DIRECTORY_DISPOSITIONS
         if is_dir_row:
             g["directory_rows"] += 1
@@ -576,6 +620,9 @@ def build_inventory(rows: list[dict], root=None) -> Optional[dict]:
         g["dir_counts"][top] = g["dir_counts"].get(top, 0) + 1
         if len(g["samples"]) < _MAX_SAMPLES:
             g["samples"].append(path)
+            # Aligned with samples so the viewer can mark exactly which rows a
+            # project rule classified.
+            g["sample_provenance"].append(provenance)
 
         # A likely-unwanted or vendored group member that is not already ignored
         # makes the whole group a gitignore candidate.
@@ -612,10 +659,31 @@ def build_inventory(rows: list[dict], root=None) -> Optional[dict]:
 
 def _finish_group(category: str, g: dict) -> dict:
     meta = CATEGORY_META[category]
+    label = meta["label"]
+    explanation = meta["explanation"]
+    recommendation = meta["recommendation"]
     flags = dict(meta["flags"])
+
+    # Project-rule overrides (P6-12). A group is keyed by category but may be fed
+    # by several project rules; we apply their optional label/explanation/
+    # recommendation/flags overrides deterministically in rule-id order, so a
+    # later id's set fields win. Built-in defaults stand where no rule overrides.
+    override_rules = g.get("override_rules", {})
+    for rid in sorted(override_rules):
+        rule = override_rules[rid]
+        if rule.label:
+            label = rule.label
+        if rule.explanation:
+            explanation = rule.explanation
+        if rule.recommendation:
+            recommendation = rule.recommendation
+        if rule.flags:
+            flags.update(rule.flags)
+
     # gitignore_candidate is only asserted when a real, not-yet-ignored member
     # exists, so we never nag about a directory that .gitignore already covers.
-    if flags["gitignore_candidate"]:
+    # An explicit rule flag override (above) is respected as-is.
+    if flags["gitignore_candidate"] and "gitignore_candidate" not in _override_keys(override_rules):
         flags["gitignore_candidate"] = g["any_gitignore_candidate"]
 
     extensions = [
@@ -633,9 +701,9 @@ def _finish_group(category: str, g: dict) -> dict:
 
     group = {
         "id": category,
-        "label": meta["label"],
-        "explanation": meta["explanation"],
-        "recommendation": meta["recommendation"],
+        "label": label,
+        "explanation": explanation,
+        "recommendation": recommendation,
         "count": g["count"],
         "bytes": g["bytes"] if g["bytes_known"] else None,
         "directory_rows": g["directory_rows"],
@@ -644,7 +712,24 @@ def _finish_group(category: str, g: dict) -> dict:
         "samples": g["samples"],
         "flags": flags,
     }
+    # Provenance (P6-12). Additive: emitted only when a non-built-in source
+    # classified at least one row in the group, so old datasets and rule-free
+    # repos stay byte-identical. ``rule_provenance`` counts rows per source;
+    # ``sample_provenance`` aligns with ``samples`` for per-row markers.
+    provenance = g.get("rule_provenance") or {}
+    if any(src != "builtin" for src in provenance):
+        group["rule_provenance"] = dict(sorted(provenance.items()))
+        group["sample_provenance"] = g.get("sample_provenance", [])
     return group
+
+
+def _override_keys(override_rules: dict) -> set:
+    """The flag keys explicitly overridden by any contributing project rule."""
+    keys: set = set()
+    for rule in override_rules.values():
+        if rule.flags:
+            keys.update(rule.flags)
+    return keys
 
 
 def _group_sort_key(group: dict):

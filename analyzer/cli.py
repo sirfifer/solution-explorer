@@ -33,6 +33,14 @@ def main():
 
         sys.exit(name_main(sys.argv[2:]))
 
+    # `analyze.py identify unknowns` learns project-local inventory rules for the
+    # non-source files the deterministic classifier still calls unknown (P6-12),
+    # dispatched here for the same single-entrypoint reason as `enhance`.
+    if len(sys.argv) > 1 and sys.argv[1] == "identify":
+        from .enrich.verify_cli import identify_main
+
+        sys.exit(identify_main(sys.argv[2:]))
+
     parser = argparse.ArgumentParser(
         description="Analyze codebase architecture and generate interactive visualization data."
     )
