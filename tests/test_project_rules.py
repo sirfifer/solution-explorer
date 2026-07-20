@@ -521,3 +521,27 @@ def test_writer_explicit_id_collision_gets_a_unique_id(tmp_path):
     patterns = {r.id: r.pattern for r in rules}
     assert patterns["myrule"] == "*.ai"
     assert patterns[new_id] == "*.psd"
+
+
+def test_writer_scaffolds_a_sidecar_gitignore_for_the_rules(tmp_path):
+    # Knowledge travels with the repo: the writer scaffolds
+    # .solution-explorer/.gitignore ignoring everything except rules/, so a
+    # repo-level ".solution-explorer/" ignore no longer buries the learned
+    # rules (dogfood finding). An existing sidecar is never overwritten.
+    from analyzer.enrich.rules_writer import write_inventory_rules
+
+    write_inventory_rules(
+        tmp_path,
+        [{"pattern": "*.xyz", "category": "data", "source": "ai-enrichment"}],
+    )
+    sidecar = tmp_path / ".solution-explorer" / ".gitignore"
+    assert sidecar.exists()
+    body = sidecar.read_text()
+    assert "*" in body and "!rules/" in body and "!.gitignore" in body
+
+    sidecar.write_text("# user edited\n")
+    write_inventory_rules(
+        tmp_path,
+        [{"pattern": "*.abc", "category": "data", "source": "ai-enrichment"}],
+    )
+    assert sidecar.read_text() == "# user edited\n", "never overwrite a user sidecar"

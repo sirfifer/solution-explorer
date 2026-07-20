@@ -206,6 +206,23 @@ def write_inventory_rules(
 
     all_entries = list(existing_raw) + new_entries
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Knowledge must travel with the repo, but users gitignore the whole
+    # .solution-explorer/ directory for the store (dogfood finding: the learned
+    # rules were unignorable). Scaffold a sidecar .gitignore INSIDE the tool
+    # directory that ignores everything except rules/, so index.db stays out of
+    # version control while the rules commit by default. Never overwrite one
+    # the user has edited.
+    sidecar = path.parent.parent / ".gitignore"
+    if not sidecar.exists():
+        sidecar.write_text(
+            "# Managed by solution-explorer: keep the store out of version\n"
+            "# control while the learned rules travel with the repo.\n"
+            "*\n"
+            "!.gitignore\n"
+            "!rules/\n"
+            "!rules/**\n",
+            encoding="utf-8",
+        )
     header = (
         "# Project knowledge layer (P6-12): learned non-source inventory rules.\n"
         "# Rules are data; no AI runs at parse or query time. Rules with\n"
