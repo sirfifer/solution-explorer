@@ -1904,6 +1904,72 @@ single-repo v2 engine over member repos; cross-repo edges (M2), solution MCP
 
 ---
 
+## Engineering strategy (robustness and regression)
+
+Design authorities: `docs/remediation/ROBUSTNESS-STRATEGY.md` (gating,
+self-validation, resilience, the two paradigms, the parity contract) and
+`REGRESSION-STRATEGY.md` (golden-master diffing, blue/green slots, the golden
+corpus). These cards are DESIGN-CARDED; the owner green-lights builds. Nothing
+here is started.
+
+### R1: Output-contract plus honest-gap backbone
+- Status: TODO (candidate; ROBUSTNESS-STRATEGY.md)
+- Scope: generalize the coverage ledger's completeness guarantee to every
+  producer (each derive pass, each emitter, each MCP tool, each enrichment pass)
+  via Pydantic v2 output models and completeness postconditions (shape and
+  completeness, never value), with per-unit exception isolation in the driver so
+  a failing unit degrades to a deterministic honest gap instead of shipping a
+  fracture or crashing the run. Highest value, most on-brand.
+
+### R2: Retry, timeout, and cost ceiling on the AI-enrichment path
+- Status: TODO (candidate)
+- Scope: stamina-based bounded retry with full jitter, transient-only, plus a
+  per-attempt timeout and a per-run cost ceiling on the outbound AI call.
+  Formalizes P4-8's lesson for the external-API surface; parse failures stay
+  deterministic and fail fast.
+
+### R3: Maturity-channel gating
+- Status: TODO (candidate)
+- Scope: an in-repo, server-free maturity model (experimental/beta/stable,
+  default stable). Analyzer features module resolving a --channel; viewer
+  build-time constant for hidden features plus a URL-param override for
+  experimental-visible; active gates stamped into provenance (determinism
+  preserved); governance (expiry, owner, archive-on-done) folded into the
+  recurring dogfood gate.
+
+### R4: Auto-update and MCP resilience (Paradigm B)
+- Status: TODO (candidate; do only when the auto-update pipeline or MCP server is
+  hardened for real team-scale use)
+- Scope: a PERSISTED cross-run circuit breaker plus cost ceiling for the
+  auto-update pipeline (auto-disable an expensive pass after N consecutive
+  failed runs, alert, keep shipping the rest, auto-reenable on fix/clear); a
+  conventional in-process breaker plus liveness endpoint for the MCP server.
+
+### G1: Projection-diff tool
+- Status: TODO (candidate; REGRESSION-STRATEGY.md)
+- Scope: a deterministic diff over two full projections reporting component,
+  relationship, finding, coverage, inventory, entity, capability, and enrichment
+  deltas, human- and CI-readable, so a change is judged improved vs regressed.
+
+### G2: Golden-corpus harness
+- Status: TODO (candidate)
+- Scope: a frozen local clone of a respected real-world repo (recommended:
+  FastAPI) held static, an approved baseline, a re-baseline procedure, CI
+  wiring. The clean regression signal the changing demo and dogfood cannot give.
+  Keep vscode as the separate scale proof.
+
+### G3: Two-slot retention for demo and dogfood deploys
+- Status: TODO (candidate)
+- Scope: keep the prior build (blue) when promoting the new one (green), run G1
+  between them. A small addition to the existing redeploy flow.
+
+### G4: Golden-corpus full-vs-incremental parity check at scale
+- Status: TODO (candidate; uses G1 and G2)
+- Scope: on the frozen corpus, prove a cold full regeneration and a warm
+  incremental run produce the same projection. The real-data proof of the
+  incremental-equals-full contract, so a daily full regeneration is provably
+  unnecessary.
+
 ## Discovered during execution
 
 Add new findings here with a date and the task you were on; do not expand task scope inline.
