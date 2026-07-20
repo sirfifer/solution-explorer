@@ -66,6 +66,18 @@ think it through honestly. Is a dedicated CRA view real value, or is the
 SBOM plus a compliance checklist most of the substance? The evaluation is a
 design task with a recommendation, not an assumed build.
 
+## No theater (owner, 2026-07-20)
+
+The tool must never be fluff or a salesman's dream for marketing hype. Real
+value and real capability only; any flash or show is purely earned by what it
+actually is, not how it looks. This is why the CRA work is a truthful
+checklist artifact and not a dashboard, and the test applies to every future
+surface.
+
+Dogfooding: the self-repo dogfood site stays local (no public deploy). The
+public angle is covered by the demo sites; two different codebases are
+analyzed for diversity, and the tool always dogfoods itself.
+
 ## Standing tests for anything new
 
 Value first: an addition must let a named stakeholder do something they
