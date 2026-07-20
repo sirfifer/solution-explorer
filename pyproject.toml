@@ -4,6 +4,16 @@ dynamic = ["version"]
 description = "Architecture visualization tool for any codebase"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "sirfifer" },
+]
+
+[project.urls]
+Homepage = "https://github.com/sirfifer/solution-explorer"
+Repository = "https://github.com/sirfifer/solution-explorer"
+Issues = "https://github.com/sirfifer/solution-explorer/issues"
 
 [project.optional-dependencies]
 models = [

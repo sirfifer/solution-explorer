@@ -1,0 +1,70 @@
+name: Scorecard analysis workflow
+
+# OpenSSF Scorecard: a weekly automated assessment of this repo's
+# supply-chain security posture (pinned dependencies, branch protection,
+# code review, vulnerability response, and more). Results publish to the
+# public Scorecard API and the repo's Code Scanning dashboard.
+#
+# This is the official OSSF-maintained workflow content
+# (https://github.com/ossf/scorecard-action), reused verbatim including its
+# own action pins, rather than re-pinned by hand, so the workflow keeps
+# receiving the exact combination of scorecard-action, checkout, and
+# codeql-action versions that OSSF tests together.
+#
+# Some checks this reports on require action outside this repo (branch
+# protection, security policy visibility, vulnerability disclosure setup).
+# See docs/supply-chain-posture.md for the current pass/fail expectations
+# and the remaining owner steps.
+
+on:
+  push:
+    # Only the default branch is supported by Scorecard.
+    branches: [main]
+  schedule:
+    # Weekly on Saturdays.
+    - cron: "30 1 * * 6"
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      # Needed for Code scanning upload
+      security-events: write
+      # Needed for GitHub OIDC token if publish_results is true
+      id-token: write
+
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: "Run analysis"
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # The Scorecard team runs a weekly scan of public GitHub repos
+          # (see https://github.com/ossf/scorecard#public-data).
+          # publish_results: true feeds our own scan into that public
+          # dataset and unlocks the results badge for the README.
+          publish_results: true
+
+      # Upload the SARIF file as a workflow artifact so results are
+      # inspectable even if the Code Scanning upload below is unavailable.
+      - name: "Upload artifact"
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+
+      # Upload the results to GitHub's code scanning dashboard.
+      - name: "Upload to code-scanning"
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          sarif_file: results.sarif
