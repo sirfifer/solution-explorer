@@ -1827,6 +1827,24 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 
 ## Phase 9: Scale proof and release
 
+### P10-1: SBOM and supply chain surfaces
+- Status: TODO (owner vision 2026-07-20, hard requirement; see VISION.md)
+- Model: Opus 4.8 after a design pass
+- Scope: build an accurate, complete Software Bill of Materials per repo, emitted with every projection and rendered as a supply chain view. Dependencies from every manifest the repo carries (package.json/lock, pyproject/poetry/requirements, Package.swift/Package.resolved, go.mod/sum, Gemfile.lock, Cargo.lock, Podfile.lock, csproj/nuget, gradle/maven), with resolved versions, pin status, and direct-vs-transitive where lockfiles allow. Language target/SDK versions (requires-python, swift-tools-version, dotnet TargetFramework, node engines) surfaced separately, not buried. Standard format: emit CycloneDX JSON as the interchange artifact beside a viewer-native surface. Everything evidence-bearing (which manifest line) and deterministic.
+- Design pass first: exact per-ecosystem sources, transitive resolution limits without running package managers, and how the supply chain view relates to the existing vendored/dependency detection.
+
+### P10-2: Security view
+- Status: TODO (owner vision 2026-07-20; design pass first)
+- Scope: a dedicated lens focused on security in every shape: secrets-shaped files (inventory already flags), authentication and crypto usage sites, network communication surfaces (what talks to what, TLS posture where detectable), data handling (entities carrying sensitive-looking fields), dependency risk (bridges to P10-1), and repo security hygiene (SECURITY.md, dependabot config, signed commits). Deterministic signals plus AI elaboration as overlay. Hard value test per VISION.md before any UI lands.
+
+### P10-3: Stakeholder views (business and executive translation)
+- Status: TODO (owner vision 2026-07-20; design pass first)
+- Scope: views for non-technical stakeholders: the system translated into business rules and business logic (the Rules lens is the seed), support-oriented views (configuration surfaces, failure points), and per-audience hiding of technical detail. Needs a real design pass with the value test applied per audience.
+
+### P10-4: EU Cyber Resilience Act evaluation
+- Status: TODO (owner-directed honest evaluation, not an assumed build)
+- Scope: research the CRA obligations relevant to a shipped software product (SBOM, vulnerability handling and reporting, security-by-default expectations, timeline and penalties), map them against what the tool already produces or could cheaply produce (P10-1 SBOM, security hygiene findings, SECURITY.md-class checks), and RECOMMEND: dedicated CRA view, findings-only integration, or checklist artifact. Deliverable is a written recommendation with the value case, owner decides.
+
 ### P9-0: Dogfood critical-review gate (recurring)
 - Status: TODO (owner-directed 2026-07-19: dogfooding is a gate)
 - Model: fresh-eyes session (any strong model), adversarial by charter
