@@ -35,13 +35,22 @@ live = [
     "httpx>=0.27",
     "pydantic>=2.5",
 ]
+# The project knowledge layer (.solution-explorer/rules, P6-12) stores rules as
+# YAML. The analyzer core stays zero-dependency (invariant I7): without PyYAML
+# the rules loader warns loudly and skips project rules; with this extra the
+# rules apply. Included in [all] and [dev] so the feature-complete install and
+# both CI lanes exercise the real rules path.
+rules = [
+    "pyyaml>=6",
+]
 all = [
-    "solution-explorer[live,treesitter]",
+    "solution-explorer[live,treesitter,rules]",
 ]
 dev = [
     "pytest",
     "pytest-cov",
     "ruff",
+    "pyyaml>=6",
 ]
 
 [project.scripts]
