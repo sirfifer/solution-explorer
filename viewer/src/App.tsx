@@ -632,7 +632,9 @@ export function App() {
             <span className="shrink-0 mt-0.5">&#x2728;</span>
             <p className="flex-1 leading-relaxed">{architecture.ai_enhance.summary}</p>
             <div className="flex items-center gap-1 shrink-0">
-              {(architecture.ai_enhance.tech_diversity || architecture.ai_enhance.test_health_summary || architecture.ai_enhance.recent_changes_summary) && (
+              {(architecture.ai_enhance.tech_diversity || architecture.ai_enhance.test_health_summary ||
+                architecture.ai_enhance.recent_changes_summary || architecture.ai_enhance.data_flow_narrative ||
+                architecture.ai_enhance.component_groups?.length) && (
                 <button
                   onClick={() => setSummaryExpanded(!summaryExpanded)}
                   className={`p-0.5 rounded ${darkMode ? "hover:bg-indigo-900/40 text-indigo-500" : "hover:bg-indigo-100 text-indigo-400"}`}
@@ -652,6 +654,12 @@ export function App() {
           </div>
           {summaryExpanded && (
             <div className={`mt-2 pt-2 space-y-2 border-t ${darkMode ? "border-indigo-800/30" : "border-indigo-200"}`}>
+              {architecture.ai_enhance.data_flow_narrative && (
+                <div className="flex items-start gap-2">
+                  <span className={`shrink-0 font-semibold uppercase tracking-wider ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>Flow</span>
+                  <p className="leading-relaxed">{architecture.ai_enhance.data_flow_narrative}</p>
+                </div>
+              )}
               {architecture.ai_enhance.tech_diversity && (
                 <div className="flex items-start gap-2">
                   <span className={`shrink-0 font-semibold uppercase tracking-wider ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>Tech</span>
@@ -685,6 +693,22 @@ export function App() {
                         </span>
                         <span className="leading-relaxed">{obs.description}</span>
                       </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {architecture.ai_enhance.component_groups && architecture.ai_enhance.component_groups.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <span className={`shrink-0 font-semibold uppercase tracking-wider ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>Groups</span>
+                  <div className="flex flex-wrap gap-1">
+                    {architecture.ai_enhance.component_groups.map((group, i) => (
+                      <span
+                        key={i}
+                        className={`px-1.5 py-0.5 rounded ${darkMode ? "bg-indigo-900/40 text-indigo-300" : "bg-indigo-100 text-indigo-600"}`}
+                        title={group.component_ids.join(", ")}
+                      >
+                        {group.name} ({group.component_ids.length})
+                      </span>
                     ))}
                   </div>
                 </div>
