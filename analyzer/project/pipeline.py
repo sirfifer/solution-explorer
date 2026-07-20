@@ -35,6 +35,7 @@ from .frontdoor import write_front_door
 from .gitinfo import apply_info_plist_names, read_git_info
 from .manifest import write_manifest_and_details
 from .monolith import write_monolith
+from .sbom_emit import emit_sbom
 from .search_shards import DEFAULT_SHARD_SIZE, write_search_shards
 
 __all__ = ["ProjectionResult", "prepare_arch", "project_split", "project_monolith", "project_all"]
@@ -50,6 +51,7 @@ class ProjectionResult:
     monolith_path: Optional[Path] = None
     coverage_path: Optional[Path] = None
     activity_path: Optional[Path] = None
+    sbom_path: Optional[Path] = None
     search_manifest_path: Optional[Path] = None
     ai_json_path: Optional[Path] = None
     llms_txt_path: Optional[Path] = None
@@ -142,6 +144,18 @@ def project_split(
     apply_verdict_overlay(prepared, store)
     coverage = build_coverage(store, root=root)
     activity = build_activity(store)
+    # SBOM and supply chain (P10-1): parse the repo's manifests deterministically,
+    # write a CycloneDX sbom.json beside the manifest, and stamp the compact
+    # supply_chain section onto the arch so it rides in the manifest. No-op (None)
+    # when there is no scan root or the repo carries no manifests, so unaffected
+    # projections are byte-identical. Done before the changelog so a new or
+    # changed dependency set is a recorded change.
+    sbom_section = emit_sbom(
+        prepared, output_dir, root=root, coverage=coverage,
+        generated_at=generated_at, indent=indent,
+    )
+    if sbom_section is not None:
+        prepared["supply_chain"] = sbom_section
     serial = _finish_changelog(
         prepared, previous, output_dir / "manifest.json",
         commit_sha=commit_sha, now=now,
@@ -172,7 +186,7 @@ def project_split(
     ai_json_path, llms_txt_path = write_front_door(
         prepared, output_dir, mode="split",
         coverage=coverage, activity=activity,
-        search_manifest=search_manifest, indent=indent,
+        search_manifest=search_manifest, supply_chain=sbom_section, indent=indent,
     )
 
     return ProjectionResult(
@@ -181,6 +195,7 @@ def project_split(
         manifest_path=manifest_path,
         coverage_path=coverage_path,
         activity_path=activity_path,
+        sbom_path=(output_dir / "sbom.json") if sbom_section is not None else None,
         search_manifest_path=output_dir / "search" / "manifest.json",
         ai_json_path=ai_json_path,
         llms_txt_path=llms_txt_path,
@@ -218,6 +233,15 @@ def project_monolith(
     apply_verdict_overlay(prepared, store)
     coverage = build_coverage(store, root=root)
     activity = build_activity(store)
+    # SBOM and supply chain (P10-1): sbom.json lands beside the single
+    # architecture.json, and the supply_chain section rides in the monolith
+    # (write_monolith copies every arch key). See project_split for the rationale.
+    sbom_section = emit_sbom(
+        prepared, output_path.parent, root=root, coverage=coverage,
+        generated_at=generated_at, indent=indent,
+    )
+    if sbom_section is not None:
+        prepared["supply_chain"] = sbom_section
     serial = _finish_changelog(
         prepared, previous, output_path, commit_sha=commit_sha, now=now
     )
@@ -227,13 +251,14 @@ def project_monolith(
     ai_json_path, llms_txt_path = write_front_door(
         prepared, output_path.parent, mode="monolith",
         coverage=coverage, activity=activity,
-        monolith_filename=output_path.name, indent=indent,
+        supply_chain=sbom_section, monolith_filename=output_path.name, indent=indent,
     )
     return ProjectionResult(
         mode="monolith",
         monolith_path=output_path,
         ai_json_path=ai_json_path,
         llms_txt_path=llms_txt_path,
+        sbom_path=(output_path.parent / "sbom.json") if sbom_section is not None else None,
         changelog_serial=serial,
         coverage=coverage,
         activity=activity,

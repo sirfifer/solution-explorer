@@ -1,0 +1,13 @@
+PODS:
+  - Alamofire (5.8.1)
+  - Kingfisher (7.10.0)
+  - SnapKit (5.6.0)
+
+DEPENDENCIES:
+  - Alamofire (~> 5.8)
+  - SnapKit
+
+SPEC CHECKSUMS:
+  Alamofire: 0123456789abcdef
+
+COCOAPODS: 1.15.2

@@ -1,0 +1,20 @@
+{
+  "pins": [
+    {
+      "identity": "swift-nio",
+      "location": "https://github.com/apple/swift-nio.git",
+      "state": { "version": "2.65.0" }
+    },
+    {
+      "identity": "swift-log",
+      "location": "https://github.com/apple/swift-log.git",
+      "state": { "version": "1.5.3" }
+    },
+    {
+      "identity": "swift-collections",
+      "location": "https://github.com/apple/swift-collections.git",
+      "state": { "version": "1.1.0" }
+    }
+  ],
+  "version": 2
+}

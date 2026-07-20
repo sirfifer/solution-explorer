@@ -137,6 +137,30 @@ export const TOOLTIP_COPY = {
     untested: "No test references this capability. It is unproven.",
   },
 
+  // The supply chain surface and SBOM (P10-1). Every line explains itself; the
+  // scope note states plainly this is an inventory, not a security scan.
+  supplyChain: {
+    entry:
+      "Open the supply chain: every dependency this repo declares or locks, with versions and pin status.",
+    scopeNote:
+      "An inventory of dependencies and versions. Not a vulnerability scan: no security claim is made.",
+    ecosystem: "A package ecosystem the repo uses, with its dependency and pin counts.",
+    target:
+      "A language runtime or SDK version this repo targets, called out separately from the packages.",
+    pinExact: "Locked to one exact version. The build cannot drift.",
+    pinRange: "A version range. An update can move within it.",
+    pinUnpinned: "No version constraint. The resolved version can change freely.",
+    direct: "Declared directly in a manifest this repo authored.",
+    transitive: "Pulled in only as a dependency of a dependency, through a lockfile.",
+    version: "The resolved version from a lockfile, when one is present.",
+    declared: "The version constraint as written in the manifest.",
+    sbomLink: "The full CycloneDX 1.5 SBOM document for interchange with other tooling.",
+    vendored: "Third-party code checked into this repo, from the coverage inventory.",
+    warning: "A manifest that was found but could not be parsed. Its dependencies are missing here.",
+    fixture:
+      "Dependencies from manifests under test or fixture directories. Accounted here but not counted as shipping dependencies.",
+  },
+
   // Evidence file:line links, shared across surfaces.
   evidence: {
     link: "Opens the exact source lines this claim is based on.",
@@ -194,6 +218,10 @@ export const SWEPT_SURFACES = [
   "rules.inferred",
   "capability.kind",
   "capability.tested",
+  "supplyChain.entry",
+  "supplyChain.scopeNote",
+  "supplyChain.pinStatus",
+  "supplyChain.scope",
   "evidence.link",
   "tours.stale",
   "directive.export",

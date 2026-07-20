@@ -98,10 +98,14 @@ def test_monolith_emits_ai_json_and_llms_txt(tmp_path):
     assert ai["front_door_version"] == 1
     assert ai["mode"] == "monolith"
     assert ai["entry"] == "architecture.json"
-    # Monolith has exactly one endpoint: the single file, and it exists.
+    # Monolith lists the single dataset file, plus the separate CycloneDX
+    # sbom.json when the repo carries manifests (the polyglot fixture does). Both
+    # named endpoints exist on disk (link integrity).
     paths = [e["path"] for e in ai["endpoints"]]
-    assert paths == ["architecture.json"]
-    assert (out.parent / paths[0]).is_file()
+    assert paths[0] == "architecture.json"
+    assert set(paths) <= {"architecture.json", "sbom.json"}
+    for path in paths:
+        assert (out.parent / path).is_file()
 
 
 # ---------------------------------------------------------------------------

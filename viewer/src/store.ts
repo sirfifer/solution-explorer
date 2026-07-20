@@ -403,6 +403,14 @@ interface ArchStore {
   closeFindingsSurface: () => void;
   setFindingsSurfaceTab: (tab: "findings" | "concerns") => void;
   setFindingsKindFilter: (kind: string | null) => void;
+
+  // Supply chain surface (P10-1). A globally reachable overlay listing the SBOM
+  // (ecosystems, dependencies, targets), available whenever the dataset carries a
+  // supply_chain section. Transient UI state like the findings surface (not
+  // URL-synced); reset on architecture reload.
+  supplyChainOpen: boolean;
+  openSupplyChain: () => void;
+  closeSupplyChain: () => void;
   // Ranked findings (rank_score desc; I11) and concerns from the projection.
   getFindings: () => Finding[];
   getConcerns: () => Concern[];
@@ -845,6 +853,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   connectionCounts: {},
   findingsSurface: { open: false, tab: "findings", kindFilter: null, elementFilter: null },
   stagedFindingSet: null,
+  supplyChainOpen: false,
   toursOpen: false,
   activeTourId: null,
   tourStep: 0,
@@ -925,6 +934,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       // dataset; reset on reload so a new scan starts closed (P6-8).
       findingsSurface: { open: false, tab: "findings", kindFilter: null, elementFilter: null },
       stagedFindingSet: null,
+      // The supply chain overlay belongs to a specific dataset; reset on reload
+      // so a new scan starts with it closed (P10-1).
+      supplyChainOpen: false,
       // A tour walk belongs to a specific dataset; reset it on reload so a new
       // scan starts with the player closed and no active tour (P6-7).
       toursOpen: false,
@@ -1913,6 +1925,11 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     set((s) => ({ findingsSurface: { ...s.findingsSurface, tab } })),
   setFindingsKindFilter: (kind) =>
     set((s) => ({ findingsSurface: { ...s.findingsSurface, kindFilter: kind } })),
+
+  // Supply chain overlay (P10-1). Simple open/close; the surface reads the
+  // supply_chain section straight off the architecture.
+  openSupplyChain: () => set({ supplyChainOpen: true }),
+  closeSupplyChain: () => set({ supplyChainOpen: false }),
 
   // Ranked by rank_score desc, ties by id (I11): "look here first" holds even if
   // the projection emitted them unordered.

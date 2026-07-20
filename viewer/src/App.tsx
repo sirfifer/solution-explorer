@@ -14,6 +14,8 @@ import { StatusDashboard } from "./components/StatusDashboard";
 import { CoverageBadge } from "./components/CoverageBadge";
 import { FindingsEntry } from "./components/FindingsEntry";
 import { FindingsSurface } from "./components/FindingsSurface";
+import { SupplyChainEntry } from "./components/SupplyChainEntry";
+import { SupplyChainSurface } from "./components/SupplyChainSurface";
 import { ToursEntry } from "./components/ToursEntry";
 import { TourPlayer } from "./components/TourPlayer";
 import { LensSwitcher } from "./components/LensSwitcher";
@@ -699,6 +701,10 @@ export function App() {
           whenever the dataset carries findings or concerns. */}
       <FindingsEntry />
 
+      {/* Supply chain / SBOM entry point (P10-1), present whenever the dataset
+          carries a supply_chain section; opens the SupplyChainSurface overlay. */}
+      <SupplyChainEntry />
+
       {/* Tours entry point (P6-7); present only when the dataset carries tours. */}
       <ToursEntry />
 
@@ -920,6 +926,9 @@ export function App() {
 
       {/* Findings and concerns surface overlay (P6-8) */}
       <FindingsSurface />
+
+      {/* Supply chain / SBOM surface overlay (P10-1) */}
+      <SupplyChainSurface />
 
       {/* Guided-walkthrough player: tour list overlay + docked step panel (P6-7) */}
       <TourPlayer />

@@ -1,0 +1,3 @@
+# runtime pins
+flask==2.3.0
+gunicorn

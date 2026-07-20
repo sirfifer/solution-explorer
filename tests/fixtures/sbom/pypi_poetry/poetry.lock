@@ -1,0 +1,15 @@
+[[package]]
+name = "httpx"
+version = "0.27.2"
+
+[[package]]
+name = "rich"
+version = "13.7.0"
+
+[[package]]
+name = "mypy"
+version = "1.8.0"
+
+[[package]]
+name = "certifi"
+version = "2024.2.2"

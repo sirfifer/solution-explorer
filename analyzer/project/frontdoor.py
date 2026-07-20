@@ -62,6 +62,7 @@ _MANIFEST_SECTIONS: tuple[tuple[str, str], ...] = (
     ("data_entities", "Flat index of data entities (models, schemas, tables)."),
     ("entity_access", "Flat index of which components read/write which data entities."),
     ("rules", "Flat index of project rules and their pass/violation state."),
+    ("supply_chain", "Software bill of materials summary: ecosystems, dependencies (name, version, pin_status, direct/transitive, evidence), language target/SDK versions, and warnings. The full CycloneDX 1.5 document is sbom.json."),
     ("tours", "Guided walkthroughs (ordered component sequences) when present."),
     ("ai_enhance", "Architecture-level AI overlay (description, help text, provenance markers) when the dataset is enriched."),
     ("changelog", "Ordered projection changelog entries (what changed since the previous projection)."),
@@ -162,12 +163,29 @@ def _manifest_sections(
     return sections
 
 
+def _sbom_endpoint() -> dict:
+    """The sbom.json endpoint, listed in both modes when a SBOM was emitted."""
+    return {
+        "path": "sbom.json",
+        "role": "sbom",
+        "contains": (
+            "CycloneDX 1.5 SBOM: bomFormat, specVersion, a content-derived "
+            "serialNumber, the metadata component (the repo, with language "
+            "target/SDK versions as properties), and one component per dependency "
+            "(name, version, purl, pin status, direct/transitive, evidence). For "
+            "a quick 'what does this depend on', read manifest.json .supply_chain "
+            "instead; fetch this for the standard interchange document."
+        ),
+    }
+
+
 def _split_endpoints(
     arch: dict,
     *,
     coverage: Optional[dict],
     activity: Optional[dict],
     search_present: bool = True,
+    supply_chain: Optional[dict] = None,
 ) -> list[dict]:
     """The endpoint map for split mode, listing only files that are emitted."""
     endpoints: list[dict] = [
@@ -231,11 +249,13 @@ def _split_endpoints(
                 "Fetch to answer 'what changes most / who owns what'."
             ),
         })
+    if supply_chain is not None:
+        endpoints.append(_sbom_endpoint())
     return endpoints
 
 
-def _monolith_endpoints(single_file: str) -> list[dict]:
-    return [
+def _monolith_endpoints(single_file: str, supply_chain: Optional[dict] = None) -> list[dict]:
+    endpoints = [
         {
             "path": single_file,
             "role": "monolith",
@@ -243,16 +263,50 @@ def _monolith_endpoints(single_file: str) -> list[dict]:
                 "The whole dataset in one file: components (nested), relationships, "
                 "stats, the inline `symbols` and `files` arrays, embedded `coverage` "
                 "(full ledger) and `activity` when present, and every optional "
-                "section under `manifest_sections`. Small-repo / backward-compat "
-                "layout: there are no separate search or detail shards, so read the "
-                "sections you need directly from this document."
+                "section under `manifest_sections` (including `supply_chain`). "
+                "Small-repo / backward-compat layout: there are no separate search "
+                "or detail shards, so read the sections you need directly from this "
+                "document."
             ),
         }
     ]
+    # sbom.json is a separate CycloneDX file beside the monolith even here.
+    if supply_chain is not None:
+        endpoints.append(_sbom_endpoint())
+    return endpoints
 
 
-def _walk_orders(mode: str, monolith_filename: str = "architecture.json") -> list[dict]:
+def _supply_chain_walk_order(mode: str, monolith_filename: str) -> dict:
+    """The 'what does this depend on' walk order (P10-1)."""
+    if mode == "monolith":
+        return {
+            "question": "what does this depend on",
+            "steps": [
+                {"fetch": monolith_filename, "then": "Read .supply_chain: .ecosystems for the per-ecosystem counts, .targets for the language target/SDK versions, and .dependencies (each with name, version, pin_status, scope direct/transitive, and evidence). Fetch sbom.json for the CycloneDX interchange document."},
+            ],
+        }
+    return {
+        "question": "what does this depend on",
+        "steps": [
+            {"fetch": "manifest.json", "then": "Read .supply_chain: .ecosystems for the per-ecosystem counts, .targets for the language target/SDK versions, and .dependencies (name, version, pin_status, scope, evidence). One fetch answers most dependency questions."},
+            {"fetch": "sbom.json", "then": "Only if you need the standard CycloneDX 1.5 document (components with purls) for interchange with other SBOM tooling."},
+        ],
+    }
+
+
+def _walk_orders(
+    mode: str,
+    monolith_filename: str = "architecture.json",
+    supply_chain: Optional[dict] = None,
+) -> list[dict]:
     """Recommended fetch sequences for common question shapes."""
+    orders = _base_walk_orders(mode, monolith_filename)
+    if supply_chain is not None:
+        orders.append(_supply_chain_walk_order(mode, monolith_filename))
+    return orders
+
+
+def _base_walk_orders(mode: str, monolith_filename: str) -> list[dict]:
     if mode == "monolith":
         return [
             {
@@ -350,15 +404,16 @@ def build_front_door(
     coverage: Optional[dict] = None,
     activity: Optional[dict] = None,
     search_manifest: Optional[dict] = None,
+    supply_chain: Optional[dict] = None,
     monolith_filename: str = "architecture.json",
 ) -> tuple[dict, str]:
     """Build the ``(ai_json_dict, llms_txt_str)`` pair for a projection.
 
     ``mode`` is ``"split"`` or ``"monolith"``. In split mode ``search_manifest``
     is the dict returned by ``write_search_shards`` (its shard list and sizing
-    feed the search section); in monolith mode it is ignored. ``coverage`` and
-    ``activity`` presence gates the corresponding endpoints (link integrity:
-    only files that are emitted are listed).
+    feed the search section); in monolith mode it is ignored. ``coverage``,
+    ``activity``, and ``supply_chain`` presence gates the corresponding endpoints
+    (link integrity: only files that are emitted are listed).
     """
     if mode not in ("split", "monolith"):
         raise ValueError(f"mode must be 'split' or 'monolith', got {mode!r}")
@@ -373,14 +428,17 @@ def build_front_door(
         "manifest_sections": _manifest_sections(
             arch, mode=mode, coverage=coverage, activity=activity
         ),
-        "walk_orders": _walk_orders(mode, monolith_filename),
+        "walk_orders": _walk_orders(mode, monolith_filename, supply_chain=supply_chain),
         "token_economy": _token_economy(),
     }
 
     if mode == "split":
         ai_json["projection_root"] = "./"
         ai_json["entry"] = "manifest.json"
-        ai_json["endpoints"] = _split_endpoints(arch, coverage=coverage, activity=activity, search_present=search_manifest is not None)
+        ai_json["endpoints"] = _split_endpoints(
+            arch, coverage=coverage, activity=activity,
+            search_present=search_manifest is not None, supply_chain=supply_chain,
+        )
         sm = search_manifest or {}
         ai_json["search"] = {
             "index": "search/manifest.json",
@@ -432,7 +490,7 @@ def build_front_door(
     else:
         ai_json["projection_root"] = "./"
         ai_json["entry"] = monolith_filename
-        ai_json["endpoints"] = _monolith_endpoints(monolith_filename)
+        ai_json["endpoints"] = _monolith_endpoints(monolith_filename, supply_chain=supply_chain)
 
     llms_txt = _render_llms_txt(ai_json, mode=mode, monolith_filename=monolith_filename)
     return ai_json, llms_txt
@@ -483,8 +541,12 @@ def _render_llms_txt(ai_json: dict, *, mode: str, monolith_filename: str) -> str
             lines.append("- [coverage.json](./coverage.json): full per-file coverage ledger and non-source inventory.")
         if any(e["path"] == "activity.json" for e in ai_json["endpoints"]):
             lines.append("- [activity.json](./activity.json): git-history activity lens (hotspots, knowledge, coupling).")
+        if any(e["path"] == "sbom.json" for e in ai_json["endpoints"]):
+            lines.append("- [sbom.json](./sbom.json): CycloneDX 1.5 SBOM; a quick dependency summary is in manifest.json .supply_chain.")
     else:
-        lines.append(f"- [{monolith_filename}](./{monolith_filename}): the whole dataset in one file (components, relationships, stats, inline symbols/files, embedded coverage/activity). Small-repo layout with no separate shards.")
+        lines.append(f"- [{monolith_filename}](./{monolith_filename}): the whole dataset in one file (components, relationships, stats, inline symbols/files, embedded coverage/activity/supply_chain). Small-repo layout with no separate shards.")
+        if any(e["path"] == "sbom.json" for e in ai_json["endpoints"]):
+            lines.append("- [sbom.json](./sbom.json): CycloneDX 1.5 SBOM beside the monolith; a quick dependency summary is in its .supply_chain section.")
     lines.append("")
     lines.append("## Token economy")
     lines.append("")
@@ -501,6 +563,7 @@ def write_front_door(
     coverage: Optional[dict] = None,
     activity: Optional[dict] = None,
     search_manifest: Optional[dict] = None,
+    supply_chain: Optional[dict] = None,
     monolith_filename: str = "architecture.json",
     indent=2,
 ) -> tuple[Path, Path]:
@@ -520,6 +583,7 @@ def write_front_door(
         coverage=coverage,
         activity=activity,
         search_manifest=search_manifest,
+        supply_chain=supply_chain,
         monolith_filename=monolith_filename,
     )
 

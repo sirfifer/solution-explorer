@@ -1,0 +1,5 @@
+{
+  "name": "sample-fixture",
+  "version": "1.0.0",
+  "dependencies": { "fixture-only-dep": "9.9.9" }
+}

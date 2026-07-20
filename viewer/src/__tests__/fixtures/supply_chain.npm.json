@@ -1,0 +1,120 @@
+{
+  "counts": {
+    "dependencies": 4,
+    "direct": 3,
+    "ecosystems": 1,
+    "fixture": {
+      "dependencies": 0,
+      "ecosystems": 0,
+      "targets": 0,
+      "warnings": 0
+    },
+    "pin_status": {
+      "exact-pinned": 2,
+      "range": 2
+    },
+    "targets": 1,
+    "transitive": 1,
+    "vendored": 1,
+    "warnings": 0
+  },
+  "dependencies": [
+    {
+      "declared": "1.3.0",
+      "ecosystem": "npm",
+      "evidence": {
+        "file": "package.json",
+        "line": 6
+      },
+      "id": "npm:left-pad@1.3.0",
+      "name": "left-pad",
+      "pin_status": "exact-pinned",
+      "purl": "pkg:npm/left-pad@1.3.0",
+      "scope": "direct",
+      "version": "1.3.0"
+    },
+    {
+      "declared": "^4.17.21",
+      "ecosystem": "npm",
+      "evidence": {
+        "file": "package.json",
+        "line": 7
+      },
+      "id": "npm:lodash@4.17.21",
+      "name": "lodash",
+      "pin_status": "range",
+      "purl": "pkg:npm/lodash@4.17.21",
+      "scope": "direct",
+      "version": "4.17.21"
+    },
+    {
+      "declared": "~5.4.0",
+      "ecosystem": "npm",
+      "evidence": {
+        "file": "package.json",
+        "line": 10
+      },
+      "id": "npm:typescript@5.4.5",
+      "name": "typescript",
+      "pin_status": "range",
+      "purl": "pkg:npm/typescript@5.4.5",
+      "scope": "direct",
+      "version": "5.4.5"
+    },
+    {
+      "ecosystem": "npm",
+      "evidence": {
+        "file": "package-lock.json"
+      },
+      "id": "npm:undici@5.28.4",
+      "name": "undici",
+      "pin_status": "exact-pinned",
+      "purl": "pkg:npm/undici@5.28.4",
+      "scope": "transitive",
+      "version": "5.28.4"
+    }
+  ],
+  "ecosystems": [
+    {
+      "dependency_count": 4,
+      "direct_count": 3,
+      "id": "npm",
+      "label": "npm (Node.js)",
+      "manifests": [
+        "package-lock.json",
+        "package.json"
+      ],
+      "pin_counts": {
+        "exact-pinned": 2,
+        "range": 2
+      },
+      "transitive_count": 1
+    }
+  ],
+  "sbom_endpoint": "sbom.json",
+  "sbom_format": "CycloneDX 1.5",
+  "scope_note": "Inventory of declared and locked dependencies with versions and pin status. Not a vulnerability scan: no security posture is claimed or implied.",
+  "targets": [
+    {
+      "constraint": ">=18",
+      "ecosystem": "npm",
+      "evidence": {
+        "file": "package.json",
+        "line": 4
+      },
+      "kind": "node",
+      "label": "Node.js engine"
+    }
+  ],
+  "vendored": [
+    {
+      "evidence": {
+        "file": "node_modules"
+      },
+      "file_count": 1200,
+      "path": "node_modules"
+    }
+  ],
+  "version": 1,
+  "warnings": []
+}

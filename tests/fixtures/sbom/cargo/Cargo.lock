@@ -1,0 +1,21 @@
+version = 3
+
+[[package]]
+name = "serde"
+version = "1.0.197"
+
+[[package]]
+name = "rand"
+version = "0.8.5"
+
+[[package]]
+name = "anyhow"
+version = "1.0.80"
+
+[[package]]
+name = "proptest"
+version = "1.4.0"
+
+[[package]]
+name = "libc"
+version = "0.2.153"
