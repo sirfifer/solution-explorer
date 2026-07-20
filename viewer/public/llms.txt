@@ -1,0 +1,11 @@
+# solution-explorer architecture site
+
+> This site is an interactive architecture viewer with a machine-readable
+> projection of the codebase. An agent can answer questions about the code by
+> fetching small JSON files instead of reading the raw repository.
+
+## Start here
+
+- [architecture/ai.json](./architecture/ai.json): the dataset-specific front door: endpoint map, sharding schemes, walk orders, and the token-economy contract. Read this first.
+- [architecture/llms.txt](./architecture/llms.txt): the markdown companion for the projection.
+- [architecture/manifest.json](./architecture/manifest.json): the structural entry document (components, relationships, stats, findings).

@@ -31,6 +31,7 @@ from ..enrich import apply_enrichment_overlay, apply_verdict_overlay
 from .activity import build_activity
 from .changelog import apply_changelog
 from .coverage import build_coverage
+from .frontdoor import write_front_door
 from .gitinfo import apply_info_plist_names, read_git_info
 from .manifest import write_manifest_and_details
 from .monolith import write_monolith
@@ -50,6 +51,8 @@ class ProjectionResult:
     coverage_path: Optional[Path] = None
     activity_path: Optional[Path] = None
     search_manifest_path: Optional[Path] = None
+    ai_json_path: Optional[Path] = None
+    llms_txt_path: Optional[Path] = None
     detail_count: int = 0
     search_total: int = 0
     changelog_serial: int = 0
@@ -163,6 +166,15 @@ def project_split(
         with open(activity_path, "w", encoding="utf-8") as fh:
             json.dump(activity, fh, indent=indent, default=str, sort_keys=True)
 
+    # AI front door (P8-3): the static entry documents that teach an agent the
+    # shard layout. Emitted last so the search manifest and coverage/activity
+    # presence are known; only the files actually written above are listed.
+    ai_json_path, llms_txt_path = write_front_door(
+        prepared, output_dir, mode="split",
+        coverage=coverage, activity=activity,
+        search_manifest=search_manifest, indent=indent,
+    )
+
     return ProjectionResult(
         mode="split",
         output_dir=output_dir,
@@ -170,6 +182,8 @@ def project_split(
         coverage_path=coverage_path,
         activity_path=activity_path,
         search_manifest_path=output_dir / "search" / "manifest.json",
+        ai_json_path=ai_json_path,
+        llms_txt_path=llms_txt_path,
         detail_count=len(prepared.get("component_detail_index", {}))
         or _count_components(prepared.get("components", [])),
         search_total=search_manifest["total"],
@@ -208,9 +222,18 @@ def project_monolith(
         prepared, previous, output_path, commit_sha=commit_sha, now=now
     )
     write_monolith(prepared, output_path, coverage=coverage, activity=activity, indent=indent)
+    # AI front door (P8-3): emitted beside the single architecture.json, with the
+    # endpoint map pointing at that one file (no shards in monolith mode).
+    ai_json_path, llms_txt_path = write_front_door(
+        prepared, output_path.parent, mode="monolith",
+        coverage=coverage, activity=activity,
+        monolith_filename=output_path.name, indent=indent,
+    )
     return ProjectionResult(
         mode="monolith",
         monolith_path=output_path,
+        ai_json_path=ai_json_path,
+        llms_txt_path=llms_txt_path,
         changelog_serial=serial,
         coverage=coverage,
         activity=activity,

@@ -1,0 +1,8 @@
+{
+  "front_door_version": 1,
+  "kind": "solution-explorer-front-door-pointer",
+  "note": "This is the site-root pointer. The dataset-specific front door lives with the projection at ./architecture/. Fetch ./architecture/ai.json for the endpoint map, sharding schemes, walk orders, and the token-economy contract.",
+  "front_door": "./architecture/ai.json",
+  "entry": "./architecture/manifest.json",
+  "llms_txt": "./architecture/llms.txt"
+}
