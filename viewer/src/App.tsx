@@ -28,7 +28,10 @@ import { useBottomSheet } from "./hooks/useBottomSheet";
 import type { SnapPoint } from "./hooks/useBottomSheet";
 import { initializeSearch } from "./utils/search";
 import { formatNumber, formatRelativeTime, getTypeColors } from "./utils/layout";
-import type { Architecture, Component } from "./types";
+import { dataUrl, getDataBase } from "./utils/dataSource";
+import { SolutionIndex } from "./components/SolutionIndex";
+import type { Architecture, Component, SolutionManifest } from "./types";
+import { SOLUTION_MANIFEST_KIND } from "./types";
 
 // Session storage keys for UI state persistence
 const STORAGE_KEYS = {
@@ -168,6 +171,9 @@ export function App() {
   useLiveMonitor();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Multi-repo (M1): a composed solution root manifest renders the member index
+  // instead of the component graph. null for a normal single-repo dataset.
+  const [solution, setSolution] = useState<SolutionManifest | null>(null);
   const [summaryDismissed, setSummaryDismissed] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -285,10 +291,20 @@ export function App() {
       try {
         setLoading(true);
 
-        // Try split mode first (manifest.json)
-        const manifestRes = await fetch("./architecture/manifest.json");
+        // Try split mode first (manifest.json). dataUrl resolves the ?data=
+        // base so a member of a composed solution loads with the same code path.
+        const manifestRes = await fetch(dataUrl("manifest.json"));
         if (isJsonResponse(manifestRes)) {
           const manifest = await manifestRes.json();
+          // A composed multi-repo SOLUTION root: render the member index, not a
+          // component graph (MULTI-REPO-DESIGN.md, M1).
+          if (manifest && manifest.kind === SOLUTION_MANIFEST_KIND) {
+            if (!useArchStore.getState().architecture) {
+              setSolution(manifest as SolutionManifest);
+              setLoading(false);
+            }
+            return;
+          }
           // Split mode: manifest has components/relationships but no symbols/files
           const data: Architecture = { ...manifest, symbols: manifest.symbols || [], files: manifest.files || [] };
           applyIfUnset(data);
@@ -365,6 +381,19 @@ export function App() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  // A composed multi-repo solution renders the member index (M1). Tapping a
+  // member navigates (via ?data=) into that member's standalone dataset, which
+  // loads through the normal architecture path below.
+  if (solution) {
+    return (
+      <SolutionIndex
+        solution={solution}
+        solutionBase={getDataBase()}
+        darkMode={darkMode}
+      />
     );
   }
 

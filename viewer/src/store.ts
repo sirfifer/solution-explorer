@@ -53,6 +53,7 @@ import {
 } from "./findings/model";
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
+import { dataUrl } from "./utils/dataSource";
 import {
   architectureIdentity,
   loadAnnotations,
@@ -1683,7 +1684,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     };
 
     try {
-      const res = await fetch(`./architecture/data/detail-${safeId}.json`);
+      const res = await fetch(dataUrl(`data/detail-${safeId}.json`));
       if (get().architecture !== requestArch) {
         // Architecture changed mid-flight: discard, the next open refetches.
         return null;
@@ -1783,7 +1784,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     // swaps the architecture mid-flight does not repopulate the fresh state.
     const requestArch = arch;
     try {
-      const res = await fetch("./architecture/coverage.json");
+      const res = await fetch(dataUrl("coverage.json"));
       if (get().architecture !== requestArch) return null;
       if (res.ok) {
         const data = await res.json();
@@ -1834,7 +1835,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     // swaps the architecture mid-flight does not repopulate the fresh state.
     const requestArch = arch;
     try {
-      const res = await fetch("./architecture/activity.json");
+      const res = await fetch(dataUrl("activity.json"));
       if (get().architecture !== requestArch) return null;
       // Guard against a Vite SPA HTML fallback returning 200 with text/html.
       const isJson = res.ok && (res.headers.get("content-type")?.includes("json") ?? false);
