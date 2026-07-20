@@ -95,12 +95,15 @@ def collect(root: Path, dirpath: str, filenames: set[str]) -> EcosystemResult:
             direct_declared.setdefault(name, constraint_str)
 
     # Resolve versions and the transitive set from the first present lockfile.
-    lock_name, resolved = _read_lockfile(root, dirpath, filenames, result)
+    # top_versions is the top-level install per name (the direct dep's version);
+    # all_pairs is every distinct (name, version) present, so genuinely-installed
+    # multiple versions of one package all survive (review finding 2).
+    lock_name, top_versions, all_pairs = _read_lockfile(root, dirpath, filenames, result)
     lock_rel = join_rel(dirpath, lock_name) if lock_name else None
 
     for name in sorted(direct_declared):
         declared = direct_declared[name]
-        version = resolved.get(name)
+        version = top_versions.get(name)
         result.dependencies.append(Dependency(
             ecosystem=ECOSYSTEM, name=name, declared=declared, version=version,
             pin_status=classify_pin(ECOSYSTEM, declared), scope=SCOPE_DIRECT,
@@ -108,12 +111,13 @@ def collect(root: Path, dirpath: str, filenames: set[str]) -> EcosystemResult:
             evidence_line=find_line(lines, f'"{name}"'),
         ))
 
-    # Transitives: everything the lockfile resolved that is not a direct dep.
+    # Transitives: every distinct (name, version) the lockfile carries that is
+    # not the exact direct pair already emitted above. A package that is direct at
+    # one version AND present at another (nested) version surfaces both.
     if lock_rel is not None:
-        for name in sorted(resolved):
-            if name in direct_declared:
+        for name, version in sorted(all_pairs):
+            if name in direct_declared and top_versions.get(name) == version:
                 continue
-            version = resolved[name]
             result.dependencies.append(Dependency(
                 ecosystem=ECOSYSTEM, name=name, declared=None, version=version,
                 pin_status=PIN_EXACT if version else classify_pin(ECOSYSTEM, None),
@@ -125,12 +129,15 @@ def collect(root: Path, dirpath: str, filenames: set[str]) -> EcosystemResult:
 
 
 def _read_lockfile(root: Path, dirpath: str, filenames: set[str], result: EcosystemResult):
-    """Return ``(lockfile_name, {name: version})`` for the first present lock.
+    """Return ``(lockfile_name, top_versions, all_pairs)`` for the first lock.
 
-    Returns ``(None, {})`` when no lockfile sits beside package.json. A lockfile
-    that cannot be parsed produces a loud warning and an empty resolution map, so
-    direct dependencies still list (without resolved versions) rather than
-    vanishing.
+    ``top_versions`` maps a package name to its TOP-LEVEL installed version (the
+    version a direct dependency resolves to); ``all_pairs`` is the set of every
+    distinct ``(name, version)`` present, so multiple installed versions of one
+    package all survive to the collector (review finding 2). Returns
+    ``(None, {}, set())`` when no lockfile sits beside package.json. A lockfile
+    that cannot be parsed produces a loud warning and empty maps, so direct
+    dependencies still list (without resolved versions) rather than vanishing.
     """
     for lock_name in _LOCKFILES:
         if lock_name not in filenames:
@@ -142,17 +149,19 @@ def _read_lockfile(root: Path, dirpath: str, filenames: set[str], result: Ecosys
             text = read_text(path)
         except OSError as exc:
             result.warnings.append(ParseWarning(ECOSYSTEM, lock_rel, f"unreadable: {exc}"))
-            return lock_name, {}
+            return lock_name, {}, set()
         try:
             if lock_name in ("package-lock.json", "npm-shrinkwrap.json"):
-                return lock_name, _parse_npm_lock(text)
-            if lock_name == "yarn.lock":
-                return lock_name, _parse_yarn_lock(text)
-            return lock_name, _parse_pnpm_lock(text)
+                top, pairs = _parse_npm_lock(text)
+            elif lock_name == "yarn.lock":
+                top, pairs = _parse_yarn_lock(text)
+            else:
+                top, pairs = _parse_pnpm_lock(text, lock_rel, result)
+            return lock_name, top, pairs
         except (json.JSONDecodeError, ValueError) as exc:
             result.warnings.append(ParseWarning(ECOSYSTEM, lock_rel, f"invalid lockfile: {exc}"))
-            return lock_name, {}
-    return None, {}
+            return lock_name, {}, set()
+    return None, {}, set()
 
 
 def _name_from_lock_key(key: str) -> str:
@@ -166,40 +175,43 @@ def _name_from_lock_key(key: str) -> str:
     return key
 
 
-def _parse_npm_lock(text: str) -> dict[str, str]:
+def _parse_npm_lock(text: str):
     data = json.loads(text)
-    resolved: dict[str, str] = {}
+    top: dict[str, str] = {}
+    pairs: set[tuple[str, str]] = set()
     # v2/v3: the flat ``packages`` map. The root package is the "" key (skip it).
     packages = data.get("packages")
-    if isinstance(packages, dict):
+    if isinstance(packages, dict) and any(k for k in packages):
         for key, entry in packages.items():
             if not key or not isinstance(entry, dict):
                 continue
             name = _name_from_lock_key(key)
             version = entry.get("version")
-            if name and isinstance(version, str):
-                # A top-level install (key exactly node_modules/<name>) is the
-                # authoritative version; do not let a nested copy overwrite it.
-                is_top = key.count("node_modules/") == 1
-                if is_top or name not in resolved:
-                    resolved[name] = version
-        if resolved:
-            return resolved
-    # v1: the recursive ``dependencies`` tree.
-    _walk_v1(data.get("dependencies"), resolved)
-    return resolved
+            if not name or not isinstance(version, str):
+                continue
+            pairs.add((name, version))
+            # A top-level install is keyed exactly node_modules/<name> (one
+            # occurrence of node_modules/); it is the direct dep's version.
+            if key.count("node_modules/") == 1:
+                top[name] = version
+        return top, pairs
+    # v1: the recursive ``dependencies`` tree. Top-level entries are direct.
+    _walk_v1(data.get("dependencies"), top, pairs, is_top=True)
+    return top, pairs
 
 
-def _walk_v1(deps, resolved: dict[str, str]) -> None:
+def _walk_v1(deps, top: dict, pairs: set, *, is_top: bool) -> None:
     if not isinstance(deps, dict):
         return
     for name, entry in deps.items():
         if not isinstance(entry, dict):
             continue
         version = entry.get("version")
-        if isinstance(version, str) and name not in resolved:
-            resolved[name] = version
-        _walk_v1(entry.get("dependencies"), resolved)
+        if isinstance(version, str):
+            pairs.add((name, version))
+            if is_top and name not in top:
+                top[name] = version
+        _walk_v1(entry.get("dependencies"), top, pairs, is_top=False)
 
 
 # A yarn.lock header line lists one or more "name@range" specs; the following
@@ -208,8 +220,11 @@ _YARN_HEADER = re.compile(r'^"?(@?[^@\s"]+(?:/[^@\s"]+)?)@')
 _YARN_VERSION = re.compile(r'^\s+version:?\s+"?([^"\s]+)"?')
 
 
-def _parse_yarn_lock(text: str) -> dict[str, str]:
-    resolved: dict[str, str] = {}
+def _parse_yarn_lock(text: str):
+    # yarn.lock has no top-level/nested distinction, so the first version seen per
+    # name is treated as its top version and every (name, version) is a pair.
+    top: dict[str, str] = {}
+    pairs: set[tuple[str, str]] = set()
     current: str | None = None
     for line in text.splitlines():
         if line and not line[0].isspace() and not line.startswith("#"):
@@ -218,30 +233,53 @@ def _parse_yarn_lock(text: str) -> dict[str, str]:
         elif current is not None:
             m = _YARN_VERSION.match(line)
             if m:
-                resolved.setdefault(current, m.group(1))
+                pairs.add((current, m.group(1)))
+                top.setdefault(current, m.group(1))
                 current = None
-    return resolved
+    return top, pairs
 
 
-# A pnpm-lock.yaml packages key is `/name@version:` or `name@version:` (v9). The
-# name may be scoped (@scope/name). Peer-suffixes like `(react@18)` are stripped.
-_PNPM_KEY = re.compile(r"^\s{2}'?/?(@?[^@'\s]+(?:/[^@'\s]+)?)@([^():'\s]+)")
+# pnpm-lock.yaml packages keys come in two shapes:
+#   v9  : `pkg@version:` or `/pkg@version:` (name may be scoped @scope/name)
+#   v5/6: `/pkg/version:` or `/@scope/name/version:` (slash-separated)
+# Peer suffixes like `(react@18)` are stripped by stopping at `(`.
+_PNPM_KEY_AT = re.compile(r"^\s{2}'?/?(@?[^@'/\s][^@'\s]*?)@([^():'\s]+)")
+_PNPM_KEY_SLASH = re.compile(r"^\s{2}'?/(@?[^/'\s]+(?:/[^/'\s]+)?)/([0-9][^:()'\s]*)")
 
 
-def _parse_pnpm_lock(text: str) -> dict[str, str]:
-    resolved: dict[str, str] = {}
+def _parse_pnpm_lock(text: str, lock_rel: str, result: EcosystemResult):
+    top: dict[str, str] = {}
+    pairs: set[tuple[str, str]] = set()
     in_packages = False
+    # Detect the lockfile format so an unrecognized older format warns loudly
+    # instead of parsing to garbage (review finding 3).
+    fmt = None  # "at" (v9) or "slash" (v5/6), decided by the first matching key.
+    saw_package_line = False
     for line in text.splitlines():
         stripped = line.rstrip()
         if stripped.startswith("packages:"):
             in_packages = True
             continue
         if in_packages and stripped and not stripped[0].isspace():
-            # A new top-level YAML block ends the packages section.
             in_packages = False
-        if not in_packages:
+        if not in_packages or not stripped:
             continue
-        m = _PNPM_KEY.match(line)
+        # Only two-space-indented mapping keys are package entries.
+        if not re.match(r"^\s{2}\S", line):
+            continue
+        saw_package_line = True
+        if fmt is None:
+            fmt = "slash" if _PNPM_KEY_SLASH.match(line) else "at"
+        m = (_PNPM_KEY_SLASH if fmt == "slash" else _PNPM_KEY_AT).match(line)
         if m:
-            resolved.setdefault(m.group(1), m.group(2))
-    return resolved
+            name, version = m.group(1), m.group(2)
+            pairs.add((name, version))
+            top.setdefault(name, version)
+    if saw_package_line and not pairs:
+        # We entered the packages section but matched no key in either shape: an
+        # unknown lockfile format. Warn rather than silently return nothing.
+        result.warnings.append(ParseWarning(
+            ECOSYSTEM, lock_rel,
+            "unrecognized pnpm-lock.yaml package key format; no dependencies parsed",
+        ))
+    return top, pairs

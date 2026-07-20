@@ -18,9 +18,11 @@ import type { Architecture, SupplyChain } from "../types";
 // viewer is verified against the exact shape the projection produces, not a mock.
 import npmSection from "./fixtures/supply_chain.npm.json";
 import multiSection from "./fixtures/supply_chain.multi.json";
+import mixedSection from "./fixtures/supply_chain.mixed.json";
 
 const NPM = npmSection as unknown as SupplyChain;
 const MULTI = multiSection as unknown as SupplyChain;
+const MIXED = mixedSection as unknown as SupplyChain;
 
 function makeArchitecture(overrides: Partial<Architecture> = {}): Architecture {
   return {
@@ -204,5 +206,23 @@ describe("SupplyChainSurface", () => {
     render(<SupplyChainSurface />);
     fireEvent.keyDown(window, { key: "Escape" });
     expect(useArchStore.getState().supplyChainOpen).toBe(false);
+  });
+
+  it("keeps fixture dependencies out of the shipping tables but accounts for them", () => {
+    // The mixed fixture has one shipping dep (left-pad) and one fixture-origin
+    // dep (fixture-only-dep) from a manifest under tests/fixtures (finding 1).
+    expect(MIXED.counts.dependencies).toBe(1);
+    expect(MIXED.counts.fixture.dependencies).toBe(1);
+    setArch(makeArchitecture({ supply_chain: MIXED }));
+    useArchStore.setState({ supplyChainOpen: true });
+    render(<SupplyChainSurface />);
+    const dialog = screen.getByRole("dialog");
+    // The shipping dependency shows; the fixture dependency is hidden until the
+    // fixture section is expanded (ranked behind, not deleted).
+    expect(within(dialog).getByText("left-pad")).toBeDefined();
+    expect(within(dialog).queryByText("fixture-only-dep")).toBeNull();
+    const section = within(dialog).getByTestId("supply-chain-fixtures");
+    fireEvent.click(within(section).getByRole("button"));
+    expect(within(dialog).getByText("fixture-only-dep")).toBeDefined();
   });
 });

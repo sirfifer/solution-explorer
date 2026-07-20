@@ -84,10 +84,12 @@ def test_pypi_pep621_and_requirements():
     sc = collect_supply_chain(SBOM / "pypi")
     deps = _deps_by_name(sc)
     assert deps["click"].pin_status == PIN_EXACT       # ==8.1.7
+    assert deps["click"].version == "8.1.7"            # exact pin populates version (finding 5)
     assert deps["requests"].pin_status == PIN_RANGE    # >=2.28
     assert deps["PyYAML"].pin_status == PIN_UNPINNED   # no specifier
     assert deps["pytest"].pin_status == PIN_RANGE      # optional-dependency >=7.0
     assert deps["flask"].pin_status == PIN_EXACT       # requirements.txt ==2.3.0
+    assert deps["flask"].version == "2.3.0"
     assert deps["gunicorn"].pin_status == PIN_UNPINNED
     # requires-python is a target, surfaced separately.
     assert ("python", ">=3.9") in [(t.kind, t.constraint) for t in sc.targets]
@@ -171,7 +173,9 @@ def test_nuget_csproj_and_lock_direct_transitive():
     deps = _deps_by_name(sc)
     assert deps["Newtonsoft.Json"].scope == "direct"
     assert deps["Newtonsoft.Json"].version == "13.0.3"
-    assert deps["Newtonsoft.Json"].pin_status == PIN_EXACT
+    # A bare csproj Version is a FLOATING MINIMUM, a range, not an exact pin
+    # (finding 8); the lock still resolves the concrete version above.
+    assert deps["Newtonsoft.Json"].pin_status == PIN_RANGE
     # The lock's Transitive type drives the scope.
     assert deps["Serilog.Sinks.Console"].scope == "transitive"
     assert ("dotnet", "net8.0") in [(t.kind, t.constraint) for t in sc.targets]
@@ -193,7 +197,15 @@ def test_classify_pin_is_ecosystem_aware():
     assert classify_pin("npm", None) == PIN_UNPINNED
     assert classify_pin("npm", "git+https://example.com/x.git") == PIN_UNPINNED
     assert classify_pin("nuget", "[1.0,2.0)") == PIN_RANGE
-    assert classify_pin("nuget", "1.2.3") == PIN_EXACT
+    # A bare NuGet version is a floating minimum (a range), not an exact pin;
+    # only a bracketed single version pins exactly (finding 8).
+    assert classify_pin("nuget", "1.2.3") == PIN_RANGE
+    assert classify_pin("nuget", "[1.2.3]") == PIN_EXACT
+    # x/X/* only ranges when a whole version component, never inside a tag (finding 4).
+    assert classify_pin("npm", "1.0.0-linux") == PIN_EXACT
+    assert classify_pin("npm", "1.0.0-exp.1") == PIN_EXACT
+    assert classify_pin("npm", "1.2.x") == PIN_RANGE
+    assert classify_pin("npm", "1.x") == PIN_RANGE
 
 
 def test_purl_normalization():
@@ -235,8 +247,10 @@ def test_parse_error_is_loud_not_silent():
 def test_collect_and_cyclonedx_are_deterministic():
     sc1 = collect_supply_chain(SBOM / "npm")
     sc2 = collect_supply_chain(SBOM / "npm")
-    a = build_cyclonedx(sc1, component_name="x", generated_at=FIXED_TS)
-    b = build_cyclonedx(sc2, component_name="x", generated_at=FIXED_TS)
+    # Different generated_at values must NOT change a single byte: the document
+    # carries no timestamp and the serial is content-derived (finding 9).
+    a = build_cyclonedx(sc1, component_name="x", generated_at="2020-01-01T00:00:00Z")
+    b = build_cyclonedx(sc2, component_name="x", generated_at="2099-12-31T23:59:59Z")
     assert json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
     # Same inputs, same content-derived serial number.
     assert a["serialNumber"] == b["serialNumber"]
@@ -268,7 +282,8 @@ def test_cyclonedx_structural_validity():
     meta = doc["metadata"]["component"]
     assert meta["type"] == "application"
     assert meta["name"] == "npm-fixture"
-    assert doc["metadata"]["timestamp"] == FIXED_TS
+    # No timestamp anywhere: the document is fully content-determined (finding 9).
+    assert "timestamp" not in doc["metadata"]
     # Every component is a well-formed library with type and name; purls, where
     # present, are pkg: URLs.
     assert doc["components"], "expected components"
@@ -333,6 +348,10 @@ def test_section_shape_and_scope_note():
     assert eco["direct_count"] == 3
     assert eco["transitive_count"] == 1
     assert eco["pin_counts"].get("exact-pinned") == 2  # left-pad + undici
+    # The counts always carry a fixture sub-block (zero here since the scan root
+    # is the manifest dir itself, so nothing is under a fixture path segment).
+    assert section["counts"]["fixture"]["dependencies"] == 0
+    assert "fixture" not in section  # no fixture block emitted when empty
 
 
 # ---------------------------------------------------------------------------
@@ -426,23 +445,169 @@ def test_emit_sbom_is_none_without_root(tmp_path):
 def test_self_repo_real_dependencies_appear_with_pins():
     sc = collect_supply_chain(REPO_ROOT)
     assert sc is not None
-    # The self repo carries npm (viewer) and PyPI (pyproject) manifests.
-    ecosystems = set(sc.ecosystems())
-    assert "npm" in ecosystems
-    assert "pypi" in ecosystems
+    ship = sc.shipping_dependencies()
 
-    npm = _deps_by_name(sc, "npm")
-    # The viewer's real, caret-ranged direct dependencies.
-    assert "react" in npm
-    assert npm["react"].pin_status == PIN_RANGE
-    assert "zustand" in npm
-    assert npm["zustand"].scope == "direct"
+    # The self repo's SHIPPING ecosystems are npm (viewer, packages/cli,
+    # infrastructure worker) and PyPI (pyproject); the go/gem/cargo/swift/pods
+    # manifests under tests/fixtures/ are fixture-origin and MUST NOT appear as
+    # shipping ecosystems (review finding 1).
+    assert set(sc.ecosystems()) == {"npm", "pypi"}
 
-    pypi = _deps_by_name(sc, "pypi")
-    # pyproject optional-dependencies declare pydantic with a >= range.
-    assert "pydantic" in pypi
-    assert pypi["pydantic"].pin_status == PIN_RANGE
+    # The viewer's real, caret-ranged direct dependencies (shipping, direct).
+    ship_direct = {(d.name, d.ecosystem): d for d in ship if d.scope == "direct"}
+    assert ("react", "npm") in ship_direct
+    assert ship_direct[("react", "npm")].pin_status == PIN_RANGE
+    assert ("zustand", "npm") in ship_direct
+    assert ship_direct[("pydantic", "pypi")].pin_status == PIN_RANGE
 
-    # requires-python surfaces as a target, not a dependency.
-    kinds = {(t.kind, t.ecosystem) for t in sc.targets}
-    assert ("python", "pypi") in kinds
+    # requires-python surfaces as a SHIPPING target, not a dependency.
+    ship_targets = {(t.kind, t.ecosystem) for t in sc.targets if t.origin == "shipping"}
+    assert ("python", "pypi") in ship_targets
+
+    # The fixture manifests are kept and accounted, just not shipping: the fixture
+    # block carries the go/gem/cargo/swift/pods ecosystems.
+    fix_ecos = {d.ecosystem for d in sc.fixture_dependencies()}
+    assert {"golang", "gem", "cargo", "swift", "cocoapods"} <= fix_ecos
+    # And no fixture-origin dependency leaked into the shipping list.
+    assert all(d.origin == "shipping" for d in ship)
+
+
+# ---------------------------------------------------------------------------
+# Review-fix locking tests (findings 1-7), each against a real fixture
+# ---------------------------------------------------------------------------
+
+def test_finding1_fixture_manifests_excluded_from_shipping(tmp_path):
+    # A repo with one shipping manifest at the root and one under tests/fixtures.
+    (tmp_path / "package.json").write_text(
+        '{"name":"app","dependencies":{"left-pad":"1.0.0"}}', encoding="utf-8"
+    )
+    fx = tmp_path / "tests" / "fixtures" / "sample"
+    fx.mkdir(parents=True)
+    (fx / "package.json").write_text(
+        '{"name":"fx","dependencies":{"evil-dep":"9.9.9"}}', encoding="utf-8"
+    )
+    sc = collect_supply_chain(tmp_path)
+    ship_names = {d.name for d in sc.shipping_dependencies()}
+    fix_names = {d.name for d in sc.fixture_dependencies()}
+    # The shipping dependency is present; the fixture dependency is kept but marked.
+    assert "left-pad" in ship_names
+    assert "evil-dep" not in ship_names
+    assert "evil-dep" in fix_names
+    section = sc.to_section()
+    assert section["counts"]["dependencies"] == 1  # shipping only
+    assert section["counts"]["fixture"]["dependencies"] == 1
+    assert section["fixture"]["dependencies"][0]["name"] == "evil-dep"
+    assert section["fixture"]["dependencies"][0]["origin"] == "test"
+    # The CycloneDX default excludes the fixture component.
+    doc = build_cyclonedx(sc, component_name="app")
+    names = {c["name"] for c in doc["components"]}
+    assert "left-pad" in names
+    assert "evil-dep" not in names
+    # ... unless explicitly requested.
+    doc_all = build_cyclonedx(sc, component_name="app", include_fixtures=True)
+    assert "evil-dep" in {c["name"] for c in doc_all["components"]}
+
+
+def test_finding1_gitignored_manifest_is_not_a_shipping_source(tmp_path):
+    (tmp_path / "package.json").write_text(
+        '{"name":"app","dependencies":{"left-pad":"1.0.0"}}', encoding="utf-8"
+    )
+    # A gitignored local subproject is workstation-local, not a shipping source.
+    (tmp_path / ".gitignore").write_text("local/\n", encoding="utf-8")
+    local = tmp_path / "local"
+    local.mkdir()
+    (local / "package.json").write_text(
+        '{"name":"local","dependencies":{"local-only":"1.0.0"}}', encoding="utf-8"
+    )
+    sc = collect_supply_chain(tmp_path)
+    names = {d.name for d in sc.dependencies}
+    assert "left-pad" in names
+    assert "local-only" not in names  # pruned by .gitignore, like the enumerator
+
+
+def test_finding2_npm_preserves_multiple_versions_of_one_package():
+    sc = collect_supply_chain(SBOM / "npm_multiversion")
+    dep_a = [d for d in sc.dependencies if d.name == "dep-a"]
+    versions = {(d.scope, d.version) for d in dep_a}
+    # The top-level 2.0.0 is direct and the nested 1.0.0 survives as transitive.
+    assert ("direct", "2.0.0") in versions
+    assert ("transitive", "1.0.0") in versions
+
+
+def test_finding3_pnpm_slash_format_parses():
+    sc = collect_supply_chain(SBOM / "pnpm")
+    deps = _deps_by_name(sc)
+    # The v6 slash-separated keys (/lodash/4.17.21, /@babel/core/7.24.0) parse.
+    assert deps["lodash"].version == "4.17.21"
+    assert deps["lodash"].scope == "direct"
+    assert deps["@babel/core"].version == "7.24.0"
+    assert deps["@babel/core"].scope == "transitive"
+    # No garbage package literally named "/".
+    assert "/" not in {d.name for d in sc.dependencies}
+    assert sc.warnings == []
+
+
+def test_finding3_unknown_pnpm_format_warns_not_silent():
+    # A packages section whose keys match neither shape must warn, not vanish.
+    from analyzer.sbom.ecosystems.npm import _parse_pnpm_lock
+    from analyzer.sbom.models import EcosystemResult
+
+    text = "lockfileVersion: '99'\n\npackages:\n\n  weird-key-no-version:\n    resolution: {}\n"
+    result = EcosystemResult(ecosystem="npm")
+    top, pairs = _parse_pnpm_lock(text, "pnpm-lock.yaml", result)
+    assert pairs == set()
+    assert len(result.warnings) == 1
+    assert "unrecognized" in result.warnings[0].error
+
+
+def test_finding4_x_only_ranges_as_version_component():
+    sc = collect_supply_chain(SBOM / "npm_multiversion")
+    deps = _deps_by_name(sc)
+    # A prerelease tag containing "x" is still an exact version, not a range.
+    assert deps["exact-tag"].pin_status == PIN_EXACT  # 1.0.0-linux
+    # A real wildcard component is a range.
+    assert deps["wild"].pin_status == PIN_RANGE  # 1.2.x
+
+
+def test_finding6_go_replace_directive_applied():
+    sc = collect_supply_chain(SBOM / "go_replace")
+    names = {d.name: d for d in sc.dependencies}
+    # A module-target replace reports the replacement module and version.
+    assert "github.com/myfork/mux" in names
+    assert names["github.com/myfork/mux"].version == "v1.8.1"
+    assert names["github.com/myfork/mux"].pin_status == PIN_EXACT
+    # The original module is not reported under its old identity.
+    assert "github.com/gorilla/mux" not in names
+    # The mapping is recorded in the declared field (never a silent rewrite).
+    assert "gorilla/mux" in names["github.com/myfork/mux"].declared
+    # A local-path replace has no resolvable version and reads unpinned.
+    assert "./vendored/logrus" in names
+    assert names["./vendored/logrus"].version is None
+    assert names["./vendored/logrus"].pin_status == PIN_UNPINNED
+
+
+def test_finding7_requirements_includes_and_editables():
+    sc = collect_supply_chain(SBOM / "pypi_includes")
+    deps = _deps_by_name(sc)
+    # `-r base.txt` was followed: its deps are present.
+    assert deps["click"].version == "8.1.7"
+    assert deps["flask"].pin_status == PIN_RANGE
+    # The including file's own exact pin carries a version (finding 5).
+    assert deps["requests"].version == "2.31.0"
+    # A VCS `-e git+...@ref#egg=name` editable is a component pinned to its ref.
+    assert "requests-vcs" in deps
+    assert deps["requests-vcs"].version == "v2.31.0"
+    assert deps["requests-vcs"].pin_status == PIN_EXACT
+    # `-e .` (the project itself) is not a dependency and is skipped.
+    assert "." not in {d.name for d in sc.dependencies}
+    # Both requirements files are recorded as manifests.
+    assert "base.txt" in sc.manifests["pypi"]
+    assert sc.warnings == []  # the base.txt cycle back to requirements.txt does not loop
+
+
+def test_finding7_missing_include_warns_loudly():
+    sc = collect_supply_chain(SBOM / "pypi_missing_include")
+    # The reachable dependency still lists.
+    assert "attrs" in {d.name for d in sc.dependencies}
+    # The missing include is a loud warning, never a silent drop.
+    assert any("include not found" in w.error for w in sc.warnings)

@@ -780,6 +780,17 @@ export interface SupplyChainVendored {
   evidence: SupplyChainEvidence;
 }
 
+// Test/fixture-origin records: dependencies declared by manifests under a
+// test/fixture/example path segment. Kept and accounted, excluded from the
+// shipping counts and the CycloneDX components (P10-1 finding 1).
+export interface SupplyChainFixtureBlock {
+  note: string;
+  ecosystems: SupplyChainEcosystem[];
+  targets: SupplyChainTarget[];
+  dependencies: SupplyChainDependency[];
+  warnings: SupplyChainWarning[];
+}
+
 export interface SupplyChain {
   version: number;
   sbom_endpoint: string;
@@ -790,6 +801,8 @@ export interface SupplyChain {
   dependencies: SupplyChainDependency[];
   warnings: SupplyChainWarning[];
   vendored?: SupplyChainVendored[];
+  // Test/fixture dependencies, present only when the repo has fixture manifests.
+  fixture?: SupplyChainFixtureBlock;
   counts: {
     ecosystems: number;
     dependencies: number;
@@ -799,6 +812,12 @@ export interface SupplyChain {
     warnings: number;
     vendored: number;
     pin_status: Record<string, number>;
+    fixture: {
+      ecosystems: number;
+      dependencies: number;
+      targets: number;
+      warnings: number;
+    };
   };
 }
 

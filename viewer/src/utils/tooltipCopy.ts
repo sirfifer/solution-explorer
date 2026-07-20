@@ -157,6 +157,8 @@ export const TOOLTIP_COPY = {
     sbomLink: "The full CycloneDX 1.5 SBOM document for interchange with other tooling.",
     vendored: "Third-party code checked into this repo, from the coverage inventory.",
     warning: "A manifest that was found but could not be parsed. Its dependencies are missing here.",
+    fixture:
+      "Dependencies from manifests under test or fixture directories. Accounted here but not counted as shipping dependencies.",
   },
 
   // Evidence file:line links, shared across surfaces.

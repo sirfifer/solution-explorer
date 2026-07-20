@@ -73,10 +73,15 @@ def collect(root: Path, dirpath: str, filenames: set[str]) -> EcosystemResult:
         if name in emitted:
             continue
         constraint, ev_file, ev_line = declared[name]
+        pin = classify_pin(ECOSYSTEM, constraint)
+        # A bare `Version="1.0.0"` is a FLOATING MINIMUM (review finding 8), so it
+        # is a range with no truly-resolved version without a lock. Only a
+        # bracketed exact `[1.0.0]` yields a concrete resolved version.
+        version = constraint.strip("[]") if (pin == PIN_EXACT and constraint) else None
         result.dependencies.append(Dependency(
-            ecosystem=ECOSYSTEM, name=name, declared=constraint, version=constraint,
-            pin_status=classify_pin(ECOSYSTEM, constraint), scope=SCOPE_DIRECT,
-            purl=build_purl(ECOSYSTEM, name, constraint), evidence_file=ev_file,
+            ecosystem=ECOSYSTEM, name=name, declared=constraint, version=version,
+            pin_status=pin, scope=SCOPE_DIRECT,
+            purl=build_purl(ECOSYSTEM, name, version), evidence_file=ev_file,
             evidence_line=ev_line,
         ))
 

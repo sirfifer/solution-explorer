@@ -36,6 +36,8 @@ __all__ = [
     "PIN_UNPINNED",
     "SCOPE_DIRECT",
     "SCOPE_TRANSITIVE",
+    "ORIGIN_SHIPPING",
+    "ORIGIN_TEST",
 ]
 
 # Pin-status vocabulary. exact-pinned is a single concrete version the build
@@ -54,6 +56,15 @@ PIN_UNPINNED = "unpinned"
 SCOPE_DIRECT = "direct"
 SCOPE_TRANSITIVE = "transitive"
 
+# Origin vocabulary (review finding 1). A shipping dependency comes from a
+# manifest the product actually builds from; a test dependency comes from a
+# manifest under a test/fixture/example path segment, which is not a shipping
+# source. Test-origin dependencies are kept and accounted (never silently
+# dropped) but ranked behind and excluded from the shipping counts and the
+# default CycloneDX components (the keep-mark-rank-behind pattern).
+ORIGIN_SHIPPING = "shipping"
+ORIGIN_TEST = "test"
+
 
 @dataclass
 class Dependency:
@@ -68,6 +79,7 @@ class Dependency:
     purl: Optional[str] = None
     evidence_file: str = ""
     evidence_line: Optional[int] = None
+    origin: str = ORIGIN_SHIPPING
 
     def to_dict(self) -> dict:
         """Compact JSON shape for the projection's supply_chain section.
@@ -92,6 +104,9 @@ class Dependency:
             out["purl"] = self.purl
         if self.evidence_line is not None:
             out["evidence"]["line"] = self.evidence_line
+        # origin rides only when non-default (test), so shipping rows stay compact.
+        if self.origin != ORIGIN_SHIPPING:
+            out["origin"] = self.origin
         return out
 
     def key(self) -> str:
@@ -109,6 +124,7 @@ class Target:
     constraint: str
     evidence_file: str = ""
     evidence_line: Optional[int] = None
+    origin: str = ORIGIN_SHIPPING
 
     def to_dict(self) -> dict:
         out: dict = {
@@ -120,6 +136,8 @@ class Target:
         }
         if self.evidence_line is not None:
             out["evidence"]["line"] = self.evidence_line
+        if self.origin != ORIGIN_SHIPPING:
+            out["origin"] = self.origin
         return out
 
 
@@ -130,9 +148,13 @@ class ParseWarning:
     ecosystem: str
     file: str
     error: str
+    origin: str = ORIGIN_SHIPPING
 
     def to_dict(self) -> dict:
-        return {"ecosystem": self.ecosystem, "file": self.file, "error": self.error}
+        out = {"ecosystem": self.ecosystem, "file": self.file, "error": self.error}
+        if self.origin != ORIGIN_SHIPPING:
+            out["origin"] = self.origin
+        return out
 
 
 @dataclass

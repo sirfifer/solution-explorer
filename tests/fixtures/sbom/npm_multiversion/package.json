@@ -1,0 +1,9 @@
+{
+  "name": "npm-multi-fixture",
+  "version": "1.0.0",
+  "dependencies": {
+    "dep-a": "^2.0.0",
+    "exact-tag": "1.0.0-linux",
+    "wild": "1.2.x"
+  }
+}

@@ -129,6 +129,46 @@ function DependencyRow({ dep, darkMode }: { dep: SupplyChainDependency; darkMode
   );
 }
 
+function FixtureSection({
+  fixture,
+  darkMode,
+}: {
+  fixture: NonNullable<import("../types").SupplyChain["fixture"]>;
+  darkMode: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <section data-testid="supply-chain-fixtures">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="w-full flex items-center gap-2 text-left"
+      >
+        <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+          {expanded ? "▼" : "▶"}
+        </span>
+        <Tooltip content={TOOLTIP_COPY.supplyChain.fixture}>
+          <h3 className={`text-[11px] font-semibold uppercase tracking-wider ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            Test and fixture dependencies
+          </h3>
+        </Tooltip>
+        <span className={`text-[11px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+          {fixture.dependencies.length} deps {"·"} excluded from the counts above
+        </span>
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-1">
+          <p className={`text-[11px] ${darkMode ? "text-zinc-600" : "text-zinc-500"}`}>{fixture.note}</p>
+          {fixture.dependencies.map((dep) => (
+            <DependencyRow key={`fx-${dep.id}`} dep={dep} darkMode={darkMode} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function SupplyChainSurface() {
   const architecture = useArchStore((s) => s.architecture);
   const darkMode = useArchStore((s) => s.darkMode);
@@ -303,6 +343,12 @@ export function SupplyChainSurface() {
                 ))}
               </div>
             </section>
+          )}
+
+          {/* Test/fixture dependencies: kept and accounted, ranked behind the
+              shipping dependencies and excluded from the counts above (finding 1). */}
+          {sc.fixture && sc.fixture.dependencies.length > 0 && (
+            <FixtureSection fixture={sc.fixture} darkMode={darkMode} />
           )}
 
           {/* Parse warnings: a found manifest that could not be read. Loud. */}

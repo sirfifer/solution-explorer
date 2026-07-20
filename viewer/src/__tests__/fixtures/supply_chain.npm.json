@@ -3,6 +3,12 @@
     "dependencies": 4,
     "direct": 3,
     "ecosystems": 1,
+    "fixture": {
+      "dependencies": 0,
+      "ecosystems": 0,
+      "targets": 0,
+      "warnings": 0
+    },
     "pin_status": {
       "exact-pinned": 2,
       "range": 2

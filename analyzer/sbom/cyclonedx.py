@@ -45,37 +45,46 @@ def build_cyclonedx(
     *,
     component_name: str,
     generated_at: Optional[str] = None,
+    include_fixtures: bool = False,
 ) -> dict:
     """Build the CycloneDX 1.5 document dict for ``supply``.
 
     ``component_name`` names the metadata (root) component, normally the repo
-    name. ``generated_at`` is the projection's injected timestamp; it is the only
-    time value in the document, so byte output is stable when it is held fixed.
+    name. Only SHIPPING dependencies and targets are emitted by default (review
+    finding 1): test/fixture-origin records are excluded from the CycloneDX
+    components unless ``include_fixtures`` is set.
+
+    The document carries NO timestamp (review finding 9): the serial number is
+    content-derived (a UUIDv5 over the sorted component identities), so the whole
+    document is byte-identical across runs on the same inputs, independent of the
+    projection's ``generated_at`` (which is accepted for API stability and not
+    written). Determinism is invariant I4.
     """
+    from .models import ORIGIN_SHIPPING
+
+    deps = supply.dependencies if include_fixtures else supply.shipping_dependencies()
+    targets = supply.targets if include_fixtures else [
+        t for t in supply.targets if t.origin == ORIGIN_SHIPPING
+    ]
+
     components: list[dict] = []
-    for dep in supply.dependencies:
+    for dep in deps:
         components.append(_dependency_component(dep))
     for vendored in supply.vendored:
         components.append(_vendored_component(vendored))
-
-    metadata: dict = {
-        "component": _metadata_component(component_name, supply),
-    }
-    if generated_at:
-        metadata["timestamp"] = generated_at
 
     doc = {
         "bomFormat": BOM_FORMAT,
         "specVersion": SPEC_VERSION,
         "serialNumber": _serial_number(component_name, components),
         "version": 1,
-        "metadata": metadata,
+        "metadata": {"component": _metadata_component(component_name, targets)},
         "components": components,
     }
     return doc
 
 
-def _metadata_component(name: str, supply: SupplyChain) -> dict:
+def _metadata_component(name: str, targets) -> dict:
     comp: dict = {
         "type": "application",
         "bom-ref": f"root:{name}",
@@ -84,7 +93,7 @@ def _metadata_component(name: str, supply: SupplyChain) -> dict:
     # Language target/SDK versions ride as properties so a standard CycloneDX
     # consumer sees them without knowing our supply_chain section.
     props = []
-    for target in supply.targets:
+    for target in targets:
         props.append({
             "name": f"{_PROP}:target:{target.ecosystem}:{target.kind}",
             "value": target.constraint,
@@ -95,22 +104,30 @@ def _metadata_component(name: str, supply: SupplyChain) -> dict:
 
 
 def _dependency_component(dep) -> dict:
+    from .models import ORIGIN_SHIPPING
+
+    is_test = dep.origin != ORIGIN_SHIPPING
     comp: dict = {
         "type": "library",
         "name": dep.name,
     }
     if dep.version:
         comp["version"] = dep.version
+    # A test-origin component (only present when fixtures are included) namespaces
+    # its bom-ref so it never collides with a shipping component of the same purl.
+    ref_prefix = "test:" if is_test else ""
     if dep.purl:
         comp["purl"] = dep.purl
-        comp["bom-ref"] = dep.purl
+        comp["bom-ref"] = f"{ref_prefix}{dep.purl}"
     else:
-        comp["bom-ref"] = dep.key()
+        comp["bom-ref"] = f"{ref_prefix}{dep.key()}"
     props = [
         {"name": f"{_PROP}:ecosystem", "value": dep.ecosystem},
         {"name": f"{_PROP}:pin_status", "value": dep.pin_status},
         {"name": f"{_PROP}:scope", "value": dep.scope},
     ]
+    if is_test:
+        props.append({"name": f"{_PROP}:origin", "value": dep.origin})
     if dep.declared:
         props.append({"name": f"{_PROP}:declared", "value": dep.declared})
     if dep.evidence_file:
