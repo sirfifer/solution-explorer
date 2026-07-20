@@ -1,6 +1,7 @@
 """Language parser registry."""
 
 from .base import BaseParser
+from .cpp import CppParser
 from .go import GoParser
 from .python_lang import PythonParser
 from .ruby import RubyParser
@@ -18,6 +19,7 @@ PARSERS = {
     "javascript": TypeScriptParser(),
     "go": GoParser(),
     "ruby": RubyParser(),
+    "cpp": CppParser(),
     # Storyboards/xibs are XML, always regex-tier (no tree-sitter). Recognized
     # v2-only via runner._SCHEMA_ONLY_EXTENSIONS, so v1 output is untouched.
     "storyboard": StoryboardParser(),
@@ -64,8 +66,15 @@ try:
 except ImportError:
     pass
 
+try:
+    from .cpp_ts import CppTreeSitterParser
+    PARSERS["cpp"] = CppTreeSitterParser()
+except ImportError:
+    pass
+
 __all__ = [
     "BaseParser", "PARSERS",
     "SwiftParser", "PythonParser", "RustParser",
     "TypeScriptParser", "GoParser", "RubyParser", "StoryboardParser",
+    "CppParser",
 ]

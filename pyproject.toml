@@ -29,6 +29,7 @@ treesitter = [
     "tree-sitter-rust>=0.23",
     "tree-sitter-go>=0.23",
     "tree-sitter-ruby>=0.23",
+    "tree-sitter-cpp>=0.23",
 ]
 live = [
     "gitpython>=3.1",
