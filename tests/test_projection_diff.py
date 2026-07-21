@@ -255,6 +255,49 @@ def test_timestamp_change_is_not_a_change():
     assert diff["has_changes"] is False
 
 
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda p: p.__setitem__("coverage", [{"total": 1}]),
+        lambda p: p["coverage"].__setitem__("summary", ["parsed", "binary"]),
+        lambda p: p["coverage"].__setitem__("inventory", ["x"]),
+        lambda p: p.__setitem__("components", "not-a-list"),
+        lambda p: p.__setitem__("relationships", {"weird": "dict"}),
+    ],
+)
+def test_malformed_section_types_degrade_not_crash(mutate):
+    # A section shaped wrong (list where dict expected, or vice versa) must
+    # degrade to empty, never abort the diff. Regression for adversarial-review
+    # finding 1 (truthy-but-wrong-type slipped past the `or {}` guard).
+    old = _base_projection()
+    new = _base_projection()
+    mutate(new)
+    diff = pd.diff_projections(old, new)  # must not raise
+    assert "sections" in diff
+
+
+def test_nan_rank_score_is_not_a_change():
+    # json.load accepts NaN; NaN != NaN would flag a spurious change on
+    # byte-identical input. Regression for adversarial-review finding 2.
+    proj = _base_projection()
+    proj["findings"][0]["rank_score"] = float("nan")
+    diff = pd.diff_projections(proj, proj)
+    assert diff["has_changes"] is False
+
+
+def test_inventory_group_without_id_still_diffed():
+    # A group lacking an id must still register a delta (keyed by label),
+    # not be silently dropped. Regression for the adversarial-review minor note.
+    old = _base_projection()
+    new = _base_projection()
+    old["coverage"]["inventory"]["groups"].append(
+        {"label": "Orphan cache", "count": 4}
+    )  # present old, gone new
+    inv = pd.diff_projections(old, new)["sections"]["inventory"]
+    assert "Orphan cache" in inv["groups"]
+    assert inv["groups"]["Orphan cache"] == {"label": "Orphan cache", "old": 4, "new": None}
+
+
 def test_absent_sections_treated_as_empty():
     # An older dataset with no findings/capabilities/entities at all.
     old = {"name": "old", "components": [{"id": "root"}], "relationships": []}

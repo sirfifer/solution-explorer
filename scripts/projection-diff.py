@@ -103,6 +103,30 @@ def flatten_components(arch: dict) -> dict[str, dict]:
     return out
 
 
+def _as_dict(value: Any) -> dict:
+    """Return value if it is a dict, else an empty dict.
+
+    A plain ``value or {}`` fails to defend against a truthy-but-wrong type: a
+    non-empty list is truthy, so ``coverage or {}`` keeps the list and the next
+    ``.get`` crashes. A malformed-but-valid-JSON projection (a section shaped as
+    a list where a dict is expected) must degrade to an empty section, never
+    abort the diff, so this guards every dict-shaped section access.
+    """
+    return value if isinstance(value, dict) else {}
+
+
+def _differs(old: Any, new: Any) -> bool:
+    """Inequality that treats two NaNs as equal.
+
+    ``NaN != NaN`` is always True, so a scalar carrying NaN (json.load accepts
+    it) would register a spurious change on byte-identical input and poison a
+    golden-corpus gate. Two NaNs are the same value for diffing purposes.
+    """
+    if isinstance(old, float) and isinstance(new, float) and old != old and new != new:
+        return False
+    return old != new
+
+
 def _index_by(items: Any, keyfn: Callable[[dict], Optional[str]]) -> dict[str, dict]:
     """Index a list of dicts by a stable string key, skipping unkeyable items."""
     out: dict[str, dict] = {}
@@ -223,7 +247,7 @@ def _diff_findings(old: dict, new: dict) -> dict:
         n = new_map[fid]
         entry: dict[str, Any] = {"id": fid, "kind": n.get("kind")}
         moved = False
-        if o.get("rank_score") != n.get("rank_score"):
+        if _differs(o.get("rank_score"), n.get("rank_score")):
             entry["rank_score"] = {"old": o.get("rank_score"), "new": n.get("rank_score")}
             moved = True
         if o.get("verification_status") != n.get("verification_status"):
@@ -251,10 +275,10 @@ def _diff_findings(old: dict, new: dict) -> dict:
 
 
 def _diff_coverage(old: dict, new: dict) -> dict:
-    old_cov = old.get("coverage") or {}
-    new_cov = new.get("coverage") or {}
-    old_sum = old_cov.get("summary") or {}
-    new_sum = new_cov.get("summary") or {}
+    old_cov = _as_dict(old.get("coverage"))
+    new_cov = _as_dict(new.get("coverage"))
+    old_sum = _as_dict(old_cov.get("summary"))
+    new_sum = _as_dict(new_cov.get("summary"))
     summary_delta: dict[str, dict[str, int]] = {}
     for disp in sorted(set(old_sum) | set(new_sum)):
         o = old_sum.get(disp, 0)
@@ -269,16 +293,18 @@ def _diff_coverage(old: dict, new: dict) -> dict:
 
 
 def _diff_inventory(old: dict, new: dict) -> dict:
-    old_inv = (old.get("coverage") or {}).get("inventory") or {}
-    new_inv = (new.get("coverage") or {}).get("inventory") or {}
+    old_inv = _as_dict(_as_dict(old.get("coverage")).get("inventory"))
+    new_inv = _as_dict(_as_dict(new.get("coverage")).get("inventory"))
     scalar: dict[str, dict] = {}
     for field in ("non_source_total", "source_gap_total", "dominant"):
         ov = old_inv.get(field)
         nv = new_inv.get(field)
         if ov != nv:
             scalar[field] = {"old": ov, "new": nv}
-    old_groups = _index_by(old_inv.get("groups"), lambda g: g.get("id"))
-    new_groups = _index_by(new_inv.get("groups"), lambda g: g.get("id"))
+    # Real inventory groups always carry an id; fall back to label so a
+    # malformed group without an id is not silently dropped from the diff.
+    old_groups = _index_by(old_inv.get("groups"), lambda g: g.get("id") or g.get("label"))
+    new_groups = _index_by(new_inv.get("groups"), lambda g: g.get("id") or g.get("label"))
     group_delta: dict[str, dict] = {}
     for gid in sorted(set(old_groups) | set(new_groups)):
         o = old_groups.get(gid)
