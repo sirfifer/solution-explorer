@@ -19,15 +19,28 @@ The corpus source is never vendored into this repo.
 - `.golden-cache/<name>/` (gitignored): the source fetched on demand at the
   pinned commit. A depth-1 fetch of the exact SHA, so no history is downloaded.
 
+The committed `baseline.json` embeds the absolute `root_path` of the machine
+that generated it (a local cache path). That field is environment-specific and
+is intentionally NOT one of the diffed sections, so a check regenerating under a
+different `root_path` (CI on Linux, or a re-baseline on macOS) never reports it
+as drift.
+
 ## Corpora
 
 - **flask** (`pallets/flask`, BSD-3-Clause, pinned at 3.1.3). The first corpus.
   Chosen for the regression role: stable, small, permissively licensed, and a
   SWE-bench standard repo (external comparability), which keeps diff noise low
   while the harness is shaken out.
-- **fastapi** (planned second): richest single-repo lens surface (routing,
-  Depends DI, Pydantic entities, OpenAPI), pinned post the 0.137.0 router
-  refactor with translated docs excluded.
+- **fastapi** (`tiangolo/fastapi`, MIT, pinned at 0.139.2). The second corpus,
+  added for lens breadth: the richest single-repo surface for this tool
+  (routing, Depends DI, Pydantic data entities, OpenAPI capabilities). Pinned
+  post the 0.137.0 (June 2026) router-internals refactor so the baseline sits on
+  the settled router tree. Its `corpus.lock` excludes the twelve translated docs
+  directories (docs/en, the canonical English docs, stays scanned) and
+  `docs_src/` (345 of its 461 Python files are `_an`/`_py39`/`_py310`
+  version-variant near-duplicates of the same tutorial snippets, pure
+  duplication noise; the `fastapi/` package and `tests/` already exercise the
+  full lens surface). The baseline is about 6.6 MB, committed by design.
 
 `vscode` stays a separate scale proof, not a daily-diff corpus.
 
@@ -97,8 +110,9 @@ To advance the frozen target itself (adopt a newer upstream release), update the
 
 ## CI
 
-`.github/workflows/golden-corpus.yml` runs `check flask` on pull requests that
-touch the engine (analyzer, `analyze.py`, or the harness/diff scripts) and fails
-on drift. The default `pytest` suite stays hermetic (no clone); the live
-fetch+generate+check is the workflow, plus an opt-in test guarded by
-`GOLDEN_CORPUS_NETWORK=1`.
+`.github/workflows/golden-corpus.yml` runs `check` on every configured corpus
+(flask and fastapi, as a matrix with `fail-fast: false` so each is an
+independent regression signal) on pull requests that touch the engine (analyzer,
+`analyze.py`, or the harness/diff scripts) and fails on drift. The default
+`pytest` suite stays hermetic (no clone); the live fetch+generate+check is the
+workflow, plus opt-in tests guarded by `GOLDEN_CORPUS_NETWORK=1`.

@@ -1972,7 +1972,22 @@ here is started.
   prior code).
 
 ### G2: Golden-corpus harness
-- Status: BUILT for FLASK (owner green-lit; scripts/golden-corpus.py + tests/golden/flask/ + workflow). FastAPI is the next step within this card.
+- Status: BUILT for FLASK and FASTAPI (owner green-lit; scripts/golden-corpus.py + tests/golden/flask/ + tests/golden/fastapi/ + matrix workflow). The two-corpus pairing from REGRESSION-STRATEGY.md is complete.
+- FastAPI added (2026-07-20, wt/g2-fastapi): tiangolo/fastapi (MIT) pinned at tag
+  0.139.2 = commit 866b7a3d0ce1025a3811f23aea4846d01a2b16a8 (lightweight tag, so
+  the tag is the commit; verified by a real depth-1 fetch matching the pin), post
+  the 0.137.0 router refactor. corpus.lock excludes the twelve translated docs
+  dirs (docs/en stays scanned) and docs_src/ (345 of 461 py files are
+  version-variant near-duplicates = duplication noise; the fastapi/ package and
+  tests/ carry the routing/DI/Pydantic/OpenAPI lens surface). Baseline: 788 files,
+  141,281 lines, 4671 symbols, 120 components, 100% coverage; baseline.json about
+  6.6 MB, committed by design. root_path is the generating machine's cache path
+  (environment-specific, undiffed). `check fastapi` ran three times cold with no
+  drift; the frozen toolchain already covered these grammars (no constraints
+  change). Workflow is now a [flask, fastapi] matrix (fail-fast: false, each an
+  independent signal). Tests: FastAPI committed-lock + baseline validity (incl. a
+  real proof the excludes held: 0 translated-doc and 0 docs_src paths, English
+  docs present), and the opt-in live network test parametrized over both corpora.
 - Delivered: fetch-at-pinned-commit + committed-baseline storage (owner decision
   2026-07-20). corpus.lock pins the exact 40-char SHA (Flask 3.1.3 =
   22d924701a6ae2e4cd01e9a15bbaf3946094af65); a depth-1 fetch-by-SHA lands the

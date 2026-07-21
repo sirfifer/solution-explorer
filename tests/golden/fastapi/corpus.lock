@@ -1,0 +1,23 @@
+{
+  "name": "fastapi",
+  "repo": "https://github.com/tiangolo/fastapi.git",
+  "ref": "0.139.2",
+  "commit": "866b7a3d0ce1025a3811f23aea4846d01a2b16a8",
+  "exclude": [
+    "docs/de/",
+    "docs/es/",
+    "docs/fr/",
+    "docs/hi/",
+    "docs/ja/",
+    "docs/ko/",
+    "docs/pt/",
+    "docs/ru/",
+    "docs/tr/",
+    "docs/uk/",
+    "docs/zh/",
+    "docs/zh-hant/",
+    "docs_src/"
+  ],
+  "license": "MIT",
+  "notes": "tiangolo/fastapi, the second golden corpus, added for lens breadth (routing, Depends DI, Pydantic data entities, OpenAPI capabilities). PINNED at 0.139.2, which is post the 0.137.0 (June 2026) router-internals refactor, so the baseline sits on the settled router.routes tree rather than the tree that broke tools mid-refactor. Freezing the commit also neutralizes the ongoing docs translation churn. Excludes: the twelve translated docs directories under docs/ (docs/en, the canonical English docs, stays scanned) so translation churn does not enter the scan, and docs_src/ because 345 of its 461 Python files are _an/_py39/_py310 version-variant near-duplicates of the same tutorial snippets, which flood the projection with duplication findings that are noise rather than signal; the routing/DI/Pydantic/OpenAPI lens surface is already fully exercised by the fastapi/ package and tests/. Held FROZEN at the pinned commit so any generation diff is attributable to our engine, not to the target moving. Re-baseline at a stopping point with: python3 scripts/golden-corpus.py baseline fastapi."
+}

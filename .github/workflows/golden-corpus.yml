@@ -1,10 +1,11 @@
 name: Golden Corpus
 
 # Golden-master regression check (card G2). On a pull request that touches the
-# engine, regenerate the frozen Flask corpus and diff it against the committed
-# baseline. A non-empty diff that is not an intended improvement is a regression
-# to investigate: re-baseline deliberately (scripts/golden-corpus.py baseline
-# flask) once the change is confirmed good, otherwise fix the regression.
+# engine, regenerate each frozen corpus (flask, fastapi) and diff it against the
+# committed baseline. A non-empty diff that is not an intended improvement is a
+# regression to investigate: re-baseline deliberately (scripts/golden-corpus.py
+# baseline <corpus>) once the change is confirmed good, otherwise fix the
+# regression.
 
 on:
   pull_request:
@@ -39,9 +40,15 @@ permissions:
   contents: read
 
 jobs:
-  golden-flask:
-    name: Flask golden diff
+  golden:
+    name: ${{ matrix.corpus }} golden diff
     runs-on: ubuntu-latest
+    strategy:
+      # Each corpus is an independent regression signal, so a drift in one must
+      # not cancel the other's check.
+      fail-fast: false
+      matrix:
+        corpus: [flask, fastapi]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -58,18 +65,18 @@ jobs:
 
       - name: Install dependencies (frozen golden toolchain)
         # The constraints file pins the tree-sitter grammars and rules loader to
-        # the exact versions that cut the baseline, so a grammar release cannot
-        # move Flask's parse tree and produce a false drift.
+        # the exact versions that cut the baselines, so a grammar release cannot
+        # move a corpus's parse tree and produce a false drift.
         run: pip install -e ".[all,dev]" -c tests/golden/constraints.txt
 
-      - name: Check Flask against the approved baseline
-        run: python3 scripts/golden-corpus.py check flask --force
+      - name: Check ${{ matrix.corpus }} against the approved baseline
+        run: python3 scripts/golden-corpus.py check ${{ matrix.corpus }} --force
 
       - name: Explain a drift failure
         if: failure()
         run: |
-          echo "## Golden corpus drift" >> $GITHUB_STEP_SUMMARY
-          echo "The Flask projection changed versus the committed baseline." >> $GITHUB_STEP_SUMMARY
+          echo "## Golden corpus drift (${{ matrix.corpus }})" >> $GITHUB_STEP_SUMMARY
+          echo "The ${{ matrix.corpus }} projection changed versus the committed baseline." >> $GITHUB_STEP_SUMMARY
           echo "If this is an intended engine improvement, re-baseline locally with" >> $GITHUB_STEP_SUMMARY
-          echo '`python3 scripts/golden-corpus.py baseline flask` and commit the new baseline.' >> $GITHUB_STEP_SUMMARY
+          echo '`python3 scripts/golden-corpus.py baseline '"${{ matrix.corpus }}"'` and commit the new baseline.' >> $GITHUB_STEP_SUMMARY
           echo "Otherwise investigate it as a regression before merge." >> $GITHUB_STEP_SUMMARY
