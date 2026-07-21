@@ -1913,13 +1913,43 @@ corpus). These cards are DESIGN-CARDED; the owner green-lights builds. Nothing
 here is started.
 
 ### R1: Output-contract plus honest-gap backbone
-- Status: TODO (candidate; ROBUSTNESS-STRATEGY.md)
+- Status: IN PROGRESS (wave 1 BUILT; wt/r1-backbone). Backbone module and the
+  derive-driver adoption are landed; the remaining producers are later waves.
 - Scope: generalize the coverage ledger's completeness guarantee to every
   producer (each derive pass, each emitter, each MCP tool, each enrichment pass)
   via Pydantic v2 output models and completeness postconditions (shape and
   completeness, never value), with per-unit exception isolation in the driver so
   a failing unit degrades to a deterministic honest gap instead of shipping a
   fracture or crashing the run. Highest value, most on-brand.
+- Wave 1 delivered (2026-07-20, wt/r1-backbone): `analyzer/contracts.py`, the
+  zero-dependency backbone (invariant I7): `ProducerGap` (Pydantic-when-available
+  / dataclass fallback, mirroring analyzer/models.py), `Isolator` (per-unit
+  try/except bulkhead recording a deterministic honest gap and returning a
+  caller default), `require`/`PostconditionError` (shape-and-completeness only,
+  never value), and deterministic `finalize_gaps` (sorted, no traceback, no
+  absolute paths). Applied to the derive driver: every pass in
+  `derive_all` now runs under isolation, plus a `_check_output_contract`
+  postcondition at handoff (presence, shape, and by-construction count
+  consistency; NOT cross-ref resolution or total_components, which some healthy
+  runs legitimately violate, deferred). Gaps ride an additive top-level
+  `arch["gaps"]` array, emitted ONLY when non-empty so a healthy run is
+  byte-identical (proven: `check flask` and `check fastapi` show no drift; the
+  engine-parity and full-vs-incremental byte-parity suites pass). Gaps flow to
+  the monolith and the split manifest automatically (write_monolith / manifest
+  copy every arch key); viewer type `ProducerGap` + optional `gaps?` added
+  (degrade-by-absence). Fail-before proved: pre-R1 a raising pass crashed the
+  whole run; post-R1 the run completes with the honest gap. EXTRACT_TIER NOT
+  bumped: gaps are a derive/project-tier signal, not a new EXTRACTED signal kind,
+  so the extraction content-hash cache key is untouched.
+- Remaining waves (each its own PR, full protocol): (2) project-emitter
+  isolation in `project_split`/`project_monolith` (the other unguarded driver);
+  (3) enrich-driver unexpected-exception isolation (the handled invoke/validation
+  paths already degrade; an unexpected exception inside `_enhance_partition`
+  still re-raises through `fut.result()`); (4) MCP tool-call postconditions
+  (dispatch already degrades KeyError/ToolError); (5) cross-reference-resolution
+  and total_components postconditions once validated against both golden corpora;
+  (6) `_assemble` skeleton-fallback hardening so even an assembly failure yields
+  a minimal valid arch plus a gap rather than a crash.
 
 ### R2: Retry, timeout, and cost ceiling on the AI-enrichment path
 - Status: TODO (candidate)
@@ -2028,6 +2058,7 @@ Add new findings here with a date and the task you were on; do not expand task s
 
 | Date | Found while | Description | Disposition |
 |---|---|---|---|
+| 2026-07-20 | R1 wave 1 producer survey | The enrich driver (`enrich/engine.py::run_enhance`) isolates partitions via `PartitionOutcome` (invoke/validation failures degrade), but an UNEXPECTED exception inside `_enhance_partition` still re-raises through `fut.result()` and crashes `run_enhance`. Likewise `project_split`/`project_monolith` call emitters as bare statements with no per-emitter isolation, so an emitter exception crashes the projection. | Both are named R1 remaining waves (project-emitter isolation = wave 2; enrich unexpected-exception isolation = wave 3) on the R1 card. Not fixed in wave 1 (scope: backbone + derive driver). The backbone (`analyzer/contracts.py` Isolator) is the shared mechanism each wave adopts. |
 | 2026-07-11 | P3-3 real-data e2e (post-Phase-0 deploy) | UnaMentis architecture-full.yml was pinned to a stale Feb SHA `31145dc` despite a `# main` comment, so the downstream deploy ran an old solution-explorer. | Fixed by UnaMentis commit `9369887` (re-pin to current main). Strengthens P2-8 (pin hygiene): a comment claiming `main` is not a pin; verify the SHA actually tracks the intended ref. |
 | 2026-07-20 | G2 adversarial review | The G1 projection diff (and therefore the golden `check`) compares nine structural sections but NOT `symbols`, `supply_chain` (SBOM), `concerns`, or `stats`. A regression confined to those, e.g. a symbol-extraction pass that halves its output or a broken SBOM, passes `check` with no drift (false clean). | RESOLVED 2026-07-20 (wt/g1-stats-supply): G1 now diffs `stats` roll-ups (total_components/files/lines/symbols/relationships, total_size_bytes, per-language counts), `supply_chain` counts (overall, per ecosystem, per bucket, warnings, pin status), and `concerns` (added/removed by id). Fail-before proof: the halved-symbols / broken-SBOM / dropped-concern case read false-clean on the prior code and now registers drift. `symbols` are still compared only at the stats count level (documented honestly in tests/golden/README.md, not per-symbol identity). `check flask` stays green (no re-baseline needed). |
 | 2026-07-11 | P3-3 real-data e2e (post-Phase-0 deploy) | Production ID drift in the Advanced Architecture Visualization workflow: an unprefixed baseline (`curriculum`) versus a repo-prefixed target (`unamentis/curriculum`) plus new structural nodes (`repo:unamentis`) caused the exact-only merge to preserve 0 of 251 enhancements. | Caught loudly by the P0-4 total-loss guard with no data loss (target left untouched), then fixed by this task (P3-3): drift-tolerant matching now preserves the enhancements and `--strict` guards the ratio in CI. |

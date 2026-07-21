@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from ..contracts import Isolator, finalize_gaps, require
 from ..models import Component, to_dict
 from ..store import FactStore
 from . import capabilities as capabilities_pass
@@ -28,6 +29,41 @@ from . import testing as testing_pass
 from .context import Deriver
 from .storeview import StoreView
 
+_REQUIRED_ARCH_KEYS = ("name", "components", "relationships", "symbols", "files", "stats")
+
+
+def _check_output_contract(arch: dict) -> None:
+    """Shape-and-completeness postcondition for the assembled architecture (R1).
+
+    Asserts presence, shape, and the count-consistency that holds by construction
+    on any healthy run (each stats total is computed from the very array it
+    summarizes), so a clean run never trips it and byte parity is preserved. It
+    deliberately does NOT assert cross-reference resolution (some healthy outputs
+    legitimately reference ids outside the component tree, for example UI targets)
+    nor total_components against the tree (UI-flow children can add nodes the
+    component map does not count); those need per-corpus validation and are a
+    later R1 wave. Never asserts what a value is (no validation creep).
+    """
+    require(isinstance(arch, dict), "derive output is not a dict")
+    for key in _REQUIRED_ARCH_KEYS:
+        require(key in arch, f"derive output missing required key '{key}'")
+    for key in ("components", "relationships", "symbols", "files"):
+        require(isinstance(arch[key], list), f"derive output '{key}' is not a list")
+    require(isinstance(arch["stats"], dict), "derive output 'stats' is not a dict")
+    stats = arch["stats"]
+    require(
+        stats.get("total_relationships") == len(arch["relationships"]),
+        "stats.total_relationships does not match the relationships array",
+    )
+    require(
+        stats.get("total_symbols") == len(arch["symbols"]),
+        "stats.total_symbols does not match the symbols array",
+    )
+    require(
+        stats.get("total_files") == len(arch["files"]),
+        "stats.total_files does not match the files array",
+    )
+
 
 def derive_all(
     store: FactStore,
@@ -37,33 +73,55 @@ def derive_all(
     root_path: str = "",
     description: str = "",
 ) -> tuple[Deriver, dict]:
-    """Run all derivation passes and return (Deriver, architecture dict)."""
+    """Run all derivation passes and return (Deriver, architecture dict).
+
+    Each pass runs under per-unit isolation (card R1): a pass that raises degrades
+    to a deterministic honest gap recorded on ``arch["gaps"]`` instead of crashing
+    the run, and the remaining passes still run. A healthy run records no gaps and
+    omits the key entirely, so its output is byte-identical to the pre-isolation
+    behavior (the golden gate and the full-vs-incremental byte-parity tests hold).
+    """
     view = StoreView.load(store)
     d = Deriver(view, root_name, repo=repo)
 
-    components_pass.discover_components(d)
-    components_pass.associate_files(d)
-    components_pass.rekey_symbols(d, store)
-    roles_pass.promote_component_types(d)
-    roles_pass.improve_component_names(d)
-    roles_pass.assign_server_ports(d)
-    flow_pass.detect_ui_flows(d)
-    flow_pass.detect_ui_actions(d)
-    storyboard_pass.derive_storyboard_flow(d)
-    rel_pass.derive_relationships(d)
-    _compute_metrics(d)
-    testing_pass.detect_testing(d)
-    arch_description = _project_description(d, description)
-    docs_pass.extract_component_docs(d)
-    capabilities_pass.derive_capabilities(d)
-    entities_pass.derive_entities(d)
-    rules_pass.derive_rules(d)
+    gaps: list = []
+    iso = Isolator("derive", gaps)
+
+    iso.run("derive.components.discover", components_pass.discover_components, d)
+    iso.run("derive.components.associate-files", components_pass.associate_files, d)
+    iso.run("derive.components.rekey-symbols", components_pass.rekey_symbols, d, store)
+    iso.run("derive.roles.promote-types", roles_pass.promote_component_types, d)
+    iso.run("derive.roles.improve-names", roles_pass.improve_component_names, d)
+    iso.run("derive.roles.assign-ports", roles_pass.assign_server_ports, d)
+    iso.run("derive.flow.ui-flows", flow_pass.detect_ui_flows, d)
+    iso.run("derive.flow.ui-actions", flow_pass.detect_ui_actions, d)
+    iso.run("derive.storyboard", storyboard_pass.derive_storyboard_flow, d)
+    iso.run("derive.relationships", rel_pass.derive_relationships, d)
+    iso.run("derive.metrics", _compute_metrics, d)
+    iso.run("derive.testing", testing_pass.detect_testing, d)
+    arch_description = iso.run(
+        "derive.project-description", _project_description, d, description,
+        default=description,
+    )
+    iso.run("derive.docs", docs_pass.extract_component_docs, d)
+    iso.run("derive.capabilities", capabilities_pass.derive_capabilities, d)
+    iso.run("derive.entities", entities_pass.derive_entities, d)
+    iso.run("derive.rules", rules_pass.derive_rules, d)
     # Correlations run last: they read the components, edges, capabilities,
     # entities, rules, and clone-fragment signals every earlier pass produced.
-    correlations_pass.derive_correlations(d)
+    iso.run("derive.correlations", correlations_pass.derive_correlations, d)
 
     arch = _assemble(d, root_name, root_path, arch_description)
-    _flush(store, d)
+    # Self-validating output: the assembled result must be shape-and-complete at
+    # handoff. A violation is an honest gap, not a crash.
+    iso.run("derive.output-contract", _check_output_contract, arch)
+    # Flushing derived facts to the store is itself a producer: a store-write
+    # failure degrades to a gap, and the arch dict (which the projection reads for
+    # its components) is still returned whole.
+    iso.run("derive.flush", _flush, store, d)
+
+    if gaps:
+        arch["gaps"] = finalize_gaps(gaps)
     return d, arch
 
 
