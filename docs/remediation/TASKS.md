@@ -2016,11 +2016,85 @@ here is started.
   (PR #74 and PR #73).
 
 ### R2: Retry, timeout, and cost ceiling on the AI-enrichment path
-- Status: TODO (candidate)
-- Scope: stamina-based bounded retry with full jitter, transient-only, plus a
-  per-attempt timeout and a per-run cost ceiling on the outbound AI call.
-  Formalizes P4-8's lesson for the external-API surface; parse failures stay
-  deterministic and fail fast.
+- Status: BUILT (2026-07-21, wt/r2-retry). Bounded, full-jitter, transient-only
+  transport retry plus a per-run cost ceiling on the enrichment invoke, wired
+  under the existing validation retry, with byte-invisible determinism.
+- CRITICAL CORRECTION to the strategy: the outbound call is NOT an HTTP SDK call;
+  it shells out to the `claude` CLI (`engine.ClaudeCliInvoker`, 600s per-attempt
+  subprocess timeout already present). R2 is designed around that subprocess
+  reality, and the per-attempt timeout is kept as-is.
+- Classifier (`analyzer/enrich/retry.py::classify_outcome`, pure, exhaustively
+  tested). Grounded in a real CLI observation (v2.1.x): a model-not-found returns
+  exit 1 WITH a JSON envelope on stdout carrying `is_error: true` and
+  `api_error_status: 404`. The pre-R2 invoker checked returncode first and never
+  parsed that envelope, so it missed the status; the invoker now surfaces
+  `api_error_status` as `InvokeResult.status_code`. Classification table:
+
+  | Outcome surface | Decision |
+  |---|---|
+  | `result.ok` true | SUCCESS |
+  | subprocess timeout / spawn failure (`invocation failed:` prefix) | TRANSIENT |
+  | `api_error_status` in {408,425,429,500,502,503,504,529} | TRANSIENT |
+  | free-text transient marker (rate limit, overloaded, timeout, ... ) when no status | TRANSIENT |
+  | `api_error_status` any other 4xx (400/401/403/404/409/422) | DETERMINISTIC |
+  | parse failure (`unparseable envelope:` prefix, exit 0 non-JSON) | DETERMINISTIC (never retried) |
+  | any other nonzero exit | DETERMINISTIC |
+
+  Structured status wins over free-text markers; the parse-failure prefix is
+  checked first so a parse failure is never retried at this layer (the semantic
+  validation retry in passes.py/_enhance_partition stays untouched, above this
+  layer). Free-text markers are phrases only (never bare 3-digit numbers) so a
+  "1500 tokens" message is not read as a 500.
+- Retry policy (`RetryPolicy`, injectable): max_attempts=4 (1 initial + 3),
+  full-jitter exponential backoff base 1.0s capped at 30.0s per sleep, per-invoke
+  total-time budget 120.0s. Transient-only; the budget is checked before each
+  retry so combined with the 600s per-attempt timeout a pathological repeated
+  hang is capped to a couple of attempts, not four full timeouts. `RetryingInvoker`
+  wraps the DEFAULT invoker only (an injected invoker is used as-is, so tests
+  wrap their own); it returns the final attempt's result with cost SUMMED across
+  all attempts, otherwise byte-identical, so a retried success stamps exactly like
+  a first-try success.
+- TOOLING DEVIATION (documented on purpose): the strategy recommends `stamina`.
+  R2 does NOT use it. (1) Zero-dependency core (I7): stamina would be a new
+  third-party dependency. (2) It fights the established determinism seam: stamina
+  drives its own monotonic/sleep and its test switch disables retrying wholesale
+  rather than making timing deterministic, so it cannot express the fake-clock /
+  fake-sleep byte-parity tests this codebase uses. A small full-jitter policy over
+  the existing injectable Clock/sleep/RNG seams is the honest fit: same algorithm,
+  no new dependency, deterministic tests.
+- Cost ceiling: per-run, summed across ALL attempts (retries counted, since the
+  RetryingInvoker returns accumulated cost). Partitions are submitted
+  INCREMENTALLY; once the ceiling is reached no new partitions launch, in-flight
+  ones finish (soft ceiling, overshoot bounded by one in-flight batch), the rest
+  are recorded "skipped: cost ceiling reached", and the architecture narrative is
+  skipped too. All-or-nothing per partition preserved (a skipped partition is
+  never half-stamped, status "skipped" not "failed", so the run exits with partial
+  state, honestly reported). Default `--max-cost-usd 10.0` (DEFAULT_MAX_COST_USD):
+  generous, since the known enrichment targets (the ~190-component iOS demo and
+  this self-repo dogfood) each cost well under a dollar in practice, so the
+  ceiling never truncates a legitimate run while bounding a pathological runaway;
+  operators raise it for larger runs. It bounds enrichment only (a real-API,
+  explicitly-invoked path) and does not touch deterministic analyzer output or the
+  golden legs. New CLI flags: `--max-cost-usd` and `--retry-attempts` (documented
+  defaults).
+- Tests: `tests/test_enrich_retry.py` (32: classifier exhaustiveness, retry
+  behavior, jitter bounds under seeded RNG, total-budget enforcement, transient-
+  only discipline, cost summation, all with fake Invoker + fake Clock, no real
+  sleep) and `tests/test_enrich_cost_ceiling.py` (6, engine-level over the polyglot
+  fixture): ceiling stops launches and records honest skips, skipped partition
+  stamps nothing, a retried success stamps BYTE-IDENTICALLY to a first-try success,
+  and fail-before proofs (a raw transient invoker fails the partition; the wrapped
+  one succeeds; no-ceiling accumulates unbounded). Full suite green (1467 passed,
+  the one worktree-only coverage-ledger quirk excepted); engine/incremental
+  byte-parity intact; healthy default analyzer output unchanged.
+- SCOPE GUARDS honored: no persisted cross-run breaker, no MCP changes, no
+  auto-update pipeline changes (all R4); partition validation logic and prompts
+  untouched; parse failures stay deterministic fail-fast. The P7 verify passes
+  (passes.py) share ClaudeCliInvoker and could adopt RetryingInvoker in a small
+  follow-up, but R2's retry + ceiling live in the enrichment `run_enhance` path,
+  which is exactly the card's surface. EXTRACT_TIER NOT bumped: retry and the cost
+  ceiling are enrichment-runtime controls, not a new extracted signal kind, so the
+  extraction content-hash cache key is untouched.
 
 ### R3: Maturity-channel gating
 - Status: TODO (candidate)

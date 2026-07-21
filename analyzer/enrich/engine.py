@@ -25,12 +25,18 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..contracts import gap_from_exception
+
+if TYPE_CHECKING:
+    # Type-only import: avoids a runtime circular import (retry imports from
+    # engine). The annotation is a string under `from __future__ import
+    # annotations`, so RetryPolicy is never needed at runtime here.
+    from .retry import RetryPolicy
 from ..derive import derive_all
 from ..store import FactStore
 from .digest import ARCH_TARGET_ID, DigestIndex
@@ -51,6 +57,7 @@ __all__ = [
     "load_scorer",
     "DEFAULT_MODEL",
     "DEFAULT_MAX_PARALLEL",
+    "DEFAULT_MAX_COST_USD",
 ]
 
 DEFAULT_MODEL = "sonnet"
@@ -96,13 +103,21 @@ def load_scorer() -> Any:
 
 @dataclass
 class InvokeResult:
-    """One headless model call result."""
+    """One headless model call result.
+
+    ``status_code`` carries the CLI envelope's ``api_error_status`` when the call
+    failed with a structured API error (for example 429 rate limit, 529 overloaded,
+    404 model-not-found). It is the primary signal the R2 transport-retry layer
+    uses to classify a failure as transient versus deterministic; it is None for a
+    success, a spawn failure, a subprocess timeout, or a parse failure.
+    """
 
     ok: bool
     text: str
     cost_usd: float = 0.0
     usage: dict = field(default_factory=dict)
     error: Optional[str] = None
+    status_code: Optional[int] = None
 
 
 # An invoker takes a prompt and returns an InvokeResult. Injectable so tests can
@@ -145,8 +160,23 @@ class ClaudeCliInvoker:
                 timeout=self.timeout,
             )
         except (OSError, subprocess.SubprocessError) as exc:
+            # Spawn failure or subprocess timeout: a bounded transient (R2).
             return InvokeResult(ok=False, text="", error=f"invocation failed: {exc}")
         if proc.returncode != 0:
+            # A nonzero exit can still carry a structured JSON error envelope on
+            # stdout: a real claude CLI run returns exit 1 for an API error WITH
+            # is_error/api_error_status in the envelope (for example a 429 rate
+            # limit or a 404 model-not-found). Surface that status so the R2
+            # retry layer can tell a transient (429/5xx) from a deterministic
+            # (4xx) failure; fall back to stderr only when there is no envelope.
+            status, detail = _envelope_error(proc.stdout)
+            if status is not None or detail is not None:
+                return InvokeResult(
+                    ok=False,
+                    text=detail or "",
+                    error=f"claude exited {proc.returncode}: {(detail or proc.stderr).strip()[:400]}",
+                    status_code=status,
+                )
             return InvokeResult(
                 ok=False, text="",
                 error=f"claude exited {proc.returncode}: {proc.stderr.strip()[:400]}",
@@ -154,6 +184,8 @@ class ClaudeCliInvoker:
         try:
             envelope = json.loads(proc.stdout)
         except json.JSONDecodeError as exc:
+            # Well-formed run (exit 0) that returned non-JSON: a deterministic
+            # parse failure. NEVER retried at the transport layer (R2).
             return InvokeResult(ok=False, text="", error=f"unparseable envelope: {exc}")
         if envelope.get("is_error"):
             return InvokeResult(
@@ -161,6 +193,7 @@ class ClaudeCliInvoker:
                 cost_usd=float(envelope.get("total_cost_usd", 0.0) or 0.0),
                 usage=envelope.get("usage", {}) or {},
                 error="model reported error",
+                status_code=_coerce_status(envelope.get("api_error_status")),
             )
         return InvokeResult(
             ok=True,
@@ -170,7 +203,55 @@ class ClaudeCliInvoker:
         )
 
 
+def _coerce_status(value: Any) -> Optional[int]:
+    """Coerce a CLI ``api_error_status`` to an int, tolerating a digit string.
+
+    The observed CLI reports an integer, but a version that emitted ``"500"`` as a
+    string would otherwise read as no-status and misclassify a transient 5xx as
+    deterministic. Accepts an int or a digit string; rejects bool (a subclass of
+    int) and anything else, returning None so the caller falls back cleanly.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
+def _envelope_error(stdout: str) -> tuple[Optional[int], Optional[str]]:
+    """Extract (api_error_status, result-detail) from a CLI JSON envelope.
+
+    Returns (None, None) when stdout is not a JSON object, so the caller can fall
+    back to stderr. Kept tiny and pure so the nonzero-exit path stays legible.
+    """
+    try:
+        env = json.loads(stdout)
+    except (json.JSONDecodeError, ValueError):
+        return None, None
+    if not isinstance(env, dict):
+        return None, None
+    detail = env.get("result")
+    return (
+        _coerce_status(env.get("api_error_status")),
+        str(detail) if detail is not None else None,
+    )
+
+
 # --- config and report -------------------------------------------------------
+
+# Default per-run cost ceiling (USD) for an enrichment run. Generous by design:
+# the known enrichment targets (the ~190-component iOS demo and this self-repo
+# dogfood) each cost well under a dollar in practice, so this ceiling never
+# truncates a legitimate run, while it bounds a pathological runaway (a flaky
+# dependency causing repeated paid retries, or an accidentally huge input). When
+# the ceiling is reached the run stops LAUNCHING new partitions, lets in-flight
+# ones finish, records the rest honestly as skipped, and exits successfully with
+# the partial state reported. Operators with genuinely larger runs raise it with
+# --max-cost-usd. This bounds enrichment only (a real-API, explicitly-invoked
+# path); it does not touch the deterministic analyzer output or the golden legs.
+DEFAULT_MAX_COST_USD = 10.0
 
 
 @dataclass
@@ -187,6 +268,12 @@ class EnhanceConfig:
     max_lines: int = 50_000
     max_components: int = 30
     min_components: int = 5
+    # R2 controls. ``max_cost_usd`` caps total reported cost across ALL attempts
+    # (retries count); None disables the ceiling. ``retry_policy`` is the
+    # injectable transport-retry policy applied to the DEFAULT invoker (an
+    # explicitly injected invoker is used as-is, so tests wrap their own).
+    max_cost_usd: Optional[float] = DEFAULT_MAX_COST_USD
+    retry_policy: Optional[RetryPolicy] = None
 
 
 @dataclass
@@ -462,7 +549,13 @@ def run_enhance(
     """Run the enrichment pipeline for one store. Returns an EnhanceReport."""
     scorer = load_scorer()
     if invoker is None:
-        invoker = ClaudeCliInvoker(model=config.model)
+        # Wrap the DEFAULT invoker with R2 transport retry (transient-only,
+        # full-jitter, bounded, per-invoke time budget). An explicitly injected
+        # invoker is used as-is, so tests wrap their own for deterministic seams.
+        from .retry import RetryingInvoker, RetryPolicy
+
+        policy = config.retry_policy or RetryPolicy()
+        invoker = RetryingInvoker(ClaudeCliInvoker(model=config.model), policy=policy)
 
     store = FactStore(str(config.store_path))
     try:
@@ -535,45 +628,87 @@ def run_enhance(
                 })
             return report
 
-        # Enhance partitions (bounded parallel).
+        # Enhance partitions (bounded parallel) under a per-run COST CEILING (R2).
+        # Partitions are submitted INCREMENTALLY, not all at once, so that once the
+        # summed reported cost across all attempts (retries counted, since the
+        # RetryingInvoker returns the accumulated cost) reaches config.max_cost_usd
+        # we STOP launching new partitions, let the in-flight batch finish, and
+        # record the rest honestly as skipped. All-or-nothing per partition is
+        # preserved: a skipped partition is never half-stamped, and the run still
+        # exits successfully with the partial state reported (skipped != failed).
+        # The ceiling is soft: the in-flight batch at the moment it is reached runs
+        # to completion, so total cost can exceed the ceiling by up to one batch;
+        # new partitions are not launched.
         outcomes: list[PartitionOutcome] = []
         payloads_by_partition: dict[int, dict] = {}
-        workers = max(1, min(config.max_parallel, len(partitions) or 1))
+        ceiling = config.max_cost_usd
+        running_cost = 0.0
+        ceiling_hit = False
+        pending: list[Partition] = list(partitions)
+
+        def _under_ceiling() -> bool:
+            return ceiling is None or running_cost < ceiling
+
         if partitions:
+            workers = max(1, min(config.max_parallel, len(partitions)))
             with ThreadPoolExecutor(max_workers=workers) as pool:
-                futures = {
-                    pool.submit(_enhance_partition, p, facts, scorer, invoker, clock): p
-                    for p in partitions
-                }
-                for fut in futures:
-                    p = futures[fut]
-                    try:
-                        outcome, payloads = fut.result()
-                    except Exception as exc:  # noqa: BLE001 - per-partition bulkhead (R1 wave 3)
-                        # An UNEXPECTED exception inside _enhance_partition (a bug,
-                        # not a handled invoke/validation failure, which already
-                        # degrade in-band) previously re-raised through fut.result()
-                        # and crashed the whole enrichment run. Isolate it per
-                        # partition: record a deterministic failed outcome (same
-                        # discipline the all-or-nothing per-partition contract
-                        # already applies to validation failures) so one bad
-                        # partition degrades to a recorded failure and the rest of
-                        # the run still enriches. The reason is scrubbed via the
-                        # honest-gap backbone (no traceback, no heap addresses), so
-                        # the report is deterministic. Retry/cost logic is untouched
-                        # (that is R2); this only stops a crash.
-                        reason = gap_from_exception("enrich.partition", "enrich", exc).reason
-                        outcome = PartitionOutcome(
-                            id=p.id,
-                            component_ids=list(p.component_ids),
-                            relationship_keys=list(p.relationship_keys),
-                            status="failed",
-                            errors=[f"partition raised an unexpected error: {reason}"],
-                        )
-                        payloads = None
-                    outcomes.append(outcome)
-                    if payloads is not None:
-                        payloads_by_partition[outcome.id] = payloads
+                in_flight: dict = {}
+                while pending and len(in_flight) < workers and _under_ceiling():
+                    part = pending.pop(0)
+                    in_flight[
+                        pool.submit(_enhance_partition, part, facts, scorer, invoker, clock)
+                    ] = part
+                while in_flight:
+                    done, _ = wait(in_flight, return_when=FIRST_COMPLETED)
+                    for fut in done:
+                        part = in_flight.pop(fut)
+                        try:
+                            outcome, payloads = fut.result()
+                        except Exception as exc:  # noqa: BLE001 - per-partition bulkhead (R1 wave 3)
+                            # An UNEXPECTED exception inside _enhance_partition (a
+                            # bug, not a handled invoke/validation failure, which
+                            # already degrade in-band) previously re-raised through
+                            # fut.result() and crashed the whole enrichment run.
+                            # Isolate it per partition: record a deterministic
+                            # failed outcome so one bad partition degrades and the
+                            # rest of the run still enriches. Reason scrubbed via the
+                            # honest-gap backbone (deterministic, no traceback).
+                            reason = gap_from_exception("enrich.partition", "enrich", exc).reason
+                            outcome = PartitionOutcome(
+                                id=part.id,
+                                component_ids=list(part.component_ids),
+                                relationship_keys=list(part.relationship_keys),
+                                status="failed",
+                                errors=[f"partition raised an unexpected error: {reason}"],
+                            )
+                            payloads = None
+                        outcomes.append(outcome)
+                        if payloads is not None:
+                            payloads_by_partition[outcome.id] = payloads
+                        running_cost += outcome.cost_usd
+                    # Top up only while under the ceiling; once reached, drain.
+                    while pending and len(in_flight) < workers and _under_ceiling():
+                        part = pending.pop(0)
+                        in_flight[
+                            pool.submit(_enhance_partition, part, facts, scorer, invoker, clock)
+                        ] = part
+            # Partitions never launched because the ceiling was reached: record
+            # them honestly as skipped (never half-stamped, all-or-nothing).
+            for part in pending:
+                ceiling_hit = True
+                outcomes.append(PartitionOutcome(
+                    id=part.id,
+                    component_ids=list(part.component_ids),
+                    relationship_keys=list(part.relationship_keys),
+                    status="skipped",
+                    errors=[f"not enriched: cost ceiling reached (${ceiling:.2f} USD)"],
+                ))
+        if ceiling_hit:
+            report.notes.append(
+                f"cost ceiling reached (${ceiling:.2f} USD): "
+                f"{sum(1 for o in outcomes if o.status == 'skipped')} partition(s) "
+                f"not enriched; partial state reported honestly"
+            )
         outcomes.sort(key=lambda o: o.id)
         report.partitions = outcomes
         report.total_cost_usd = sum(o.cost_usd for o in outcomes)
@@ -587,7 +722,15 @@ def run_enhance(
         # only adds the bulkhead for an unexpected raise. Retry/cost untouched.
         commit_sha = current_commit_sha(str(config.root))
         arch_payload: Optional[dict] = None
-        if regenerate_arch:
+        if regenerate_arch and ceiling is not None and running_cost >= ceiling:
+            # The ceiling was reached during the partitions; the architecture
+            # narrative is a peer producer, so do not launch it either. Recorded
+            # honestly, consistent with the skipped partitions.
+            report.notes.append(
+                f"architecture narrative not generated: cost ceiling reached "
+                f"(${ceiling:.2f} USD)"
+            )
+        elif regenerate_arch:
             try:
                 arch_payload, arch_cost, arch_errs = _enhance_architecture(
                     facts, scorer, invoker, clock
