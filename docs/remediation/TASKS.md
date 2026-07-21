@@ -1959,7 +1959,19 @@ here is started.
   G3 (two-slot demo/dogfood diff) and G4 (full-vs-incremental parity) build on.
 
 ### G2: Golden-corpus harness
-- Status: TODO (candidate; target validated 2026-07-20)
+- Status: BUILT for FLASK (owner green-lit; scripts/golden-corpus.py + tests/golden/flask/ + workflow). FastAPI is the next step within this card.
+- Delivered: fetch-at-pinned-commit + committed-baseline storage (owner decision
+  2026-07-20). corpus.lock pins the exact 40-char SHA (Flask 3.1.3 =
+  22d924701a6ae2e4cd01e9a15bbaf3946094af65); a depth-1 fetch-by-SHA lands the
+  frozen source in the gitignored .golden-cache/; only the approved baseline.json
+  is committed. Harness subcommands: list, fetch, generate, baseline (the
+  re-baseline procedure), check (diff vs baseline via the G1 tool, exit 1 on
+  drift). CI: .github/workflows/golden-corpus.yml runs check flask on engine-
+  touching PRs (hash-pinned actions). 16 hermetic tests + 1 opt-in live-network
+  test (verified green: real fetch+generate+check = no drift). README documents
+  the model and re-baseline procedure. NEXT within G2: add FastAPI pinned at
+  0.139.2+ with translated docs excluded (the exclude mechanism is already wired
+  via corpus.lock -> managed .gitignore block).
 - Scope: a frozen local clone held static, an approved baseline, a re-baseline
   procedure, CI wiring. The clean regression signal the changing demo and
   dogfood cannot give. TWO-CORPUS pairing (see REGRESSION-STRATEGY.md): build
