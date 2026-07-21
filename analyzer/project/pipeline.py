@@ -188,24 +188,46 @@ def _apply_project_gaps(prepared: dict, derive_gaps: list, project_gaps: list) -
     prepared["gaps"] = finalize_gaps(list(derive_gaps) + list(project_gaps))
 
 
+def _json_scalar(value, fallback=""):
+    """Coerce an identity field to a JSON-safe scalar for the skeleton.
+
+    A well-formed arch carries plain strings (or None for ``repository``) in
+    these fields. If an upstream bug left a non-scalar here, and it is the very
+    thing that made the main writer fail, embedding it verbatim would make the
+    skeleton fail too. ``json.dump(default=str)`` does not save us against a
+    CIRCULAR object (circularity is detected before ``default`` is consulted), so
+    stringify eagerly: ``str`` breaks circular references (Python renders them as
+    ``{...}``), so the skeleton always serializes and the run always ships an
+    artifact that carries the gaps.
+    """
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    try:
+        return str(value)
+    except Exception:  # noqa: BLE001 - extremely defensive; never let a repr crash the skeleton
+        return fallback
+
+
 def _empty_arch_doc(prepared: dict) -> dict:
     """A minimal, guaranteed-serializable arch skeleton for a main-writer failure.
 
     Mirrors ``derive.pipeline._skeleton_arch``: the identity fields are carried
-    through, every collection is empty, and the stats totals are zero and
-    self-consistent. Built from scratch (never the possibly-unserializable real
-    collections that made the writer fail), so it always serializes. It is the
-    honest "the projection could not assemble the full document" fallback,
-    paired with the failing writer's gap.
+    through (coerced to JSON-safe scalars via ``_json_scalar`` so even a
+    pathological non-serializable identity field cannot make the skeleton fail),
+    every collection is empty, and the stats totals are zero and self-consistent.
+    Built from scratch (never the possibly-unserializable real collections that
+    made the writer fail), so it always serializes. It is the honest "the
+    projection could not assemble the full document" fallback, paired with the
+    failing writer's gap.
     """
     return {
-        "name": prepared.get("name", ""),
-        "description": prepared.get("description", ""),
-        "repository": prepared.get("repository"),
-        "default_branch": prepared.get("default_branch", "main"),
-        "generated_at": prepared.get("generated_at", ""),
-        "analyzer_version": prepared.get("analyzer_version", ""),
-        "root_path": prepared.get("root_path", ""),
+        "name": _json_scalar(prepared.get("name", "")),
+        "description": _json_scalar(prepared.get("description", "")),
+        "repository": _json_scalar(prepared.get("repository"), None),
+        "default_branch": _json_scalar(prepared.get("default_branch", "main"), "main"),
+        "generated_at": _json_scalar(prepared.get("generated_at", "")),
+        "analyzer_version": _json_scalar(prepared.get("analyzer_version", "")),
+        "root_path": _json_scalar(prepared.get("root_path", "")),
         "components": [],
         "relationships": [],
         "capabilities": [],
@@ -259,6 +281,16 @@ def _write_skeleton_manifest(
     path = output_dir / "manifest.json"
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(doc, fh, indent=indent, default=str, sort_keys=True)
+    # The skeleton declares an empty detail index, so any detail shards a partial
+    # write_manifest_and_details already wrote are orphans inconsistent with it.
+    # Best-effort prune so the shipped tree matches the manifest it advertises.
+    data_dir = output_dir / "data"
+    if data_dir.is_dir():
+        for stale in data_dir.glob("detail-*.json"):
+            try:
+                stale.unlink()
+            except OSError:
+                pass
     return path
 
 
@@ -394,11 +426,19 @@ def project_split(
     # all run BEFORE the manifest so any gap they record rides on the manifest
     # that is written last. Their file bytes are independent of write order, so a
     # clean run is byte-identical to the pre-isolation ordering.
+    n_gaps = len(gaps)
     search_manifest = iso.run(
         "project.search-shards", write_search_shards, prepared, output_dir,
         store=store, shard_size=shard_size, indent=indent,
         default_factory=lambda: _empty_search_manifest(shard_size),
     )
+    # A failed search write yields the empty-manifest default (a truthy dict), so
+    # the front door must NOT be told search is present, or ai.json / llms.txt
+    # would advertise a search index that was never written (a lying contract the
+    # front door explicitly guards against). Distinguish a real empty index (no
+    # gap) from a failed write (a gap was recorded) and pass None on failure so
+    # the front door emits its honest search-absent fallback.
+    search_ok = len(gaps) == n_gaps
 
     coverage_path = None
     if coverage is not None:
@@ -412,7 +452,8 @@ def project_split(
 
     ai_json_path, llms_txt_path = iso.run(
         "project.frontdoor", write_front_door, prepared, output_dir, mode="split",
-        coverage=coverage, activity=activity, search_manifest=search_manifest,
+        coverage=coverage, activity=activity,
+        search_manifest=(search_manifest if search_ok else None),
         supply_chain=sbom_section, cra_present=cra_result is not None, indent=indent,
         default=(None, None),
     )

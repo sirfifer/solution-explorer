@@ -258,5 +258,83 @@ def test_derive_and_project_gaps_coexist_on_the_manifest(tmp_path, monkeypatch):
     store.close()
 
 
+# ---------------------------------------------------------------------------
+# adversarial-review hardening (PR #74 findings)
+# ---------------------------------------------------------------------------
+
+
+def test_failed_search_is_not_advertised_in_the_front_door(tmp_path, monkeypatch):
+    # Finding 2: a failed search write yields the empty-manifest default (a truthy
+    # dict), which must NOT make the front door advertise a search index that was
+    # never written. The front door must emit its honest search-absent contract.
+    _build_repo(tmp_path)
+    store = _extract(tmp_path)
+    monkeypatch.setattr(pipe, "write_search_shards", _boom)
+    out = tmp_path / "out"
+    manifest = _split(tmp_path, store, out)
+    assert "project.search-shards" in _producers(manifest)
+    assert not (out / "search" / "manifest.json").exists()
+    ai = json.loads((out / "ai.json").read_text(encoding="utf-8"))
+    assert ai["search"] is None  # honest: no lying search endpoint
+    store.close()
+
+
+def test_healthy_search_is_still_advertised(tmp_path):
+    # Guard for the fix above: a real (successful) search index is advertised, so
+    # the "failed -> None" logic did not suppress a genuine index.
+    _build_repo(tmp_path)
+    store = _extract(tmp_path)
+    out = tmp_path / "out"
+    manifest = _split(tmp_path, store, out)
+    assert "gaps" not in manifest
+    ai = json.loads((out / "ai.json").read_text(encoding="utf-8"))
+    assert ai["search"] is not None
+    assert (out / "search" / "manifest.json").exists()
+    store.close()
+
+
+def test_skeleton_manifest_prunes_orphan_detail_shards(tmp_path, monkeypatch):
+    # Finding 4: when the manifest writer fails after (partially) writing detail
+    # shards, the skeleton declares an empty detail index, so any shards already
+    # on disk are orphans. They are pruned so the tree matches the manifest.
+    _build_repo(tmp_path)
+    store = _extract(tmp_path)
+    out = tmp_path / "out"
+    (out / "data").mkdir(parents=True, exist_ok=True)
+    (out / "data" / "detail-stale.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(pipe, "write_manifest_and_details", _boom)
+    manifest = _split(tmp_path, store, out)  # skeleton path
+    assert "project.manifest" in _producers(manifest)
+    assert manifest["component_detail_index"] == {}
+    assert not (out / "data" / "detail-stale.json").exists()  # orphan pruned
+    store.close()
+
+
+def test_non_serializable_identity_field_degrades_without_crash(tmp_path, monkeypatch):
+    # Finding 1: a circular object in an identity field that reaches BOTH the real
+    # manifest writer and the skeleton must not crash the run. The skeleton
+    # coerces identity fields to JSON-safe scalars, so it still ships a manifest;
+    # the Isolator fallback guard is the final backstop. Here the arch description
+    # is circular and the real writer is forced to fail, driving the skeleton.
+    _build_repo(tmp_path)
+    store = _extract(tmp_path)
+    circular: dict = {}
+    circular["self"] = circular
+
+    _, arch = derive_all(store, "sample", root_path=str(tmp_path))
+    arch["description"] = circular  # a non-serializable identity field
+    monkeypatch.setattr(pipe, "write_manifest_and_details", _boom)
+    out = tmp_path / "out"
+    # Must NOT raise (no cascading crash) and must ship a well-formed manifest.
+    pipe.project_split(
+        arch, out, store=store, root=tmp_path,
+        generated_at=FIXED_TS, analyzer_version="1.2.0",
+    )
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert "project.manifest" in _producers(manifest)
+    assert isinstance(manifest["description"], str)  # coerced, serializable
+    store.close()
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

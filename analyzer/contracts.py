@@ -55,6 +55,18 @@ _REASON_CAP = 500
 # on a degraded run. Collapse every hex address to a constant placeholder.
 _HEX_ADDR_RE = re.compile(r"0x[0-9a-fA-F]+")
 
+# An absolute POSIX filesystem path in an exception message (an OSError like
+# ``FileNotFoundError: [Errno 2] ... '/Users/me/repo/x.toml'``) embeds the
+# machine's directory layout. It is BOTH a determinism hazard (the same failure
+# on CI and on a dev box yields different bytes, so a degraded artifact is not
+# reproducible cross-environment) AND a leak of usernames and directory
+# structure into a published artifact. Collapse the machine-specific directory
+# to ``...`` and keep only the basename, which is stable and still informative,
+# exactly as the hex-address scrub keeps the shape while dropping the volatile
+# part. Requires at least two segments so a lone ``/x`` or a URL's ``//`` is not
+# matched (the negative lookbehind also excludes ``://``).
+_ABS_PATH_RE = re.compile(r"(?<![\w:/])(?:/[^/\s'\"()]+){2,}/?")
+
 
 class PostconditionError(Exception):
     """A producer's output failed its shape-and-completeness contract.
@@ -131,15 +143,26 @@ def gap_to_dict(gap: Any) -> dict:
 def _scrub_reason(text: str) -> str:
     """Make a reason string deterministic and bounded.
 
-    Collapses to a single line and caps the length. Determinism of the CONTENT
-    is the producer's job (a unit that is a pure function of its input raises the
-    same message every time); this only removes newlines that would fracture the
-    single-line ledger convention and bounds a pathological length.
+    Collapses to a single line, scrubs the two machine-specific volatile parts
+    (heap addresses and absolute paths), and caps the length. Determinism of the
+    CONTENT is the producer's job (a unit that is a pure function of its input
+    raises the same message every time); this removes newlines that would
+    fracture the single-line ledger convention, strips the parts that vary across
+    runs and machines so the "same input, same gap" contract holds even for a
+    file-I/O failure, and bounds a pathological length.
     """
     one_line = _HEX_ADDR_RE.sub("0x...", " ".join(str(text).split()))
+    one_line = _ABS_PATH_RE.sub(_replace_abs_path, one_line)
     if len(one_line) > _REASON_CAP:
         return one_line[:_REASON_CAP] + f"... (truncated, {len(one_line)} chars)"
     return one_line
+
+
+def _replace_abs_path(match: re.Match) -> str:
+    """Collapse a matched absolute path to ``.../<basename>`` (or ``...``)."""
+    path = match.group(0).rstrip("/")
+    basename = path.rsplit("/", 1)[-1]
+    return f".../{basename}" if basename else "..."
 
 
 def gap_from_exception(
@@ -217,7 +240,19 @@ class Isolator:
         except Exception as exc:  # noqa: BLE001 - deliberate bulkhead boundary
             self.gaps.append(gap_from_exception(producer, self.stage, exc))
             if default_factory is not None:
-                return default_factory()
+                # The fallback itself must never cascade into a crash: a
+                # skeleton writer does real work (serialization, file I/O) and
+                # could fail too. Isolate it, record a second honest gap, and
+                # fall back to the plain ``default`` so a failing bulkhead can
+                # never take the run down (the exact failure this bulkhead
+                # exists to prevent).
+                try:
+                    return default_factory()
+                except Exception as exc2:  # noqa: BLE001 - fallback bulkhead
+                    self.gaps.append(
+                        gap_from_exception(f"{producer}.fallback", self.stage, exc2)
+                    )
+                    return default
             return default
 
     def gap(self, producer: str, reason: str, *, status: str = "failed") -> None:
