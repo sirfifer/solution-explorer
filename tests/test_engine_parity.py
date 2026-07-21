@@ -24,6 +24,7 @@ import pytest
 
 from analyzer.models import to_dict
 from analyzer.multi_repo import MultiRepoOrchestrator
+from analyzer.parity import VOLATILE_KEYS as _VOLATILE_KEYS
 from analyzer.parsers import PARSERS
 from analyzer.scanner import ArchitectureScanner
 
@@ -55,14 +56,9 @@ requires_tree_sitter_tier = pytest.mark.skipif(
 
 # Top-level keys stripped before comparison: timestamps, absolute machine
 # paths, the analyzer version, and the changelog (which embeds timestamps and
-# depends on prior output).
-_VOLATILE_KEYS = (
-    "generated_at",
-    "root_path",
-    "analyzer_version",
-    "changelog",
-    "changelog_serial",
-)
+# depends on prior output). Sourced from analyzer.parity (imported at the top) so
+# this fixture guard and the golden-corpus parity check (G4) share ONE
+# volatile-field allowlist rather than each maintaining its own.
 
 
 def _deep_sort(obj):

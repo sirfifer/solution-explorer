@@ -2110,7 +2110,32 @@ here is started.
   between them. A small addition to the existing redeploy flow.
 
 ### G4: Golden-corpus full-vs-incremental parity check at scale
-- Status: TODO (candidate; uses G1 and G2)
+- Status: BUILT (2026-07-21, wt/g4-parity; uses G1 and G2). A `parity <name>`
+  subcommand on scripts/golden-corpus.py proves the incremental-equals-full
+  contract on the frozen corpus at scale, so a daily full regeneration is
+  provably unnecessary.
+- Delivered: two checks, both required to pass. (1) NO-CHANGE parity: a cold full
+  generation (store wiped) and a warm rerun (store reused) over the unchanged
+  tree must match. (2) CHANGED-FILE parity: one source file is edited, a warm
+  incremental run and a cold full run over the mutated tree must match (proving
+  the changed-file path, not just no-change); the edit is always reverted so the
+  frozen corpus is untouched. The comparison is stronger than the G1 semantic
+  diff: `analyzer/parity.py` holds the SINGLE volatile-field allowlist (reused by
+  the engine-parity fixture guard, so there is one list not two), and after
+  stripping those fields the projections are compared BYTE-for-byte with list
+  order preserved, catching an ordering regression a by-id diff would miss. A
+  mismatch is a real engine finding, never papered over: it prints the G1 diff
+  and exits 1. Validated on BOTH corpora locally: flask and fastapi each pass the
+  no-change and the changed-file variants. The changed-file variant works cleanly
+  on the shallow single-commit clone (the v2 engine is content-hash incremental,
+  so it needs no git commit or --base-sha), so it is included rather than scoped
+  out. CI: a `parity` job (both corpora) added to golden-corpus.yml as
+  workflow_dispatch only, not per-PR: it runs four analyses per corpus (about 4x
+  the `check` cost) and proves a contract that changes only with the incremental
+  engine, so on-demand keeps PR CI fast while the per-PR `check` still catches
+  projection regressions. Tests: `tests/test_golden_parity.py` (hermetic
+  normalizer + harness-wiring + run_parity exit-code tests, plus an opt-in
+  GOLDEN_CORPUS_NETWORK live parity test over both corpora). README updated.
 - Scope: on the frozen corpus, prove a cold full regeneration and a warm
   incremental run produce the same projection. The real-data proof of the
   incremental-equals-full contract, so a daily full regeneration is provably
