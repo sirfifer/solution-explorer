@@ -188,13 +188,12 @@ class ClaudeCliInvoker:
             # parse failure. NEVER retried at the transport layer (R2).
             return InvokeResult(ok=False, text="", error=f"unparseable envelope: {exc}")
         if envelope.get("is_error"):
-            status = envelope.get("api_error_status")
             return InvokeResult(
                 ok=False, text=str(envelope.get("result", "")),
                 cost_usd=float(envelope.get("total_cost_usd", 0.0) or 0.0),
                 usage=envelope.get("usage", {}) or {},
                 error="model reported error",
-                status_code=int(status) if isinstance(status, int) else None,
+                status_code=_coerce_status(envelope.get("api_error_status")),
             )
         return InvokeResult(
             ok=True,
@@ -202,6 +201,23 @@ class ClaudeCliInvoker:
             cost_usd=float(envelope.get("total_cost_usd", 0.0) or 0.0),
             usage=envelope.get("usage", {}) or {},
         )
+
+
+def _coerce_status(value: Any) -> Optional[int]:
+    """Coerce a CLI ``api_error_status`` to an int, tolerating a digit string.
+
+    The observed CLI reports an integer, but a version that emitted ``"500"`` as a
+    string would otherwise read as no-status and misclassify a transient 5xx as
+    deterministic. Accepts an int or a digit string; rejects bool (a subclass of
+    int) and anything else, returning None so the caller falls back cleanly.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
 
 
 def _envelope_error(stdout: str) -> tuple[Optional[int], Optional[str]]:
@@ -216,10 +232,9 @@ def _envelope_error(stdout: str) -> tuple[Optional[int], Optional[str]]:
         return None, None
     if not isinstance(env, dict):
         return None, None
-    status = env.get("api_error_status")
     detail = env.get("result")
     return (
-        int(status) if isinstance(status, int) else None,
+        _coerce_status(env.get("api_error_status")),
         str(detail) if detail is not None else None,
     )
 

@@ -18,7 +18,7 @@ import random
 
 import pytest
 
-from analyzer.enrich.engine import InvokeResult
+from analyzer.enrich.engine import InvokeResult, _coerce_status, _envelope_error
 from analyzer.enrich.retry import (
     RetryDecision,
     RetryingInvoker,
@@ -143,6 +143,29 @@ def test_no_false_positive_on_numeric_token_count():
     # markers only, no bare 3-digit numbers).
     r = InvokeResult(ok=False, text="", error="claude exited 1: prompt was 1500 tokens, invalid schema")
     assert classify_outcome(r) is RetryDecision.DETERMINISTIC
+
+
+# --- status coercion (adversarial review of PR #79, NIT 2) -------------------
+
+
+def test_status_coercion_accepts_int_and_digit_string():
+    # A CLI that reported api_error_status as the string "500" must still yield a
+    # transient classification, not read as no-status (which would be treated
+    # deterministic and never retried).
+    assert _coerce_status(500) == 500
+    assert _coerce_status("500") == 500
+    assert _coerce_status("  429 ") == 429
+    assert _coerce_status(True) is None  # bool is not a status
+    assert _coerce_status("not-a-number") is None
+    assert _coerce_status(None) is None
+
+
+def test_envelope_error_coerces_string_status_to_transient():
+    status, detail = _envelope_error('{"api_error_status": "503", "result": "overloaded"}')
+    assert status == 503
+    assert detail == "overloaded"
+    r = InvokeResult(ok=False, text=detail, error="claude exited 1: overloaded", status_code=status)
+    assert classify_outcome(r) is RetryDecision.TRANSIENT
 
 
 # --- RetryingInvoker behavior ------------------------------------------------
