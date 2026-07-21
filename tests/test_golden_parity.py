@@ -215,6 +215,76 @@ def test_run_parity_returns_one_on_divergence(tmp_path, monkeypatch, capsys):
 
 
 # ---------------------------------------------------------------------------
+# adversarial-review hardening (PR #77 findings)
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_import_refuses_a_foreign_cached_module(monkeypatch, tmp_path):
+    # Finding 1: the sys.path guard cannot beat an already-populated sys.modules
+    # cache. Simulate a hosting process that imported a FOREIGN analyzer before
+    # the harness loaded (both the package and its parity submodule are foreign,
+    # which is what that scenario produces): the harness must refuse loudly
+    # rather than silently compare with someone else's allowlist.
+    import types
+
+    foreign_dir = tmp_path / "elsewhere" / "analyzer"
+    fake_pkg = types.ModuleType("analyzer")
+    fake_pkg.__file__ = str(foreign_dir / "__init__.py")
+    fake_pkg.__path__ = [str(foreign_dir)]
+    fake_mod = types.ModuleType("analyzer.parity")
+    fake_mod.__file__ = str(foreign_dir / "parity.py")
+    fake_mod.normalize_for_parity = lambda p: "DECOY"
+    fake_pkg.parity = fake_mod
+    monkeypatch.setitem(sys.modules, "analyzer", fake_pkg)
+    monkeypatch.setitem(sys.modules, "analyzer.parity", fake_mod)
+    with pytest.raises(RuntimeError, match="outside this checkout"):
+        gc._normalize_for_parity()
+
+
+def test_normalize_import_accepts_this_checkout():
+    fn = gc._normalize_for_parity()
+    assert callable(fn)
+    assert fn({"a": 1}) == fn({"a": 1})  # the real normalizer, working
+
+
+def test_fetch_fast_path_restores_a_poisoned_tracked_file(tmp_path):
+    # Finding 2: a hard kill between the parity mutation write and its finally
+    # restore leaves a stray edit in a tracked file; the pin check alone would
+    # then serve the poisoned tree to every later non-force run. The fast path
+    # must restore tracked content while leaving untracked files (the analyzer
+    # store) alone.
+    cache = tmp_path / "cache"
+    src = cache / "demo"
+    src.mkdir(parents=True)
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(src), *args], check=True,
+                       capture_output=True, text=True)
+
+    git("init", "-q")
+    git("config", "user.email", "t@t")
+    git("config", "user.name", "t")
+    (src / "app.py").write_text("x = 1\n", encoding="utf-8")
+    git("add", "app.py")
+    git("commit", "-q", "-m", "pin")
+    head = subprocess.run(
+        ["git", "-C", str(src), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    # Poison a tracked file (the simulated interrupted mutation) and add an
+    # untracked file (the simulated analyzer store) that must survive.
+    (src / "app.py").write_text("x = 1\n# poisoned synthetic edit\n", encoding="utf-8")
+    (src / "untracked-store.db").write_text("keep me", encoding="utf-8")
+
+    corpus = {"name": "demo", "repo": "unused", "commit": head, "exclude": []}
+    out = gc.fetch_corpus(corpus, cache_dir=cache)  # fast path: HEAD == pin
+    assert out == src
+    assert (src / "app.py").read_text(encoding="utf-8") == "x = 1\n"  # restored
+    assert (src / "untracked-store.db").exists()  # untracked state untouched
+
+
+# ---------------------------------------------------------------------------
 # opt-in live parity against the real corpora
 # ---------------------------------------------------------------------------
 

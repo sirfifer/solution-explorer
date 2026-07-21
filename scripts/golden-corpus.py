@@ -187,6 +187,28 @@ def fetch_corpus(
         except subprocess.CalledProcessError:
             head = ""
         if head == commit:
+            # The pin check alone is not enough: a hard kill (SIGKILL, power
+            # loss) mid-run can leave a stray edit in a TRACKED file (for
+            # example the parity command's synthetic edit before its finally
+            # restore ran), and every later non-force run would then analyze
+            # the poisoned tree (adversarial review of PR #77, finding 2).
+            # Restore any modified tracked file to the pinned content;
+            # untracked files (the gitignored analyzer store) are untouched,
+            # and the managed .gitignore excludes block is reapplied after.
+            try:
+                dirty = subprocess.run(
+                    ["git", "-C", str(src), "status", "--porcelain",
+                     "--untracked-files=no"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout.strip()
+            except subprocess.CalledProcessError:
+                dirty = ""
+            if dirty:
+                subprocess.run(
+                    ["git", "-C", str(src), "checkout", "--", "."], check=True
+                )
             _apply_excludes(src, corpus.get("exclude", []))
             return src
 
@@ -269,10 +291,26 @@ def render_diff_text(diff: dict) -> str:
 def _normalize_for_parity():
     """Import this checkout's analyzer.parity.normalize_for_parity (see sys.path
     note above), so the parity compare uses the SAME volatile-field allowlist as
-    the engine-parity fixture guard rather than a second, drifting copy."""
-    from analyzer.parity import normalize_for_parity
+    the engine-parity fixture guard rather than a second, drifting copy.
 
-    return normalize_for_parity
+    The sys.path guard wins the import RESOLUTION, but it cannot beat an already
+    populated sys.modules cache: a hosting process that imported a foreign
+    `analyzer` before loading this harness would silently hand us that module
+    (adversarial review of PR #77, finding 1). Unreachable in every shipped path
+    (the CLI is a fresh process; CI installs the checkout), but verify rather
+    than promise: refuse loudly if the resolved module lives outside this repo.
+    """
+    import analyzer.parity as parity_mod
+
+    mod_file = Path(getattr(parity_mod, "__file__", "")).resolve()
+    if not mod_file.is_relative_to(REPO_ROOT):
+        raise RuntimeError(
+            f"analyzer.parity resolved to {mod_file}, outside this checkout "
+            f"({REPO_ROOT}); a foreign analyzer module is cached in sys.modules. "
+            "Run the harness in a fresh process so the parity compare uses this "
+            "repo's volatile-field allowlist."
+        )
+    return parity_mod.normalize_for_parity
 
 
 def _compare_projections(a_path: Path, b_path: Path) -> Optional[dict]:

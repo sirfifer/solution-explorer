@@ -57,6 +57,13 @@ def canonical(projection: dict) -> str:
     ``sort_keys=True`` makes dict key order irrelevant; list order is preserved so
     a real ordering drift is not hidden. ``default=str`` mirrors the projection
     writers so any stray non-JSON scalar serializes the same way.
+
+    Caveat for IN-MEMORY callers: ``default=str`` and JSON key coercion mean two
+    in-memory dicts that differ only in a non-JSON way (distinct objects with an
+    equal ``str()``, or an int key vs its string form) canonicalize identically.
+    That is deliberate and safe for the parity check, whose inputs both come from
+    ``json.load`` (which cannot produce such values), but do not rely on this
+    function to distinguish arbitrary in-memory objects.
     """
     return json.dumps(projection, sort_keys=True, indent=2, default=str) + "\n"
 
