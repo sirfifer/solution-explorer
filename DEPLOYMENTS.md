@@ -58,6 +58,52 @@ Making it cache the v2 fact store for true incremental is a deferred follow-up
 
 - **Upstream vs downstream `live-monitor.yml` divergence (F-PL-8).** The UnaMentis `live-monitor.yml` has diverged substantially from the upstream template: it uses the pre-built-JSON path, has no incremental mode, and has no R2/worker steps. Upstream template changes no longer describe what is deployed downstream. Downstream is green; do not assume the upstream template is the source of truth for a given install. When changing the template, verify the effect against the actual downstream workflow files rather than the template alone. Under the v2 default, `live-monitor.yml` runs correctly but its `--incremental`/`--baseline` flags are no-ops, so it re-scans cold each run (see the Analysis engine section above).
 
+## Blue/green projection diff (two-slot health check, card G3)
+
+Every build should be comparable to the one before it. On a deploy, the prior
+projection (blue) is diffed against the newly built one (green) with the G1
+projection-diff tool (`scripts/blue-green-diff.py`), and the report is written to
+the GitHub job step summary plus a `projection-diff.json` run artifact. It is a
+HEALTH CHECK, not a gate: the analyzed project moves on its own, so a non-empty
+diff mixes engine changes with project changes and must never block the deploy.
+`blue-green-diff.py` always exits 0; a missing, unreachable, or malformed blue
+degrades to a loud honest note in the summary and the deploy continues.
+
+- **Dogfood (this repo).** Automatic, no configuration. VISION.md keeps the
+  self-repo dogfood site LOCAL (no public deploy), so git is the retention slot:
+  the committed `architecture.json` is blue and the freshly generated
+  `viewer/public/architecture.json` is green. The `Blue/green projection diff
+  (dogfood)` step in `.github/workflows/architecture-viz.yml` runs on every push,
+  PR, and dispatch and uploads the `projection-diff` artifact.
+
+- **Demo (downstream consumers of `action.yml`).** Opt-in, one line. Add the
+  `diff-against-url` input pointing at your currently-live projection JSON and
+  the action diffs the just-built projection against it:
+
+  ```yaml
+  - uses: sirfifer/solution-explorer@main
+    with:
+      config: solution-explorer.json
+      deploy-to: cloudflare
+      diff-against-url: https://<cf-project>.pages.dev/architecture.json
+      # ... existing cloudflare-* inputs ...
+  ```
+
+  Split-mode installs point it at the manifest instead (for example
+  `https://<cf-project>.pages.dev/architecture/manifest.json`); the diff then
+  runs at manifest level. Default (unset) skips the step entirely, so existing
+  consumers see zero behavior change.
+
+  HONEST OPEN EDGE: the demo side is NOT yet verified end to end. The downstream
+  UnaMentis deploy is currently broken on an owner-gated Cloudflare token
+  (`DEPLOY_TOKEN` / the downstream workflows), so adding `diff-against-url` to a
+  live demo install and confirming a real blue-versus-green demo diff is gated on
+  the owner fixing that token. Until then the demo path is exercised only by the
+  hermetic tests (`tests/test_blue_green_diff.py`, including the URL-fetch branch)
+  and is documented here for one-line adoption once the token is restored. The
+  dogfood side IS proven end to end (a real committed-baseline-versus-current
+  diff).
+
 ## How Redeployment Works
 
 Downstream deploys are **automatic**. When changes are pushed to `sirfifer/solution-explorer` main:

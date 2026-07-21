@@ -2105,9 +2105,59 @@ here is started.
   diversity options.
 
 ### G3: Two-slot retention for demo and dogfood deploys
-- Status: TODO (candidate)
-- Scope: keep the prior build (blue) when promoting the new one (green), run G1
-  between them. A small addition to the existing redeploy flow.
+- Status: BUILT (2026-07-21, wt/g3-two-slot; uses G1). `scripts/blue-green-diff.py`
+  wraps the G1 projection-diff as a NON-BLOCKING deploy-time health check: it
+  loads the prior (blue) and new (green) projections, writes the G1 delta to the
+  GitHub step summary, and uploads the full JSON diff as a `projection-diff` run
+  artifact. It ALWAYS exits 0; a missing, unreachable, or malformed blue degrades
+  to a loud honest note in the summary and the deploy continues, so the diff
+  infrastructure can never break a deploy.
+- Delivered: `--blue` accepts EITHER a local path OR an http/https/file URL (blue
+  is read or fetched accordingly, stdlib urllib, 30s timeout); `--new` is the
+  local green projection; `--summary-out` appends markdown (pass
+  $GITHUB_STEP_SUMMARY), `--json-out` writes the deterministic artifact. The diff
+  body is the G1 delta (single source of truth, loaded by importlib-by-path like
+  the enrich scorer), so it stays byte-deterministic; the markdown header adds no
+  timestamps. Wiring: (1) DOGFOOD `.github/workflows/architecture-viz.yml`
+  `generate` job gained a `Blue/green projection diff (dogfood)` step (after the
+  AI-enhancement merge) plus a conditional `Upload Projection Diff`, hash-pinned
+  to the same v4.6.2 upload-artifact the workflow already uses. (2) DEMO
+  `action.yml` gained an OPT-IN `diff-against-url` input (default empty = skipped,
+  zero behavior change for existing consumers) and the matching diff + upload
+  steps using the file's own `@v4` action convention.
+- CORRECTION to the card premise (verified, not assumed): the card said fetch
+  blue from a "live dogfood URL". There is none. VISION.md keeps the self-repo
+  dogfood site LOCAL (no public deploy), and the workflow `deploy` job is
+  currently SKIPPED (its `if:` gates on `vars.CLOUDFLARE_PROJECT_NAME`, which is
+  unset). So git is the dogfood's native retention slot: the committed
+  `architecture.json` (the AI-enhanced solution-explorer baseline) is blue and the
+  freshly generated `viewer/public/architecture.json` is green. The URL-fetch
+  capability still exists and is tested; the DEMO side uses it (the downstream
+  installs do deploy to Cloudflare, whose prior-deployment URL is a fetchable
+  blue).
+- Acceptance proof (dogfood, real, pre-merge): a local end-to-end run diffed the
+  committed baseline (name solution-explorer, analyzer 1.0.0, 23 components)
+  against a fresh current-engine generation (analyzer 1.2.0, 81 components) and
+  produced the expected large health-check delta (+58 components; changes across
+  all 12 diffed sections) with a valid JSON artifact. The dogfood step also runs
+  on the post-merge main push (the `generate` job runs unconditionally), so the
+  step summary carries a real blue-versus-green diff every build.
+- Tests: `tests/test_blue_green_diff.py`, 12 hermetic tests (local files and
+  file:// URLs only, never the live network). The two contracts locked in:
+  degrade-loudly-and-exit-0 (missing/unreachable/malformed blue, missing green)
+  and correct-summary-plus-deterministic-JSON on a real diff, plus determinism,
+  append-not-overwrite, and URL classification. Both golden legs stay green
+  (analyzer output is untouched). EXTRACT_TIER NOT bumped: G3 is a deploy-time
+  reporting tool over already-projected output; it adds no extracted signal kind,
+  so the extraction content-hash cache key is untouched.
+- HONEST OPEN EDGES: (1) the DEMO side is not verified end to end. The downstream
+  UnaMentis deploy is broken on an owner-gated Cloudflare token, so adding
+  `diff-against-url` to a live install and confirming a real demo diff is gated on
+  the owner restoring the token; documented for one-line adoption in
+  DEPLOYMENTS.md. (2) The dogfood workflow `deploy` job stays owner-gated off
+  (no `CLOUDFLARE_PROJECT_NAME`), consistent with VISION's local-only dogfood; the
+  diff runs in the `generate` job instead, so it is unaffected. Enabling a public
+  dogfood deploy is an owner decision, not taken here.
 
 ### G4: Golden-corpus full-vs-incremental parity check at scale
 - Status: BUILT (2026-07-21, wt/g4-parity; uses G1 and G2). A `parity <name>`
