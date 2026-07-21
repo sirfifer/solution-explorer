@@ -172,3 +172,94 @@ def test_gap_reaches_the_monolith_projection(tmp_path, monkeypatch):
     doc = json.loads(out.read_text(encoding="utf-8"))
     assert "gaps" in doc
     assert any(g["producer"] == "derive.relationships" for g in doc["gaps"])
+
+
+# ---------------------------------------------------------------------------
+# wave 5: cross-reference and count-consistency postconditions
+# ---------------------------------------------------------------------------
+#
+# These would NOT surface as a gap against the pre-wave-5 contract (the checks
+# did not exist), so each is a fail-before proof. The contract was validated to
+# produce ZERO gaps on flask, fastapi, the storyboard fixture, and the real iOS
+# demo, so a healthy run never trips it (byte parity preserved, proven by the
+# golden gate and the byte-parity suites).
+
+
+def _assemble_then(monkeypatch, mutate):
+    """Wrap the real _assemble, applying ``mutate(arch)`` to the result."""
+    real_assemble = derive_pipeline._assemble
+
+    def broken_assemble(d, root_name, root_path, desc):
+        arch = real_assemble(d, root_name, root_path, desc)
+        mutate(arch)
+        return arch
+
+    monkeypatch.setattr(derive_pipeline, "_assemble", broken_assemble)
+
+
+def _contract_gap_reason(arch: dict):
+    return next(
+        (g["reason"] for g in arch.get("gaps", [])
+         if g["producer"] == "derive.output-contract"),
+        None,
+    )
+
+
+def test_duplicate_component_id_surfaces_as_gap(tmp_path, monkeypatch):
+    _build_repo(tmp_path)
+    store = _extract(tmp_path)
+
+    def mutate(arch):
+        existing = arch["components"][0]["id"]
+        arch["components"].append({"id": existing, "children": []})
+
+    _assemble_then(monkeypatch, mutate)
+    _, arch = derive_all(store, "sample", root_path=str(tmp_path))  # must NOT raise
+    reason = _contract_gap_reason(arch)
+    assert reason is not None and "duplicate" in reason
+    store.close()
+
+
+def test_unresolved_relationship_endpoint_surfaces_as_gap(tmp_path, monkeypatch):
+    _build_repo(tmp_path)
+    store = _extract(tmp_path)
+
+    def mutate(arch):
+        # A synthetic edge to a ghost target, with the count kept consistent so
+        # the earlier total_relationships check passes and the cross-ref check is
+        # the one that fires.
+        real_id = arch["components"][0]["id"]
+        arch["relationships"].append(
+            {"source": real_id, "target": "ghost-component-id", "type": "calls"}
+        )
+        arch["stats"]["total_relationships"] = len(arch["relationships"])
+
+    _assemble_then(monkeypatch, mutate)
+    _, arch = derive_all(store, "sample", root_path=str(tmp_path))  # must NOT raise
+    reason = _contract_gap_reason(arch)
+    assert reason is not None and "resolve" in reason
+    store.close()
+
+
+def test_inflated_total_components_surfaces_as_gap(tmp_path, monkeypatch):
+    _build_repo(tmp_path)
+    store = _extract(tmp_path)
+
+    def mutate(arch):
+        arch["stats"]["total_components"] = 999999  # far above the distinct tree ids
+
+    _assemble_then(monkeypatch, mutate)
+    _, arch = derive_all(store, "sample", root_path=str(tmp_path))  # must NOT raise
+    reason = _contract_gap_reason(arch)
+    assert reason is not None and "total_components" in reason
+    store.close()
+
+
+def test_healthy_run_passes_the_wave5_contract(tmp_path):
+    # The other half of the fail-before: a real, unmutated run trips none of the
+    # new checks, so it records no output-contract gap (and no gaps key at all).
+    _build_repo(tmp_path)
+    store = _extract(tmp_path)
+    _, arch = derive_all(store, "sample", root_path=str(tmp_path))
+    assert "gaps" not in arch
+    store.close()
