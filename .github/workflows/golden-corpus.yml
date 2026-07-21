@@ -15,6 +15,19 @@ on:
       - "scripts/golden-corpus.py"
       - "scripts/projection-diff.py"
       - "tests/golden/**"
+      - "pyproject.toml"
+      - ".github/workflows/golden-corpus.yml"
+  # Re-verify main on push so a merged change that moves the projection (an
+  # engine change or a dependency bump) cannot sit on main unchecked.
+  push:
+    branches: [main]
+    paths:
+      - "analyze.py"
+      - "analyzer/**"
+      - "scripts/golden-corpus.py"
+      - "scripts/projection-diff.py"
+      - "tests/golden/**"
+      - "pyproject.toml"
       - ".github/workflows/golden-corpus.yml"
   workflow_dispatch:
 
@@ -43,8 +56,11 @@ jobs:
           key: pip-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: pip-${{ runner.os }}-
 
-      - name: Install dependencies
-        run: pip install -e ".[all,dev]"
+      - name: Install dependencies (frozen golden toolchain)
+        # The constraints file pins the tree-sitter grammars and rules loader to
+        # the exact versions that cut the baseline, so a grammar release cannot
+        # move Flask's parse tree and produce a false drift.
+        run: pip install -e ".[all,dev]" -c tests/golden/constraints.txt
 
       - name: Check Flask against the approved baseline
         run: python3 scripts/golden-corpus.py check flask --force
