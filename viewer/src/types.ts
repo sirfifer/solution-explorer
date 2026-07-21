@@ -827,6 +827,17 @@ export interface RepositoryInfo {
   default_branch?: string | null;
 }
 
+// Honest-gap record for one producer unit (card R1). When a derive pass, an
+// emitter, or another producer cannot hand off a whole result, it records one of
+// these instead of crashing the run. `status` mirrors the coverage-ledger
+// disposition vocabulary ("failed"). Deterministic (same input, same gap).
+export interface ProducerGap {
+  producer: string;
+  stage: string;
+  status: string;
+  reason: string;
+}
+
 export interface Architecture {
   name: string;
   description: string;
@@ -889,6 +900,12 @@ export interface Architecture {
   };
   changelog?: ChangelogEntry[];
   changelog_serial?: number;
+  // Producer honest gaps (card R1). Optional and omitted entirely on a healthy
+  // run (a run with no gaps adds no bytes, preserving byte parity), so old
+  // datasets and clean runs have no key. When present, each entry names a
+  // producer that could not hand off a complete result and why; the viewer can
+  // surface these as honest gaps and otherwise degrades around them.
+  gaps?: ProducerGap[];
 }
 
 // ---------------------------------------------------------------------------
