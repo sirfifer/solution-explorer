@@ -414,6 +414,37 @@ def test_supply_chain_per_ecosystem_delta():
     assert "pypi" not in sc["by_ecosystem"]  # unchanged, not reported
 
 
+def test_supply_chain_nonstring_ecosystem_degrades_not_crash():
+    # A dependency carrying a non-string ecosystem (int, or an unhashable dict
+    # or list) is malformed input; the per-ecosystem count must degrade to the
+    # "(unknown)" bucket, never crash the diff. Regression for the Card 1
+    # adversarial-review finding. The fix lives in _counts_by, so it also
+    # hardens the shared relationship/finding by-kind paths (below).
+    old = _base_projection()
+    for bad in (5, {"nested": 1}, ["npm"], None, True):
+        new = _base_projection()
+        new["supply_chain"]["dependencies"] = [
+            {"id": "x", "ecosystem": bad},
+            {"id": "y", "ecosystem": "npm"},
+        ]
+        diff = pd.diff_projections(old, new)  # must not raise
+        assert "supply_chain" in diff["sections"]
+
+
+def test_mixed_type_kind_keys_degrade_not_crash():
+    # _counts_by must not crash when a relationship type or finding kind is a
+    # non-string leaf on one side and a string on the other (the union sort
+    # would raise). Pre-existing shared-path crash surfaced by the Card 1 review;
+    # locked here alongside the ecosystem fix.
+    old = _base_projection()
+    new = _base_projection()
+    new["relationships"] = [{"source": "root/api", "target": "root/web", "type": 7}]
+    new["findings"] = [{"id": "f:x", "kind": 9}]
+    diff = pd.diff_projections(old, new)  # must not raise
+    assert "relationships" in diff["sections"]
+    assert "findings" in diff["sections"]
+
+
 def test_concerns_added_and_removed():
     old = _base_projection()
     new = _base_projection()

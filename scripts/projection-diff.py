@@ -149,12 +149,21 @@ def _index_by(items: Any, keyfn: Callable[[dict], Optional[str]]) -> dict[str, d
 
 
 def _counts_by(items: Any, keyfn: Callable[[dict], Optional[str]]) -> dict[str, int]:
-    """Count a list of dicts grouped by a string key (deterministic)."""
+    """Count a list of dicts grouped by a string key (deterministic).
+
+    A key that is missing or is not a non-empty string degrades to a stable
+    ``(unknown)`` bucket. This keeps every group key hashable and mutually
+    sortable, so a malformed projection (a non-string, or an unhashable dict or
+    list, where a string key is expected) is counted rather than crashing the
+    diff: the ``sorted(set | set)`` in ``_merge_count_delta`` would otherwise
+    raise on mixed-type keys. Same degrade-never-crash contract as ``_as_dict``.
+    """
     out: dict[str, int] = {}
     for item in items or []:
         if not isinstance(item, dict):
             continue
-        key = keyfn(item) or "(unknown)"
+        raw = keyfn(item)
+        key = raw if isinstance(raw, str) and raw else "(unknown)"
         out[key] = out.get(key, 0) + 1
     return out
 
