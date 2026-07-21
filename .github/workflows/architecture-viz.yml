@@ -110,6 +110,33 @@ jobs:
               --strict
           fi
 
+      - name: Blue/green projection diff (dogfood)
+        # Two-slot health check (card G3, REGRESSION-STRATEGY.md). VISION.md keeps
+        # the self-repo dogfood site LOCAL (no public deploy), so there is no live
+        # URL to fetch: git is the native retention slot. The committed
+        # architecture.json is the prior (blue) projection and the freshly
+        # generated viewer/public/architecture.json (post AI-enhancement merge) is
+        # the new (green) one. It is a HEALTH CHECK, not a gate (the analyzed repo
+        # moves on its own), so blue-green-diff.py ALWAYS exits 0: a missing or
+        # unreadable blue degrades loudly in the step summary and never fails CI.
+        run: |
+          python3 scripts/blue-green-diff.py \
+            --blue architecture.json \
+            --new viewer/public/architecture.json \
+            --label dogfood \
+            --summary-out "$GITHUB_STEP_SUMMARY" \
+            --json-out projection-diff.json
+
+      - name: Upload Projection Diff
+        # Only present when the diff succeeded (blue and green both loaded); on a
+        # loud degrade no JSON is written and this step is skipped.
+        if: hashFiles('projection-diff.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: projection-diff
+          path: projection-diff.json
+          retention-days: 30
+
       - name: Install Viewer Dependencies
         working-directory: viewer
         run: npm ci

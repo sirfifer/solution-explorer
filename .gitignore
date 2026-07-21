@@ -22,6 +22,10 @@ packages/cli/dist/
 # architecture.json` and re-run /ai-assist to restore AI enhancements.
 .arch-baseline/
 
+# Blue/green health-check artifact (card G3). Written by scripts/blue-green-diff.py
+# on a local dogfood run; uploaded as a CI artifact, never committed.
+projection-diff.json
+
 # v2 engine (--engine v2) persistent fact store; the incremental baseline lives
 # here by default (<root>/.solution-explorer/index.db). Generated, never tracked.
 # The store stays ignored via .solution-explorer/.gitignore (sidecar); the

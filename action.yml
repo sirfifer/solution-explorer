@@ -45,6 +45,10 @@ inputs:
     description: 'Name for the uploaded build artifact. Override when a caller repo also runs the reference workflow to avoid a collision.'
     required: false
     default: 'architecture-viz'
+  diff-against-url:
+    description: 'Opt-in two-slot health check (card G3). When set to the URL of your currently-live (blue) projection JSON (for example https://<cf-project>.pages.dev/architecture.json, or the split manifest.json), the just-built (green) projection is diffed against it and the report is written to the job step summary plus a projection-diff.json artifact. Non-blocking: a fetch or diff failure never fails the deploy. Default empty = skipped, zero behavior change.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -211,6 +215,46 @@ runs:
       with:
         name: ${{ inputs.artifact-name }}
         path: .solution-explorer/viewer/dist
+        retention-days: 30
+
+    - name: Blue/green projection diff (demo)
+      # Opt-in two-slot health check (card G3). When diff-against-url is set,
+      # fetch the currently-live (blue) projection and diff the just-built (green)
+      # one against it, surfacing the report in the step summary. Non-blocking:
+      # blue-green-diff.py always exits 0, so a fetch or diff failure never breaks
+      # the deploy. Default (empty) skips this step, so existing consumers see
+      # zero behavior change.
+      if: inputs.diff-against-url != ''
+      shell: bash
+      env:
+        DIFF_AGAINST_URL: ${{ inputs.diff-against-url }}
+      run: |
+        DIST=".solution-explorer/viewer/dist"
+        if [ -f "$DIST/architecture.json" ]; then
+          GREEN="$DIST/architecture.json"
+        elif [ -f "$DIST/architecture/manifest.json" ]; then
+          GREEN="$DIST/architecture/manifest.json"
+        else
+          {
+            echo "## Blue/green projection diff (demo)"
+            echo ""
+            echo "**BLUE/GREEN DIFF UNAVAILABLE:** no built projection found under $DIST; skipping (non-blocking)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+        python3 .solution-explorer/scripts/blue-green-diff.py \
+          --blue "$DIFF_AGAINST_URL" \
+          --new "$GREEN" \
+          --label demo \
+          --summary-out "$GITHUB_STEP_SUMMARY" \
+          --json-out projection-diff.json
+
+    - name: Upload Projection Diff (demo)
+      if: inputs.diff-against-url != '' && hashFiles('projection-diff.json') != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: projection-diff
+        path: projection-diff.json
         retention-days: 30
 
     - name: Deploy to Cloudflare Pages
