@@ -259,7 +259,7 @@ runs:
 
     - name: Deploy to Cloudflare Pages
       if: inputs.deploy-to == 'cloudflare'
-      uses: cloudflare/wrangler-action@v3
+      uses: cloudflare/wrangler-action@v4
       # cloudflare-project-name is interpolated into wrangler-action's `command`,
       # which is not a `run:` shell block. wrangler-action runs the command via
       # @actions/exec (no shell), so `$VAR` indirection would be passed literally
