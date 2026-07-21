@@ -283,6 +283,46 @@ def test_committed_flask_baseline_exists_and_matches_identity():
         assert section in data
 
 
+_FASTAPI_TRANSLATED_DOCS = (
+    "de", "es", "fr", "hi", "ja", "ko", "pt", "ru", "tr", "uk", "zh", "zh-hant",
+)
+
+
+def test_committed_fastapi_lock_is_valid():
+    corpus = gc.load_corpus("fastapi")  # real tests/golden/fastapi/corpus.lock
+    assert corpus["repo"] == "https://github.com/tiangolo/fastapi.git"
+    assert corpus["ref"] == "0.139.2"
+    # A pin must be a full 40-char SHA, not a mutable tag.
+    assert len(corpus["commit"]) == 40
+    assert all(c in "0123456789abcdef" for c in corpus["commit"])
+    # The FastAPI corpus excludes every translated docs directory (docs/en, the
+    # canonical English docs, stays scanned) and docs_src. Dropping an exclude
+    # would silently re-include churny translations or version-variant tutorial
+    # near-duplicates and move the baseline.
+    excludes = set(corpus["exclude"])
+    for lang in _FASTAPI_TRANSLATED_DOCS:
+        assert f"docs/{lang}/" in excludes
+    assert "docs_src/" in excludes
+    assert "docs/en/" not in excludes  # English docs must remain scanned
+
+
+def test_committed_fastapi_baseline_exists_and_matches_identity():
+    base = gc.baseline_path("fastapi")
+    assert base.exists(), "the approved FastAPI baseline must be committed"
+    data = json.loads(base.read_text(encoding="utf-8"))
+    assert data["name"] == "fastapi"
+    for section in ("components", "relationships", "findings", "coverage"):
+        assert section in data
+    # The excludes held at generation time: no translated-doc or docs_src file
+    # landed in the projection, and English docs did. This is the real proof the
+    # exclude mechanism worked, not just that it is configured in the lock.
+    paths = [f.get("path", "") for f in data.get("files", []) if isinstance(f, dict)]
+    translated = tuple(f"docs/{lang}/" for lang in _FASTAPI_TRANSLATED_DOCS)
+    assert not any(p.startswith(translated) for p in paths)
+    assert not any(p.startswith("docs_src/") for p in paths)
+    assert any(p.startswith("docs/en/") for p in paths)
+
+
 # ---------------------------------------------------------------------------
 # Opt-in live network test (the real fetch + generate + check)
 # ---------------------------------------------------------------------------
@@ -291,11 +331,12 @@ def test_committed_flask_baseline_exists_and_matches_identity():
 @pytest.mark.slow
 @pytest.mark.skipif(
     os.environ.get("GOLDEN_CORPUS_NETWORK") != "1",
-    reason="set GOLDEN_CORPUS_NETWORK=1 to run the live Flask fetch+generate+check",
+    reason="set GOLDEN_CORPUS_NETWORK=1 to run the live fetch+generate+check",
 )
-def test_live_flask_check_matches_baseline(tmp_path):
+@pytest.mark.parametrize("corpus", ["flask", "fastapi"])
+def test_live_check_matches_baseline(corpus, tmp_path):
     res = subprocess.run(
-        [sys.executable, str(HARNESS), "check", "flask", "--force"],
+        [sys.executable, str(HARNESS), "check", corpus, "--force"],
         capture_output=True,
         text=True,
     )
