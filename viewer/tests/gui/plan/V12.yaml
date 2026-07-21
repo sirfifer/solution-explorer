@@ -1,0 +1,18 @@
+# V12 resilience (vector V12): a malformed dataset degrades to a legible
+# message, never a blank page. The design's second induced fault (an
+# ErrorBoundary-caught render crash) has no user-reachable trigger in the
+# production build; that is a recorded waiver (plan/waivers.yaml) and a
+# design discrepancy, not a silent skip.
+# Executed against the running UI on 2026-07-21.
+
+- id: V12.1
+  vector: resilience
+  viewport: desktop
+  dataset: malformed
+  steps:
+    - "Load the app for dataset 'malformed' and wait up to 15 seconds for the page to settle"
+  pass_when:
+    - "a legible error screen is shown reading 'Architecture Data Not Found' with the parse error and recovery guidance (run the analyzer)"
+    - "the page is not blank and nothing is stuck on a loading spinner"
+    - "no unexpected console or network errors during the flow (the two boot probes 404 by design on this dataset)"
+  evidence: screenshot+console

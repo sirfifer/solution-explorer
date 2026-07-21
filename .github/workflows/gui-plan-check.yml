@@ -35,8 +35,5 @@ jobs:
 
       - run: pip install pyyaml
 
-      # --bootstrap-ok exists only for the window between the harness PR and
-      # the plan PR: it downgrades the no-plan-files-at-all state to a loud
-      # pass. The PR that lands the plan removes the flag.
       - name: Plan completeness check
-        run: python3 scripts/gui-plan-check.py --bootstrap-ok
+        run: python3 scripts/gui-plan-check.py

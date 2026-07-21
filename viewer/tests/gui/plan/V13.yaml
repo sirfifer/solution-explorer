@@ -1,0 +1,45 @@
+# V13 review and annotate (vector V13): review mode toggles; an annotation
+# is created, edited, deleted; a selection set is created and populated;
+# state survives a full reload (localStorage keyed by architecture
+# identity). Desktop here; the phone half of this vector is V8.8, which
+# walks to the finding that review mode is unreachable at 390px.
+# Executed against the running UI on 2026-07-21.
+
+- id: V13.1
+  vector: review-annotate
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the header button labeled 'Review'"
+    - "Click the component node titled 'extract'"
+    - "Type 'GUI plan walk annotation' into the feedback input"
+    - "Click the button labeled 'Add Feedback'"
+    - "Click the header button titled 'View all annotations'"
+    - "Click the edit control on the annotation"
+    - "Type 'GUI plan walk annotation EDITED' into the feedback input"
+    - "Click the button labeled 'Update Feedback'"
+    - "Reload the page"
+    - "Click the header button labeled 'Review'"
+    - "Click the header button titled 'View all annotations'"
+    - "Click the delete control on the annotation"
+    - "Click the header button labeled 'Review'"
+    - "Click the component node titled 'extract'"
+    - "Click the button labeled '+ Set'"
+    - "Click the header button labeled 'Review'"
+  pass_when:
+    - "step 3: review mode activates with the banner 'Review Mode: click any component to add feedback'"
+    - "step 6: the annotation saves and the Review button shows a count of 1"
+    - "step 7: the review summary lists the annotation under the extract component with edit and delete controls"
+    - "step 10: the edited text replaces the original in the summary"
+    - "step 11: after a full reload the annotation count of 1 survives (persistence keyed by architecture identity)"
+    - "step 14: deleting removes the annotation and the summary reads 0 annotations"
+    - "step 17: a selection set is created; the review summary's Selection sets section lists 'Manual selection' with 1 member and an export affordance"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - component:ReviewModeButton
+    - component:AnnotationInput
+    - component:ReviewSummary
+    - component:SelectionSetsSection

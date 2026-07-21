@@ -17,6 +17,9 @@ Subcommands:
   inject-gaps <file>    Transform: add a deterministic, honestly-labeled
                         producer-gap record (R1 `gaps` key) to a monolith
                         projection, in place.
+  write-malformed <file>  Write a deterministic syntactically-invalid
+                        architecture.json (V12: the viewer must degrade to a
+                        legible message, never a blank page).
   assemble <key>        Copy viewer/dist to viewer/tests/gui/.serve/<key>/,
                         remove the architecture data baked in from
                         viewer/public, and overlay the staged payload. Prints
@@ -170,6 +173,18 @@ def cmd_inject_gaps(path: Path) -> int:
     return 0
 
 
+# Deterministic invalid JSON for the malformed dataset (V12). Truncated mid
+# object so JSON.parse fails with a stable message shape.
+MALFORMED_PAYLOAD = '{"name": "malformed-fixture", "components": [ {"id": "x", '
+
+
+def cmd_write_malformed(path: Path) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(MALFORMED_PAYLOAD, encoding="utf-8")
+    print(f"[gui-datasets] wrote deterministic malformed JSON to {path}")
+    return 0
+
+
 def cmd_assemble(key: str, dist: Path) -> int:
     _dataset(key)  # validates the key
     staging = STAGING_ROOT / key
@@ -210,6 +225,8 @@ def main(argv: list[str] | None = None) -> int:
     p_strip.add_argument("file", type=Path)
     p_gaps = sub.add_parser("inject-gaps")
     p_gaps.add_argument("file", type=Path)
+    p_mal = sub.add_parser("write-malformed")
+    p_mal.add_argument("file", type=Path)
     p_asm = sub.add_parser("assemble")
     p_asm.add_argument("key")
     p_asm.add_argument("--dist", type=Path, default=DIST_DIR)
@@ -223,6 +240,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_strip_ai(args.file)
     if args.command == "inject-gaps":
         return cmd_inject_gaps(args.file)
+    if args.command == "write-malformed":
+        return cmd_write_malformed(args.file)
     if args.command == "assemble":
         return cmd_assemble(args.key, args.dist)
     return 2

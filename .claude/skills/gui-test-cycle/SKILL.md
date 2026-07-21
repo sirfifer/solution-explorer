@@ -63,9 +63,12 @@ cd viewer && npm ci && npm run build && cd ..
 # 3. Assemble the serve root (dist copy + dataset payload, baked data removed).
 python3 scripts/gui-datasets.py assemble dogfood
 
-# 4. Serve. One port PER SHARD (see isolation below). Ports 41NN by vector
-#    number, e.g. V1 -> 4101, V13 -> 4113.
-python3 -m http.server 4101 --directory viewer/tests/gui/.serve/dogfood &
+# 4. Serve. One port PER SHARD-DATASET PAIR (see isolation below): port
+#    4<vector><dataset-index>0, e.g. V1's dogfood -> 4110, V1's split-mode
+#    -> 4111, V9's three datasets -> 4910, 4911, 4912. Steps 1 and 3 must be
+#    repeated for EVERY dataset key the plan's cases declare (V9 and V12
+#    declare degradation datasets), not just the primary.
+python3 -m http.server 4110 --directory viewer/tests/gui/.serve/dogfood &
 ```
 
 The serve command was verified against a real browser when this harness was
@@ -114,7 +117,9 @@ missing element, never decide a failure "does not matter", never retry beyond
 the single permitted reattempt. Your job is literal execution and honest
 observation; interpretation belongs to the orchestrator.
 
-APP: http://localhost:{PORT}/  (serving the "{DATASET}" dataset)
+APP URLS (one per dataset this shard touches; "load ... for dataset 'x'"
+steps use the matching URL; the first line is the shard's primary):
+{PORT_MAP}
 SHARD OUTPUT: {RUN_DIR}/shards/{VECTOR_ID}.json
 EVIDENCE DIR: {RUN_DIR}/evidence/
 
@@ -122,12 +127,17 @@ TOOLING: drive the browser with mcp__playwriter__execute (Playwright `page`
 in scope). Open your OWN tab once at the start:
   const p = await context.newPage(); state.p = p;
 Then IMMEDIATELY, before loading the app, install capture hooks and clear
-storage for your origin:
+storage for EVERY origin in the port map (visit each once and clear):
   state.consoleErrors = []; state.networkErrors = [];
   p.on('console', m => { if (m.type() === 'error') state.consoleErrors.push({text: m.text().slice(0,300), url: (m.location() && m.location().url) || ''}); });
   p.on('response', r => { if (r.status() >= 400) state.networkErrors.push(r.status() + ' ' + r.url()); });
   p.on('pageerror', e => state.consoleErrors.push({text: String(e).slice(0,300), url: 'pageerror'}));
-  await p.goto('http://localhost:{PORT}/'); await p.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+Then visit every url in the port map once and clear its storage:
+  await p.goto(url); await p.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+The welcome dialog appears on each origin's first successful load after the
+clear; the plan's first case per origin dismisses it explicitly, and later
+cases on that origin rely on the dismissal persisting. Do not clear storage
+again between cases.
 Set the viewport per case BEFORE its first step:
   desktop: {width: 1440, height: 900}
   mobile: {width: 390, height: 844}
@@ -138,27 +148,46 @@ YOUR CASES (execute in order, exactly as written):
 
 ACTION VOCABULARY (closed; a step outside it is a plan bug: record the case
 BLOCKED at that step with a note, do not improvise):
-- "load ...": goto the app URL (with any query string the step names) and
-  wait until the named condition (e.g. graph rendered: at least one
-  .react-flow__node visible) or 15s timeout.
+- "load ...": goto the app URL for the named dataset (with any query string
+  the step names; default dataset is the shard's primary) and wait until the
+  named condition (e.g. graph rendered: at least one .react-flow__node
+  visible) or 15s timeout.
 - "click <label>": click the element found by user-visible label (see FINDING
   ELEMENTS). One click.
-- "open <thing>": click the control that opens the named panel/tab/overlay.
+- "open <thing>": operate the control that opens the named panel/tab/overlay.
+  A dropdown that is a native select element (the lens switcher is one) is
+  operated by selecting the option with the named label.
 - "type <text> into <field>": focus the field found by label/placeholder and
   type the text.
 - "scroll to <target>": scroll the named container or element into view.
-- "press and hold <target> for N ms": pointerdown on the target, wait N ms,
-  pointerup (the mobile touch-and-hold path).
+- "press and hold <target> for N ms": dispatch touchstart at the target's
+  center, wait N ms, observe, then touchend. Synthetic TouchEvent dispatch
+  via p.evaluate is the defined implementation (verified: it drives the
+  touch-and-hold preview; the extension tooling has no native touch
+  emulation).
+- "press <key>": a keyboard key (p.keyboard.press), e.g. Enter; "press the
+  browser back control" means p.goBack().
+- "swipe <up|down> on <target>": a touch drag on the target, implemented as
+  a dispatched touchstart plus a sequence of touchmove steps in the named
+  direction then touchend (needed for the mobile bottom sheet, whose
+  expansion is gesture-only).
 - "switch viewport orientation": swap viewport width and height.
 - "reload": page.reload() and wait for render.
 
 FINDING ELEMENTS: the way a person would. By visible text, accessible role or
-label, and position, in that order (getByRole, getByText, getByLabel,
-getByPlaceholder). Prefer exact visible text from the step. NEVER use CSS
+label, title attribute, and position, in that order (getByRole, getByText,
+getByLabel, getByTitle, getByPlaceholder; icon-only controls carry their
+user-visible name in title, e.g. 'View all annotations', 'Edit', 'Delete').
+Prefer exact visible text from the step. NEVER use CSS
 classes or DOM structure selectors except the two named in this prompt
 (.react-flow__node for graph nodes and their title text for node lookup). If
 the step's label matches multiple elements, use the first VISIBLE match; if it
-matches none, the step cannot be performed.
+matches none, the step cannot be performed. When the step names a container
+("the detail panel tab labeled X", "the tree row", "the header button", "the
+bottom navigation button"), find the container by its visible position and
+role FIRST and search for the label inside it; the same word often appears as
+both a component name and a tab label, and the container scope is what a
+person reading the step would use.
 
 VERDICT SEMANTICS (from the design doc, apply mechanically):
 - A step that cannot be performed (element genuinely absent after a 5s wait,
@@ -172,12 +201,18 @@ VERDICT SEMANTICS (from the design doc, apply mechanically):
   a fresh reload (reload, clear nothing else, re-run the case's steps). If
   the retry passes fully, the verdict is PASS_FLAKY (attempts: 2), never
   PASS. If the retry also fails, keep the FIRST attempt's verdict and
-  details. Never a third attempt.
+  details. Never a third attempt. A STATEFUL case (one whose assertions
+  depend on state the case itself creates or on being the origin's first
+  load, e.g. an annotation count or an unread badge) is effectively
+  single-attempt: if the retry cannot satisfy the state precondition, skip
+  the retry, keep the first verdict, and note "retry not applicable:
+  stateful preconditions".
 - Case timeout: if a single case exceeds 5 minutes of wall time, record it
   BLOCKED at the current step with a note "case timeout".
 
-ERROR ALLOWLIST for this dataset (from datasets.yaml; these are KNOWN
-intentional probes and do NOT fail a case; everything else does):
+ERROR ALLOWLIST per dataset (from datasets.yaml; these are KNOWN intentional
+probes and do NOT fail a case; everything else does; apply the allowlist of
+the dataset the case declares):
 {ALLOWLIST_BLOCK}
 A console error whose source URL (or whose text) matches an allowlisted path
 is covered by that entry. Failed requests to allowlisted paths are covered.
@@ -202,7 +237,7 @@ case objects. Exact shape, keys in exactly this order:
       "id": "V2.1",
       "vector": "<vector slug from the case>",
       "viewport": "desktop",
-      "dataset": "{DATASET}",
+      "dataset": "<the dataset the case declares>",
       "verdict": "PASS" | "PASS_FLAKY" | "FAIL" | "BLOCKED",
       "step_reached": <1-based last step successfully performed>,
       "steps_total": <count>,

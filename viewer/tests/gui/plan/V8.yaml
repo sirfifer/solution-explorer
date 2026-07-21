@@ -1,0 +1,115 @@
+# V8 mobile (vector V8): the source vectors repeated at 390x844 portrait
+# plus one landscape width-hungry view; tap targets work; the touch-and-hold
+# path is exercised; no horizontal page scroll. Mobile is first-class: a
+# feature that only works with a mouse at 1440px is a failing test, not a
+# caveat.
+# All cases executed against the running UI on 2026-07-21. Two walk findings
+# are encoded as cases expected to block, per the cardinal rule (do not bend
+# the case to pass): at 390px there is no reachable lens switcher (V8.4) and
+# no reachable review mode control (V8.8); both are desktop-only today.
+
+- id: V8.1
+  vector: mobile
+  viewport: mobile
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+  pass_when:
+    - "at least 3 component nodes are visible in the graph"
+    - "a bottom navigation bar with Tree, Graph, and Search is visible"
+    - "the page does not scroll horizontally"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot+console
+
+- id: V8.2
+  vector: mobile
+  viewport: mobile
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer%2Fextract&tab=symbols&drill=root' and wait until the graph has rendered at least one node"
+    - "Click the sheet header labeled 'Swipe up for details'"
+    - "Swipe up on the bottom sheet drag handle"
+    - "Click the symbol named 'ActivityResult' in the symbol list"
+  pass_when:
+    - "step 2: the bottom sheet opens showing the component detail with its tabs"
+    - "step 3: the sheet expands so the symbol list is visible"
+    - "step 4: a code preview is visible containing at least 3 lines including 'class ActivityResult' (drill-to-code works on a phone)"
+    - "the page does not scroll horizontally"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+
+- id: V8.3
+  vector: mobile
+  viewport: mobile
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the bottom navigation button labeled 'Search'"
+    - "Type 'analyzer' into the search input"
+    - "Press Enter to select the first result"
+  pass_when:
+    - "step 3: the results list a component result 'analyzer' tagged as a module"
+    - "step 4: selecting it navigates to the analyzer component"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+
+- id: V8.4
+  vector: mobile
+  viewport: mobile
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Open the lens switcher and choose 'Data'"
+  pass_when:
+    - "a lens switcher control is reachable at phone width and switches the lens (mobile parity: every lens available on desktop is available on a phone)"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+
+- id: V8.5
+  vector: mobile
+  viewport: mobile
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the help button labeled '?' on the component node titled 'tests'"
+  pass_when:
+    - "a help popover opens showing the component's role or description content, readable at phone width"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+
+- id: V8.6
+  vector: mobile
+  viewport: mobile
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Press and hold the component node titled 'extract' for 600 ms"
+  pass_when:
+    - "the touch-and-hold documentation preview appears (TECH STACK content visible)"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+
+- id: V8.7
+  vector: mobile
+  viewport: mobile-landscape
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?lens=flow' and wait until the graph has rendered at least one node"
+  pass_when:
+    - "the Flow lens (a width-hungry left-to-right view) renders its entry-flow list and graph in landscape"
+    - "the page does not scroll horizontally"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+
+- id: V8.8
+  vector: mobile
+  viewport: mobile
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Review'"
+  pass_when:
+    - "a review mode control is reachable at phone width and enters review mode (the V13 workflow must be possible on a phone)"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot

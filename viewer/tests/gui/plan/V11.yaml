@@ -1,0 +1,82 @@
+# V11 findings and surfaces (vector V11): FindingsSurface,
+# SupplyChainSurface, InventoryPanel, CoverageBadge each render their
+# dataset section and drill into an entry; ChangelogPanel carries the
+# what's-new record. Sampling: two entries each where two exist.
+# Shard-order note (adversarial review of PR #83): the changelog unread
+# badge exists only on the shard's FIRST load of the origin (any load marks
+# it read in localStorage), so the changelog case runs first and also
+# dismisses the welcome dialog for the shard; later cases must not expect
+# either again.
+# All cases executed against the running UI on 2026-07-21 (the reordered
+# first-load sequence was executed live during the adversarial review).
+
+- id: V11.1
+  vector: findings-surfaces
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the expand arrow on the changelog entry row beneath WHAT'S NEW (the row with the relative timestamp and the components-added summary)"
+  pass_when:
+    - "on this first load of the origin, the WHAT'S NEW section shows the latest changelog entry with an unread count badge"
+    - "step 3: the entry expands to a per-component change list ('New component discovered' rows)"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - component:ChangelogPanel
+
+- id: V11.2
+  vector: findings-surfaces
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the strip labeled 'Review what the system noticed'"
+    - "Click the expand arrow on the first duplication finding"
+    - "Open the surface tab labeled 'Concerns'"
+  pass_when:
+    - "the findings strip shows the counts (78 findings, 6 concerns, unverified badge)"
+    - "step 2: the surface opens with kind filters (duplication, inconsistency, unreferenced) and a findings list"
+    - "step 3: the entry expands to its members, each with a file and line reference"
+    - "step 4: the Concerns tab lists 6 concerns including 'Auth' with member counts"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - component:FindingsEntry
+    - component:FindingsSurface
+
+- id: V11.3
+  vector: findings-surfaces
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the strip labeled 'Supply chain'"
+    - "Click the filter labeled 'direct (50)'"
+  pass_when:
+    - "the supply chain strip shows dependency totals (569 dependencies, 2 ecosystems)"
+    - "step 2: the surface opens with the honest scope note ('Not a vulnerability scan'), language targets, and per-ecosystem dependency lists with source locations"
+    - "step 3: the list filters to the 50 direct dependencies"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - component:SupplyChainEntry
+    - component:SupplyChainSurface
+
+- id: V11.4
+  vector: findings-surfaces
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the strip labeled '100% of source analyzed'"
+    - "Click the link labeled 'Explore inventory'"
+  pass_when:
+    - "step 2: the coverage ledger expands showing SOURCE ANALYZED, SOURCE GAPS, and NON-SOURCE accounted groups with counts"
+    - "step 3: the inventory panel opens showing non-source groups with byte sizes and a recommendation per group"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - component:CoverageBadge
+    - component:InventoryPanel

@@ -1,0 +1,142 @@
+# V5 lenses (vector V5): each registered lens activates, renders populated
+# content, and each of its sub-views answers with data; switching lenses
+# preserves sane state. Sampling: every lens, every sub-view, one selection
+# each. Three sub-views have no data instance in any Phase 1 dataset
+# (flow/which-tab, rules/governs-data, rules/guards-contract); see
+# plan/waivers.yaml. The lens switcher is a native select element; the
+# runner operates it by choosing the named option.
+# All cases executed against the running UI on 2026-07-21.
+
+- id: V5.1
+  vector: lenses
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?lens=activity' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the entry named 'remediation' in the activity ranking list"
+  pass_when:
+    - "the Activity panel shows a commit total from git history and a hotspot-ranked list of at least 5 entries (look-first)"
+    - "ranking entries carry author count and bus-factor badges (who-knows), including knowledge-island markers (at-risk)"
+    - "entries show per-component commit counts (how-alive)"
+    - "step 3: the selection navigates to the component and a CHANGES WITH co-change list plus FILES THAT CHANGE TOGETHER pairs are shown (changes-with)"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - lens:activity
+    - component:ActivityPanel
+    - subview:activity/look-first
+    - subview:activity/who-knows
+    - subview:activity/at-risk
+    - subview:activity/changes-with
+    - subview:activity/how-alive
+
+- id: V5.2
+  vector: lenses
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?lens=flow' and wait until the graph has rendered at least one node"
+    - "Click the entry flow named 'HomeViewController' in the Flow panel"
+    - "Click the button labeled 'Next' in the flow walkthrough"
+  pass_when:
+    - "the Flow panel lists at least one entry flow (where-start)"
+    - "selecting the flow starts a walkthrough showing 'Step 1 of 3' with Previous and Next controls (what-next)"
+    - "the PATH section lists the ordered screens Home, Detail, Settings (how-here)"
+    - "the path distinguishes 'push: show' from 'modal (presentModally)' (modal-or-push)"
+    - "step 3: the walkthrough advances to step 2"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - lens:flow
+    - component:FlowPanel
+    - subview:flow/where-start
+    - subview:flow/what-next
+    - subview:flow/how-here
+    - subview:flow/modal-or-push
+
+- id: V5.3
+  vector: lenses
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?lens=capability' and wait until the graph has rendered at least one node"
+    - "Click the capability 'GET /health' in the Capability panel"
+  pass_when:
+    - "the Capability panel shows a capability total with a proven-by-tests count and lists capabilities grouped by kind, API group first (what-can-it-do, which-kind)"
+    - "each listed capability names its owning component (who-owns) and carries a tested or untested badge (is-proven)"
+    - "step 2: the selection opens the owning component's Capabilities tab, where the capability entry carries a source location (where-contract)"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - lens:capability
+    - component:CapabilityPanel
+    - subview:capability/what-can-it-do
+    - subview:capability/which-kind
+    - subview:capability/who-owns
+    - subview:capability/is-proven
+    - subview:capability/where-contract
+
+- id: V5.4
+  vector: lenses
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?lens=data' and wait until the graph has rendered at least one node"
+    - "Click the entity named 'User' in the Data panel"
+  pass_when:
+    - "the Data panel shows an entity total with access-edge count and lists entities grouped by kind, most-touched first (what-knows)"
+    - "step 2: the entity view shows READ BY and WRITTEN BY accessor lists (who-reads, who-writes) with FIELDS listed for the entity"
+    - "accessor entries distinguish certain from INFERRED access (how-sure)"
+    - "the entity view names where the entity is defined (where-defined)"
+    - "the ego graph renders at least 5 access edges (the reads and writes edge types)"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - lens:data
+    - component:DataPanel
+    - subview:data/what-knows
+    - subview:data/who-reads
+    - subview:data/who-writes
+    - subview:data/how-sure
+    - subview:data/where-defined
+    - edge:reads
+    - edge:writes
+
+- id: V5.5
+  vector: lenses
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?lens=rules' and wait until the graph has rendered at least one node"
+    - "Click the rule beginning 'multi-branch: if t ==' in the Rules panel"
+  pass_when:
+    - "the Rules panel shows a rule total and groups rules by kind with counts (where-decisions-live), including POLICY / DECISION, VALIDATION, and CONSTRAINT groups"
+    - "within a kind, rules group under the enforcing component ranked by count (what-enforces), each with a source location"
+    - "rules carry confidence markers distinguishing declared from INFERRED (how-sure)"
+    - "step 2: the selection navigates to the enforcing component with the rule selected in the URL"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - lens:rules
+    - component:RulesPanel
+    - subview:rules/where-decisions-live
+    - subview:rules/what-enforces
+    - subview:rules/how-sure
+
+- id: V5.6
+  vector: lenses
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer&drill=root' and wait until the detail panel has rendered"
+    - "Open the lens switcher and choose 'Activity'"
+    - "Open the lens switcher and choose 'Structure'"
+  pass_when:
+    - "each switch renders the chosen lens without an error screen"
+    - "after returning to Structure, the component selection is preserved (the URL still carries component=analyzer) and the graph renders nodes"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - lens:structure
+    - component:LensSwitcher

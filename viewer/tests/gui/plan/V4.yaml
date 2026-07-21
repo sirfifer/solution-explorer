@@ -1,0 +1,79 @@
+# V4 edge types (vector V4): each relationship type present in the dataset
+# renders; both endpoint nodes of a sampled edge are navigable. Edges are
+# decorative today (no click handler), so navigability means the endpoints.
+# Sampling rule: edges sorted by the composite source+target+type key, first
+# two per type; the case drills to the level where the sampled edge's
+# endpoints are both visible. Types present in the Phase 1 datasets: import,
+# uses, http, navigation, modal (plus reads/writes, rendered only by the
+# Data lens ego view and covered by V5.4). The other 11 EDGE_STYLES types
+# have no instance in any Phase 1 dataset; see plan/waivers.yaml.
+# All cases executed against the running UI on 2026-07-21.
+
+- id: V4.1
+  vector: edge-types
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?drill=analyzer' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the component node titled 'extract'"
+    - "Click the component node titled 'parsers'"
+  pass_when:
+    - "exactly 1 edge renders at this drill level (the sampled import edge, extract to parsers)"
+    - "step 3: clicking the source endpoint opens its detail panel"
+    - "step 4: clicking the target endpoint opens its detail panel"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - edge:import
+    - subview:structure/connections
+
+- id: V4.2
+  vector: edge-types
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?drill=packages%2Fcli' and wait until the graph has rendered at least one node"
+    - "Click the component node titled 'commands'"
+    - "Click the component node titled 'templates'"
+  pass_when:
+    - "exactly 3 edges render at this drill level (the uses edges among commands, lib, and templates)"
+    - "both sampled endpoints open their detail panels when clicked"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - edge:uses
+
+- id: V4.3
+  vector: edge-types
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?drill=tests%2Ffixtures%2Fpolyglot' and wait until the graph has rendered at least one node"
+    - "Click the component node titled 'polyglot-web'"
+    - "Click the component node titled 'polyglot-api'"
+  pass_when:
+    - "exactly 1 edge renders at this drill level (the sampled http edge, polyglot-web to polyglot-api)"
+    - "both sampled endpoints open their detail panels when clicked"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - edge:http
+
+- id: V4.4
+  vector: edge-types
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?drill=tests%2Ffixtures%2Fstoryboard%2Fapp' and wait until the graph has rendered at least one node"
+    - "Click the component node titled 'HomeViewController'"
+    - "Click the component node titled 'SettingsViewController'"
+  pass_when:
+    - "exactly 2 edges render at this drill level (the sampled navigation edge home to detail, and the sampled modal edge home to settings)"
+    - "the screen nodes render inside device frames (a phone status bar reading '9:41' is visible on each)"
+    - "both sampled endpoints open their detail panels when clicked"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - edge:navigation
+    - edge:modal

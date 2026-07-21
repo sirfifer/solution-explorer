@@ -1,0 +1,41 @@
+# V1 boot-and-render (GUI-REGRESSION-STRATEGY.md vector V1).
+# Sampling rule: both boot layouts, dogfood monolith and split-mode.
+# Every case in this file was executed against the running UI on 2026-07-21
+# before being committed (the cardinal rule).
+# Note: on a fresh origin the first successful load shows the welcome dialog;
+# each case dismisses it explicitly where it appears.
+
+- id: V1.1
+  vector: boot-and-render
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+  pass_when:
+    - "at least 3 component nodes are visible in the graph"
+    - "a node card titled 'arch-visualizer' shows the type badge 'Web Client'"
+    - "the header shows a component count of at least 70 components"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot+console
+  covers:
+    - component:ArchitectureGraph
+    - component:ComponentNode
+    - subview:structure/identity
+
+- id: V1.2
+  vector: boot-and-render
+  viewport: desktop
+  dataset: split-mode
+  steps:
+    - "Load the app for dataset 'split-mode' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the component node titled 'extract'"
+    - "Open the detail panel tab labeled 'Files'"
+  pass_when:
+    - "at least 3 component nodes are visible in the graph"
+    - "the Files tab lists at least 5 file names (lazy detail shards loaded)"
+    - "no unexpected console or network errors during the flow (in particular, no architecture/manifest.json 404: split mode loads via the manifest)"
+  evidence: screenshot+console
+  covers:
+    - component:ArchitectureGraph

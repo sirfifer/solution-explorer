@@ -58,9 +58,16 @@ ACTION_VERBS = (
     "open",
     "type",
     "scroll to",
-    "press and hold",
+    # "press" covers both forms: "press and hold <target> for N ms" (the
+    # touch-and-hold path) and "press <key>" (a keyboard key, e.g. Enter, or
+    # the browser back control). Extended in the plan PR per the design rule
+    # that a needed verb extends the vocabulary in the same PR.
+    "press",
     "switch viewport orientation",
     "reload",
+    # "swipe <up|down> on <target>": touch drag, needed for the mobile bottom
+    # sheet whose expansion is gesture-only. Added in the plan PR.
+    "swipe",
 )
 TOKEN_KINDS = ("lens", "subview", "tab", "edge", "component")
 CASE_ID_RE = re.compile(r"^V(\d+)\.\d+$")

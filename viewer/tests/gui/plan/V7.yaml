@@ -1,0 +1,73 @@
+# V7 navigation state (vector V7): breadcrumbs reflect the drill path; back
+# returns correctly; expand/collapse round-trips; a deep link restores state.
+# Sampling rule: two drill paths (graph drill V7.1, aggregate expand V7.3),
+# one tree round-trip (V7.2), one deep link (V7.4).
+# All cases executed against the running UI on 2026-07-21. Walk finding
+# recorded for the report: at the arch-visualizer drill level the graph
+# renders only the 'src' child; the sibling 'gui' listed under
+# sub-components does not render as a node.
+
+- id: V7.1
+  vector: navigation-state
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the component node titled 'arch-visualizer'"
+    - "Click the button labeled 'Drill into arch-visualizer'"
+    - "Click the breadcrumb button labeled 'Up'"
+    - "Press the browser back control"
+  pass_when:
+    - "step 4: the breadcrumb bar reads Home / solution-explorer / arch-visualizer (organization: the drill path mirrors how the codebase is organized)"
+    - "step 5: Up returns to the root view (URL carries drill=root)"
+    - "step 6: browser back restores the drilled view (URL carries drill=arch-visualizer) and the graph re-renders"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - subview:structure/organization
+
+- id: V7.2
+  vector: navigation-state
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the expand arrow on the tree row 'solution-explorer'"
+    - "Click the expand arrow on the tree row 'solution-explorer'"
+    - "Click the tree row labeled 'solution-explorer'"
+  pass_when:
+    - "step 2: the tree row expands, showing child rows beneath solution-explorer"
+    - "step 3: the same arrow collapses the children again (round-trip)"
+    - "step 4: clicking the row itself selects the component (its detail panel opens) without expanding it"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - component:TreeNavigator
+
+- id: V7.3
+  vector: navigation-state
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?drill=tests%2Ffixtures%2Fpolyglot' and wait until the graph has rendered at least one node"
+    - "Click the aggregate node labeled '3 Packages'"
+  pass_when:
+    - "step 1: aggregate nodes labeled '3 Packages' and '1 Module' render alongside the typed component nodes (hidden: the collapsed remainder is visible as an aggregate, never silently dropped)"
+    - "step 2: the aggregate expands into its member nodes 'ios', 'polyglot-core', and 'rubylib'"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - component:AggregateNode
+    - subview:structure/hidden
+
+- id: V7.4
+  vector: navigation-state
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=infrastructure%2Fcloudflare&tab=docs&drill=root' and wait until the detail panel has rendered"
+  pass_when:
+    - "the deep link restores the full state in one load: the component is selected and the Docs tab is active showing the Cloudflare README content"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot

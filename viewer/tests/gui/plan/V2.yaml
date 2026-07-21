@@ -1,0 +1,57 @@
+# V2 drill-to-code (vector V2): root to component to symbols to a visible
+# code preview. The product's core promise.
+# Sampling rule: three components of distinct types, chosen as the first
+# component by sorted id, within the first three types (alphabetical) that
+# have a nonzero Symbols count in the UI: api-server (analyzer/extract),
+# module (analyzer), web-client (viewer/src, reached by drill because the
+# first web-client by sorted id is a fixture with a synthetic path).
+# All cases executed against the running UI on 2026-07-21.
+
+- id: V2.1
+  vector: drill-to-code
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the component node titled 'arch-visualizer'"
+    - "Click the button labeled 'Drill into arch-visualizer'"
+    - "Click the component node titled 'src'"
+    - "Open the detail panel tab labeled 'Symbols'"
+    - "Click the symbol named 'App' in the symbol list"
+  pass_when:
+    - "a code preview is visible containing at least 3 lines of source text"
+    - "the preview names the source location 'viewer/src/App.tsx' with a line number"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - component:DetailPanel
+    - component:CodePreview
+    - tab:symbols
+
+- id: V2.2
+  vector: drill-to-code
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the component node titled 'extract'"
+    - "Open the detail panel tab labeled 'Symbols'"
+    - "Click the symbol named 'ActivityResult' in the symbol list"
+  pass_when:
+    - "a code preview is visible containing at least 3 lines of source text including 'class ActivityResult'"
+    - "the preview names the source location 'analyzer/extract/activity.py' with a line number"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+
+- id: V2.3
+  vector: drill-to-code
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer&tab=symbols&drill=root' and wait until the detail panel has rendered"
+    - "Click the symbol named 'UIActionDetector' in the symbol list"
+  pass_when:
+    - "a code preview is visible containing at least 3 lines of source text including 'class UIActionDetector'"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot

@@ -1,0 +1,50 @@
+# V9 degradation (vector V9): unenriched, gap-carrying, and old datasets all
+# render without errors; gaps surface visibly; AI-dependent surfaces are
+# absent, not broken. Sampling: one dataset each.
+# All cases executed against the running UI on 2026-07-21. Walk finding
+# encoded per the cardinal rule: V9.2's gap-visibility assertion FAILED on
+# the walk (the viewer's types declare the R1 gaps key but no component
+# renders it); the case ships asserting what the design requires.
+
+- id: V9.1
+  vector: degradation
+  viewport: desktop
+  dataset: unenriched
+  steps:
+    - "Load the app for dataset 'unenriched' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Load the app for dataset 'unenriched' with the query string '?component=analyzer&drill=root' and wait until the detail panel has rendered"
+  pass_when:
+    - "the graph renders at least 3 component nodes"
+    - "no AI architecture summary strip is shown (the sparkle-marked summary paragraph the enriched dogfood renders under the header; absent, not broken)"
+    - "step 3: no tab labeled 'AI Insights' is shown and no 'AI intent' marker appears in the WHY / WHO strip"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot+console
+
+- id: V9.2
+  vector: degradation
+  viewport: desktop
+  dataset: gaps
+  steps:
+    - "Load the app for dataset 'gaps' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+  pass_when:
+    - "the graph renders at least 3 component nodes without an error screen"
+    - "the producer-gap record is surfaced visibly somewhere in the UI (the dataset carries two R1 gap entries naming derive.capabilities and project.emitters.activity)"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot+console
+
+- id: V9.3
+  vector: degradation
+  viewport: desktop
+  dataset: old-format
+  steps:
+    - "Load the app for dataset 'old-format' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the drill button on the first component node"
+  pass_when:
+    - "the frozen 2026-07-07 projection renders without an error screen (the additive-projection promise)"
+    - "no coverage badge is shown (the old projection has no coverage ledger; absent, not broken)"
+    - "step 3: drilling into the root component renders its children"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot+console

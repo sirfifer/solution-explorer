@@ -1,0 +1,155 @@
+# V3 detail tabs (vector V3): every tab renders content matching the
+# component's data; conditional tabs appear exactly when data exists.
+# Sampling rule per tab: the first two components by sorted id carrying the
+# tab's data, plus the first component by sorted id without it
+# (analyzer/cra, which has no docs, no ai_enhance, no testing, no
+# capabilities, no data entities, no actions). Recorded one-sided samples:
+# actions has exactly ONE data-bearing component in the dogfood
+# (tests/fixtures/polyglot/apps/ios); status has ZERO (no live fixture), so
+# V3.7 tests only the conditional-absence half.
+# All cases executed against the running UI on 2026-07-21. Walk finding: the
+# Docs tab APPEARS for patterns-only components (analyzer) but renders 'No
+# documentation files found'; V3.1 asserts the tab's own presence condition
+# is matched by content, which is the behavior the design requires.
+
+- id: V3.1
+  vector: detail-tabs
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=infrastructure%2Fcloudflare&tab=docs&drill=root' and wait until the detail panel has rendered"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Load the app for dataset 'dogfood' with the query string '?component=root&tab=docs&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer&tab=docs&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer%2Fcra&drill=analyzer' and wait until the detail panel has rendered"
+  pass_when:
+    - "step 1: the Docs tab renders README content including the heading 'Cloudflare Infrastructure for Solution Explorer'"
+    - "step 3: the Docs tab renders documentation content of at least 3 lines"
+    - "step 4: the Docs tab is present AND renders content matching the component's docs data (analyzer carries one detected pattern); a tab that appears but renders 'No documentation files found' fails this assertion"
+    - "step 5: no tab labeled 'Docs' is shown for analyzer/cra"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - tab:docs
+
+- id: V3.2
+  vector: detail-tabs
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer&tab=ai&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=docs&tab=ai&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer%2Fcra&drill=analyzer' and wait until the detail panel has rendered"
+  pass_when:
+    - "step 1: the AI Insights tab renders a role badge 'Business Logic', a criticality marker 'critical', and a narrative section 'ABOUT THIS COMPONENT'"
+    - "step 1: the WHY / WHO strip above the tabs shows an author, a last-change time, and an 'AI intent' marker"
+    - "step 2: the AI Insights tab renders a narrative section with at least 2 lines of text"
+    - "step 3: no tab labeled 'AI Insights' is shown for analyzer/cra"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - tab:ai
+    - subview:structure/rationale
+
+- id: V3.3
+  vector: detail-tabs
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=packages%2Fcli&tab=testing&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=tests&tab=testing&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer%2Fcra&drill=analyzer' and wait until the detail panel has rendered"
+  pass_when:
+    - "step 1: the Testing tab shows TEST FILES, TOTAL TESTS, and FRAMEWORKS values including 'Vitest'"
+    - "step 2: the Testing tab shows a total test count greater than 1000"
+    - "step 3: no tab labeled 'Testing' is shown for analyzer/cra"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - tab:testing
+
+- id: V3.4
+  vector: detail-tabs
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer&tab=capabilities&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=tests&tab=capabilities&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer%2Fcra&drill=analyzer' and wait until the detail panel has rendered"
+  pass_when:
+    - "step 1: the Capabilities tab lists at least one capability with kind group 'EVENTS' and a source location"
+    - "step 2: the Capabilities tab lists at least 10 capabilities"
+    - "step 3: no tab labeled 'Capabilities' is shown for analyzer/cra"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - tab:capabilities
+
+- id: V3.5
+  vector: detail-tabs
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=tests&tab=data&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=infrastructure%2Fcloudflare%2Fworker&tab=data&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer%2Fcra&drill=analyzer' and wait until the detail panel has rendered"
+  pass_when:
+    - "step 1: the Data tab lists at least one entity with its kind (for example MIGRATION 'Order') and a source location"
+    - "step 2: the Data tab lists at least one entity"
+    - "step 3: no tab labeled 'Data' is shown for analyzer/cra"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - tab:data
+
+- id: V3.6
+  vector: detail-tabs
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=tests%2Ffixtures%2Fpolyglot%2Fapps%2Fios&tab=actions&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer&drill=root' and wait until the detail panel has rendered"
+  pass_when:
+    - "step 1: the Actions tab lists the action 'Increment' with kind 'button'"
+    - "step 2: no tab labeled 'Actions' is shown for analyzer"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - tab:actions
+
+- id: V3.7
+  vector: detail-tabs
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer&drill=root' and wait until the detail panel has rendered"
+    - "Load the app for dataset 'dogfood' with the query string '?component=tests&drill=root' and wait until the detail panel has rendered"
+  pass_when:
+    - "step 1: no tab labeled 'Status' is shown (no component carries live_status without a live fixture; the with-data half of this tab is Phase 4 scope)"
+    - "step 2: no tab labeled 'Status' is shown"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - tab:status
+
+- id: V3.8
+  vector: detail-tabs
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer%2Fextract&drill=root' and wait until the detail panel has rendered"
+    - "Open the detail panel tab labeled 'Files'"
+    - "Click the file named 'activity.py' in the file list"
+    - "Load the app for dataset 'dogfood' with the query string '?component=analyzer%2Fextract&tab=relationships&drill=root' and wait until the detail panel has rendered"
+    - "Click the link target named 'parsers' in the relationships list"
+  pass_when:
+    - "step 1: the Overview tab renders the component's language and file statistics"
+    - "step 3: a file detail view opens showing 'analyzer/extract/activity.py' with its line count and FILE DOCUMENTATION text"
+    - "step 4: the Links tab lists 'OUTGOING (1)' with target 'parsers' and type 'import'"
+    - "step 5: the selection navigates to the 'parsers' component (its detail panel opens)"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - tab:overview
+    - tab:files
+    - tab:relationships
