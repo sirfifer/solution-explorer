@@ -126,7 +126,7 @@ storage for your origin:
   state.consoleErrors = []; state.networkErrors = [];
   p.on('console', m => { if (m.type() === 'error') state.consoleErrors.push({text: m.text().slice(0,300), url: (m.location() && m.location().url) || ''}); });
   p.on('response', r => { if (r.status() >= 400) state.networkErrors.push(r.status() + ' ' + r.url()); });
-  p.on('pageerror', e => state.consoleErrors.push({text: String(e).slice(0,300), url: 'pageerror'});
+  p.on('pageerror', e => state.consoleErrors.push({text: String(e).slice(0,300), url: 'pageerror'}));
   await p.goto('http://localhost:{PORT}/'); await p.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
 Set the viewport per case BEFORE its first step:
   desktop: {width: 1440, height: 900}
@@ -187,8 +187,10 @@ EVIDENCE: for every case, save an end-state screenshot to
 {RUN_DIR}/evidence/{VECTOR_ID}.<case-number>.png (use
 p.screenshot({path, fullPage: false})). For BLOCKED and FAIL, the screenshot
 is taken at the moment of failure. Cases with evidence "screenshot+console"
-additionally get their captured console/network arrays written into the shard
-entry even when allowlisted-only (for audit).
+additionally record the FULL captured console/network arrays, including
+allowlisted probe entries, in the optional console_audit and network_audit
+fields of the shard entry (audit trail; console_errors/network_errors stay
+non-allowlisted-only so a passing case reads clean).
 
 SHARD FORMAT: write ONE json file to SHARD OUTPUT (create parent dirs) with
 the Write tool. It must validate against viewer/tests/gui/results-schema.json
@@ -208,6 +210,8 @@ case objects. Exact shape, keys in exactly this order:
       "assertions": [ {"text": "<pass_when line verbatim>", "outcome": "pass"|"fail"|"not-evaluated", "detail": "<what you observed, plainly>"} ],
       "console_errors": ["<non-allowlisted excerpts, empty if clean>"],
       "network_errors": ["<STATUS url, non-allowlisted, empty if clean>"],
+      "console_audit": ["<screenshot+console cases only: FULL console error list including allowlisted probes; omit the key otherwise>"],
+      "network_audit": ["<screenshot+console cases only: FULL failed-request list including allowlisted probes; omit the key otherwise>"],
       "evidence": ["evidence/{VECTOR_ID}.<n>.png"],
       "wall_time_seconds": <number>,
       "notes": "<optional literal observations; omit the key if none>"

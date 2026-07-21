@@ -66,6 +66,16 @@ surfaces:
     file: ReviewSummary.tsx
   - component: SelectionSetsSection
     file: SelectionSetsSection.tsx
+  # The two surfaces below are real surfaces the design doc inventories, but
+  # no Phase 1 dataset can exercise them (StatusDashboard needs
+  # architecture.live_status from a live fixture; SolutionIndex needs a
+  # composed multi-repo solution dataset). They are listed HERE, not in the
+  # ignore list, so the deferral is a waiver in plan/waivers.yaml, printed on
+  # every check run, per the design's visible-decision rule.
+  - component: StatusDashboard
+    file: StatusDashboard.tsx
+  - component: SolutionIndex
+    file: SolutionIndex.tsx
 
 ignore:
   - file: MarkdownRenderer.tsx
@@ -84,11 +94,6 @@ ignore:
     reason: >
       Passive context strip inside DetailPanel's overview; renders nothing
       without rationale data. Exercised implicitly by V3 overview cases.
-  - file: StatusDashboard.tsx
-    reason: >
-      Requires architecture.live_status, which only a live fixture provides.
-      Phase 4 scope by design-doc decision (live and admin surfaces); recorded
-      deferral, not an oversight.
   - file: AdminDashboard.tsx
     reason: >
       Live/admin surface requiring live-config.json; Phase 4 scope by
@@ -103,8 +108,3 @@ ignore:
     reason: "Part of AdminDashboard; same Phase 4 deferral."
   - file: admin/SettingsTab.tsx
     reason: "Part of AdminDashboard; same Phase 4 deferral."
-  - file: SolutionIndex.tsx
-    reason: >
-      Requires a composed multi-repo solution dataset, which is not in the
-      Phase 1 dataset set (dogfood, split-mode, unenriched, gaps, old-format).
-      Recorded deferral to the multi-repo engagement; revisit with Phase 4.

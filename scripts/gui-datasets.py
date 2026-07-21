@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import shutil
 import subprocess
 import sys
@@ -77,8 +78,18 @@ def _load_yaml(path: Path) -> dict:
             "PyYAML is required to read datasets.yaml. Install it with "
             "`pip install pyyaml` (it is part of the repo's [dev] extras)."
         )
-    with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    try:
+        with open(path, encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except yaml.YAMLError as exc:
+        sys.exit(f"Unreadable YAML in {path}: {exc}")
+
+
+def _load_projection(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        sys.exit(f"Cannot read {path} as JSON: {exc}")
 
 
 def _dataset(key: str) -> dict:
@@ -106,7 +117,7 @@ def cmd_generate(key: str) -> int:
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
     for template in spec.get("generate") or []:
-        command = template.replace("{staging}", str(staging))
+        command = template.replace("{staging}", shlex.quote(str(staging)))
         print(f"[gui-datasets] {command}")
         result = subprocess.run(command, shell=True, cwd=REPO_ROOT)
         if result.returncode != 0:
@@ -134,7 +145,7 @@ def _strip_ai(node: object) -> int:
 
 
 def cmd_strip_ai(path: Path) -> int:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = _load_projection(path)
     removed = _strip_ai(data)
     path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
     if removed == 0:
@@ -150,7 +161,7 @@ def cmd_strip_ai(path: Path) -> int:
 
 
 def cmd_inject_gaps(path: Path) -> int:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = _load_projection(path)
     if not isinstance(data, dict) or "components" not in data:
         sys.exit(f"{path} does not look like a monolith projection")
     data["gaps"] = INJECTED_GAPS

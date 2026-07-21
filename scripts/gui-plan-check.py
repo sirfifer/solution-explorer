@@ -8,12 +8,17 @@ it makes it impossible for a surface to have no recorded disposition at all.
 
 Tier one statically enumerates the surfaces that ARE extractable from source:
   - registered lens ids and their question (sub-view) ids from
-    viewer/src/lenses/*.ts,
+    viewer/src/lenses/*.ts (one definition file per lens; that convention is
+    load-bearing here and is cross-checked against the side-effect imports in
+    lenses/index.ts, so a lens registered without its own file, or a dead
+    lens file that is never imported, fails loudly),
   - DetailPanel tab keys from the TAB_KEYS array,
   - EDGE_STYLES relationship types from viewer/src/utils/layout.ts.
-Any enumerated surface with zero plan references fails the check. An
-enumerator that parses NOTHING from a source file also fails: a source-style
-drift must break the check loudly, never rot it quietly.
+Any enumerated surface with zero plan references fails the check. The
+enumerators are anti-rot by construction: they capture BROADLY and then
+validate what they captured, so an id they cannot canonicalize into a
+coverage token is a loud finding, never a silent drop; an enumerator that
+parses nothing is likewise a failure.
 
 Tier two covers what source cannot enumerate: the hand-maintained manifest
 viewer/tests/gui/surface.yaml is cross-checked against the plan in both
@@ -28,10 +33,11 @@ A surface no dataset can exercise is not silently skipped: it gets an entry in
 viewer/tests/gui/plan/waivers.yaml with a reason. Waivers satisfy coverage but
 are printed on every run, so they stay visible decisions, never invisible gaps.
 
-Exit codes: 0 clean, 1 findings, 2 usage/parse error.
-`--bootstrap-ok` downgrades the no-plan-files-at-all state to a loud exit 0;
-it exists only for the window between the harness PR and the plan PR and is
-removed from CI when the plan lands.
+Exit codes: 0 clean, 1 findings, 2 usage or unreadable input.
+`--bootstrap-ok` exists only for the window between the harness PR and the
+plan PR: it downgrades exactly one finding (no plan case files exist yet) and
+nothing else; every structural finding still fails. The plan PR removes the
+flag from CI.
 """
 
 from __future__ import annotations
@@ -56,11 +62,18 @@ ACTION_VERBS = (
     "switch viewport orientation",
     "reload",
 )
-CASE_ID_RE = re.compile(r"^V\d+\.\d+$")
-QUOTED_ID_RE = re.compile(r'^\s*id:\s*"([a-z0-9-]+)"\s*,?\s*$')
-TAB_KEYS_RE = re.compile(r"const TAB_KEYS[^=]*=\s*\[([^\]]*)\]")
-QUOTED_STR_RE = re.compile(r'"([a-z0-9_-]+)"')
-EDGE_KEY_RE = re.compile(r"^\s*([a-z_]+):\s*\{")
+TOKEN_KINDS = ("lens", "subview", "tab", "edge", "component")
+CASE_ID_RE = re.compile(r"^V(\d+)\.\d+$")
+# Broad captures, then canonical validation: an id the enumerator cannot turn
+# into a coverage token is a loud finding, never a silent drop.
+BROAD_ID_RE = re.compile(r'^\s*id:\s*"([^"]*)"')
+QUESTION_LINE_RE = re.compile(r"^\s*question:", re.MULTILINE)
+CANONICAL_ID_RE = re.compile(r"^[a-z0-9-]+$")
+TAB_KEYS_RE = re.compile(r"const TAB_KEYS[^=]*=\s*\[(.*?)\]", re.DOTALL)
+QUOTED_STR_RE = re.compile(r"[\"']([^\"']+)[\"']")
+EDGE_KEY_RE = re.compile(r"^\s*([A-Za-z0-9_$]+):")
+CANONICAL_EDGE_RE = re.compile(r"^[a-z0-9_]+$")
+SIDE_EFFECT_IMPORT_RE = re.compile(r'^import\s+"\./([A-Za-z0-9_-]+)";', re.MULTILINE)
 
 
 def _load_yaml(path: Path):
@@ -68,8 +81,12 @@ def _load_yaml(path: Path):
         import yaml
     except ImportError:
         sys.exit("PyYAML is required (part of the repo's [dev] extras).")
-    with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    try:
+        with open(path, encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except yaml.YAMLError as exc:
+        print(f"Unreadable YAML in {path}: {exc}", file=sys.stderr)
+        sys.exit(2)
 
 
 # --- Tier one enumerators ---------------------------------------------------
@@ -78,10 +95,12 @@ def _load_yaml(path: Path):
 def enumerate_lenses(lenses_dir: Path, findings: list[str]) -> dict[str, list[str]]:
     """Map lens id -> question ids, parsed from the lens definition files.
 
-    Each lens file must yield exactly one lens id (a quoted `id:` followed
-    within two lines by `label:`) and at least one question id (a quoted `id:`
-    followed within two lines by `question:`). Anything else is a loud parse
-    failure, not a silent shrug.
+    Anti-rot contract, three loud failure modes: (1) a definition file that
+    does not yield exactly one lens id and at least one question id; (2) a
+    question count that disagrees with an independent count of `question:`
+    lines in the same file (a silently dropped sub-view); (3) a mismatch
+    between the definition files and the side-effect imports in index.ts (a
+    registered lens with no file, or a dead file never registered).
     """
     lenses: dict[str, list[str]] = {}
     files = sorted(
@@ -93,18 +112,36 @@ def enumerate_lenses(lenses_dir: Path, findings: list[str]) -> dict[str, list[st
         findings.append(f"tier1: no lens definition files found in {lenses_dir}")
         return lenses
     for f in files:
-        lines = f.read_text(encoding="utf-8").splitlines()
+        text = f.read_text(encoding="utf-8")
+        lines = text.splitlines()
         lens_ids: list[str] = []
         question_ids: list[str] = []
         for i, line in enumerate(lines):
-            m = QUOTED_ID_RE.match(line)
+            m = BROAD_ID_RE.match(line)
             if not m:
                 continue
+            captured = m.group(1)
             lookahead = " ".join(lines[i + 1 : i + 3])
-            if "question:" in lookahead:
-                question_ids.append(m.group(1))
-            elif "label:" in lookahead:
-                lens_ids.append(m.group(1))
+            is_question = "question:" in lookahead
+            is_lens = not is_question and "label:" in lookahead
+            if not is_question and not is_lens:
+                continue
+            if not CANONICAL_ID_RE.match(captured):
+                findings.append(
+                    f"tier1: {f.name}: id \"{captured}\" cannot be canonicalized "
+                    "into a coverage token (expected lowercase [a-z0-9-]); "
+                    "update gui-plan-check.py or the source in the same PR."
+                )
+                continue
+            (question_ids if is_question else lens_ids).append(captured)
+        independent_question_count = len(QUESTION_LINE_RE.findall(text))
+        if len(question_ids) != independent_question_count:
+            findings.append(
+                f"tier1: {f.name}: parsed {len(question_ids)} question ids but "
+                f"the file has {independent_question_count} `question:` lines; "
+                "an enumerated sub-view was silently dropped. Update "
+                "gui-plan-check.py alongside the source change."
+            )
         if len(lens_ids) != 1 or not question_ids:
             findings.append(
                 f"tier1: enumerator could not parse {f.name}: expected exactly "
@@ -114,33 +151,88 @@ def enumerate_lenses(lenses_dir: Path, findings: list[str]) -> dict[str, list[st
             )
             continue
         lenses[lens_ids[0]] = question_ids
+
+    index_ts = lenses_dir / "index.ts"
+    if index_ts.exists():
+        imported = set(SIDE_EFFECT_IMPORT_RE.findall(index_ts.read_text(encoding="utf-8")))
+        file_stems = {f.stem for f in files}
+        for missing_file in sorted(imported - file_stems):
+            findings.append(
+                f"tier1: lenses/index.ts imports ./{missing_file} but no such "
+                "definition file was enumerated (a lens registered outside the "
+                "one-file-per-lens convention is invisible to this check)."
+            )
+        for dead_file in sorted(file_stems - imported):
+            findings.append(
+                f"tier1: lens file {dead_file}.ts is never imported by "
+                "lenses/index.ts (a dead lens file would demand plan coverage "
+                "falsely)."
+            )
+    else:
+        findings.append("tier1: lenses/index.ts not found; registration cross-check impossible")
     return lenses
 
 
 def enumerate_tabs(detail_panel: Path, findings: list[str]) -> list[str]:
-    m = TAB_KEYS_RE.search(detail_panel.read_text(encoding="utf-8"))
-    tabs = QUOTED_STR_RE.findall(m.group(1)) if m else []
-    if not tabs:
+    text = detail_panel.read_text(encoding="utf-8")
+    m = TAB_KEYS_RE.search(text)
+    if not m:
         findings.append(
-            f"tier1: could not parse TAB_KEYS from {detail_panel.name}; update "
-            "gui-plan-check.py alongside the source change."
+            f"tier1: could not find the TAB_KEYS array in {detail_panel.name}; "
+            "update gui-plan-check.py alongside the source change."
+        )
+        return []
+    body = m.group(1)
+    tabs = QUOTED_STR_RE.findall(body)
+    independent_count = len([t for t in body.split(",") if t.strip()])
+    if not tabs or len(tabs) != independent_count:
+        findings.append(
+            f"tier1: TAB_KEYS parse mismatch in {detail_panel.name}: "
+            f"{len(tabs)} quoted keys vs {independent_count} comma-separated "
+            "entries; a tab was silently dropped. Update gui-plan-check.py "
+            "alongside the source change."
         )
     return tabs
 
 
 def enumerate_edge_types(layout: Path, findings: list[str]) -> list[str]:
+    """Brace-depth walk of the EDGE_STYLES object literal.
+
+    Keys are captured broadly at depth one and validated; a key that cannot be
+    canonicalized is a loud finding. Multi-line values are handled by the
+    depth tracking, so a formatter rewrap cannot truncate the enumeration.
+    """
     types: list[str] = []
-    inside = False
+    depth = 0
+    started = False
     for line in layout.read_text(encoding="utf-8").splitlines():
-        if "const EDGE_STYLES" in line:
-            inside = True
+        if not started:
+            if "const EDGE_STYLES" in line:
+                started = True
+                depth = line.count("{") - line.count("}")
             continue
-        if inside:
-            if line.strip().startswith("}"):
-                break
+        stripped = line.strip()
+        if depth == 1 and not stripped.startswith("//"):
             m = EDGE_KEY_RE.match(line)
             if m:
-                types.append(m.group(1))
+                key = m.group(1)
+                if CANONICAL_EDGE_RE.match(key):
+                    types.append(key)
+                else:
+                    findings.append(
+                        f"tier1: EDGE_STYLES key \"{key}\" cannot be "
+                        "canonicalized into a coverage token; update "
+                        "gui-plan-check.py or the source in the same PR."
+                    )
+        depth += line.count("{") - line.count("}")
+        if depth <= 0:
+            break
+    if started and depth > 0:
+        findings.append(
+            f"tier1: EDGE_STYLES object in {layout.name} never closed at the "
+            "tracked depth; enumeration may be truncated. Update "
+            "gui-plan-check.py alongside the source change."
+        )
     if not types:
         findings.append(
             f"tier1: could not parse EDGE_STYLES from {layout.name}; update "
@@ -155,22 +247,34 @@ def enumerate_edge_types(layout: Path, findings: list[str]) -> list[str]:
 def load_plan(plan_dir: Path, dataset_keys: set[str], findings: list[str]):
     """Load plan case files; validate case shape; return (cases, covers)."""
     cases: list[dict] = []
-    case_files = sorted(plan_dir.glob("V*.yaml"))
-    for f in case_files:
+    for f in sorted(plan_dir.glob("V*.yaml")):
         content = _load_yaml(f)
         if not isinstance(content, list):
             findings.append(f"plan: {f.name} is not a YAML list of cases")
             continue
         for case in content:
+            if not isinstance(case, dict):
+                findings.append(f"plan: {f.name}: case entry is not a mapping: {str(case)[:60]!r}")
+                continue
             case["_file"] = f.name
             cases.append(case)
     seen_ids: set[str] = set()
     covers: set[str] = set()
     for case in cases:
         cid = str(case.get("id", "<missing id>"))
-        where = f"{case.get('_file')}:{cid}"
-        if not CASE_ID_RE.match(cid):
+        fname = str(case.get("_file"))
+        where = f"{fname}:{cid}"
+        id_match = CASE_ID_RE.match(cid)
+        if not id_match:
             findings.append(f"plan: {where}: id must match V<n>.<n>")
+        else:
+            file_vector = re.match(r"^V(\d+)\.yaml$", fname)
+            if file_vector and file_vector.group(1) != id_match.group(1):
+                findings.append(
+                    f"plan: {where}: case id belongs to vector V{id_match.group(1)} "
+                    f"but lives in {fname}; the runner shards by file, so this "
+                    "case would execute in the wrong shard."
+                )
         if cid in seen_ids:
             findings.append(f"plan: duplicate case id {cid}")
         seen_ids.add(cid)
@@ -197,8 +301,25 @@ def load_plan(plan_dir: Path, dataset_keys: set[str], findings: list[str]):
             findings.append(
                 f"plan: {where}: evidence must be one of {sorted(EVIDENCE_KINDS)}"
             )
-        for token in case.get("covers") or []:
-            covers.add(str(token))
+        raw_covers = case.get("covers")
+        if raw_covers is None:
+            continue
+        if not isinstance(raw_covers, list):
+            findings.append(
+                f"plan: {where}: covers must be a list of tokens, got "
+                f"{type(raw_covers).__name__}"
+            )
+            continue
+        for token in raw_covers:
+            token = str(token).strip()
+            kind = token.split(":", 1)[0] if ":" in token else ""
+            if kind not in TOKEN_KINDS:
+                findings.append(
+                    f"plan: {where}: covers token {token!r} does not start "
+                    f"with a known kind {TOKEN_KINDS}"
+                )
+                continue
+            covers.add(token)
     return cases, covers
 
 
@@ -212,10 +333,20 @@ def load_waivers(plan_dir: Path, findings: list[str]) -> dict[str, str]:
         findings.append("plan: waivers.yaml is not a YAML list")
         return waivers
     for entry in content:
-        token = str(entry.get("token", ""))
+        if not isinstance(entry, dict):
+            findings.append(f"plan: waivers.yaml entry is not a mapping: {str(entry)[:60]!r}")
+            continue
+        token = str(entry.get("token", "")).strip()
         reason = str(entry.get("reason", "")).strip()
         if not token or not reason:
             findings.append(f"plan: waivers.yaml entry missing token or reason: {entry}")
+            continue
+        kind = token.split(":", 1)[0] if ":" in token else ""
+        if kind not in TOKEN_KINDS:
+            findings.append(
+                f"plan: waivers.yaml token {token!r} does not start with a "
+                f"known kind {TOKEN_KINDS}"
+            )
             continue
         waivers[token] = reason
     return waivers
@@ -256,9 +387,18 @@ def run_check(repo_root: Path, bootstrap_ok: bool, list_only: bool) -> int:
     if surface_yaml.exists():
         manifest = _load_yaml(surface_yaml) or {}
         for entry in manifest.get("surfaces") or []:
-            surfaces[str(entry["component"])] = str(entry["file"])
+            name = str(entry["component"])
+            file = str(entry["file"])
+            if name in surfaces:
+                findings.append(f"tier2: duplicate surface component {name} in surface.yaml")
+            if file in surfaces.values():
+                findings.append(f"tier2: duplicate surface file {file} in surface.yaml")
+            surfaces[name] = file
         for entry in manifest.get("ignore") or []:
-            ignored_files[str(entry["file"])] = str(entry.get("reason", ""))
+            file = str(entry["file"])
+            if file in ignored_files:
+                findings.append(f"tier2: duplicate ignore file {file} in surface.yaml")
+            ignored_files[file] = str(entry.get("reason", ""))
     else:
         findings.append(f"missing {surface_yaml.relative_to(repo_root)}")
 
@@ -269,46 +409,8 @@ def run_check(repo_root: Path, bootstrap_ok: bool, list_only: bool) -> int:
             print(f"component:{name}")
         return 0
 
-    case_files = sorted(plan_dir.glob("V*.yaml")) if plan_dir.is_dir() else []
-    if not case_files:
-        banner = (
-            "gui-plan-check: NO PLAN CASE FILES under viewer/tests/gui/plan/. "
-            "Every enumerated surface is uncovered."
-        )
-        if bootstrap_ok:
-            print(f"{banner}\nBOOTSTRAP MODE (--bootstrap-ok): passing anyway. "
-                  "This flag must be removed from CI in the PR that lands the plan.")
-            return 0
-        print(banner)
-        return 1
-
-    cases, covers = load_plan(plan_dir, dataset_keys, findings)
-    waivers = load_waivers(plan_dir, findings)
-
-    # Tier one: every enumerated surface referenced or explicitly waived.
-    for token in sorted(tier1):
-        if token not in covers and token not in waivers:
-            findings.append(f"tier1: no plan reference or waiver for {token}")
-    # Phantom references and waivers (typo protection): every tier-1-shaped
-    # token used anywhere must exist in the enumeration.
-    for token in sorted(covers | set(waivers)):
-        kind = token.split(":", 1)[0]
-        if kind in ("lens", "subview", "tab", "edge") and token not in tier1:
-            findings.append(f"tier1: token {token} does not match any enumerated surface")
-
-    # Tier two: manifest vs plan, both directions.
-    for name in sorted(surfaces):
-        token = f"component:{name}"
-        if token not in covers and token not in waivers:
-            findings.append(f"tier2: surface {name} has no plan reference or waiver")
-    for token in sorted(covers | set(waivers)):
-        if token.startswith("component:") and token.split(":", 1)[1] not in surfaces:
-            findings.append(
-                f"tier2: token {token} names a component absent from surface.yaml"
-            )
-
-    # Tier two: the file sweep. Every component file is in the manifest or the
-    # ignore list; every manifest/ignore path exists; no file is in both.
+    # Structural tier-two checks that do not depend on the plan: the file
+    # sweep. These are evaluated in EVERY mode, including bootstrap.
     actual_files = {
         str(p.relative_to(components_dir))
         for p in components_dir.rglob("*.tsx")
@@ -326,12 +428,61 @@ def run_check(repo_root: Path, bootstrap_ok: bool, list_only: bool) -> int:
     for rel in sorted(manifest_files & set(ignored_files)):
         findings.append(f"tier2: {rel} is in both surfaces and ignore")
 
-    # Stale waivers: a waived token that is also covered should drop the waiver.
-    for token in sorted(set(waivers) & covers):
-        findings.append(f"waiver: {token} is waived but also covered; remove the waiver")
+    case_files = sorted(plan_dir.glob("V*.yaml")) if plan_dir.is_dir() else []
+    no_plan = not case_files
+    if no_plan:
+        # The one finding --bootstrap-ok may downgrade. Coverage checks are
+        # meaningless without a plan, but every structural finding above still
+        # stands and still fails, so a broken enumerator or a deleted manifest
+        # cannot hide behind the bootstrap window.
+        if not bootstrap_ok:
+            findings.append(
+                "plan: NO PLAN CASE FILES under viewer/tests/gui/plan/; every "
+                "enumerated surface is uncovered"
+            )
+        else:
+            print(
+                "gui-plan-check: BOOTSTRAP MODE (--bootstrap-ok): no plan case "
+                "files yet; coverage checks skipped, structural checks still "
+                "enforced. This flag must be removed from CI in the PR that "
+                "lands the plan."
+            )
+    else:
+        cases, covers = load_plan(plan_dir, dataset_keys, findings)
+        waivers = load_waivers(plan_dir, findings)
 
-    for token, reason in sorted(waivers.items()):
-        print(f"WAIVED (visible decision, not a gap): {token}: {reason}")
+        # Tier one: every enumerated surface referenced or explicitly waived.
+        for token in sorted(tier1):
+            if token not in covers and token not in waivers:
+                findings.append(f"tier1: no plan reference or waiver for {token}")
+        # Phantom references and waivers (typo protection): every tier-1-shaped
+        # token used anywhere must exist in the enumeration.
+        for token in sorted(covers | set(waivers)):
+            kind = token.split(":", 1)[0]
+            if kind in ("lens", "subview", "tab", "edge") and token not in tier1:
+                findings.append(
+                    f"tier1: token {token} does not match any enumerated surface"
+                )
+
+        # Tier two: manifest vs plan, both directions.
+        for name in sorted(surfaces):
+            token = f"component:{name}"
+            if token not in covers and token not in waivers:
+                findings.append(f"tier2: surface {name} has no plan reference or waiver")
+        for token in sorted(covers | set(waivers)):
+            if token.startswith("component:") and token.split(":", 1)[1] not in surfaces:
+                findings.append(
+                    f"tier2: token {token} names a component absent from surface.yaml"
+                )
+
+        # Stale waivers: a waived token that is also covered should drop the waiver.
+        for token in sorted(set(waivers) & covers):
+            findings.append(
+                f"waiver: {token} is waived but also covered; remove the waiver"
+            )
+
+        for token, reason in sorted(waivers.items()):
+            print(f"WAIVED (visible decision, not a gap): {token}: {reason}")
 
     if findings:
         print(f"\ngui-plan-check: {len(findings)} finding(s):")
@@ -339,11 +490,12 @@ def run_check(repo_root: Path, bootstrap_ok: bool, list_only: bool) -> int:
             print(f"  - {finding}")
         return 1
 
-    n_cases = len(cases)
+    if no_plan:
+        return 0
     print(
         f"gui-plan-check: clean. {len(tier1)} tier-1 surfaces, "
         f"{len(surfaces)} manifest surfaces, {len(ignored_files)} ignored files, "
-        f"{n_cases} plan cases, {len(waivers)} waivers."
+        f"{len(cases)} plan cases, {len(waivers)} waivers."
     )
     return 0
 
@@ -356,7 +508,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--bootstrap-ok",
         action="store_true",
-        help="Exit 0 when no plan case files exist yet (harness-PR window only).",
+        help="Downgrade only the no-plan-files-yet finding (harness-PR window).",
     )
     parser.add_argument(
         "--list", action="store_true", help="Print enumerated surface tokens and exit."

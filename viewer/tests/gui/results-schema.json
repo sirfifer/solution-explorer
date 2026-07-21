@@ -48,7 +48,7 @@
   "$defs": {
     "case": {
       "type": "object",
-      "propertyOrder": ["id", "vector", "viewport", "dataset", "verdict", "step_reached", "steps_total", "attempts", "assertions", "console_errors", "network_errors", "evidence", "wall_time_seconds", "notes"],
+      "propertyOrder": ["id", "vector", "viewport", "dataset", "verdict", "step_reached", "steps_total", "attempts", "assertions", "console_errors", "network_errors", "console_audit", "network_audit", "evidence", "wall_time_seconds", "notes"],
       "required": ["id", "vector", "viewport", "dataset", "verdict", "step_reached", "steps_total", "attempts", "assertions", "console_errors", "network_errors", "evidence", "wall_time_seconds"],
       "additionalProperties": false,
       "properties": {
@@ -99,6 +99,16 @@
         "network_errors": {
           "type": "array",
           "description": "Non-allowlisted failed requests as 'STATUS url' strings (empty when clean).",
+          "items": { "type": "string" }
+        },
+        "console_audit": {
+          "type": "array",
+          "description": "Optional audit trail for evidence 'screenshot+console' cases: the FULL captured console error list including allowlisted probe entries. console_errors stays non-allowlisted-only.",
+          "items": { "type": "string" }
+        },
+        "network_audit": {
+          "type": "array",
+          "description": "Optional audit trail for evidence 'screenshot+console' cases: the FULL captured failed-request list including allowlisted probes.",
           "items": { "type": "string" }
         },
         "evidence": {
