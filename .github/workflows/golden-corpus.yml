@@ -80,3 +80,47 @@ jobs:
           echo "If this is an intended engine improvement, re-baseline locally with" >> $GITHUB_STEP_SUMMARY
           echo '`python3 scripts/golden-corpus.py baseline '"${{ matrix.corpus }}"'` and commit the new baseline.' >> $GITHUB_STEP_SUMMARY
           echo "Otherwise investigate it as a regression before merge." >> $GITHUB_STEP_SUMMARY
+
+  # Full-vs-incremental parity at scale (card G4). This runs FOUR analyses per
+  # corpus (cold full, warm rerun, warm incremental over a one-file edit, cold
+  # full of the mutated tree), roughly four times the cost of the per-PR `check`
+  # above (about two minutes per corpus in CI). It proves the
+  # incremental-equals-full contract, which changes only with the incremental
+  # engine (rarely), not with most PRs, so it is workflow_dispatch (on demand)
+  # rather than on every PR, keeping PR CI fast while the per-PR `check` still
+  # catches projection regressions.
+  parity:
+    name: ${{ matrix.corpus }} parity (full vs incremental)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        corpus: [flask, fastapi]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pip-${{ runner.os }}-
+
+      - name: Install dependencies (frozen golden toolchain)
+        run: pip install -e ".[all,dev]" -c tests/golden/constraints.txt
+
+      - name: Prove ${{ matrix.corpus }} full-vs-incremental parity
+        run: python3 scripts/golden-corpus.py parity ${{ matrix.corpus }} --force
+
+      - name: Explain a parity failure
+        if: failure()
+        run: |
+          echo "## Golden corpus parity failure (${{ matrix.corpus }})" >> $GITHUB_STEP_SUMMARY
+          echo "A cold full regeneration and a warm incremental run of ${{ matrix.corpus }} produced different projections." >> $GITHUB_STEP_SUMMARY
+          echo "This is a real incremental-vs-full engine divergence, not a harness issue: the incremental-equals-full contract is broken." >> $GITHUB_STEP_SUMMARY
+          echo "Investigate the engine before relying on the light-handed auto-update path. The step log shows the G1 diff." >> $GITHUB_STEP_SUMMARY

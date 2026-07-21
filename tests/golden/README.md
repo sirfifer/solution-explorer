@@ -51,6 +51,7 @@ python3 scripts/golden-corpus.py list             # configured corpora + baselin
 python3 scripts/golden-corpus.py check flask       # fetch, analyze, diff vs baseline (exit 1 on drift)
 python3 scripts/golden-corpus.py generate flask -o /tmp/flask.json   # just produce a projection
 python3 scripts/golden-corpus.py baseline flask    # re-baseline (see below)
+python3 scripts/golden-corpus.py parity flask      # full-vs-incremental parity at scale (G4)
 ```
 
 `check` is the gate: a non-empty diff that is not an intended improvement is a
@@ -89,6 +90,32 @@ compared by id, not by their internal membership. Treat a clean `check` as "the
 structural representation and the roll-up counts did not change," not as "nothing
 regressed."
 
+## Full-vs-incremental parity at scale (G4)
+
+`parity <corpus>` proves the incremental-equals-full contract from
+`docs/remediation/ROBUSTNESS-STRATEGY.md` on real code at scale: a warm
+incremental run must produce the same projection as a cold full regeneration, so
+a daily full regeneration is provably unnecessary. It runs two checks, both
+required to pass:
+
+1. NO-CHANGE parity: a cold full generation (the store is wiped first) and a warm
+   rerun (the store is reused) over the unchanged tree must match.
+2. CHANGED-FILE parity: one source file is edited, a warm incremental run and a
+   cold full run are taken over the mutated tree, and they must match. This
+   proves the changed-file path, not only the no-change path. The edit is always
+   reverted (a `finally`), so the frozen corpus is left untouched.
+
+The comparison standard is stronger than the `check` semantic diff: it strips the
+same volatile fields the engine-parity fixture guard strips (the single allowlist
+lives in `analyzer/parity.py`, reused by both) and then compares the projections
+BYTE-for-byte with list order preserved, so it also catches an ordering
+regression a by-id diff would miss. A mismatch is a real incremental-vs-full
+engine divergence, never a harness bug: the command prints the G1 diff as the
+human explanation and exits 1. It is never weakened to make a real difference
+pass.
+
+Both corpora pass today (flask and fastapi, no-change and changed-file variants).
+
 ## Re-baseline procedure
 
 Re-baseline at a stopping point on purpose, never to silence a diff you have not
@@ -116,3 +143,12 @@ independent regression signal) on pull requests that touch the engine (analyzer,
 `analyze.py`, or the harness/diff scripts) and fails on drift. The default
 `pytest` suite stays hermetic (no clone); the live fetch+generate+check is the
 workflow, plus opt-in tests guarded by `GOLDEN_CORPUS_NETWORK=1`.
+
+The same workflow has a `parity` job (both corpora) that runs `parity` (G4). It
+is `workflow_dispatch` only, not on every PR: it runs four analyses per corpus
+(about four times the `check` cost), and the incremental-equals-full contract it
+proves changes only with the incremental engine, not with most PRs, so running
+it on demand keeps PR CI fast while the per-PR `check` still catches projection
+regressions. Trigger it from the Actions tab when the incremental or extraction
+path changes. The opt-in `test_live_parity_holds` (guarded by
+`GOLDEN_CORPUS_NETWORK=1`) exercises the same path locally.

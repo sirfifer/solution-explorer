@@ -26,6 +26,11 @@ Subcommands:
     check <name>         fetch, analyze, and diff against the committed baseline;
                          a non-empty diff that is not an intended improvement is a
                          regression to investigate. Exits 1 on drift (CI gate).
+    parity <name>        prove the full-vs-incremental parity contract at scale
+                         (card G4): a cold full regeneration and a warm rerun must
+                         produce the same projection, and a warm incremental over
+                         a one-file edit must equal a cold full of the mutated
+                         tree. Exits 1 on any divergence (a real engine finding).
 
 The first corpus is FLASK (pallets/flask, BSD-3-Clause, SWE-bench standard):
 stable, small, low diff noise, built first while the harness is shaken out.
@@ -51,6 +56,14 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 GOLDEN_DIR = REPO_ROOT / "tests" / "golden"
 CACHE_DIR = REPO_ROOT / ".golden-cache"
 ANALYZE_SCRIPT = REPO_ROOT / "analyze.py"
+
+# The parity check (G4) reuses analyzer.parity's volatile-field allowlist. Put
+# THIS checkout first on sys.path so `import analyzer` resolves to the repo the
+# harness lives in (a worktree, or the CI checkout), not whatever an editable
+# install elsewhere points at. The rest of the harness shells out to analyze.py
+# in a fresh process, so this only affects the in-process parity import.
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 # Markers bounding the harness-managed excludes block appended to a fetched
 # corpus's .gitignore. Rewritten on every fetch so the block is idempotent and
@@ -174,6 +187,28 @@ def fetch_corpus(
         except subprocess.CalledProcessError:
             head = ""
         if head == commit:
+            # The pin check alone is not enough: a hard kill (SIGKILL, power
+            # loss) mid-run can leave a stray edit in a TRACKED file (for
+            # example the parity command's synthetic edit before its finally
+            # restore ran), and every later non-force run would then analyze
+            # the poisoned tree (adversarial review of PR #77, finding 2).
+            # Restore any modified tracked file to the pinned content;
+            # untracked files (the gitignored analyzer store) are untouched,
+            # and the managed .gitignore excludes block is reapplied after.
+            try:
+                dirty = subprocess.run(
+                    ["git", "-C", str(src), "status", "--porcelain",
+                     "--untracked-files=no"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout.strip()
+            except subprocess.CalledProcessError:
+                dirty = ""
+            if dirty:
+                subprocess.run(
+                    ["git", "-C", str(src), "checkout", "--", "."], check=True
+                )
             _apply_excludes(src, corpus.get("exclude", []))
             return src
 
@@ -246,6 +281,170 @@ def diff_against_baseline(generated: Path, baseline: Path) -> dict:
 
 def render_diff_text(diff: dict) -> str:
     return _load_projection_diff().render_text(diff)
+
+
+# ---------------------------------------------------------------------------
+# Full-vs-incremental parity at scale (card G4)
+# ---------------------------------------------------------------------------
+
+
+def _normalize_for_parity():
+    """Import this checkout's analyzer.parity.normalize_for_parity (see sys.path
+    note above), so the parity compare uses the SAME volatile-field allowlist as
+    the engine-parity fixture guard rather than a second, drifting copy.
+
+    The sys.path guard wins the import RESOLUTION, but it cannot beat an already
+    populated sys.modules cache: a hosting process that imported a foreign
+    `analyzer` before loading this harness would silently hand us that module
+    (adversarial review of PR #77, finding 1). Unreachable in every shipped path
+    (the CLI is a fresh process; CI installs the checkout), but verify rather
+    than promise: refuse loudly if the resolved module lives outside this repo.
+    """
+    import analyzer.parity as parity_mod
+
+    mod_file = Path(getattr(parity_mod, "__file__", "")).resolve()
+    if not mod_file.is_relative_to(REPO_ROOT):
+        raise RuntimeError(
+            f"analyzer.parity resolved to {mod_file}, outside this checkout "
+            f"({REPO_ROOT}); a foreign analyzer module is cached in sys.modules. "
+            "Run the harness in a fresh process so the parity compare uses this "
+            "repo's volatile-field allowlist."
+        )
+    return parity_mod.normalize_for_parity
+
+
+def _compare_projections(a_path: Path, b_path: Path) -> Optional[dict]:
+    """Return None when two projections are byte-identical after normalization.
+
+    On a mismatch, return the G1 projection diff as the human-readable
+    explanation. The comparison strips only the volatile fields (timestamps,
+    machine path, version, changelog) and then compares bytes with LIST ORDER
+    PRESERVED, which is strictly stronger than the G1 semantic diff (it also
+    catches an ordering regression a by-id diff would miss). It is never weakened
+    to make a real difference pass.
+    """
+    normalize = _normalize_for_parity()
+    with a_path.open(encoding="utf-8") as fh:
+        a = json.load(fh)
+    with b_path.open(encoding="utf-8") as fh:
+        b = json.load(fh)
+    if normalize(a) == normalize(b):
+        return None
+    pd = _load_projection_diff()
+    return pd.diff_projections(pd.load_projection(a_path), pd.load_projection(b_path))
+
+
+def _pick_source_file(projection_path: Path, src: Path) -> Optional[Path]:
+    """Pick a deterministic real source file from a projection, for the mutation
+    variant. First parsed ``.py`` file by sorted path (both corpora are Python),
+    resolved under the fetched ``src`` and confirmed on disk. Returns None when
+    none is available (the mutation variant is then skipped, not failed)."""
+    try:
+        with projection_path.open(encoding="utf-8") as fh:
+            projection = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return None
+    for rel in sorted(
+        f.get("path", "") for f in projection.get("files", [])
+        if str(f.get("path", "")).endswith(".py")
+    ):
+        candidate = src / rel
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def run_parity(
+    name: str,
+    *,
+    force: bool = False,
+    mutate: bool = True,
+    golden_dir: Optional[Path] = None,
+    cache_dir: Optional[Path] = None,
+) -> int:
+    """Prove the incremental-equals-full contract on a frozen corpus at scale.
+
+    Two checks, both required to pass:
+
+      1. NO-CHANGE parity: a cold full regeneration and a warm rerun (the store
+         is NOT wiped) over the unchanged tree must produce the same projection.
+      2. CHANGED-FILE parity (when ``mutate``): after the cold baseline, one
+         source file is edited, a warm incremental run and a cold full run are
+         taken over the mutated tree, and they must agree. This proves the
+         changed-file path, not only the no-change path. The edit is always
+         reverted, so the frozen corpus is left untouched.
+
+    A mismatch prints the G1 diff as the explanation and returns 1; it is a real
+    engine finding, never papered over.
+    """
+
+    def _report_failure(kind: str, diff: dict) -> None:
+        sys.stderr.write(
+            f"\nPARITY FAILURE ({kind}): the two runs over the same tree produced "
+            "different projections. This is a real incremental-vs-full engine "
+            "divergence, not a harness issue. The G1 diff explains it:\n"
+        )
+        sys.stderr.write(render_diff_text(diff))
+        if not diff.get("has_changes"):
+            # The byte compare is authoritative and stronger than the semantic
+            # diff. If the semantic diff finds nothing, the difference is in list
+            # ORDER or a field the by-id diff does not track; say so plainly
+            # rather than let the empty diff read as "nothing wrong".
+            sys.stderr.write(
+                "\n(The semantic diff shows no section change, so the divergence "
+                "is a list-ordering or untracked-field difference. The byte-parity "
+                "compare is authoritative and it flagged a real difference.)\n"
+            )
+
+    corpus = load_corpus(name, golden_dir)
+    src = fetch_corpus(corpus, cache_dir, force=force)
+    base = _out_dir(name, cache_dir) / "parity"
+
+    print(f"Parity: {name} (cold full vs warm rerun over the frozen tree)")
+    cold = base / "cold" / "projection.json"
+    warm = base / "warm" / "projection.json"
+    generate_projection(src, cold, cold=True)   # wipe the store, full parse
+    generate_projection(src, warm, cold=False)  # reuse the warm store
+    nochange_diff = _compare_projections(cold, warm)
+    if nochange_diff is None:
+        print("  OK: warm rerun is byte-identical to the cold full run (no-change parity).")
+    else:
+        _report_failure("no-change", nochange_diff)
+
+    changed_ok = True
+    if mutate:
+        mut_file = _pick_source_file(cold, src)
+        if mut_file is None:
+            print("  changed-file parity SKIPPED: no picked source file in the projection.")
+        else:
+            rel = mut_file.relative_to(src)
+            print(f"Parity: {name} (changed-file: warm incremental vs cold full, edit {rel})")
+            original = mut_file.read_text(encoding="utf-8")
+            try:
+                mut_file.write_text(
+                    original + "\n# golden-corpus parity: synthetic edit\n",
+                    encoding="utf-8",
+                )
+                mut_warm = base / "mut-warm" / "projection.json"
+                mut_cold = base / "mut-cold" / "projection.json"
+                generate_projection(src, mut_warm, cold=False)  # warm incremental
+                generate_projection(src, mut_cold, cold=True)   # cold full, mutated tree
+                changed_diff = _compare_projections(mut_warm, mut_cold)
+            finally:
+                mut_file.write_text(original, encoding="utf-8")  # restore the frozen corpus
+            if changed_diff is None:
+                print(
+                    "  OK: warm incremental equals cold full on the mutated tree "
+                    "(changed-file parity)."
+                )
+            else:
+                changed_ok = False
+                _report_failure("changed-file", changed_diff)
+
+    if nochange_diff is None and changed_ok:
+        print(f"\nOK: '{name}' full-vs-incremental parity holds.")
+        return 0
+    return 1
 
 
 # ---------------------------------------------------------------------------
@@ -338,6 +537,10 @@ def _cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_parity(args: argparse.Namespace) -> int:
+    return run_parity(args.name, force=args.force, mutate=not args.no_mutate)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Golden-corpus regression harness (G2): analyze a frozen "
@@ -377,6 +580,21 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text", help="diff output format"
     )
     p_check.set_defaults(func=_cmd_check)
+
+    p_parity = sub.add_parser(
+        "parity",
+        help="prove full-vs-incremental parity: cold full == warm rerun (G4)",
+    )
+    p_parity.add_argument("name", help="corpus name (directory under tests/golden/)")
+    p_parity.add_argument(
+        "--force", action="store_true", help="re-fetch even if the cache is at the pin"
+    )
+    p_parity.add_argument(
+        "--no-mutate",
+        action="store_true",
+        help="skip the changed-file variant, run only the no-change parity",
+    )
+    p_parity.set_defaults(func=_cmd_parity)
 
     return parser
 
