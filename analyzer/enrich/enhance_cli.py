@@ -16,7 +16,13 @@ import argparse
 import sys
 from pathlib import Path
 
-from .engine import DEFAULT_MAX_PARALLEL, DEFAULT_MODEL, EnhanceConfig, run_enhance
+from .engine import (
+    DEFAULT_MAX_COST_USD,
+    DEFAULT_MAX_PARALLEL,
+    DEFAULT_MODEL,
+    EnhanceConfig,
+    run_enhance,
+)
 
 DEFAULT_STORE_RELPATH = Path(".solution-explorer") / "index.db"
 
@@ -100,6 +106,25 @@ def build_parser() -> argparse.ArgumentParser:
         default=5,
         help="Soft per-partition minimum before affinity merge (default: 5).",
     )
+    parser.add_argument(
+        "--max-cost-usd",
+        type=float,
+        default=DEFAULT_MAX_COST_USD,
+        help="Per-run cost ceiling in USD summed across ALL attempts, retries "
+        f"included (default: {DEFAULT_MAX_COST_USD}). Once reached, no new "
+        "partitions launch, in-flight ones finish, the rest are recorded as "
+        "skipped, and the run exits successfully with the partial state reported. "
+        "Pass a large value to effectively disable it.",
+    )
+    parser.add_argument(
+        "--retry-attempts",
+        type=int,
+        default=None,
+        help="Transport attempts per logical invoke for the default invoker (1 "
+        "initial plus retries), transient failures only, full-jitter backoff "
+        "(default: 4). Deterministic failures (parse errors, 4xx) are never "
+        "retried.",
+    )
     return parser
 
 
@@ -121,6 +146,12 @@ def main(argv: list[str]) -> int:
         )
         return 2
 
+    retry_policy = None
+    if args.retry_attempts is not None:
+        from .retry import RetryPolicy
+
+        retry_policy = RetryPolicy(max_attempts=args.retry_attempts)
+
     config = EnhanceConfig(
         store_path=store_path,
         root=root,
@@ -134,6 +165,8 @@ def main(argv: list[str]) -> int:
         max_lines=args.max_lines,
         max_components=args.max_components,
         min_components=args.min_components,
+        max_cost_usd=args.max_cost_usd,
+        retry_policy=retry_policy,
     )
 
     report = run_enhance(config)
@@ -163,7 +196,7 @@ def main(argv: list[str]) -> int:
         line = f"    partition {p.id}: {status} ({len(p.component_ids)} components"
         line += f", {p.attempts} attempt(s))"
         print(line)
-        if p.status == "failed":
+        if p.status in ("failed", "skipped"):
             for err in p.errors[:5]:
                 print(f"      - {err}")
     print(
