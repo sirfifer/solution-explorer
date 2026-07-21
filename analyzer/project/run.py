@@ -26,6 +26,7 @@ integration-tested against the real viewer build.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,6 +34,8 @@ from pathlib import Path
 from .. import __version__
 from ..derive import derive_all, derive_multi_from_config
 from ..extract import extract_activity, extract_repo
+from ..features import DEFAULT_CHANNEL, active_gates, resolve_channel
+from ..features import ENV_VAR as CHANNEL_ENV_VAR
 from ..store import FactStore
 from .coverage import coverage_families, format_source_percent
 from .pipeline import project_monolith, project_split
@@ -88,6 +91,35 @@ def run_v2(args) -> None:
     """Run the v2 pipeline from parsed CLI args (analyzer/cli.py ``main``)."""
     generated_at = datetime.now(timezone.utc).isoformat()
     indent = None if args.compact else 2
+
+    # Resolve the maturity channel (card R3), precedence CLI > env > default. A
+    # stable resolution (the default, and the only value any golden/CI run uses)
+    # activates no non-stable gate and stamps nothing, so output stays
+    # byte-identical. A bad value fails loudly rather than silently degrading.
+    try:
+        channel = resolve_channel(
+            getattr(args, "channel", None), os.environ.get(CHANNEL_ENV_VAR)
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
+    if channel != DEFAULT_CHANNEL:
+        # Report honestly (no theater): only claim a stamp when a non-stable gate
+        # actually activates. With the shipped empty registry a non-default
+        # channel activates nothing, so the output is byte-identical to stable and
+        # the message must say so rather than assert a stamp that was not written.
+        active = active_gates(channel)
+        if active:
+            names = ", ".join(g.id for g in active)
+            print(
+                f"Maturity channel: {channel} ({len(active)} active gate(s) "
+                f"stamped into provenance: {names})"
+            )
+        else:
+            print(
+                f"Maturity channel: {channel} (no active gates; output is "
+                f"byte-identical to stable)"
+            )
 
     # v2 is incremental by construction; the legacy incremental flags are
     # accepted so existing workflow invocations keep running unmodified, but
@@ -162,14 +194,16 @@ def run_v2(args) -> None:
             )
             result = project_split(
                 arch, output_dir, store=store, root=root,
-                generated_at=generated_at, analyzer_version=__version__, indent=indent,
+                generated_at=generated_at, analyzer_version=__version__,
+                channel=channel, indent=indent,
             )
             output_label = f"{output_dir}/"
         else:
             output_path = Path(args.output)
             result = project_monolith(
                 arch, output_path, store=store, root=root,
-                generated_at=generated_at, analyzer_version=__version__, indent=indent,
+                generated_at=generated_at, analyzer_version=__version__,
+                channel=channel, indent=indent,
             )
             output_label = str(output_path)
     finally:
