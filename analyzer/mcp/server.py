@@ -19,6 +19,7 @@ import json
 import sys
 from typing import IO, Any, Optional
 
+from ..contracts import PostconditionError
 from . import __version__
 from .context import StoreContext
 from .tools import TOOLS, ToolError, call_tool, render_result
@@ -111,14 +112,35 @@ class MCPServer:
             return self._error(req_id, INVALID_PARAMS, "tools/call requires a 'name'")
         if not isinstance(arguments, dict):
             return self._error(req_id, INVALID_PARAMS, "'arguments' must be an object")
+        # Per-tool bulkhead at the dispatch boundary (R1 wave 4). Each tool's
+        # result is validated for shape-and-completeness inside call_tool; a
+        # malformed result (PostconditionError) or an unexpected exception in the
+        # handler degrades to a well-formed MCP error with per-tool attribution,
+        # never a crashed server loop or a silent garbage handoff. KeyError
+        # (unknown tool) and ToolError (malformed arguments) keep their existing
+        # user-facing INVALID_PARAMS mapping.
         try:
             result = call_tool(self.ctx, name, arguments)
         except KeyError:
             return self._error(req_id, INVALID_PARAMS, f"unknown tool: {name}")
         except ToolError as exc:
             return self._error(req_id, INVALID_PARAMS, str(exc))
-        as_json = bool(arguments.get("json"))
-        text = render_result(result, as_json)
+        except PostconditionError as exc:
+            return self._error(
+                req_id, INTERNAL_ERROR, f"tool '{name}' produced an incomplete result: {exc}"
+            )
+        except Exception as exc:  # noqa: BLE001 - tool bulkhead, never crash the loop
+            return self._error(
+                req_id, INTERNAL_ERROR, f"tool '{name}' failed: {type(exc).__name__}: {exc}"
+            )
+        try:
+            as_json = bool(arguments.get("json"))
+            text = render_result(result, as_json)
+        except Exception as exc:  # noqa: BLE001 - rendering bulkhead, never crash the loop
+            return self._error(
+                req_id, INTERNAL_ERROR,
+                f"rendering tool '{name}' result failed: {type(exc).__name__}: {exc}",
+            )
         return self._result(
             req_id,
             {"content": [{"type": "text", "text": text}], "isError": False},

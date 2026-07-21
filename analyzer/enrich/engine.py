@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from ..contracts import gap_from_exception
 from ..derive import derive_all
 from ..store import FactStore
 from .digest import ARCH_TARGET_ID, DigestIndex
@@ -545,7 +546,31 @@ def run_enhance(
                     for p in partitions
                 }
                 for fut in futures:
-                    outcome, payloads = fut.result()
+                    p = futures[fut]
+                    try:
+                        outcome, payloads = fut.result()
+                    except Exception as exc:  # noqa: BLE001 - per-partition bulkhead (R1 wave 3)
+                        # An UNEXPECTED exception inside _enhance_partition (a bug,
+                        # not a handled invoke/validation failure, which already
+                        # degrade in-band) previously re-raised through fut.result()
+                        # and crashed the whole enrichment run. Isolate it per
+                        # partition: record a deterministic failed outcome (same
+                        # discipline the all-or-nothing per-partition contract
+                        # already applies to validation failures) so one bad
+                        # partition degrades to a recorded failure and the rest of
+                        # the run still enriches. The reason is scrubbed via the
+                        # honest-gap backbone (no traceback, no heap addresses), so
+                        # the report is deterministic. Retry/cost logic is untouched
+                        # (that is R2); this only stops a crash.
+                        reason = gap_from_exception("enrich.partition", "enrich", exc).reason
+                        outcome = PartitionOutcome(
+                            id=p.id,
+                            component_ids=list(p.component_ids),
+                            relationship_keys=list(p.relationship_keys),
+                            status="failed",
+                            errors=[f"partition raised an unexpected error: {reason}"],
+                        )
+                        payloads = None
                     outcomes.append(outcome)
                     if payloads is not None:
                         payloads_by_partition[outcome.id] = payloads
