@@ -58,7 +58,11 @@ def _check_output_contract(arch: dict) -> None:
     total is computed from the very array it summarizes), and, from wave 5, the
     cross-reference and count consistency that a whole assembled projection must
     satisfy. Shape-and-completeness only, never what a value IS (no validation
-    creep). A clean run never trips it, so byte parity is preserved.
+    creep). A WELL-FORMED graph never trips it, so byte parity is preserved on
+    healthy runs; a genuinely malformed graph (a real id collision, a dangling
+    UI edge) is surfaced as an honest gap, which is the contract doing its job
+    (a known producer of such graphs is the pre-existing swiftui_flow tab-id
+    collision, recorded in the TASKS.md Discovered table).
 
     The wave-5 additions were validated to produce ZERO gaps and no drift across
     flask, fastapi, the storyboard fixture, and the real iOS demo (530
