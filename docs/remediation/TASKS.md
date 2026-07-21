@@ -1913,9 +1913,13 @@ corpus). These cards are DESIGN-CARDED; the owner green-lights builds. Nothing
 here is started.
 
 ### R1: Output-contract plus honest-gap backbone
-- Status: IN PROGRESS (waves 1-4 BUILT). Backbone module, derive-driver
-  adoption, project-emitter isolation, and the enrich + MCP boundaries are
-  landed; only the cross-reference wave (5) remains.
+- Status: DONE (all waves 1-5 built). Backbone module, derive-driver adoption,
+  project-emitter isolation, the enrich + MCP boundaries, and the
+  cross-reference / count-consistency postconditions are all landed. Every
+  producer boundary (each derive pass, each projection emitter, each enrichment
+  partition and the architecture narrative, each MCP tool) now records a
+  deterministic honest gap or degrades to a well-formed error instead of
+  crashing or shipping a fracture.
 - Scope: generalize the coverage ledger's completeness guarantee to every
   producer (each derive pass, each emitter, each MCP tool, each enrichment pass)
   via Pydantic v2 output models and completeness postconditions (shape and
@@ -1986,17 +1990,30 @@ here is started.
   R4). Fail-before proved in `tests/test_enrich_partition_isolation.py` and
   `tests/test_mcp_result_postcondition.py`; existing enrich and MCP suites stay
   green. EXTRACT_TIER not bumped (gaps stay a derive/project-tier signal).
-- Remaining wave (its own PR, full protocol): (5) cross-reference-resolution and
-  total_components postconditions at the derive assembly boundary, validated
-  against both golden corpora. Empirically scoped 2026-07-21 (survey across
-  flask, fastapi, the storyboard fixture, and the real iOS demo, 530 rels):
-  component-id uniqueness and relationship-endpoint resolution to a tree node id
-  hold everywhere (UI-flow children ARE added to the assembled tree, so UI edges
-  resolve), so both are safe postconditions; `total_components == tree-node
-  count` is NOT safe (the iOS demo has 190 tree nodes vs 99 path components), but
-  `total_components <= unique tree-node ids` holds everywhere. Waves (2)
-  project-emitter and (6) `_assemble` skeleton-fallback already landed (PR #74
-  and PR #73).
+- Wave 5 delivered (2026-07-21, wt/r1-wave5-crossref): cross-reference and
+  count-consistency postconditions at the derive assembly boundary, the checks
+  wave 1 deferred pending per-corpus validation. `_check_output_contract` now
+  also asserts component-id UNIQUENESS across the tree, relationship ENDPOINT
+  RESOLUTION (every source and target resolves to a tree node id), and a
+  total_components BOUND (at least the root-component count, at most the distinct
+  tree-node ids). Empirically scoped and validated to produce ZERO gaps and no
+  drift across flask, fastapi, the storyboard fixture, and the real iOS demo (530
+  relationships, rich SwiftUI flows: 190 tree nodes vs 99 path components, 0
+  unresolved endpoints, 0 dups). The earlier deferral worried UI targets
+  reference ids outside the component map, but the flow passes ADD those UI-flow
+  children to the assembled tree, so UI edges resolve to them; `total_components
+  == tree-node count` stays unsafe (hence the bound, not equality). Ledger
+  completeness is already an output postcondition at the project tier, so it is
+  not re-checked here. Precision of the claim (adversarial review of PR #76): a
+  WELL-FORMED graph never trips the contract (verified across 18 repos including
+  every fixture and four real Swift/iOS repos, zero output-contract gaps); a
+  genuinely malformed graph, such as the pre-existing swiftui_flow tab-id
+  collision recorded in the Discovered table, IS surfaced as an honest gap,
+  which is the contract working as designed, not a false positive. Fail-before
+  proved (injected duplicate id, unresolved endpoint, inflated total_components
+  each surface as a derive.output-contract gap). EXTRACT_TIER unchanged. Waves
+  (2) project-emitter and (6) `_assemble` skeleton-fallback landed earlier
+  (PR #74 and PR #73).
 
 ### R2: Retry, timeout, and cost ceiling on the AI-enrichment path
 - Status: TODO (candidate)
@@ -2105,6 +2122,8 @@ Add new findings here with a date and the task you were on; do not expand task s
 
 | Date | Found while | Description | Disposition |
 |---|---|---|---|
+| 2026-07-21 | R1 wave 5 adversarial review (PR #76) | Pre-existing SwiftUI tab-id collision bug in `analyzer/swiftui_flow.py`, exposed as an honest gap by the new wave-5 postconditions (a TRUE positive, not a contract defect). Two realistic, compilable SwiftUI shapes produce genuinely malformed graphs: (a) two tabs with the SAME `.tabItem` label collide on `tab_id` (the id is derived from the label slug, swiftui_flow.py:450), yielding duplicate component ids in the assembled tree; (b) two tabs presenting the SAME content View collide in `tab_components` (keyed by view name, swiftui_flow.py:461), then the nesting loop (lines 631-637) nests one id twice and leaves a dangling tab-bar edge. On such repos the wave-5 contract records a deterministic `derive.output-contract` gap instead of silently shipping the collision. | Fix the collision at source in `swiftui_flow.py` (disambiguate tab ids beyond the label slug, and key `tab_components` so two tabs can share a content view) as its own small card with these two shapes as fixtures; not fixed inline in PR #76 (scope discipline: the contract change must not smuggle in a detector change). Until then the honest gap is the correct behavior. Wording in the R1 card and the contract docstring adjusted from "a clean run never trips it" to "a well-formed graph never trips it". |
+| 2026-07-21 | R1 wave 5 adversarial review (PR #76) | Multi-repo merge is neither contract-checked nor gap-honest: `analyzer/derive/multi.py::merge_architectures` never calls `_check_output_contract` on the merged result and copies only components/relationships/symbols/files/stats/repositories, so any per-repo `gaps` arrays are silently DROPPED from the merged projection (a per-repo honest gap disappears in multi-repo output). | Follow-up owned by the standing multi-repo unification family (the same family as the P4-7 coverage/incremental and P10-1 SBOM-aggregation deferrals): merge per-repo gaps into the merged arch (re-finalize, prefix or carry the repo attribution) and run the output contract on the merged result. Out of PR #76 scope (single-repo assembly boundary). |
 | 2026-07-21 | R1 waves 3+4 adversarial review (PR #75) | Two minor error-completeness edges: (1) in `mcp/server.py::_tools_call`, a KNOWN tool whose handler raises `KeyError` internally was caught by the `except KeyError` unknown-tool branch and mislabeled INVALID_PARAMS "unknown tool" instead of an INTERNAL_ERROR with attribution; (2) in `enrich/engine.py::run_enhance`, the architecture-narrative producer (`_enhance_architecture`) is a peer unit to the partitions but ran unguarded, so an unexpected exception there still crashed the run. | RESOLVED in PR #75. (1) unknown-tool resolution now happens BEFORE dispatch (`name not in TOOLS_BY_NAME`), so a handler KeyError reaches the generic INTERNAL_ERROR bulkhead with per-tool attribution. (2) the `_enhance_architecture` call is wrapped in the same degrade pattern (records a scrubbed note, leaves the narrative unenriched, catches only `Exception` so KeyboardInterrupt/SystemExit propagate). Each has a fail-before regression test. All other hard contracts held under adversarial pressure (selective partition failure with surviving siblings, all 9 tools through the postcondition, a real serve_stdio round trip with a crashing tool mid-stream, determinism). |
 | 2026-07-20 | R1 wave 1 producer survey | The enrich driver (`enrich/engine.py::run_enhance`) isolates partitions via `PartitionOutcome` (invoke/validation failures degrade), but an UNEXPECTED exception inside `_enhance_partition` still re-raises through `fut.result()` and crashes `run_enhance`. Likewise `project_split`/`project_monolith` call emitters as bare statements with no per-emitter isolation, so an emitter exception crashes the projection. | Both are named R1 remaining waves (project-emitter isolation = wave 2; enrich unexpected-exception isolation = wave 3) on the R1 card. Project-emitter isolation RESOLVED 2026-07-21 (wave 2, wt/r1-wave2-emitters): `project_split`/`project_monolith` now run every emitter under an `Isolator` and write the main artifact last so it carries every gap and skeleton-degrades on its own failure; `check flask`/`check fastapi` no drift. The enrich `_enhance_partition` re-raise RESOLVED 2026-07-21 (wave 3, wt/r1-wave34-enrich-mcp): `run_enhance` now wraps `fut.result()` so one partition's unexpected exception degrades to a recorded failed `PartitionOutcome` instead of crashing the run. The backbone (`analyzer/contracts.py` Isolator) is the shared mechanism each wave adopts. |
 | 2026-07-21 | R1 wave 2 adversarial review (PR #74) | Four degraded-path defects, all healthy output byte-perfect: (1) MAJOR, `Isolator.run` called `default_factory()` outside its try/except, so a skeleton writer that itself raised could cascade into a crash. (2) MAJOR, gap reasons built from `str(exc)` leaked absolute filesystem paths for file-I/O emitters (OSError), against the documented "no absolute paths" invariant and breaking cross-environment byte-determinism of degraded artifacts. (3) MINOR, a failed search write returned the truthy empty-manifest default, so the AI front door advertised a search index that was never written. (4) NIT, orphan `data/detail-*.json` shards survived a partial manifest failure whose skeleton declares an empty index. | RESOLVED in PR #74. (1) `Isolator.run` now wraps `default_factory()` in its own try/except, recording a second `<producer>.fallback` gap and returning the plain default, so a fallback failure can never cascade; `_empty_arch_doc` additionally coerces identity fields to JSON-safe scalars (`_json_scalar`) so the skeleton always serializes. (2) `_scrub_reason` now collapses absolute paths to `.../<basename>` (deterministic, non-leaking, analogous to the hex-address scrub). (3) the pipeline detects a recorded `project.search-shards` gap and passes `search_manifest=None` to the front door so it emits its honest search-absent contract. (4) the skeleton manifest best-effort prunes orphan detail shards. Each has a fail-before regression test (`tests/test_contracts.py`, `tests/test_project_isolation.py`). Byte parity re-confirmed (`check flask` no drift, engine/incremental parity green). |

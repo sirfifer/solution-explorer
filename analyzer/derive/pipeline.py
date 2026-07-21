@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from ..contracts import Isolator, finalize_gaps, require
+from ..contracts import Isolator, finalize_gaps, require, unresolved_reference_count
 from ..models import Component, to_dict
 from ..store import FactStore
 from . import capabilities as capabilities_pass
@@ -32,17 +32,57 @@ from .storeview import StoreView
 _REQUIRED_ARCH_KEYS = ("name", "components", "relationships", "symbols", "files", "stats")
 
 
+def _tree_component_ids(components: list) -> list:
+    """Collect every component id in the assembled tree, depth-first.
+
+    Includes UI-flow children (Component nodes added under ``children`` by the
+    flow passes), because they are real nodes the viewer renders and relationship
+    endpoints legitimately point at them. Returned as a list (not a set) so the
+    caller can detect duplicates.
+    """
+    ids: list = []
+
+    def walk(comps: list) -> None:
+        for comp in comps:
+            ids.append(comp.get("id"))
+            walk(comp.get("children", []))
+
+    walk(components)
+    return ids
+
+
 def _check_output_contract(arch: dict) -> None:
     """Shape-and-completeness postcondition for the assembled architecture (R1).
 
-    Asserts presence, shape, and the count-consistency that holds by construction
-    on any healthy run (each stats total is computed from the very array it
-    summarizes), so a clean run never trips it and byte parity is preserved. It
-    deliberately does NOT assert cross-reference resolution (some healthy outputs
-    legitimately reference ids outside the component tree, for example UI targets)
-    nor total_components against the tree (UI-flow children can add nodes the
-    component map does not count); those need per-corpus validation and are a
-    later R1 wave. Never asserts what a value is (no validation creep).
+    Asserts presence, shape, the by-construction count-consistency (each stats
+    total is computed from the very array it summarizes), and, from wave 5, the
+    cross-reference and count consistency that a whole assembled projection must
+    satisfy. Shape-and-completeness only, never what a value IS (no validation
+    creep). A WELL-FORMED graph never trips it, so byte parity is preserved on
+    healthy runs; a genuinely malformed graph (a real id collision, a dangling
+    UI edge) is surfaced as an honest gap, which is the contract doing its job
+    (a known producer of such graphs is the pre-existing swiftui_flow tab-id
+    collision, recorded in the TASKS.md Discovered table).
+
+    The wave-5 additions were validated to produce ZERO gaps and no drift across
+    flask, fastapi, the storyboard fixture, and the real iOS demo (530
+    relationships, rich SwiftUI flows), which is what makes them safe:
+
+      - Component id UNIQUENESS across the whole tree. A duplicate id is a real
+        collision bug (F-CRIT-5 territory); none occurs on any validated corpus.
+      - Relationship ENDPOINT RESOLUTION: every source and target resolves to a
+        node id present in the tree. The earlier deferral worried that UI targets
+        reference ids outside the component map, but the flow passes ADD those
+        UI-flow children to the assembled tree, so UI edges resolve to them (0
+        unresolved endpoints on the iOS demo's 530 edges). A dangling endpoint is
+        a real inconsistency worth surfacing.
+      - total_components BOUND: total_components counts the path-component map,
+        which UI-flow children legitimately exceed in the tree (iOS demo: 99 vs
+        190 nodes), so it is NOT equated to the node count. It is bounded instead:
+        at least the number of root components (which are all path components) and
+        at most the number of distinct tree node ids. This catches a count that
+        is grossly inflated or below the roots it must contain, without the
+        false-positive the naive tree-equality check would raise on UI repos.
     """
     require(isinstance(arch, dict), "derive output is not a dict")
     for key in _REQUIRED_ARCH_KEYS:
@@ -62,6 +102,28 @@ def _check_output_contract(arch: dict) -> None:
     require(
         stats.get("total_files") == len(arch["files"]),
         "stats.total_files does not match the files array",
+    )
+
+    # Cross-reference and count consistency (wave 5).
+    tree_ids = _tree_component_ids(arch["components"])
+    id_set = set(tree_ids)
+    require(
+        len(tree_ids) == len(id_set),
+        "component tree contains duplicate component ids",
+    )
+    endpoints: list = []
+    for rel in arch["relationships"]:
+        endpoints.append(rel.get("source"))
+        endpoints.append(rel.get("target"))
+    require(
+        unresolved_reference_count(id_set, endpoints) == 0,
+        "one or more relationship endpoints do not resolve to a component tree id",
+    )
+    total_components = stats.get("total_components")
+    require(
+        isinstance(total_components, int)
+        and len(arch["components"]) <= total_components <= len(id_set),
+        "stats.total_components is out of the [root components, distinct tree ids] bound",
     )
 
 
