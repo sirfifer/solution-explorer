@@ -208,11 +208,25 @@ def run_v2(args) -> None:
         # the exact ranked, verdict-overlaid, CRA-merged findings surface the
         # projection produced, so the SARIF log matches the delivered artifact
         # byte-for-byte in content, not a second, possibly-diverging read.
+        #
+        # SARIF is an opt-in sidecar that runs AFTER the main projection has
+        # shipped, so its gap channel is the console, not arch["gaps"] (the
+        # artifact is already on disk). A SARIF failure must not fracture the
+        # successful projection or crash the CLI with a traceback (card R1 wave
+        # 2, graceful degradation): degrade to a loud honest message and keep the
+        # run's success, since the primary deliverable already shipped.
         from .sarif import write_sarif
 
         source_path = (output_dir / "manifest.json") if args.split else output_path
-        with open(source_path, "r", encoding="utf-8") as fh:
-            projected = json.load(fh)
-        sarif_path = write_sarif(projected, args.sarif, analyzer_version=__version__)
-        n_results = len(projected.get("findings") or [])
-        print(f"SARIF: {sarif_path} ({n_results} result(s))")
+        try:
+            with open(source_path, "r", encoding="utf-8") as fh:
+                projected = json.load(fh)
+            sarif_path = write_sarif(projected, args.sarif, analyzer_version=__version__)
+            n_results = len(projected.get("findings") or [])
+            print(f"SARIF: {sarif_path} ({n_results} result(s))")
+        except Exception as exc:  # noqa: BLE001 - sidecar bulkhead after the main artifact
+            print(
+                f"SARIF: export skipped, {type(exc).__name__}: {exc} "
+                f"(the projection at {output_label} shipped and is unaffected)",
+                file=sys.stderr,
+            )
