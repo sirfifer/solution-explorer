@@ -1913,9 +1913,9 @@ corpus). These cards are DESIGN-CARDED; the owner green-lights builds. Nothing
 here is started.
 
 ### R1: Output-contract plus honest-gap backbone
-- Status: IN PROGRESS (waves 1-2 BUILT). Backbone module, derive-driver
-  adoption, and project-emitter isolation are landed; the enrich, MCP, and
-  cross-reference waves (3-5) are later PRs.
+- Status: IN PROGRESS (waves 1-4 BUILT). Backbone module, derive-driver
+  adoption, project-emitter isolation, and the enrich + MCP boundaries are
+  landed; only the cross-reference wave (5) remains.
 - Scope: generalize the coverage ledger's completeness guarantee to every
   producer (each derive pass, each emitter, each MCP tool, each enrichment pass)
   via Pydantic v2 output models and completeness postconditions (shape and
@@ -1967,14 +1967,36 @@ here is started.
   the honest gap). EXTRACT_TIER NOT bumped: gaps stay a derive/project-tier
   signal, not a new EXTRACTED signal kind, so the extraction content-hash cache
   key is untouched.
-- Remaining waves (each its own PR, full protocol): (3) enrich-driver
-  unexpected-exception isolation (the handled invoke/validation paths already
-  degrade; an unexpected exception inside `_enhance_partition` still re-raises
-  through `fut.result()`); (4) MCP tool-call postconditions (dispatch already
-  degrades KeyError/ToolError); (5) cross-reference-resolution and
-  total_components postconditions once validated against both golden corpora.
-  Wave (6) `_assemble` skeleton-fallback hardening already landed in wave 1
-  (PR #73, adversarial-review finding 1).
+- Waves 3+4 delivered (2026-07-21, wt/r1-wave34-enrich-mcp): the enrich and MCP
+  producer boundaries. Wave 3 (enrich): `run_enhance` previously let an
+  UNEXPECTED exception inside `_enhance_partition` re-raise through
+  `fut.result()` and crash the whole enrichment run. The handled invoke and
+  validation failures already degrade in-band to a failed `PartitionOutcome`;
+  this extends the same all-or-nothing per-partition discipline to unexpected
+  exceptions (one bad partition degrades to a recorded failure, reason scrubbed
+  via the honest-gap backbone so it is deterministic, and the rest of the run
+  still enriches). Retry and cost logic are untouched (that is R2). Wave 4 (MCP):
+  each tool's result is validated for shape-and-completeness at the dispatch
+  handoff (`call_tool` runs `_check_tool_result`): a non-ToolResult, a non-string
+  `text`, or a non-dict `data` raises PostconditionError, which the server maps
+  to a well-formed MCP error with per-tool attribution, never a crashed server
+  loop and never the pre-wave silent garbage handoff (a structurally-incomplete
+  result was shipped with `isError: false`, a false success). Shape-and-
+  completeness only, never value validation. No breaker, no liveness (that is
+  R4). Fail-before proved in `tests/test_enrich_partition_isolation.py` and
+  `tests/test_mcp_result_postcondition.py`; existing enrich and MCP suites stay
+  green. EXTRACT_TIER not bumped (gaps stay a derive/project-tier signal).
+- Remaining wave (its own PR, full protocol): (5) cross-reference-resolution and
+  total_components postconditions at the derive assembly boundary, validated
+  against both golden corpora. Empirically scoped 2026-07-21 (survey across
+  flask, fastapi, the storyboard fixture, and the real iOS demo, 530 rels):
+  component-id uniqueness and relationship-endpoint resolution to a tree node id
+  hold everywhere (UI-flow children ARE added to the assembled tree, so UI edges
+  resolve), so both are safe postconditions; `total_components == tree-node
+  count` is NOT safe (the iOS demo has 190 tree nodes vs 99 path components), but
+  `total_components <= unique tree-node ids` holds everywhere. Waves (2)
+  project-emitter and (6) `_assemble` skeleton-fallback already landed (PR #74
+  and PR #73).
 
 ### R2: Retry, timeout, and cost ceiling on the AI-enrichment path
 - Status: TODO (candidate)
@@ -2083,7 +2105,8 @@ Add new findings here with a date and the task you were on; do not expand task s
 
 | Date | Found while | Description | Disposition |
 |---|---|---|---|
-| 2026-07-20 | R1 wave 1 producer survey | The enrich driver (`enrich/engine.py::run_enhance`) isolates partitions via `PartitionOutcome` (invoke/validation failures degrade), but an UNEXPECTED exception inside `_enhance_partition` still re-raises through `fut.result()` and crashes `run_enhance`. Likewise `project_split`/`project_monolith` call emitters as bare statements with no per-emitter isolation, so an emitter exception crashes the projection. | Both are named R1 remaining waves (project-emitter isolation = wave 2; enrich unexpected-exception isolation = wave 3) on the R1 card. Project-emitter isolation RESOLVED 2026-07-21 (wave 2, wt/r1-wave2-emitters): `project_split`/`project_monolith` now run every emitter under an `Isolator` and write the main artifact last so it carries every gap and skeleton-degrades on its own failure; `check flask`/`check fastapi` no drift. The enrich `_enhance_partition` re-raise remains open for wave 3. The backbone (`analyzer/contracts.py` Isolator) is the shared mechanism each wave adopts. |
+| 2026-07-21 | R1 waves 3+4 adversarial review (PR #75) | Two minor error-completeness edges: (1) in `mcp/server.py::_tools_call`, a KNOWN tool whose handler raises `KeyError` internally was caught by the `except KeyError` unknown-tool branch and mislabeled INVALID_PARAMS "unknown tool" instead of an INTERNAL_ERROR with attribution; (2) in `enrich/engine.py::run_enhance`, the architecture-narrative producer (`_enhance_architecture`) is a peer unit to the partitions but ran unguarded, so an unexpected exception there still crashed the run. | RESOLVED in PR #75. (1) unknown-tool resolution now happens BEFORE dispatch (`name not in TOOLS_BY_NAME`), so a handler KeyError reaches the generic INTERNAL_ERROR bulkhead with per-tool attribution. (2) the `_enhance_architecture` call is wrapped in the same degrade pattern (records a scrubbed note, leaves the narrative unenriched, catches only `Exception` so KeyboardInterrupt/SystemExit propagate). Each has a fail-before regression test. All other hard contracts held under adversarial pressure (selective partition failure with surviving siblings, all 9 tools through the postcondition, a real serve_stdio round trip with a crashing tool mid-stream, determinism). |
+| 2026-07-20 | R1 wave 1 producer survey | The enrich driver (`enrich/engine.py::run_enhance`) isolates partitions via `PartitionOutcome` (invoke/validation failures degrade), but an UNEXPECTED exception inside `_enhance_partition` still re-raises through `fut.result()` and crashes `run_enhance`. Likewise `project_split`/`project_monolith` call emitters as bare statements with no per-emitter isolation, so an emitter exception crashes the projection. | Both are named R1 remaining waves (project-emitter isolation = wave 2; enrich unexpected-exception isolation = wave 3) on the R1 card. Project-emitter isolation RESOLVED 2026-07-21 (wave 2, wt/r1-wave2-emitters): `project_split`/`project_monolith` now run every emitter under an `Isolator` and write the main artifact last so it carries every gap and skeleton-degrades on its own failure; `check flask`/`check fastapi` no drift. The enrich `_enhance_partition` re-raise RESOLVED 2026-07-21 (wave 3, wt/r1-wave34-enrich-mcp): `run_enhance` now wraps `fut.result()` so one partition's unexpected exception degrades to a recorded failed `PartitionOutcome` instead of crashing the run. The backbone (`analyzer/contracts.py` Isolator) is the shared mechanism each wave adopts. |
 | 2026-07-21 | R1 wave 2 adversarial review (PR #74) | Four degraded-path defects, all healthy output byte-perfect: (1) MAJOR, `Isolator.run` called `default_factory()` outside its try/except, so a skeleton writer that itself raised could cascade into a crash. (2) MAJOR, gap reasons built from `str(exc)` leaked absolute filesystem paths for file-I/O emitters (OSError), against the documented "no absolute paths" invariant and breaking cross-environment byte-determinism of degraded artifacts. (3) MINOR, a failed search write returned the truthy empty-manifest default, so the AI front door advertised a search index that was never written. (4) NIT, orphan `data/detail-*.json` shards survived a partial manifest failure whose skeleton declares an empty index. | RESOLVED in PR #74. (1) `Isolator.run` now wraps `default_factory()` in its own try/except, recording a second `<producer>.fallback` gap and returning the plain default, so a fallback failure can never cascade; `_empty_arch_doc` additionally coerces identity fields to JSON-safe scalars (`_json_scalar`) so the skeleton always serializes. (2) `_scrub_reason` now collapses absolute paths to `.../<basename>` (deterministic, non-leaking, analogous to the hex-address scrub). (3) the pipeline detects a recorded `project.search-shards` gap and passes `search_manifest=None` to the front door so it emits its honest search-absent contract. (4) the skeleton manifest best-effort prunes orphan detail shards. Each has a fail-before regression test (`tests/test_contracts.py`, `tests/test_project_isolation.py`). Byte parity re-confirmed (`check flask` no drift, engine/incremental parity green). |
 | 2026-07-21 | R1 wave 2 adversarial review (PR #74) | Follow-up (not fixed in wave 2): the AI front door decides the `coverage.json` / `activity.json` endpoint presence from the in-memory coverage/activity object, not from whether that specific sidecar FILE write succeeded. In the narrow case where `build_coverage` succeeds but the `coverage.json` write fails, the front door still advertises `coverage.json` though it is absent (the search case was fixed; coverage/activity are entangled because the same `coverage` param also gates the manifest-embedded coverage section, which IS present). | Follow-up: give `write_front_door` a separate "file present" signal so it can advertise the manifest coverage section while omitting an absent `coverage.json` endpoint. Narrow (build-succeeds-but-write-fails) and strictly better than the pre-wave-2 crash; left for a small front-door signature change rather than expanded here. |
 | 2026-07-11 | P3-3 real-data e2e (post-Phase-0 deploy) | UnaMentis architecture-full.yml was pinned to a stale Feb SHA `31145dc` despite a `# main` comment, so the downstream deploy ran an old solution-explorer. | Fixed by UnaMentis commit `9369887` (re-pin to current main). Strengthens P2-8 (pin hygiene): a comment claiming `main` is not a pin; verify the SHA actually tracks the intended ref. |

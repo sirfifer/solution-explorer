@@ -20,6 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from ..contracts import require
 from .context import StoreContext
 
 # Response bounds (invariant: no silent truncation, always an "N more" notice).
@@ -1071,14 +1072,37 @@ TOOLS: list[ToolSpec] = [
 TOOLS_BY_NAME: dict[str, ToolSpec] = {t.name: t for t in TOOLS}
 
 
+def _check_tool_result(name: str, result: Any) -> None:
+    """Shape-and-completeness postcondition on a tool result at handoff (R1 wave 4).
+
+    Assert only that the handoff is a well-formed ToolResult (a text STRING and a
+    data DICT), never what the values ARE (no content validation, no value
+    checks). A tool that returns a structurally-incomplete result (for example
+    ``data=None`` or a non-string ``text``) would otherwise be handed off
+    silently: rendered as ``"null"`` in JSON mode or as a non-string text field,
+    a false success. This turns that into a PostconditionError the server maps to
+    a well-formed MCP error, so an incomplete result is an honest failure rather
+    than quiet garbage. It NEVER crashes the server loop.
+    """
+    require(isinstance(result, ToolResult), f"tool '{name}' did not return a ToolResult")
+    require(isinstance(result.text, str), f"tool '{name}' result.text is not a string")
+    require(isinstance(result.data, dict), f"tool '{name}' result.data is not a dict")
+
+
 def call_tool(ctx: StoreContext, name: str, args: dict) -> ToolResult:
     """Dispatch to a tool by name. Raises KeyError for an unknown tool and
     ToolError for malformed arguments (the server maps both to JSON-RPC errors).
+
+    The tool's result is checked against its shape-and-completeness postcondition
+    at handoff (R1 wave 4): a malformed result raises PostconditionError, which
+    the server maps to a well-formed MCP error instead of shipping quiet garbage.
     """
     spec = TOOLS_BY_NAME.get(name)
     if spec is None:
         raise KeyError(name)
-    return spec.handler(ctx, args or {})
+    result = spec.handler(ctx, args or {})
+    _check_tool_result(name, result)
+    return result
 
 
 def render_result(result: ToolResult, as_json: bool) -> str:

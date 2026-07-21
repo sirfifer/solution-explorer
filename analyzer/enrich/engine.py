@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from ..contracts import gap_from_exception
 from ..derive import derive_all
 from ..store import FactStore
 from .digest import ARCH_TARGET_ID, DigestIndex
@@ -545,7 +546,31 @@ def run_enhance(
                     for p in partitions
                 }
                 for fut in futures:
-                    outcome, payloads = fut.result()
+                    p = futures[fut]
+                    try:
+                        outcome, payloads = fut.result()
+                    except Exception as exc:  # noqa: BLE001 - per-partition bulkhead (R1 wave 3)
+                        # An UNEXPECTED exception inside _enhance_partition (a bug,
+                        # not a handled invoke/validation failure, which already
+                        # degrade in-band) previously re-raised through fut.result()
+                        # and crashed the whole enrichment run. Isolate it per
+                        # partition: record a deterministic failed outcome (same
+                        # discipline the all-or-nothing per-partition contract
+                        # already applies to validation failures) so one bad
+                        # partition degrades to a recorded failure and the rest of
+                        # the run still enriches. The reason is scrubbed via the
+                        # honest-gap backbone (no traceback, no heap addresses), so
+                        # the report is deterministic. Retry/cost logic is untouched
+                        # (that is R2); this only stops a crash.
+                        reason = gap_from_exception("enrich.partition", "enrich", exc).reason
+                        outcome = PartitionOutcome(
+                            id=p.id,
+                            component_ids=list(p.component_ids),
+                            relationship_keys=list(p.relationship_keys),
+                            status="failed",
+                            errors=[f"partition raised an unexpected error: {reason}"],
+                        )
+                        payloads = None
                     outcomes.append(outcome)
                     if payloads is not None:
                         payloads_by_partition[outcome.id] = payloads
@@ -553,17 +578,31 @@ def run_enhance(
         report.partitions = outcomes
         report.total_cost_usd = sum(o.cost_usd for o in outcomes)
 
-        # Architecture-level narrative (its own validation unit).
+        # Architecture-level narrative (its own validation unit). It is a peer
+        # producer to the partitions, so an UNEXPECTED exception here must degrade
+        # the same way instead of crashing the run (adversarial review of PR #75,
+        # finding 2): the narrative is left unenriched with a recorded note, and
+        # the partitions that already succeeded still stamp. _enhance_architecture
+        # already handles invoke/validation failures in-band (returns None); this
+        # only adds the bulkhead for an unexpected raise. Retry/cost untouched.
         commit_sha = current_commit_sha(str(config.root))
         arch_payload: Optional[dict] = None
         if regenerate_arch:
-            arch_payload, arch_cost, arch_errs = _enhance_architecture(
-                facts, scorer, invoker, clock
-            )
-            report.total_cost_usd += arch_cost
-            if arch_payload is None:
+            try:
+                arch_payload, arch_cost, arch_errs = _enhance_architecture(
+                    facts, scorer, invoker, clock
+                )
+                report.total_cost_usd += arch_cost
+                if arch_payload is None:
+                    report.notes.append(
+                        "architecture narrative failed schema validation: "
+                        + "; ".join(arch_errs[:5])
+                    )
+            except Exception as exc:  # noqa: BLE001 - arch-producer bulkhead (R1 wave 3)
+                arch_payload = None
+                reason = gap_from_exception("enrich.architecture", "enrich", exc).reason
                 report.notes.append(
-                    "architecture narrative failed schema validation: " + "; ".join(arch_errs[:5])
+                    f"architecture narrative raised an unexpected error: {reason}"
                 )
 
         # Stamp valid payloads (all-or-nothing per partition already enforced).
