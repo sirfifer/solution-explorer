@@ -211,7 +211,7 @@ runs:
         "
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact-name }}
         path: .solution-explorer/viewer/dist
@@ -251,7 +251,7 @@ runs:
 
     - name: Upload Projection Diff (demo)
       if: inputs.diff-against-url != '' && hashFiles('projection-diff.json') != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: projection-diff
         path: projection-diff.json
