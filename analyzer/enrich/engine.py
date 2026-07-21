@@ -578,17 +578,31 @@ def run_enhance(
         report.partitions = outcomes
         report.total_cost_usd = sum(o.cost_usd for o in outcomes)
 
-        # Architecture-level narrative (its own validation unit).
+        # Architecture-level narrative (its own validation unit). It is a peer
+        # producer to the partitions, so an UNEXPECTED exception here must degrade
+        # the same way instead of crashing the run (adversarial review of PR #75,
+        # finding 2): the narrative is left unenriched with a recorded note, and
+        # the partitions that already succeeded still stamp. _enhance_architecture
+        # already handles invoke/validation failures in-band (returns None); this
+        # only adds the bulkhead for an unexpected raise. Retry/cost untouched.
         commit_sha = current_commit_sha(str(config.root))
         arch_payload: Optional[dict] = None
         if regenerate_arch:
-            arch_payload, arch_cost, arch_errs = _enhance_architecture(
-                facts, scorer, invoker, clock
-            )
-            report.total_cost_usd += arch_cost
-            if arch_payload is None:
+            try:
+                arch_payload, arch_cost, arch_errs = _enhance_architecture(
+                    facts, scorer, invoker, clock
+                )
+                report.total_cost_usd += arch_cost
+                if arch_payload is None:
+                    report.notes.append(
+                        "architecture narrative failed schema validation: "
+                        + "; ".join(arch_errs[:5])
+                    )
+            except Exception as exc:  # noqa: BLE001 - arch-producer bulkhead (R1 wave 3)
+                arch_payload = None
+                reason = gap_from_exception("enrich.architecture", "enrich", exc).reason
                 report.notes.append(
-                    "architecture narrative failed schema validation: " + "; ".join(arch_errs[:5])
+                    f"architecture narrative raised an unexpected error: {reason}"
                 )
 
         # Stamp valid payloads (all-or-nothing per partition already enforced).

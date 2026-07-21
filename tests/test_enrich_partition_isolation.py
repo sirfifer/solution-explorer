@@ -22,7 +22,12 @@ import re
 
 from analyzer.derive import derive_all
 from analyzer.enrich import engine
-from analyzer.enrich.engine import EnhanceConfig, InvokeResult, run_enhance
+from analyzer.enrich.engine import (
+    EnhanceConfig,
+    InvokeResult,
+    PartitionOutcome,
+    run_enhance,
+)
 from analyzer.extract import extract_repo
 from analyzer.store import FactStore
 
@@ -104,6 +109,38 @@ def test_one_bad_partition_does_not_abort_a_dry_run(tmp_path, monkeypatch):
     )
     assert report.dry_run is True
     assert report.plan_preview  # the plan was previewed, nothing invoked
+
+
+def test_unexpected_architecture_exception_degrades_without_crash(tmp_path, monkeypatch):
+    # Adversarial review of PR #75, finding 2: the architecture-narrative producer
+    # is a peer unit to the partitions. An unexpected exception there must degrade
+    # to a recorded note (narrative left unenriched) instead of crashing the run,
+    # while the partitions that succeeded still complete.
+    db = _build_fixture_store(tmp_path)
+
+    def _ok_partition(partition, facts, scorer, invoker, clock):
+        outcome = PartitionOutcome(
+            id=partition.id,
+            component_ids=list(partition.component_ids),
+            relationship_keys=list(partition.relationship_keys),
+            status="enriched",
+        )
+        return outcome, {"components": {}, "relationships": {}}
+
+    def _arch_boom(*_a, **_k):
+        raise RuntimeError("architecture narrative exploded")
+
+    monkeypatch.setattr(engine, "_enhance_partition", _ok_partition)
+    monkeypatch.setattr(engine, "_enhance_architecture", _arch_boom)
+    # Must NOT raise: the arch producer is isolated.
+    report = run_enhance(
+        _config(tmp_path, db), invoker=_ArchInvoker(), clock=FIXED_CLOCK
+    )
+    assert report.architecture_enriched is False
+    assert any(
+        "architecture narrative raised an unexpected error" in n for n in report.notes
+    )
+    assert not report.failed_partitions  # the partitions themselves succeeded
 
 
 def _boom_partition(*_args, **_kwargs):

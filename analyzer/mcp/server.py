@@ -22,7 +22,7 @@ from typing import IO, Any, Optional
 from ..contracts import PostconditionError
 from . import __version__
 from .context import StoreContext
-from .tools import TOOLS, ToolError, call_tool, render_result
+from .tools import TOOLS, TOOLS_BY_NAME, ToolError, call_tool, render_result
 
 # The latest MCP protocol revision this server targets. The server echoes the
 # client's requested version when the client sends one (spec-compliant
@@ -112,17 +112,21 @@ class MCPServer:
             return self._error(req_id, INVALID_PARAMS, "tools/call requires a 'name'")
         if not isinstance(arguments, dict):
             return self._error(req_id, INVALID_PARAMS, "'arguments' must be an object")
+        # An unknown tool is resolved BEFORE dispatch so it maps to INVALID_PARAMS
+        # here and can never be conflated with a handler that itself raises
+        # KeyError over store data (adversarial review of PR #75, finding 1): that
+        # is a real internal fault and must reach the INTERNAL_ERROR bulkhead
+        # below with per-tool attribution, not be mislabeled "unknown tool".
+        if name not in TOOLS_BY_NAME:
+            return self._error(req_id, INVALID_PARAMS, f"unknown tool: {name}")
         # Per-tool bulkhead at the dispatch boundary (R1 wave 4). Each tool's
         # result is validated for shape-and-completeness inside call_tool; a
         # malformed result (PostconditionError) or an unexpected exception in the
         # handler degrades to a well-formed MCP error with per-tool attribution,
-        # never a crashed server loop or a silent garbage handoff. KeyError
-        # (unknown tool) and ToolError (malformed arguments) keep their existing
-        # user-facing INVALID_PARAMS mapping.
+        # never a crashed server loop or a silent garbage handoff. ToolError
+        # (malformed arguments) keeps its user-facing INVALID_PARAMS mapping.
         try:
             result = call_tool(self.ctx, name, arguments)
-        except KeyError:
-            return self._error(req_id, INVALID_PARAMS, f"unknown tool: {name}")
         except ToolError as exc:
             return self._error(req_id, INVALID_PARAMS, str(exc))
         except PostconditionError as exc:

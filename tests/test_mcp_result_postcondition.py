@@ -141,5 +141,37 @@ def test_healthy_tools_call_is_unchanged(ctx):
     assert resp["result"]["content"][0]["text"]
 
 
+def test_handler_keyerror_is_internal_error_not_unknown_tool(ctx, monkeypatch):
+    # Adversarial review of PR #75, finding 1: a KNOWN tool whose handler raises
+    # KeyError internally (a plausible bug over store data) must map to a
+    # well-formed INTERNAL_ERROR with per-tool attribution, never be mislabeled
+    # "unknown tool" (INVALID_PARAMS). Unknown-tool resolution happens before
+    # dispatch, so a handler KeyError reaches the generic bulkhead.
+    server = MCPServer(ctx)
+
+    def _key_boom(c, a):
+        raise KeyError("missing_store_key")
+
+    _patch_handler(monkeypatch, "se_overview", _key_boom)
+    resp = _tools_call(server, "se_overview")
+    assert "error" in resp
+    assert resp["error"]["code"] == INTERNAL_ERROR
+    assert "se_overview" in resp["error"]["message"]
+    assert "KeyError" in resp["error"]["message"]
+    assert "unknown tool" not in resp["error"]["message"]
+
+
+def test_genuinely_unknown_tool_still_maps_to_invalid_params(ctx):
+    # The other half: a name not in the registry is still INVALID_PARAMS
+    # "unknown tool", resolved before dispatch.
+    from analyzer.mcp.server import INVALID_PARAMS
+
+    server = MCPServer(ctx)
+    resp = _tools_call(server, "se_does_not_exist")
+    assert "error" in resp
+    assert resp["error"]["code"] == INVALID_PARAMS
+    assert "unknown tool" in resp["error"]["message"]
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
