@@ -16,7 +16,7 @@
     - "Load the app for dataset 'unenriched' with the query string '?component=analyzer&drill=root' and wait until the detail panel has rendered"
   pass_when:
     - "the graph renders at least 3 component nodes"
-    - "no AI architecture summary strip is shown (absent, not broken)"
+    - "no AI architecture summary strip is shown (the sparkle-marked summary paragraph the enriched dogfood renders under the header; absent, not broken)"
     - "step 3: no tab labeled 'AI Insights' is shown and no 'AI intent' marker appears in the WHY / WHO strip"
     - "no unexpected console or network errors during the flow"
   evidence: screenshot+console

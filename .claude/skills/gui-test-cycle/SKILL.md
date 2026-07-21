@@ -63,9 +63,12 @@ cd viewer && npm ci && npm run build && cd ..
 # 3. Assemble the serve root (dist copy + dataset payload, baked data removed).
 python3 scripts/gui-datasets.py assemble dogfood
 
-# 4. Serve. One port PER SHARD (see isolation below). Ports 41NN by vector
-#    number, e.g. V1 -> 4101, V13 -> 4113.
-python3 -m http.server 4101 --directory viewer/tests/gui/.serve/dogfood &
+# 4. Serve. One port PER SHARD-DATASET PAIR (see isolation below): port
+#    4<vector><dataset-index>0, e.g. V1's dogfood -> 4110, V1's split-mode
+#    -> 4111, V9's three datasets -> 4910, 4911, 4912. Steps 1 and 3 must be
+#    repeated for EVERY dataset key the plan's cases declare (V9 and V12
+#    declare degradation datasets), not just the primary.
+python3 -m http.server 4110 --directory viewer/tests/gui/.serve/dogfood &
 ```
 
 The serve command was verified against a real browser when this harness was
@@ -129,7 +132,12 @@ storage for EVERY origin in the port map (visit each once and clear):
   p.on('console', m => { if (m.type() === 'error') state.consoleErrors.push({text: m.text().slice(0,300), url: (m.location() && m.location().url) || ''}); });
   p.on('response', r => { if (r.status() >= 400) state.networkErrors.push(r.status() + ' ' + r.url()); });
   p.on('pageerror', e => state.consoleErrors.push({text: String(e).slice(0,300), url: 'pageerror'}));
-  for each url in the port map: await p.goto(url); await p.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+Then visit every url in the port map once and clear its storage:
+  await p.goto(url); await p.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+The welcome dialog appears on each origin's first successful load after the
+clear; the plan's first case per origin dismisses it explicitly, and later
+cases on that origin rely on the dismissal persisting. Do not clear storage
+again between cases.
 Set the viewport per case BEFORE its first step:
   desktop: {width: 1440, height: 900}
   mobile: {width: 390, height: 844}
@@ -167,8 +175,10 @@ BLOCKED at that step with a note, do not improvise):
 - "reload": page.reload() and wait for render.
 
 FINDING ELEMENTS: the way a person would. By visible text, accessible role or
-label, and position, in that order (getByRole, getByText, getByLabel,
-getByPlaceholder). Prefer exact visible text from the step. NEVER use CSS
+label, title attribute, and position, in that order (getByRole, getByText,
+getByLabel, getByTitle, getByPlaceholder; icon-only controls carry their
+user-visible name in title, e.g. 'View all annotations', 'Edit', 'Delete').
+Prefer exact visible text from the step. NEVER use CSS
 classes or DOM structure selectors except the two named in this prompt
 (.react-flow__node for graph nodes and their title text for node lookup). If
 the step's label matches multiple elements, use the first VISIBLE match; if it
@@ -191,7 +201,12 @@ VERDICT SEMANTICS (from the design doc, apply mechanically):
   a fresh reload (reload, clear nothing else, re-run the case's steps). If
   the retry passes fully, the verdict is PASS_FLAKY (attempts: 2), never
   PASS. If the retry also fails, keep the FIRST attempt's verdict and
-  details. Never a third attempt.
+  details. Never a third attempt. A STATEFUL case (one whose assertions
+  depend on state the case itself creates or on being the origin's first
+  load, e.g. an annotation count or an unread badge) is effectively
+  single-attempt: if the retry cannot satisfy the state precondition, skip
+  the retry, keep the first verdict, and note "retry not applicable:
+  stateful preconditions".
 - Case timeout: if a single case exceeds 5 minutes of wall time, record it
   BLOCKED at the current step with a note "case timeout".
 

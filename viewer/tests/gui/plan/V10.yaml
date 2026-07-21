@@ -25,13 +25,15 @@
   covers:
     - component:HelpSystem
 
+# V10.2 runs after V10.1 in the same shard, so the welcome dialog is already
+# dismissed; it re-enters the walkthrough through the Shortcuts tab's replay
+# control, which is also what makes the full sequence testable at will.
 - id: V10.2
   vector: help-and-tours
   viewport: desktop
   dataset: dogfood
   steps:
     - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
-    - "Click the button labeled 'Skip' in the welcome dialog"
     - "Click the help button labeled '?' at the bottom right of the page"
     - "Open the help panel tab labeled 'Shortcuts'"
     - "Click the control labeled 'Replay welcome guide'"
@@ -41,8 +43,8 @@
     - "Click the button labeled 'Next'"
     - "Click the button labeled 'Get Started'"
   pass_when:
-    - "step 5: the welcome walkthrough opens at its first step ('Welcome to Architecture Visualizer')"
-    - "steps 6 to 9: each Next advances one step through the five-step sequence"
-    - "step 10: 'Get Started' closes the walkthrough and the app is usable behind it"
+    - "step 4: the welcome walkthrough opens at its first step ('Welcome to Architecture Visualizer')"
+    - "steps 5 to 8: each Next advances one step through the five-step sequence"
+    - "step 9: 'Get Started' closes the walkthrough and the app is usable behind it"
     - "no unexpected console or network errors during the flow"
   evidence: screenshot

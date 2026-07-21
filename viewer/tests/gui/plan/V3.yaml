@@ -18,14 +18,15 @@
   dataset: dogfood
   steps:
     - "Load the app for dataset 'dogfood' with the query string '?component=infrastructure%2Fcloudflare&tab=docs&drill=root' and wait until the detail panel has rendered"
+    - "Click the button labeled 'Skip' in the welcome dialog"
     - "Load the app for dataset 'dogfood' with the query string '?component=root&tab=docs&drill=root' and wait until the detail panel has rendered"
     - "Load the app for dataset 'dogfood' with the query string '?component=analyzer&tab=docs&drill=root' and wait until the detail panel has rendered"
     - "Load the app for dataset 'dogfood' with the query string '?component=analyzer%2Fcra&drill=analyzer' and wait until the detail panel has rendered"
   pass_when:
     - "step 1: the Docs tab renders README content including the heading 'Cloudflare Infrastructure for Solution Explorer'"
-    - "step 2: the Docs tab renders documentation content of at least 3 lines"
-    - "step 3: the Docs tab is present AND renders content matching the component's docs data (analyzer carries one detected pattern); a tab that appears but renders 'No documentation files found' fails this assertion"
-    - "step 4: no tab labeled 'Docs' is shown for analyzer/cra"
+    - "step 3: the Docs tab renders documentation content of at least 3 lines"
+    - "step 4: the Docs tab is present AND renders content matching the component's docs data (analyzer carries one detected pattern); a tab that appears but renders 'No documentation files found' fails this assertion"
+    - "step 5: no tab labeled 'Docs' is shown for analyzer/cra"
     - "no unexpected console or network errors during the flow"
   evidence: screenshot
   covers:

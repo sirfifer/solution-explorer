@@ -2391,10 +2391,18 @@ fix cycles are a separate owner-triggered engagement.
   rule (do not bend the case to pass): no reachable lens switcher at 390px
   (V8.4), no reachable review mode on mobile (V8.8), R1 producer gaps
   surface nowhere in the viewer (V9.2), Docs tab renders empty for
-  patterns-only components (V3.1 step 3). Also recorded: the open mobile
+  patterns-only components (V3.1). Also recorded: the open mobile
   bottom sheet intercepts taps aimed at the bottom navigation, and the
   drilled arch-visualizer level renders only the src child while its
   sub-components list names two.
+- Adversarial review (live execution of five sampled cases plus storage-state
+  probes) caught the load-bearing lesson of this PR: cases are correct
+  individually but must agree on SHARD-ORDER storage semantics (the welcome
+  dialog dismisses once per origin; the changelog unread badge exists only
+  on the origin's first load). Fixed by one convention, stated in the skill:
+  first case per origin dismisses the dialog, state-dependent first-load
+  assertions run first in their shard, stateful cases are single-attempt for
+  the retry rule. Icon-only controls are now findable by title attribute.
 
 ## Discovered during execution
 
