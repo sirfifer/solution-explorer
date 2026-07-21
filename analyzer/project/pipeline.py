@@ -40,6 +40,7 @@ from typing import Optional
 
 from ..contracts import Isolator, finalize_gaps
 from ..enrich import apply_enrichment_overlay, apply_verdict_overlay
+from ..features import DEFAULT_CHANNEL, gate_provenance
 from .activity import activity_manifest_summary, build_activity
 from .changelog import apply_changelog
 from .coverage import build_coverage, coverage_manifest_summary
@@ -82,6 +83,7 @@ def prepare_arch(
     root=None,
     generated_at: Optional[str] = None,
     analyzer_version: Optional[str] = None,
+    channel: str = DEFAULT_CHANNEL,
     isolator: Optional[Isolator] = None,
 ) -> dict:
     """Return a copy of ``arch`` with environment fields filled in.
@@ -90,6 +92,12 @@ def prepare_arch(
     ``root`` points at a git working tree) the credential-stripped repository
     URL and default branch. Info.plist app names are resolved from disk. The
     input dict is not mutated.
+
+    Maturity gating (card R3): when ``channel`` activates one or more non-stable
+    gates, a deterministic ``gate_provenance`` stamp is added so the non-default
+    output is self-explaining. On the default ``stable`` channel (and any channel
+    that activates no non-stable gate) the stamp is ``None`` and NOTHING is added,
+    so the output is byte-identical to a run built before the mechanism existed.
 
     When an ``isolator`` is supplied (the projection drivers pass theirs), the
     two environment reads that touch disk (``read_git_info`` and
@@ -104,6 +112,9 @@ def prepare_arch(
         prepared["generated_at"] = generated_at
     if analyzer_version is not None:
         prepared["analyzer_version"] = analyzer_version
+    provenance = gate_provenance(channel)
+    if provenance is not None:
+        prepared["gate_provenance"] = provenance
     if root is not None:
         prepared["root_path"] = str(root)
         if isolator is None:
@@ -356,6 +367,7 @@ def project_split(
     root=None,
     generated_at: Optional[str] = None,
     analyzer_version: Optional[str] = None,
+    channel: str = DEFAULT_CHANNEL,
     previous: Optional[dict] = None,
     commit_sha: str = "",
     now: Optional[datetime] = None,
@@ -368,6 +380,10 @@ def project_split(
     that raises records a deterministic honest gap and is absent, never
     fracturing the run. The manifest (the main artifact) is written LAST so it
     carries every gap, and it degrades to a skeleton on its own failure.
+
+    ``channel`` is the resolved maturity channel (card R3); it stamps a
+    deterministic ``gate_provenance`` on a non-default run and is a no-op on the
+    default ``stable`` channel.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -376,7 +392,7 @@ def project_split(
 
     prepared = prepare_arch(
         arch, root=root, generated_at=generated_at,
-        analyzer_version=analyzer_version, isolator=iso,
+        analyzer_version=analyzer_version, channel=channel, isolator=iso,
     )
     # Gaps the derive tier already recorded on the arch (dicts). Captured before
     # any projection work so the final merge combines the two sources without
@@ -499,6 +515,7 @@ def project_monolith(
     root=None,
     generated_at: Optional[str] = None,
     analyzer_version: Optional[str] = None,
+    channel: str = DEFAULT_CHANNEL,
     previous: Optional[dict] = None,
     commit_sha: str = "",
     now: Optional[datetime] = None,
@@ -509,6 +526,10 @@ def project_monolith(
     Isolated exactly like ``project_split``: sidecars that raise record honest
     gaps and are absent; ``architecture.json`` (the main artifact) is written
     last carrying every gap, and degrades to a skeleton on its own failure.
+
+    ``channel`` is the resolved maturity channel (card R3); it stamps a
+    deterministic ``gate_provenance`` on a non-default run and is a no-op on the
+    default ``stable`` channel.
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -517,7 +538,7 @@ def project_monolith(
 
     prepared = prepare_arch(
         arch, root=root, generated_at=generated_at,
-        analyzer_version=analyzer_version, isolator=iso,
+        analyzer_version=analyzer_version, channel=channel, isolator=iso,
     )
     derive_gaps = list(prepared.get("gaps", []))
 

@@ -35,6 +35,7 @@ import type {
 } from "./types";
 import type { SearchResult } from "./utils/search";
 import { addToSearchIndex } from "./utils/search";
+import { resolveChannel } from "./utils/channel";
 import {
   getLens,
   resolveLensId,
@@ -1024,7 +1025,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   // Switch lens WITHOUT disturbing the current selection, breadcrumbs, or drill
   // level (invariant I12: the same element stays selected across lens switches).
   // An unknown or unavailable id resolves to the default lens.
-  setLens: (id) => set((s) => ({ lens: resolveLensId(id, s.architecture) })),
+  setLens: (id) => set((s) => ({ lens: resolveLensId(id, s.architecture, resolveChannel()) })),
 
   // The active lens's node/edge selection, fed to the graph pipeline. For
   // Structure this is exactly the existing selectors, so old data renders

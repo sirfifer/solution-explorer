@@ -104,6 +104,13 @@ def _dataset_identity(arch: dict) -> dict:
     provenance = _provenance(arch)
     if provenance is not None:
         identity["provenance"] = provenance
+    # Maturity-gate provenance (card R3): present only on a non-default-channel
+    # run that activated a non-stable gate, so a default projection is
+    # byte-identical here. Surfaced so an AI consumer of a non-default dataset
+    # sees which experimental/beta gates shaped it.
+    gate_provenance = arch.get("gate_provenance")
+    if gate_provenance:
+        identity["gate_provenance"] = gate_provenance
     # An agent needs to know up front whether prose exists: an unenriched
     # dataset has empty descriptions and no help text, and "what does each
     # component do" degrades to structure-only answers (battery finding).

@@ -906,6 +906,15 @@ export interface Architecture {
   // producer that could not hand off a complete result and why; the viewer can
   // surface these as honest gaps and otherwise degrades around them.
   gaps?: ProducerGap[];
+  // Maturity-gate provenance (card R3). Optional and present ONLY on a
+  // non-default-channel run that activated a non-stable gate, so a default
+  // projection omits it entirely and byte parity holds. When present it names the
+  // resolved channel and the active experimental/beta gates that shaped the
+  // output; the viewer must not require it (degrade-by-absence).
+  gate_provenance?: {
+    channel: string;
+    active_gates: { id: string; stability: string }[];
+  };
 }
 
 // ---------------------------------------------------------------------------

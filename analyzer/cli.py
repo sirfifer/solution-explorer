@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+from .features import CHANNELS
+from .features import ENV_VAR as FEATURES_ENV_VAR
 from .models import to_dict
 from .multi_repo import MultiRepoOrchestrator
 from .scanner import ArchitectureScanner
@@ -157,6 +159,18 @@ def main():
              "github/codeql-action/upload-sarif. Findings are a v2-engine "
              "feature (--engine v1 writes an empty, still schema-valid log). "
              "See docs/sarif-export.md for the upload workflow.",
+    )
+    parser.add_argument(
+        "--channel",
+        choices=CHANNELS,
+        default=None,
+        help="Maturity channel that decides which gated features are active "
+             "(card R3). Default 'stable' (also settable via the "
+             f"{FEATURES_ENV_VAR} environment variable; the flag wins). A "
+             "'stable' run is byte-identical to a run with no gating: the "
+             "experimental/beta channels only add data when a non-stable gate is "
+             "active, and each active gate is stamped into the projection "
+             "provenance. Gating is a v2-engine mechanism.",
     )
 
     args = parser.parse_args()

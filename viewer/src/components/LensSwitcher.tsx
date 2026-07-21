@@ -1,5 +1,6 @@
 import { useArchStore } from "../store";
 import { listAvailableLenses } from "../lenses";
+import { maturitySuffix, resolveChannel } from "../utils/channel";
 import { Tooltip } from "./Tooltip";
 import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
@@ -14,7 +15,11 @@ export function LensSwitcher() {
   const lens = useArchStore((s) => s.lens);
   const setLens = useArchStore((s) => s.setLens);
 
-  const available = listAvailableLenses(architecture);
+  // Resolve the maturity channel (card R3). Default "stable" shows only stable
+  // lenses (the current behavior, unchanged); a `?channel=` override surfaces the
+  // beta/experimental lenses it activates, each labeled below.
+  const channel = resolveChannel();
+  const available = listAvailableLenses(architecture, channel);
   // No dataset yet: nothing to show.
   if (available.length === 0) return null;
 
@@ -43,6 +48,7 @@ export function LensSwitcher() {
           {available.map((l) => (
             <option key={l.id} value={l.id}>
               {l.label}
+              {maturitySuffix(l.maturity)}
             </option>
           ))}
         </select>

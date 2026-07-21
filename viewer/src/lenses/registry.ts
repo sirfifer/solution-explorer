@@ -10,6 +10,7 @@
  * own cards (P6-2, P6-3, P6-5 to P6-9).
  */
 import type { Architecture, Component, Relationship, AggregateNode } from "../types";
+import { type Channel, DEFAULT_CHANNEL, isMaturityActive } from "../utils/channel";
 
 export const DEFAULT_LENS_ID = "structure";
 
@@ -52,6 +53,14 @@ export interface LensDefinition {
   id: string;
   label: string;
   description: string;
+  /**
+   * Maturity gate (card R3). Undefined means "stable" (the default), so every
+   * existing lens is stable and unchanged. A lens declared "beta" or
+   * "experimental" is filtered out on the default channel and only appears when
+   * the resolved channel activates it, rendered with an explicit label. This is
+   * the registry's declaration; the URL-param channel decides what is active.
+   */
+  maturity?: Channel;
   /** Whether this lens has anything to show for the loaded dataset. */
   isAvailable: (arch: Architecture) => boolean;
   /** Select the nodes and edges the graph renders under this lens. */
@@ -80,19 +89,42 @@ export function listLenses(): LensDefinition[] {
   return [...registry.values()];
 }
 
-/** The lenses that have something to show for this dataset, in registration order. */
-export function listAvailableLenses(arch: Architecture | null): LensDefinition[] {
+/**
+ * The lenses that have something to show for this dataset AND are active on the
+ * resolved maturity channel, in registration order. The channel defaults to
+ * "stable" so an existing single-argument caller (and every existing lens, which
+ * is stable) is unchanged; a non-stable channel additionally surfaces the beta /
+ * experimental lenses it activates (the switcher labels them).
+ */
+export function listAvailableLenses(
+  arch: Architecture | null,
+  channel: Channel = DEFAULT_CHANNEL,
+): LensDefinition[] {
   if (!arch) return [];
-  return [...registry.values()].filter((l) => l.isAvailable(arch));
+  return [...registry.values()].filter(
+    (l) => isMaturityActive(l.maturity, channel) && l.isAvailable(arch),
+  );
 }
 
 /**
- * Resolve a requested lens id to a usable one: the request if it is registered
- * and available for the dataset, otherwise the default (Structure). This keeps
- * an unknown or now-unavailable `?lens=` from breaking the view.
+ * Resolve a requested lens id to a usable one: the request if it is registered,
+ * active on the resolved channel, and available for the dataset, otherwise the
+ * default (Structure). This keeps an unknown, now-unavailable, or
+ * channel-gated-off `?lens=` from breaking the view. The channel defaults to
+ * "stable" so existing callers are unchanged.
  */
-export function resolveLensId(id: string | null | undefined, arch: Architecture | null): string {
+export function resolveLensId(
+  id: string | null | undefined,
+  arch: Architecture | null,
+  channel: Channel = DEFAULT_CHANNEL,
+): string {
   const def = id ? registry.get(id) : undefined;
-  if (def && (!arch || def.isAvailable(arch))) return def.id;
+  if (
+    def &&
+    isMaturityActive(def.maturity, channel) &&
+    (!arch || def.isAvailable(arch))
+  ) {
+    return def.id;
+  }
   return DEFAULT_LENS_ID;
 }

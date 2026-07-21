@@ -1868,7 +1868,8 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 - Status: TODO (owner-directed 2026-07-19: dogfooding is a gate)
 - Model: fresh-eyes session (any strong model), adversarial by charter
 - Scope: a no-punches-pulled evaluation, on BOTH the self-repo projection and the unamentis-ios projection: does the projection FAIRLY REPRESENT the project (components, roles, relationships, coverage, findings)? What does the tool make easy that raw code reading does not, demonstrated with real answered questions? What does it misrepresent, hide, or get wrong? Every defect becomes a Discovered row or card; no defect may be softened. Recorded in the Phase gate records table as a recurring gate (run at least at each phase gate from now on).
-- Accept: a written gate record with concrete misrepresentations found (or the explicit finding that none were found, with the questions that probed for them), filed cards for every defect, and the owner-facing summary.
+- Gate Inventory review (card R3, MANDATORY each run): walk the Gate Inventory table above. Every gate past its `Expires` date MUST graduate (promote a level toward stable, then archive the gate and delete its machinery) or die (remove the gate and its code) THIS cycle; a stale gate is a defect, never left in place. Confirm each analyzer gate in the table matches `analyzer/features.py::REGISTERED_GATES` and each viewer lens `maturity` declaration, so no gate is live-but-undocumented or documented-but-dead. If the inventory is empty, record that it is empty and clean.
+- Accept: a written gate record with concrete misrepresentations found (or the explicit finding that none were found, with the questions that probed for them), filed cards for every defect, the Gate Inventory disposition (each gate graduated/kept/removed, or "empty and clean"), and the owner-facing summary.
 
 ### P9-1: Large-repo public demos
 - Status: TODO (elaborate at Phase 8 gate)
@@ -2097,13 +2098,94 @@ here is started.
   extraction content-hash cache key is untouched.
 
 ### R3: Maturity-channel gating
-- Status: TODO (candidate)
+- Status: DONE (2026-07-21, wt/r3-maturity-gating). The in-repo, server-free
+  maturity model plus its governance is built; the mechanism ships with an EMPTY
+  production registry (the honest exemplar path, see below).
 - Scope: an in-repo, server-free maturity model (experimental/beta/stable,
   default stable). Analyzer features module resolving a --channel; viewer
   build-time constant for hidden features plus a URL-param override for
   experimental-visible; active gates stamped into provenance (determinism
   preserved); governance (expiry, owner, archive-on-done) folded into the
   recurring dogfood gate.
+- EXEMPLAR PATH REALITY CHOSE: tests-only, registry EMPTY. An honest survey of
+  every candidate the strategy named (Phase A/B wave-1 C#/Java/C++ parse and
+  their "not yet frozen" framework edges, hidden-field surfacing, the CRA
+  checklist, AI-discovered edges, the per-language reference-extractor maturity
+  table) found NOTHING that qualifies: each is already shipped, default-on, and
+  in the public demo, not a feature that must be partially visible before it is
+  done. Inventing a gate for show would be theater (VISION.md), so
+  `features.REGISTERED_GATES` is `()` and the Gate Inventory starts empty with
+  the governance in place. The mechanism is proven end to end by tests that
+  register their own gate.
+- Analyzer (`analyzer/features.py`, pure stdlib, invariant I7): channels
+  stable(0)/beta(1)/experimental(2) with Rust-toolchain activation (a channel
+  activates every feature at or below its instability level, so on the default
+  stable channel beta and experimental are OFF); `resolve_channel` (precedence
+  CLI `--channel` > `SOLUTION_EXPLORER_CHANNEL` env > default, invalid values
+  rejected loudly at both sources); `Gate` (id + stability + owner + expires +
+  summary); `gate_provenance` = the deterministic stamp. DETERMINISM RULE
+  enforced: `gate_provenance` returns None on the stable channel AND whenever no
+  non-stable gate is active, so a default run (the only value any golden/CI run
+  uses) stamps NOTHING and is byte-identical. The stamp lands as an additive
+  top-level `gate_provenance` key (channel + sorted active non-stable gates, id +
+  stability only) that flows into the manifest/monolith automatically and is
+  surfaced in the ai.json front door's dataset identity. Wired through
+  `analyzer/cli.py` (`--channel`), `project/run.py` (resolve + thread), and
+  `project/pipeline.py::prepare_arch` (stamp). Gating is a v2-engine mechanism.
+- Viewer: two independent server-free mechanisms (`viewer/src/utils/channel.ts`).
+  (1) BUILD-TIME constant `__EXPERIMENTAL_BUILD__` (vite.config define, default
+  false) so genuinely-unfinished code guarded by `if (__EXPERIMENTAL_BUILD__)` is
+  dead-code-eliminated from a production bundle; the honest reference consumer is
+  an experimental-build-only diagnostic (no unfinished user feature exists). (2)
+  RUNTIME channel via a `?channel=` URL-param override, default stable; the lens
+  registry (`lenses/registry.ts`) gains an optional `maturity` (default stable)
+  and `listAvailableLenses`/`resolveLensId` filter by the resolved channel. A
+  visible non-stable lens is labeled explicitly (`maturitySuffix`, e.g.
+  "Experimental Test (experimental)") in `LensSwitcher`. The viewer `Architecture`
+  type gains an optional `gate_provenance` (degrade-by-absence; the viewer never
+  requires it).
+- EXTRACT_TIER NOT bumped: the gate-provenance stamp is a project-tier field
+  computed from the resolved channel, not a new extracted signal kind, so the
+  extraction content-hash cache key is untouched. ADDITIVE projection: old and
+  default datasets omit `gate_provenance` and render unchanged.
+- Tests: `tests/test_features_gating.py` (16: resolution precedence + validation,
+  activation matrix, the determinism invariant that stable never stamps even with
+  a gate registered, and end-to-end through the real pipeline over a real fixture
+  store: default has no stamp; experimental with an EMPTY registry is
+  byte-identical to default; experimental with a registered gate differs by
+  EXACTLY the additive stamp and the front door surfaces it; beta does not
+  activate an experimental gate). `viewer/src/__tests__/channel.test.tsx` (15:
+  channel resolution + URL-param override, activation semantics, registry maturity
+  filter, and a LensSwitcher render proving `?channel=experimental` shows the
+  experimental lens WITH its label while the default channel hides it). Build-time
+  DCE proven by grepping the built bundle: the EXPERIMENTAL_BUILD_DIAGNOSTIC
+  sentinel is ABSENT from a production build and PRESENT in a
+  `VITE_EXPERIMENTAL_BUILD=1` build. Both golden legs (`check flask` /
+  `check fastapi`) show no drift; full pytest and viewer vitest green.
+- SCOPE GUARDS honored: no flag server, no persisted breaker state, nothing from
+  R4; no new base dependency (I7). Governance recorded in the Gate Inventory
+  below and reviewed by the recurring dogfood gate (P9-0).
+
+### Gate Inventory (maturity gates, card R3)
+
+The live registry of maturity gates the R3 mechanism governs. Every gate carries
+a maturity, an owner, and a graduation-or-removal expiry. The recurring dogfood
+gate (P9-0) reviews this table and forces each gate past its expiry to GRADUATE
+(promote a level, ending at stable, then archive the gate and delete its
+machinery) or DIE (remove the gate and its code). Fowler's rule: a feature is not
+done until its release gate is archived. A stale gate left to accumulate as
+permanent config is the number-one documented failure mode and is a defect here.
+
+Where gates live: analyzer gates in `analyzer/features.py` (`REGISTERED_GATES`,
+mirrored here on add); viewer lens gates declare `maturity` on their
+`viewer/src/lenses/registry.ts` entry; genuinely-unfinished viewer code uses the
+`__EXPERIMENTAL_BUILD__` build-time constant. Prefer the keystone pattern (wire
+the last connection in the final commit, no gate); reach for a gate only when a
+feature must be partially visible before it is done.
+
+| Gate id | Surface | Maturity | Owner | Expires | Graduation / removal criterion |
+|---|---|---|---|---|---|
+| (none) | -- | -- | -- | -- | EMPTY BY DESIGN: no feature currently needs partial visibility before it is done. Adding a gate for show would be theater. |
 
 ### R4: Auto-update and MCP resilience (Paradigm B)
 - Status: TODO (candidate; do only when the auto-update pipeline or MCP server is
