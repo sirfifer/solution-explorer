@@ -46,6 +46,22 @@ def test_gap_reason_is_single_line_and_capped():
     assert "truncated" in gl.reason  # announced, never a silent cut
 
 
+def test_gap_reason_scrubs_memory_addresses_for_determinism():
+    # A default object repr embeds a heap address that varies run to run. The
+    # reason must collapse it so two distinct instances yield the SAME gap, or a
+    # degraded run would drift under the golden gate.
+    import re
+
+    class Widget:
+        pass
+
+    r1 = contracts.gap_from_exception("p", "s", RuntimeError(f"bad {Widget()!r}")).reason
+    r2 = contracts.gap_from_exception("p", "s", RuntimeError(f"bad {Widget()!r}")).reason
+    assert "0x..." in r1
+    assert r1 == r2  # deterministic across distinct heap addresses
+    assert not re.search(r"0x[0-9a-fA-F]{4,}", r1)  # no raw address survives
+
+
 def test_require_passes_and_raises():
     contracts.require(True, "must not raise")
     with pytest.raises(contracts.PostconditionError, match="missing thing"):
@@ -89,6 +105,25 @@ def test_isolator_captures_postcondition_failure_as_gap():
     assert "output missing a required section" in contracts.gap_to_dict(gaps[0])["reason"]
 
 
+def test_isolator_default_factory_is_lazy_and_used_only_on_failure():
+    gaps: list = []
+    iso = contracts.Isolator("derive", gaps)
+    calls: list = []
+
+    def factory():
+        calls.append(1)
+        return "skeleton"
+
+    # Success: the factory is never built (a healthy run pays nothing).
+    assert iso.run("ok", lambda: "real", default_factory=factory) == "real"
+    assert calls == []
+    # Failure: the factory value is returned and a gap is recorded.
+    assert iso.run("bad", lambda: (_ for _ in ()).throw(ValueError("x")),
+                   default_factory=factory) == "skeleton"
+    assert calls == [1]
+    assert len(gaps) == 1
+
+
 def test_isolator_does_not_swallow_base_exceptions():
     gaps: list = []
     iso = contracts.Isolator("derive", gaps)
@@ -121,6 +156,18 @@ def test_finalize_gaps_is_sorted_and_serialized():
     out = contracts.finalize_gaps(gaps)
     assert [g["producer"] for g in out] == ["derive.a", "derive.z"]  # sorted
     assert all(isinstance(g, dict) for g in out)
+
+
+def test_finalize_gaps_sort_key_includes_stage():
+    # Same producer, different stage: stage breaks the tie so the order is total
+    # and independent of insertion order (matters once multi-stage gaps are
+    # finalized together in later R1 waves).
+    gaps = [
+        contracts.ProducerGap(producer="p", stage="emit", reason="r"),
+        contracts.ProducerGap(producer="p", stage="derive", reason="r"),
+    ]
+    out = contracts.finalize_gaps(gaps)
+    assert [g["stage"] for g in out] == ["derive", "emit"]
 
 
 def test_unresolved_reference_count():

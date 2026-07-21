@@ -65,6 +65,47 @@ def _check_output_contract(arch: dict) -> None:
     )
 
 
+def _skeleton_arch(root_name: str, root_path: str, description: str) -> dict:
+    """A minimal but contract-valid architecture for the assembly-failure gap.
+
+    Same top-level shape as ``_assemble`` with every collection empty and the
+    stats totals at zero, so it passes ``_check_output_contract`` (its counts are
+    consistent by construction). It is the honest "assembly produced nothing"
+    fallback: severe degradation, but a whole well-formed document the viewer can
+    render around, paired with the ``derive.assemble`` gap that explains it.
+    """
+    return {
+        "name": root_name,
+        "description": description,
+        "repository": None,
+        "default_branch": "main",
+        "generated_at": "",
+        "analyzer_version": "",
+        "root_path": root_path,
+        "components": [],
+        "relationships": [],
+        "capabilities": [],
+        "data_entities": [],
+        "entity_access": [],
+        "rules": [],
+        "concerns": [],
+        "findings": [],
+        "symbols": [],
+        "files": [],
+        "stats": {
+            "total_files": 0,
+            "total_lines": 0,
+            "total_size_bytes": 0,
+            "languages": {},
+            "total_symbols": 0,
+            "total_symbols_detected": 0,
+            "total_components": 0,
+            "total_relationships": 0,
+        },
+        "repositories": [],
+    }
+
+
 def derive_all(
     store: FactStore,
     root_name: str,
@@ -111,7 +152,15 @@ def derive_all(
     # entities, rules, and clone-fragment signals every earlier pass produced.
     iso.run("derive.correlations", correlations_pass.derive_correlations, d)
 
-    arch = _assemble(d, root_name, root_path, arch_description)
+    # Assembly is itself a producer: if a preceding pass corrupted shared state
+    # before it degraded, assembly can raise. Isolate it too, degrading to a
+    # minimal but contract-valid skeleton so the run still completes with an
+    # honest gap instead of a crash (the skeleton is built lazily, so a healthy
+    # run pays nothing).
+    arch = iso.run(
+        "derive.assemble", _assemble, d, root_name, root_path, arch_description,
+        default_factory=lambda: _skeleton_arch(root_name, root_path, arch_description),
+    )
     # Self-validating output: the assembled result must be shape-and-complete at
     # handoff. A violation is an honest gap, not a crash.
     iso.run("derive.output-contract", _check_output_contract, arch)

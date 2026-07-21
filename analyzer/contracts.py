@@ -39,6 +39,7 @@ without it. Nothing here imports pydantic at module top level or requires it.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import asdict as _dc_asdict
 from dataclasses import dataclass, is_dataclass
@@ -48,6 +49,11 @@ from typing import Any
 # (a giant repr) must not bloat the artifact; the reason is a human hint, not a
 # payload. Truncation is announced so it is never a silent cut.
 _REASON_CAP = 500
+
+# A CPython object repr embeds a heap address (``<Foo object at 0x10a3f...>``)
+# that varies run to run, which would break the "same input, same gap" contract
+# on a degraded run. Collapse every hex address to a constant placeholder.
+_HEX_ADDR_RE = re.compile(r"0x[0-9a-fA-F]+")
 
 
 class PostconditionError(Exception):
@@ -130,7 +136,7 @@ def _scrub_reason(text: str) -> str:
     same message every time); this only removes newlines that would fracture the
     single-line ledger convention and bounds a pathological length.
     """
-    one_line = " ".join(str(text).split())
+    one_line = _HEX_ADDR_RE.sub("0x...", " ".join(str(text).split()))
     if len(one_line) > _REASON_CAP:
         return one_line[:_REASON_CAP] + f"... (truncated, {len(one_line)} chars)"
     return one_line
@@ -157,7 +163,14 @@ def finalize_gaps(gaps: list) -> list[dict]:
     output ONLY when it is non-empty, so a clean run adds no bytes.
     """
     dicts = [gap_to_dict(g) for g in gaps]
-    dicts.sort(key=lambda g: (g.get("producer", ""), g.get("status", ""), g.get("reason", "")))
+    dicts.sort(
+        key=lambda g: (
+            g.get("producer", ""),
+            g.get("stage", ""),
+            g.get("status", ""),
+            g.get("reason", ""),
+        )
+    )
     return dicts
 
 
@@ -190,13 +203,21 @@ class Isolator:
         fn: Callable[..., Any],
         *args: Any,
         default: Any = None,
+        default_factory: Callable[[], Any] | None = None,
         **kwargs: Any,
     ) -> Any:
-        """Run one unit under isolation, recording a gap on failure."""
+        """Run one unit under isolation, recording a gap on failure.
+
+        On failure the caller gets ``default_factory()`` when provided (built
+        lazily, so a healthy run pays nothing to construct a fallback it never
+        needs), else ``default``.
+        """
         try:
             return fn(*args, **kwargs)
         except Exception as exc:  # noqa: BLE001 - deliberate bulkhead boundary
             self.gaps.append(gap_from_exception(producer, self.stage, exc))
+            if default_factory is not None:
+                return default_factory()
             return default
 
     def gap(self, producer: str, reason: str, *, status: str = "failed") -> None:

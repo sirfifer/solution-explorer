@@ -131,6 +131,30 @@ def test_output_contract_violation_surfaces_as_gap(tmp_path, monkeypatch):
     store.close()
 
 
+def test_assembly_failure_degrades_to_skeleton_and_gap(tmp_path, monkeypatch):
+    # A pass that corrupts shared Deriver state before it raises can make the
+    # assembler itself fail. Assembly is isolated too: the run completes with an
+    # honest gap and a minimal contract-valid skeleton, never a crash. (Adversarial
+    # review of PR #73 finding 1.)
+    _build_repo(tmp_path)
+    store = _extract(tmp_path)
+
+    def corrupt_then_raise(d):
+        d.relationships.append(object())  # a non-serializable edge poisons assembly
+        raise RuntimeError("corrupted shared state then failed")
+
+    monkeypatch.setattr(rel_pass, "derive_relationships", corrupt_then_raise)
+    _, arch = derive_all(store, "sample", root_path=str(tmp_path))  # must NOT raise
+    producers = {g["producer"] for g in arch.get("gaps", [])}
+    assert "derive.relationships" in producers
+    assert "derive.assemble" in producers  # assembly degraded, did not crash the run
+    # The skeleton is whole and contract-valid: empty collections, zeroed stats.
+    assert arch["components"] == []
+    assert arch["relationships"] == []
+    assert arch["stats"]["total_relationships"] == 0
+    store.close()
+
+
 def test_gap_reaches_the_monolith_projection(tmp_path, monkeypatch):
     # End-to-end: a derive-pass gap must ride through to the on-disk projection
     # the viewer loads (write_monolith copies every arch key), so the honest gap
