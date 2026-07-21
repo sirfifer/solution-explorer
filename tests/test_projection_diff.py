@@ -115,6 +115,39 @@ def _base_projection() -> dict:
         "capabilities": [
             {"id": "cap:http", "kind": "web", "name": "http"},
         ],
+        "concerns": [
+            {"id": "concern:configuration", "kind": "configuration", "title": "Configuration"},
+            {"id": "concern:logging", "kind": "logging", "title": "Logging"},
+        ],
+        "stats": {
+            "total_components": 3,
+            "total_files": 5,
+            "total_lines": 1000,
+            "total_symbols": 200,
+            "total_symbols_detected": 200,
+            "total_relationships": 2,
+            "total_size_bytes": 40000,
+            "languages": {"python": 800, "typescript": 200},
+        },
+        "supply_chain": {
+            "counts": {
+                "dependencies": 4,
+                "direct": 3,
+                "transitive": 1,
+                "ecosystems": 2,
+                "targets": 1,
+                "vendored": 0,
+                "warnings": 0,
+                "pin_status": {"pinned": 2, "range": 2},
+                "fixture": {"dependencies": 1, "warnings": 0},
+            },
+            "dependencies": [
+                {"id": "pypi:flask@", "ecosystem": "pypi", "name": "flask"},
+                {"id": "pypi:jinja2@", "ecosystem": "pypi", "name": "jinja2"},
+                {"id": "npm:react@", "ecosystem": "npm", "name": "react"},
+                {"id": "npm:vite@", "ecosystem": "npm", "name": "vite"},
+            ],
+        },
     }
 
 
@@ -263,6 +296,10 @@ def test_timestamp_change_is_not_a_change():
         lambda p: p["coverage"].__setitem__("inventory", ["x"]),
         lambda p: p.__setitem__("components", "not-a-list"),
         lambda p: p.__setitem__("relationships", {"weird": "dict"}),
+        lambda p: p.__setitem__("stats", ["not", "a", "dict"]),
+        lambda p: p.__setitem__("supply_chain", ["nope"]),
+        lambda p: p["supply_chain"].__setitem__("counts", "not-a-dict"),
+        lambda p: p.__setitem__("concerns", {"weird": "dict"}),
     ],
 )
 def test_malformed_section_types_degrade_not_crash(mutate):
@@ -307,6 +344,148 @@ def test_absent_sections_treated_as_empty():
     assert diff["sections"]["findings"]["new"]
     assert diff["sections"]["capabilities"]["added"] == ["cap:http"]
     assert diff["has_changes"] is True
+
+
+# ---------------------------------------------------------------------------
+# Stats, supply_chain, and concerns (the G1 diff extension: catches the gross
+# extraction / broken-SBOM regressions the identity-keyed sections above miss)
+# ---------------------------------------------------------------------------
+
+
+def test_stats_symbol_halving_registers_drift():
+    # The exact false-clean the G2 adversarial review proved: symbols are not a
+    # diffed section, so before this extension a symbol-extraction pass that
+    # silently halved its output passed the golden `check` with no drift. The
+    # stats roll-up is the section that now catches it.
+    old = _base_projection()
+    new = _base_projection()
+    new["stats"]["total_symbols"] = 100  # was 200: halved
+    new["stats"]["total_symbols_detected"] = 100
+    diff = pd.diff_projections(old, new)
+    assert diff["has_changes"] is True
+    assert diff["changed_sections"]["stats"] is True
+    d = diff["sections"]["stats"]["deltas"]
+    assert d["total_symbols"] == {"old": 200, "new": 100}
+    assert d["total_symbols_detected"] == {"old": 200, "new": 100}
+
+
+def test_stats_totals_and_per_language_deltas():
+    old = _base_projection()
+    new = _base_projection()
+    new["stats"]["total_files"] = 6
+    new["stats"]["total_lines"] = 1100
+    new["stats"]["languages"]["python"] = 900
+    new["stats"]["languages"]["go"] = 50  # a language appearing
+    d = pd.diff_projections(old, new)["sections"]["stats"]["deltas"]
+    assert d["total_files"] == {"old": 5, "new": 6}
+    assert d["total_lines"] == {"old": 1000, "new": 1100}
+    assert d["languages.python"] == {"old": 800, "new": 900}
+    assert d["languages.go"] == {"old": None, "new": 50}  # absence reads as None
+
+
+def test_supply_chain_count_and_warning_deltas():
+    old = _base_projection()
+    new = _base_projection()
+    # A broken SBOM pass: dependency count drops, warnings appear, a pin bucket
+    # shifts. All roll into the flattened counts delta.
+    new["supply_chain"]["counts"]["dependencies"] = 2
+    new["supply_chain"]["counts"]["warnings"] = 3
+    new["supply_chain"]["counts"]["pin_status"]["range"] = 1
+    diff = pd.diff_projections(old, new)
+    assert diff["has_changes"] is True
+    assert diff["changed_sections"]["supply_chain"] is True
+    sc = diff["sections"]["supply_chain"]
+    assert sc["counts"]["dependencies"] == {"old": 4, "new": 2}
+    assert sc["counts"]["warnings"] == {"old": 0, "new": 3}
+    assert sc["counts"]["pin_status.range"] == {"old": 2, "new": 1}
+
+
+def test_supply_chain_per_ecosystem_delta():
+    old = _base_projection()
+    new = _base_projection()
+    # Drop both npm deps: pypi is unchanged, npm regresses to zero. The
+    # per-ecosystem view surfaces a single-ecosystem regression even when the
+    # overall total also moves.
+    new["supply_chain"]["dependencies"] = [
+        d for d in new["supply_chain"]["dependencies"] if d["ecosystem"] != "npm"
+    ]
+    sc = pd.diff_projections(old, new)["sections"]["supply_chain"]
+    assert sc["by_ecosystem"]["npm"] == {"old": 2, "new": 0}
+    assert "pypi" not in sc["by_ecosystem"]  # unchanged, not reported
+
+
+def test_supply_chain_nonstring_ecosystem_degrades_not_crash():
+    # A dependency carrying a non-string ecosystem (int, or an unhashable dict
+    # or list) is malformed input; the per-ecosystem count must degrade to the
+    # "(unknown)" bucket, never crash the diff. Regression for the Card 1
+    # adversarial-review finding. The fix lives in _counts_by, so it also
+    # hardens the shared relationship/finding by-kind paths (below).
+    old = _base_projection()
+    for bad in (5, {"nested": 1}, ["npm"], None, True):
+        new = _base_projection()
+        new["supply_chain"]["dependencies"] = [
+            {"id": "x", "ecosystem": bad},
+            {"id": "y", "ecosystem": "npm"},
+        ]
+        diff = pd.diff_projections(old, new)  # must not raise
+        assert "supply_chain" in diff["sections"]
+
+
+def test_mixed_type_kind_keys_degrade_not_crash():
+    # _counts_by must not crash when a relationship type or finding kind is a
+    # non-string leaf on one side and a string on the other (the union sort
+    # would raise). Pre-existing shared-path crash surfaced by the Card 1 review;
+    # locked here alongside the ecosystem fix.
+    old = _base_projection()
+    new = _base_projection()
+    new["relationships"] = [{"source": "root/api", "target": "root/web", "type": 7}]
+    new["findings"] = [{"id": "f:x", "kind": 9}]
+    diff = pd.diff_projections(old, new)  # must not raise
+    assert "relationships" in diff["sections"]
+    assert "findings" in diff["sections"]
+
+
+def test_concerns_added_and_removed():
+    old = _base_projection()
+    new = _base_projection()
+    new["concerns"] = [
+        {"id": "concern:configuration", "kind": "configuration", "title": "Configuration"},
+        {"id": "concern:persistence", "kind": "persistence", "title": "Persistence"},
+    ]
+    con = pd.diff_projections(old, new)["sections"]["concerns"]
+    assert con["added"] == ["concern:persistence"]
+    assert con["removed"] == ["concern:logging"]
+
+
+def test_absent_stats_supply_chain_concerns_degrade_to_empty():
+    # Additive-projection rule: an older dataset that predates these sections
+    # diffs cleanly. Wholesale appearance is additions, and a dataset with none
+    # of the sections is identical to itself (no spurious drift).
+    old = {"name": "old", "components": [{"id": "root"}], "relationships": []}
+    new = _base_projection()
+    diff = pd.diff_projections(old, new)  # must not raise
+    assert diff["changed_sections"]["stats"] is True
+    assert diff["changed_sections"]["supply_chain"] is True
+    assert diff["changed_sections"]["concerns"] is True
+    same = pd.diff_projections(old, old)
+    assert same["changed_sections"]["stats"] is False
+    assert same["changed_sections"]["supply_chain"] is False
+    assert same["changed_sections"]["concerns"] is False
+
+
+def test_render_text_includes_new_sections():
+    old = _base_projection()
+    new = _base_projection()
+    new["stats"]["total_symbols"] = 50
+    new["supply_chain"]["counts"]["warnings"] = 2
+    new["concerns"].append(
+        {"id": "concern:persistence", "kind": "persistence", "title": "P"}
+    )
+    text = pd.render_text(pd.diff_projections(old, new))
+    assert "Stats:" in text
+    assert "total_symbols: 200 -> 50 (-150)" in text
+    assert "Supply chain:" in text
+    assert "Concerns:" in text
 
 
 # ---------------------------------------------------------------------------
