@@ -57,15 +57,24 @@ Dependabot; the pin lives only here.
 
 ## What the check does and does not catch
 
-`check` runs the G1 projection diff, which compares the nine structural sections
+`check` runs the G1 projection diff, which compares twelve structural sections
 (components, relationships, findings, coverage, inventory, data_entities,
-entity_access, capabilities, enrichment). It intentionally does NOT diff
-`symbols`, the `supply_chain` SBOM, `concerns`, or `stats`, so a regression
-confined to those (for example a symbol-extraction pass that silently halves its
-output, or a broken SBOM) would pass `check` with no drift. Extending the diff to
-cover `stats` roll-ups and `supply_chain` counts is tracked as a follow-up in
-`docs/remediation/TASKS.md` (Discovered table, 2026-07-20). Treat a clean `check`
-as "the structural representation did not change," not as "nothing regressed."
+entity_access, capabilities, concerns, enrichment, stats, and supply_chain). The
+`stats` roll-ups (total_components/files/lines/symbols/relationships,
+total_size_bytes, and per-language line counts) and the `supply_chain` count
+roll-ups (dependencies overall, per ecosystem, and per count bucket including
+warnings and pin status) were added specifically to catch the gross extraction
+and SBOM regressions the identity-keyed sections miss: a symbol-extraction pass
+that silently halves its output now moves `stats.total_symbols`, and a broken
+SBOM pass moves the `supply_chain` counts. `concerns` are compared by id
+(added, removed).
+
+What the check still does NOT catch: the `symbols` array is compared only at the
+`stats` count level, not per-symbol identity, so a change that swaps one symbol
+for another while keeping the total constant would not register. `concerns` are
+compared by id, not by their internal membership. Treat a clean `check` as "the
+structural representation and the roll-up counts did not change," not as "nothing
+regressed."
 
 ## Re-baseline procedure
 

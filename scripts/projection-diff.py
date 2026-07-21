@@ -20,6 +20,15 @@ every projection section:
   - capabilities: count, added, removed
   - enrichment: AI-enrichment coverage at component, relationship, and
     architecture level
+  - stats: roll-up scalar deltas (total_components/files/lines/symbols/
+    relationships, total_size_bytes, and per-language line counts). This is the
+    catch for a gross extraction regression the identity-keyed sections miss:
+    symbols are not a diffed section, so a pass that silently halves
+    total_symbols shows up here and nowhere else.
+  - supply_chain: dependency-count deltas overall, per count roll-up (direct,
+    transitive, pin status, warnings, fixture sub-counts), and per ecosystem.
+    This is the catch for a broken SBOM pass.
+  - concerns: count and identity (added, removed by id)
 
 Determinism is a hard contract: the diff never reads a timestamp, sorts every
 enumerated list, and produces byte-identical output for byte-identical inputs.
@@ -160,6 +169,43 @@ def _merge_count_delta(
         o = old_counts.get(key, 0)
         n = new_counts.get(key, 0)
         if o != n:
+            delta[key] = {"old": o, "new": n}
+    return delta
+
+
+def _flatten_scalars(value: Any, prefix: str = "") -> dict[str, Any]:
+    """Flatten a dict's scalar leaves into dotted keys, deterministically.
+
+    A scalar is an int, float, str, or bool leaf. Nested dicts descend with a
+    dotted prefix; lists and any other type are skipped. This is how the stats
+    and supply_chain count roll-ups are diffed additively: a new scalar count
+    field (say a new pin-status bucket) is covered with no code change, and the
+    caller sorts the keys so the output stays deterministic.
+    """
+    out: dict[str, Any] = {}
+    if not isinstance(value, dict):
+        return out
+    for key, val in value.items():
+        dotted = f"{prefix}{key}"
+        if isinstance(val, (str, int, float)):  # bool is a subclass of int
+            out[dotted] = val
+        elif isinstance(val, dict):
+            out.update(_flatten_scalars(val, f"{dotted}."))
+    return out
+
+
+def _scalar_delta(old_flat: dict[str, Any], new_flat: dict[str, Any]) -> dict[str, dict]:
+    """Per-key {old, new} for every scalar key that changed on either side.
+
+    Absence on one side reads as ``None`` (a field appearing or disappearing is
+    a real change). NaN-safe via ``_differs`` so a byte-identical input never
+    registers a spurious change, and the keys are sorted for determinism.
+    """
+    delta: dict[str, dict] = {}
+    for key in sorted(set(old_flat) | set(new_flat)):
+        o = old_flat.get(key)
+        n = new_flat.get(key)
+        if _differs(o, n):
             delta[key] = {"old": o, "new": n}
     return delta
 
@@ -343,6 +389,43 @@ def _diff_entity_access(old: dict, new: dict) -> dict:
     }
 
 
+def _diff_stats(old: dict, new: dict) -> dict:
+    """Roll-up scalar deltas for the stats section.
+
+    Flattens every scalar under ``stats`` (the total_* roll-ups plus the
+    per-language line counts under ``languages``) and reports what changed. This
+    is the section that catches a gross extraction regression the identity-keyed
+    sections miss: symbols are not a diffed section, so a pass that silently
+    halves ``total_symbols`` shows up here and nowhere else.
+    """
+    old_flat = _flatten_scalars(_as_dict(old.get("stats")))
+    new_flat = _flatten_scalars(_as_dict(new.get("stats")))
+    return {"deltas": _scalar_delta(old_flat, new_flat)}
+
+
+def _diff_supply_chain(old: dict, new: dict) -> dict:
+    """Dependency-count deltas overall, per count roll-up, and per ecosystem.
+
+    Two complementary views. ``counts`` flattens the whole ``supply_chain.counts``
+    roll-up (dependencies, direct, transitive, warnings, pin_status buckets,
+    fixture sub-counts), so a broken SBOM pass that zeroes or halves a count
+    registers. ``by_ecosystem`` is derived from the dependency list itself, so a
+    regression confined to one ecosystem's resolution is visible even when the
+    overall total is unchanged.
+    """
+    old_sc = _as_dict(old.get("supply_chain"))
+    new_sc = _as_dict(new.get("supply_chain"))
+    counts = _scalar_delta(
+        _flatten_scalars(_as_dict(old_sc.get("counts"))),
+        _flatten_scalars(_as_dict(new_sc.get("counts"))),
+    )
+    by_ecosystem = _merge_count_delta(
+        _counts_by(old_sc.get("dependencies"), lambda d: d.get("ecosystem")),
+        _counts_by(new_sc.get("dependencies"), lambda d: d.get("ecosystem")),
+    )
+    return {"counts": counts, "by_ecosystem": by_ecosystem}
+
+
 def _enrichment_stats(arch: dict) -> dict:
     comps = flatten_components(arch)
     comp_total = len(comps)
@@ -390,10 +473,14 @@ def _section_has_changes(section: str, payload: dict) -> bool:
         )
     if section == "inventory":
         return bool(payload["scalars"] or payload["groups"])
-    if section in ("data_entities", "capabilities", "entity_access"):
+    if section in ("data_entities", "capabilities", "entity_access", "concerns"):
         return bool(payload["added"] or payload["removed"])
     if section == "enrichment":
         return payload["old"] != payload["new"]
+    if section == "stats":
+        return bool(payload["deltas"])
+    if section == "supply_chain":
+        return bool(payload["counts"] or payload["by_ecosystem"])
     return False
 
 
@@ -408,7 +495,10 @@ def diff_projections(old: dict, new: dict) -> dict:
         "data_entities": _diff_id_list(old, new, "data_entities"),
         "entity_access": _diff_entity_access(old, new),
         "capabilities": _diff_id_list(old, new, "capabilities"),
+        "concerns": _diff_id_list(old, new, "concerns"),
         "enrichment": _diff_enrichment(old, new),
+        "stats": _diff_stats(old, new),
+        "supply_chain": _diff_supply_chain(old, new),
     }
     changed_sections = {
         name: _section_has_changes(name, payload) for name, payload in sections.items()
@@ -619,6 +709,38 @@ def render_text(diff: dict) -> str:
                 "  architecture-level: "
                 f"{eo['architecture_enriched']} -> {en['architecture_enriched']}"
             )
+        lines.append("")
+
+    # Stats (roll-up scalar deltas: the catch for a symbol-extraction halving or
+    # other gross regression that the identity-keyed sections above cannot see).
+    if diff["changed_sections"]["stats"]:
+        lines.append("Stats:")
+        for key, cnt in s["stats"]["deltas"].items():
+            lines.append(f"  {key}: {_signed(cnt['old'], cnt['new'])}")
+        lines.append("")
+
+    # Supply chain (SBOM count roll-ups and per-ecosystem dependency deltas).
+    sc = s["supply_chain"]
+    if diff["changed_sections"]["supply_chain"]:
+        lines.append("Supply chain:")
+        for key, cnt in sc["counts"].items():
+            lines.append(f"  {key}: {_signed(cnt['old'], cnt['new'])}")
+        if sc["by_ecosystem"]:
+            lines.append("  dependencies by ecosystem:")
+            for eco, cnt in sc["by_ecosystem"].items():
+                lines.append(f"    {eco}: {_signed(cnt['old'], cnt['new'])}")
+        lines.append("")
+
+    # Concerns
+    con = s["concerns"]
+    if diff["changed_sections"]["concerns"]:
+        lines.append(f"Concerns: {_signed(con['old_count'], con['new_count'])}")
+        if con["added"]:
+            lines.append(f"  added ({len(con['added'])}):")
+            lines.extend(_fmt_list(con["added"]))
+        if con["removed"]:
+            lines.append(f"  removed ({len(con['removed'])}):")
+            lines.extend(_fmt_list(con["removed"]))
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"

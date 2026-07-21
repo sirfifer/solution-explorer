@@ -1957,6 +1957,19 @@ here is started.
   sorted, byte-identical output for byte-identical inputs). Absent sections in an
   older dataset are treated as empty (additive-projection rule). Foundation that
   G3 (two-slot demo/dogfood diff) and G4 (full-vs-incremental parity) build on.
+- Extended (2026-07-20, wt/g1-stats-supply): added three diffed sections that
+  close the false-clean the identity-keyed sections miss (Discovered table,
+  2026-07-20). `stats` roll-up scalar deltas (total_components/files/lines/
+  symbols/relationships, total_size_bytes, per-language line counts) catch a
+  gross extraction regression such as symbol extraction silently halving;
+  `supply_chain` count-roll-up deltas (dependencies overall, per ecosystem, per
+  count bucket including warnings and pin status) catch a broken SBOM pass;
+  `concerns` added/removed by id. Additive (absent sections degrade to empty),
+  deterministic, schema unchanged (solution-explorer/projection-diff/v1). Verified:
+  `check flask` stays green (a fresh generation byte-agrees with the committed
+  baseline on all three sections, so no re-baseline was needed), and the exact
+  halved-symbols false-clean now registers drift (fail-before proved against the
+  prior code).
 
 ### G2: Golden-corpus harness
 - Status: BUILT for FLASK (owner green-lit; scripts/golden-corpus.py + tests/golden/flask/ + workflow). FastAPI is the next step within this card.
@@ -2001,7 +2014,7 @@ Add new findings here with a date and the task you were on; do not expand task s
 | Date | Found while | Description | Disposition |
 |---|---|---|---|
 | 2026-07-11 | P3-3 real-data e2e (post-Phase-0 deploy) | UnaMentis architecture-full.yml was pinned to a stale Feb SHA `31145dc` despite a `# main` comment, so the downstream deploy ran an old solution-explorer. | Fixed by UnaMentis commit `9369887` (re-pin to current main). Strengthens P2-8 (pin hygiene): a comment claiming `main` is not a pin; verify the SHA actually tracks the intended ref. |
-| 2026-07-20 | G2 adversarial review | The G1 projection diff (and therefore the golden `check`) compares nine structural sections but NOT `symbols`, `supply_chain` (SBOM), `concerns`, or `stats`. A regression confined to those, e.g. a symbol-extraction pass that halves its output or a broken SBOM, passes `check` with no drift (false clean). | Documented in tests/golden/README.md. FOLLOW-UP: extend G1 to add `stats` roll-up deltas (total_symbols/relationships/components/files/lines) and `supply_chain` counts, so gross extraction and SBOM regressions are caught. Small, additive, do before R1 relies on the gate. |
+| 2026-07-20 | G2 adversarial review | The G1 projection diff (and therefore the golden `check`) compares nine structural sections but NOT `symbols`, `supply_chain` (SBOM), `concerns`, or `stats`. A regression confined to those, e.g. a symbol-extraction pass that halves its output or a broken SBOM, passes `check` with no drift (false clean). | RESOLVED 2026-07-20 (wt/g1-stats-supply): G1 now diffs `stats` roll-ups (total_components/files/lines/symbols/relationships, total_size_bytes, per-language counts), `supply_chain` counts (overall, per ecosystem, per bucket, warnings, pin status), and `concerns` (added/removed by id). Fail-before proof: the halved-symbols / broken-SBOM / dropped-concern case read false-clean on the prior code and now registers drift. `symbols` are still compared only at the stats count level (documented honestly in tests/golden/README.md, not per-symbol identity). `check flask` stays green (no re-baseline needed). |
 | 2026-07-11 | P3-3 real-data e2e (post-Phase-0 deploy) | Production ID drift in the Advanced Architecture Visualization workflow: an unprefixed baseline (`curriculum`) versus a repo-prefixed target (`unamentis/curriculum`) plus new structural nodes (`repo:unamentis`) caused the exact-only merge to preserve 0 of 251 enhancements. | Caught loudly by the P0-4 total-loss guard with no data loss (target left untouched), then fixed by this task (P3-3): drift-tolerant matching now preserves the enhancements and `--strict` guards the ratio in CI. |
 | 2026-07-11 | P1-1 PyPI dry-run | `twine check` warns that `long_description` and `long_description_content_type` are missing from pyproject.toml, so the PyPI project page will render no description. Not an upload blocker. | Log only; packaging polish. Point pyproject at README.md (`readme = "README.md"`) as part of P2-5 docs reconciliation or a small follow-up. Out of P1-1 scope (versioning). |
 | 2026-07-11 | P1-1 secrets check | release.yml references GitHub Environments `npm` and `pypi` that do not exist (only `copilot` and `github-pages` do) and depends on secret `NPM_TOKEN` that is not set (repo secrets are only CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, DEPLOY_TOKEN). PyPI publish uses OIDC trusted publishing that needs a PyPI-side pending publisher. | Human prerequisite for the release, recorded in P1-1 Evidence "Human steps remaining". Not a code fix; the human owns these credentials. |
