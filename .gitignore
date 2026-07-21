@@ -32,3 +32,7 @@ packages/cli/dist/
 
 # Cloudflare Worker
 infrastructure/cloudflare/worker/.wrangler/
+
+# Golden-corpus fetched source (card G2): frozen clones fetched on demand at
+# a pinned commit. Never tracked; only tests/golden/<name>/baseline.json is.
+.golden-cache/

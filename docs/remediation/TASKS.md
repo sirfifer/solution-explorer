@@ -1959,7 +1959,19 @@ here is started.
   G3 (two-slot demo/dogfood diff) and G4 (full-vs-incremental parity) build on.
 
 ### G2: Golden-corpus harness
-- Status: TODO (candidate; target validated 2026-07-20)
+- Status: BUILT for FLASK (owner green-lit; scripts/golden-corpus.py + tests/golden/flask/ + workflow). FastAPI is the next step within this card.
+- Delivered: fetch-at-pinned-commit + committed-baseline storage (owner decision
+  2026-07-20). corpus.lock pins the exact 40-char SHA (Flask 3.1.3 =
+  22d924701a6ae2e4cd01e9a15bbaf3946094af65); a depth-1 fetch-by-SHA lands the
+  frozen source in the gitignored .golden-cache/; only the approved baseline.json
+  is committed. Harness subcommands: list, fetch, generate, baseline (the
+  re-baseline procedure), check (diff vs baseline via the G1 tool, exit 1 on
+  drift). CI: .github/workflows/golden-corpus.yml runs check flask on engine-
+  touching PRs (hash-pinned actions). 16 hermetic tests + 1 opt-in live-network
+  test (verified green: real fetch+generate+check = no drift). README documents
+  the model and re-baseline procedure. NEXT within G2: add FastAPI pinned at
+  0.139.2+ with translated docs excluded (the exclude mechanism is already wired
+  via corpus.lock -> managed .gitignore block).
 - Scope: a frozen local clone held static, an approved baseline, a re-baseline
   procedure, CI wiring. The clean regression signal the changing demo and
   dogfood cannot give. TWO-CORPUS pairing (see REGRESSION-STRATEGY.md): build
@@ -1989,6 +2001,7 @@ Add new findings here with a date and the task you were on; do not expand task s
 | Date | Found while | Description | Disposition |
 |---|---|---|---|
 | 2026-07-11 | P3-3 real-data e2e (post-Phase-0 deploy) | UnaMentis architecture-full.yml was pinned to a stale Feb SHA `31145dc` despite a `# main` comment, so the downstream deploy ran an old solution-explorer. | Fixed by UnaMentis commit `9369887` (re-pin to current main). Strengthens P2-8 (pin hygiene): a comment claiming `main` is not a pin; verify the SHA actually tracks the intended ref. |
+| 2026-07-20 | G2 adversarial review | The G1 projection diff (and therefore the golden `check`) compares nine structural sections but NOT `symbols`, `supply_chain` (SBOM), `concerns`, or `stats`. A regression confined to those, e.g. a symbol-extraction pass that halves its output or a broken SBOM, passes `check` with no drift (false clean). | Documented in tests/golden/README.md. FOLLOW-UP: extend G1 to add `stats` roll-up deltas (total_symbols/relationships/components/files/lines) and `supply_chain` counts, so gross extraction and SBOM regressions are caught. Small, additive, do before R1 relies on the gate. |
 | 2026-07-11 | P3-3 real-data e2e (post-Phase-0 deploy) | Production ID drift in the Advanced Architecture Visualization workflow: an unprefixed baseline (`curriculum`) versus a repo-prefixed target (`unamentis/curriculum`) plus new structural nodes (`repo:unamentis`) caused the exact-only merge to preserve 0 of 251 enhancements. | Caught loudly by the P0-4 total-loss guard with no data loss (target left untouched), then fixed by this task (P3-3): drift-tolerant matching now preserves the enhancements and `--strict` guards the ratio in CI. |
 | 2026-07-11 | P1-1 PyPI dry-run | `twine check` warns that `long_description` and `long_description_content_type` are missing from pyproject.toml, so the PyPI project page will render no description. Not an upload blocker. | Log only; packaging polish. Point pyproject at README.md (`readme = "README.md"`) as part of P2-5 docs reconciliation or a small follow-up. Out of P1-1 scope (versioning). |
 | 2026-07-11 | P1-1 secrets check | release.yml references GitHub Environments `npm` and `pypi` that do not exist (only `copilot` and `github-pages` do) and depends on secret `NPM_TOKEN` that is not set (repo secrets are only CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, DEPLOY_TOKEN). PyPI publish uses OIDC trusted publishing that needs a PyPI-side pending publisher. | Human prerequisite for the release, recorded in P1-1 Evidence "Human steps remaining". Not a code fix; the human owns these credentials. |

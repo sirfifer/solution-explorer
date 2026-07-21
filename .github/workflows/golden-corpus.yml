@@ -1,0 +1,75 @@
+name: Golden Corpus
+
+# Golden-master regression check (card G2). On a pull request that touches the
+# engine, regenerate the frozen Flask corpus and diff it against the committed
+# baseline. A non-empty diff that is not an intended improvement is a regression
+# to investigate: re-baseline deliberately (scripts/golden-corpus.py baseline
+# flask) once the change is confirmed good, otherwise fix the regression.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "analyze.py"
+      - "analyzer/**"
+      - "scripts/golden-corpus.py"
+      - "scripts/projection-diff.py"
+      - "tests/golden/**"
+      - "pyproject.toml"
+      - ".github/workflows/golden-corpus.yml"
+  # Re-verify main on push so a merged change that moves the projection (an
+  # engine change or a dependency bump) cannot sit on main unchecked.
+  push:
+    branches: [main]
+    paths:
+      - "analyze.py"
+      - "analyzer/**"
+      - "scripts/golden-corpus.py"
+      - "scripts/projection-diff.py"
+      - "tests/golden/**"
+      - "pyproject.toml"
+      - ".github/workflows/golden-corpus.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: golden-corpus-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  golden-flask:
+    name: Flask golden diff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: pip-${{ runner.os }}-
+
+      - name: Install dependencies (frozen golden toolchain)
+        # The constraints file pins the tree-sitter grammars and rules loader to
+        # the exact versions that cut the baseline, so a grammar release cannot
+        # move Flask's parse tree and produce a false drift.
+        run: pip install -e ".[all,dev]" -c tests/golden/constraints.txt
+
+      - name: Check Flask against the approved baseline
+        run: python3 scripts/golden-corpus.py check flask --force
+
+      - name: Explain a drift failure
+        if: failure()
+        run: |
+          echo "## Golden corpus drift" >> $GITHUB_STEP_SUMMARY
+          echo "The Flask projection changed versus the committed baseline." >> $GITHUB_STEP_SUMMARY
+          echo "If this is an intended engine improvement, re-baseline locally with" >> $GITHUB_STEP_SUMMARY
+          echo '`python3 scripts/golden-corpus.py baseline flask` and commit the new baseline.' >> $GITHUB_STEP_SUMMARY
+          echo "Otherwise investigate it as a regression before merge." >> $GITHUB_STEP_SUMMARY
