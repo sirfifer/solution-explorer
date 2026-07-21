@@ -1946,10 +1946,17 @@ here is started.
   conventional in-process breaker plus liveness endpoint for the MCP server.
 
 ### G1: Projection-diff tool
-- Status: TODO (candidate; REGRESSION-STRATEGY.md)
+- Status: BUILT (owner green-lit; scripts/projection-diff.py + tests/test_projection_diff.py)
 - Scope: a deterministic diff over two full projections reporting component,
   relationship, finding, coverage, inventory, entity, capability, and enrichment
   deltas, human- and CI-readable, so a change is judged improved vs regressed.
+- Delivered: stdlib-only CLI over two monolith projections (old/blue, new/green).
+  Text report for humans and PR comments; --format json is the complete
+  machine-readable delta for CI; --exit-code turns a non-empty diff into exit 1
+  for gating. Determinism is a hard contract (never reads a timestamp, every list
+  sorted, byte-identical output for byte-identical inputs). Absent sections in an
+  older dataset are treated as empty (additive-projection rule). Foundation that
+  G3 (two-slot demo/dogfood diff) and G4 (full-vs-incremental parity) build on.
 
 ### G2: Golden-corpus harness
 - Status: TODO (candidate; target validated 2026-07-20)
