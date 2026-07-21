@@ -1913,8 +1913,9 @@ corpus). These cards are DESIGN-CARDED; the owner green-lights builds. Nothing
 here is started.
 
 ### R1: Output-contract plus honest-gap backbone
-- Status: IN PROGRESS (wave 1 BUILT; wt/r1-backbone). Backbone module and the
-  derive-driver adoption are landed; the remaining producers are later waves.
+- Status: IN PROGRESS (waves 1-2 BUILT). Backbone module, derive-driver
+  adoption, and project-emitter isolation are landed; the enrich, MCP, and
+  cross-reference waves (3-5) are later PRs.
 - Scope: generalize the coverage ledger's completeness guarantee to every
   producer (each derive pass, each emitter, each MCP tool, each enrichment pass)
   via Pydantic v2 output models and completeness postconditions (shape and
@@ -1941,15 +1942,39 @@ here is started.
   whole run; post-R1 the run completes with the honest gap. EXTRACT_TIER NOT
   bumped: gaps are a derive/project-tier signal, not a new EXTRACTED signal kind,
   so the extraction content-hash cache key is untouched.
-- Remaining waves (each its own PR, full protocol): (2) project-emitter
-  isolation in `project_split`/`project_monolith` (the other unguarded driver);
-  (3) enrich-driver unexpected-exception isolation (the handled invoke/validation
-  paths already degrade; an unexpected exception inside `_enhance_partition`
-  still re-raises through `fut.result()`); (4) MCP tool-call postconditions
-  (dispatch already degrades KeyError/ToolError); (5) cross-reference-resolution
-  and total_components postconditions once validated against both golden corpora;
-  (6) `_assemble` skeleton-fallback hardening so even an assembly failure yields
-  a minimal valid arch plus a gap rather than a crash.
+- Wave 2 delivered (2026-07-21, wt/r1-wave2-emitters): project-emitter isolation
+  in `project_split`/`project_monolith` (the other unguarded driver). Every
+  emitter now runs under an `Isolator("project", gaps)`: `prepare_arch` git-info
+  reads (gitinfo, Info.plist names), the enrichment and verdict overlays,
+  coverage, activity, SBOM, CRA, changelog, search shards, the sidecar
+  coverage/activity JSON, and the AI front door. A sidecar that raises records a
+  deterministic honest `project.<name>` gap and is simply absent, never
+  fracturing the run. The main artifact (the manifest in split mode,
+  `architecture.json` in monolith mode) is written LAST so it carries every
+  project-tier gap on its additive `gaps` key, and it degrades to a minimal but
+  well-formed skeleton (identity fields, empty collections, zeroed stats, the
+  same shape wave 1 gave `_assemble`) on its own failure, so the run always ships
+  a viewer-loadable artifact that accounts for what failed. Derive-tier and
+  project-tier gaps are merged (captured separately, re-finalized, never
+  double-counted). SARIF at the CLI level (`project/run.py`) runs after the main
+  projection has shipped, so its gap channel is the console: a SARIF failure now
+  degrades to a loud honest message instead of crashing the CLI. Byte parity
+  proven: a clean run adds no `gaps` key (the reorder of independent file writes
+  does not change any file's bytes), the engine-parity and full-vs-incremental
+  byte-parity suites pass, and `check flask` / `check fastapi` show no drift.
+  Fail-before proved in `tests/test_project_isolation.py` (10 of 12 injection
+  tests raise against the pre-wave-2 pipeline; post-wave-2 the run completes with
+  the honest gap). EXTRACT_TIER NOT bumped: gaps stay a derive/project-tier
+  signal, not a new EXTRACTED signal kind, so the extraction content-hash cache
+  key is untouched.
+- Remaining waves (each its own PR, full protocol): (3) enrich-driver
+  unexpected-exception isolation (the handled invoke/validation paths already
+  degrade; an unexpected exception inside `_enhance_partition` still re-raises
+  through `fut.result()`); (4) MCP tool-call postconditions (dispatch already
+  degrades KeyError/ToolError); (5) cross-reference-resolution and
+  total_components postconditions once validated against both golden corpora.
+  Wave (6) `_assemble` skeleton-fallback hardening already landed in wave 1
+  (PR #73, adversarial-review finding 1).
 
 ### R2: Retry, timeout, and cost ceiling on the AI-enrichment path
 - Status: TODO (candidate)
@@ -2058,7 +2083,9 @@ Add new findings here with a date and the task you were on; do not expand task s
 
 | Date | Found while | Description | Disposition |
 |---|---|---|---|
-| 2026-07-20 | R1 wave 1 producer survey | The enrich driver (`enrich/engine.py::run_enhance`) isolates partitions via `PartitionOutcome` (invoke/validation failures degrade), but an UNEXPECTED exception inside `_enhance_partition` still re-raises through `fut.result()` and crashes `run_enhance`. Likewise `project_split`/`project_monolith` call emitters as bare statements with no per-emitter isolation, so an emitter exception crashes the projection. | Both are named R1 remaining waves (project-emitter isolation = wave 2; enrich unexpected-exception isolation = wave 3) on the R1 card. Not fixed in wave 1 (scope: backbone + derive driver). The backbone (`analyzer/contracts.py` Isolator) is the shared mechanism each wave adopts. |
+| 2026-07-20 | R1 wave 1 producer survey | The enrich driver (`enrich/engine.py::run_enhance`) isolates partitions via `PartitionOutcome` (invoke/validation failures degrade), but an UNEXPECTED exception inside `_enhance_partition` still re-raises through `fut.result()` and crashes `run_enhance`. Likewise `project_split`/`project_monolith` call emitters as bare statements with no per-emitter isolation, so an emitter exception crashes the projection. | Both are named R1 remaining waves (project-emitter isolation = wave 2; enrich unexpected-exception isolation = wave 3) on the R1 card. Project-emitter isolation RESOLVED 2026-07-21 (wave 2, wt/r1-wave2-emitters): `project_split`/`project_monolith` now run every emitter under an `Isolator` and write the main artifact last so it carries every gap and skeleton-degrades on its own failure; `check flask`/`check fastapi` no drift. The enrich `_enhance_partition` re-raise remains open for wave 3. The backbone (`analyzer/contracts.py` Isolator) is the shared mechanism each wave adopts. |
+| 2026-07-21 | R1 wave 2 adversarial review (PR #74) | Four degraded-path defects, all healthy output byte-perfect: (1) MAJOR, `Isolator.run` called `default_factory()` outside its try/except, so a skeleton writer that itself raised could cascade into a crash. (2) MAJOR, gap reasons built from `str(exc)` leaked absolute filesystem paths for file-I/O emitters (OSError), against the documented "no absolute paths" invariant and breaking cross-environment byte-determinism of degraded artifacts. (3) MINOR, a failed search write returned the truthy empty-manifest default, so the AI front door advertised a search index that was never written. (4) NIT, orphan `data/detail-*.json` shards survived a partial manifest failure whose skeleton declares an empty index. | RESOLVED in PR #74. (1) `Isolator.run` now wraps `default_factory()` in its own try/except, recording a second `<producer>.fallback` gap and returning the plain default, so a fallback failure can never cascade; `_empty_arch_doc` additionally coerces identity fields to JSON-safe scalars (`_json_scalar`) so the skeleton always serializes. (2) `_scrub_reason` now collapses absolute paths to `.../<basename>` (deterministic, non-leaking, analogous to the hex-address scrub). (3) the pipeline detects a recorded `project.search-shards` gap and passes `search_manifest=None` to the front door so it emits its honest search-absent contract. (4) the skeleton manifest best-effort prunes orphan detail shards. Each has a fail-before regression test (`tests/test_contracts.py`, `tests/test_project_isolation.py`). Byte parity re-confirmed (`check flask` no drift, engine/incremental parity green). |
+| 2026-07-21 | R1 wave 2 adversarial review (PR #74) | Follow-up (not fixed in wave 2): the AI front door decides the `coverage.json` / `activity.json` endpoint presence from the in-memory coverage/activity object, not from whether that specific sidecar FILE write succeeded. In the narrow case where `build_coverage` succeeds but the `coverage.json` write fails, the front door still advertises `coverage.json` though it is absent (the search case was fixed; coverage/activity are entangled because the same `coverage` param also gates the manifest-embedded coverage section, which IS present). | Follow-up: give `write_front_door` a separate "file present" signal so it can advertise the manifest coverage section while omitting an absent `coverage.json` endpoint. Narrow (build-succeeds-but-write-fails) and strictly better than the pre-wave-2 crash; left for a small front-door signature change rather than expanded here. |
 | 2026-07-11 | P3-3 real-data e2e (post-Phase-0 deploy) | UnaMentis architecture-full.yml was pinned to a stale Feb SHA `31145dc` despite a `# main` comment, so the downstream deploy ran an old solution-explorer. | Fixed by UnaMentis commit `9369887` (re-pin to current main). Strengthens P2-8 (pin hygiene): a comment claiming `main` is not a pin; verify the SHA actually tracks the intended ref. |
 | 2026-07-20 | G2 adversarial review | The G1 projection diff (and therefore the golden `check`) compares nine structural sections but NOT `symbols`, `supply_chain` (SBOM), `concerns`, or `stats`. A regression confined to those, e.g. a symbol-extraction pass that halves its output or a broken SBOM, passes `check` with no drift (false clean). | RESOLVED 2026-07-20 (wt/g1-stats-supply): G1 now diffs `stats` roll-ups (total_components/files/lines/symbols/relationships, total_size_bytes, per-language counts), `supply_chain` counts (overall, per ecosystem, per bucket, warnings, pin status), and `concerns` (added/removed by id). Fail-before proof: the halved-symbols / broken-SBOM / dropped-concern case read false-clean on the prior code and now registers drift. `symbols` are still compared only at the stats count level (documented honestly in tests/golden/README.md, not per-symbol identity). `check flask` stays green (no re-baseline needed). |
 | 2026-07-11 | P3-3 real-data e2e (post-Phase-0 deploy) | Production ID drift in the Advanced Architecture Visualization workflow: an unprefixed baseline (`curriculum`) versus a repo-prefixed target (`unamentis/curriculum`) plus new structural nodes (`repo:unamentis`) caused the exact-only merge to preserve 0 of 251 enhancements. | Caught loudly by the P0-4 total-loss guard with no data loss (target left untouched), then fixed by this task (P3-3): drift-tolerant matching now preserves the enhancements and `--strict` guards the ratio in CI. |

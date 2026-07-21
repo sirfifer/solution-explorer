@@ -136,6 +136,54 @@ def test_isolator_does_not_swallow_base_exceptions():
     assert gaps == []  # a user abort is never turned into an honest gap
 
 
+def test_isolator_default_factory_failure_does_not_cascade():
+    # The fallback itself must never crash the run (adversarial review of PR #74,
+    # finding 1): when both the unit AND its default_factory raise, the run gets
+    # the plain default and TWO honest gaps (the unit and its ".fallback"), never
+    # a propagated exception.
+    gaps: list = []
+    iso = contracts.Isolator("project", gaps)
+
+    def primary():
+        raise ValueError("primary failed")
+
+    def bad_factory():
+        raise RuntimeError("the fallback also broke")
+
+    result = iso.run("project.main", primary, default="SAFE", default_factory=bad_factory)
+    assert result == "SAFE"  # the plain default, never a crash
+    producers = {contracts.gap_to_dict(g)["producer"] for g in gaps}
+    assert producers == {"project.main", "project.main.fallback"}
+    reasons = {contracts.gap_to_dict(g)["reason"] for g in gaps}
+    assert "ValueError: primary failed" in reasons
+    assert "RuntimeError: the fallback also broke" in reasons
+
+
+def test_gap_reason_scrubs_absolute_paths_for_determinism():
+    # A file-I/O failure (OSError family) embeds the machine's absolute path in
+    # its message. contracts.py documents that a gap carries NO absolute paths;
+    # wave 2 routes many file emitters through the isolator, so this must hold or
+    # a degraded artifact is machine-dependent and leaks the directory layout.
+    exc = FileNotFoundError(2, "No such file or directory",
+                            "/Users/someone/dev/repo/sub/thing.toml")
+    reason = contracts.gap_from_exception("project.sbom", "project", exc).reason
+    assert "/Users/someone" not in reason
+    assert "/dev/repo/sub" not in reason
+    assert ".../thing.toml" in reason  # the basename is stable and kept
+    # Deterministic across two builds (and would be across two machines with a
+    # different absolute prefix but the same basename).
+    exc2 = FileNotFoundError(2, "No such file or directory",
+                             "/home/ci/checkout/sub/thing.toml")
+    reason2 = contracts.gap_from_exception("project.sbom", "project", exc2).reason
+    assert reason == reason2
+
+
+def test_path_scrub_leaves_non_paths_untouched():
+    # No over-scrub: a plain message and a relative-looking token are unchanged.
+    r = contracts.gap_from_exception("p", "s", ValueError("bad value a/b for key")).reason
+    assert r == "ValueError: bad value a/b for key"
+
+
 def test_isolator_direct_gap():
     gaps: list = []
     iso = contracts.Isolator("emit", gaps)
