@@ -48,16 +48,34 @@ import argparse
 import importlib.util
 import json
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
 
-# Fetch timeout for a remote blue projection, in seconds. A slow or hung live
-# site must not stall a deploy; on timeout the diff degrades loudly and the
-# deploy continues.
+# Total wall-clock deadline for fetching a remote blue projection, in seconds.
+# This is a TOTAL bound, not merely a per-socket timeout: a slow-drip server that
+# trickles a few bytes just inside every socket read would otherwise hold a
+# deploy far past any per-recv timeout. The deadline is checked between chunk
+# reads, and each individual read is additionally bounded by the socket timeout
+# below, so the whole fetch cannot exceed roughly one socket-timeout past this
+# deadline. On breach the diff degrades loudly and the deploy continues.
 _FETCH_TIMEOUT_S = 30
+
+# Per-socket-operation timeout (seconds). Bounds a single stalled read so the
+# between-chunk deadline check is actually reached on a fully-hung connection.
+_SOCKET_TIMEOUT_S = 15
+
+# Chunk size for the capped, deadline-bounded read.
+_READ_CHUNK = 1 << 16  # 64 KiB
+
+# Hard cap on a fetched blue projection, in bytes. A projection larger than this
+# is anomalous (the dogfood monolith is a few MB); reading unbounded into memory
+# is a denial-of-service surface for a live-fetched blue. On breach the diff
+# degrades loudly rather than reading without limit.
+_MAX_BLUE_BYTES = 64 * 1024 * 1024
 
 # The URL schemes a remote blue may use. http/https for a live deploy; file for
 # a local file:// URL (used by the hermetic tests and as a local-path escape).
@@ -106,6 +124,31 @@ def _parse_projection(raw: bytes | str, origin: str) -> dict:
     return data
 
 
+def _read_capped(resp: Any) -> tuple[bytes, Optional[str]]:
+    """Read a response body with a total deadline and a size cap.
+
+    Reads in chunks, checking the total wall-clock deadline BEFORE each read (so a
+    slow-drip server cannot hold the fetch past ``_FETCH_TIMEOUT_S`` by more than
+    one in-flight socket read) and the cumulative size AFTER each read (so an
+    oversized blue cannot be read unbounded into memory). Returns
+    ``(body, None)`` on a complete read, or ``(b"", reason)`` when a bound is
+    breached. Socket errors propagate to the caller's except handlers.
+    """
+    start = time.monotonic()
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        if time.monotonic() - start > _FETCH_TIMEOUT_S:
+            return b"", f"exceeded {_FETCH_TIMEOUT_S}s total fetch deadline"
+        chunk = resp.read(_READ_CHUNK)
+        if not chunk:
+            return b"".join(chunks), None
+        total += len(chunk)
+        if total > _MAX_BLUE_BYTES:
+            return b"", f"blue projection exceeds the {_MAX_BLUE_BYTES}-byte cap"
+        chunks.append(chunk)
+
+
 def load_blue(source: str) -> tuple[Optional[dict], Optional[str]]:
     """Load the prior/blue projection from a URL or a local path.
 
@@ -117,14 +160,16 @@ def load_blue(source: str) -> tuple[Optional[dict], Optional[str]]:
     """
     if _is_url(source):
         try:
-            with urllib.request.urlopen(source, timeout=_FETCH_TIMEOUT_S) as resp:  # noqa: S310 - schemes are allowlisted above
-                body = resp.read()
+            with urllib.request.urlopen(source, timeout=_SOCKET_TIMEOUT_S) as resp:  # noqa: S310 - schemes are allowlisted above
+                body, cap_reason = _read_capped(resp)
         except urllib.error.HTTPError as exc:
             return None, f"could not fetch blue from {source}: HTTP {exc.code} {exc.reason}"
         except urllib.error.URLError as exc:
             return None, f"could not fetch blue from {source}: {exc.reason}"
         except (OSError, ValueError) as exc:
             return None, f"could not fetch blue from {source}: {exc}"
+        if cap_reason is not None:
+            return None, f"could not fetch blue from {source}: {cap_reason}"
         try:
             return _parse_projection(body, source), None
         except ValueError as exc:
@@ -217,11 +262,23 @@ def _write(out_path: Optional[str], text: str) -> None:
     """Append to a summary file, or write to stdout when no path is given.
 
     The GitHub step summary file is append-only across steps, so this appends.
+    A write failure (unwritable path, a directory, a full disk) must NOT crash:
+    the whole tool is a non-blocking health check that always exits 0, so a
+    failed summary write degrades to a last-ditch stderr note and the report is
+    also echoed to stdout so it is not lost.
     """
-    if out_path:
+    if not out_path:
+        sys.stdout.write(text)
+        return
+    try:
         with open(out_path, "a", encoding="utf-8") as fh:
             fh.write(text)
-    else:
+    except OSError as exc:
+        print(
+            f"blue-green-diff: could not write summary to {out_path}: {exc}; "
+            "echoing to stdout instead (non-blocking).",
+            file=sys.stderr,
+        )
         sys.stdout.write(text)
 
 
@@ -297,9 +354,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     _write(args.summary_out, summary)
 
     if args.json_out:
-        Path(args.json_out).write_text(
-            json.dumps(diff, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
+        # A failed artifact write must not crash the health check either.
+        try:
+            Path(args.json_out).write_text(
+                json.dumps(diff, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+        except OSError as exc:
+            print(
+                f"blue-green-diff: could not write JSON diff to {args.json_out}: "
+                f"{exc} (non-blocking).",
+                file=sys.stderr,
+            )
     return 0
 
 

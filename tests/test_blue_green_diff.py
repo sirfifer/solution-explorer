@@ -230,6 +230,68 @@ def test_summary_is_appended_not_overwritten(tmp_path):
     assert "Blue/green projection diff" in text
 
 
+# --- output-write failures must still exit 0 (adversarial review #78, MAJOR 1) -
+
+
+def test_unwritable_summary_out_exits_zero(tmp_path, capsys):
+    # A summary-out path whose parent directory does not exist must NOT crash:
+    # the health check always exits 0. Fail-before: pre-fix this raised
+    # FileNotFoundError and exited 1, which would fail the deploy job.
+    blue = _write_json(tmp_path / "blue.json", _projection("demo", ["a"]))
+    green = _write_json(tmp_path / "green.json", _projection("demo", ["a", "b"]))
+    rc = BGD.main([
+        "--blue", str(blue), "--new", str(green),
+        "--summary-out", str(tmp_path / "no_such_dir" / "out.md"),
+    ])
+    assert rc == 0
+    err = capsys.readouterr()
+    # The report is not lost: a last-ditch stderr note plus the report echoed.
+    assert "could not write summary" in err.err
+    assert "Blue/green projection diff" in err.out
+
+
+def test_summary_out_is_a_directory_exits_zero(tmp_path):
+    blue = _write_json(tmp_path / "blue.json", _projection("demo", ["a"]))
+    green = _write_json(tmp_path / "green.json", _projection("demo", ["a"]))
+    a_dir = tmp_path / "adir"
+    a_dir.mkdir()
+    rc = BGD.main(["--blue", str(blue), "--new", str(green), "--summary-out", str(a_dir)])
+    assert rc == 0
+
+
+def test_unwritable_json_out_exits_zero(tmp_path):
+    # A failed artifact write must not crash either; the summary is still written.
+    blue = _write_json(tmp_path / "blue.json", _projection("demo", ["a"]))
+    green = _write_json(tmp_path / "green.json", _projection("demo", ["a", "b"]))
+    summary = tmp_path / "summary.md"
+    rc = BGD.main([
+        "--blue", str(blue), "--new", str(green),
+        "--summary-out", str(summary),
+        "--json-out", str(tmp_path / "no_such_dir" / "diff.json"),
+    ])
+    assert rc == 0
+    assert "Components: 1 -> 2 (+1)" in summary.read_text(encoding="utf-8")
+    assert not (tmp_path / "no_such_dir" / "diff.json").exists()
+
+
+# --- fetch size cap must degrade loudly (adversarial review #78, MAJOR 2) ------
+
+
+def test_oversized_blue_degrades_loudly(tmp_path, monkeypatch):
+    # A blue larger than the size cap must degrade loudly rather than read
+    # unbounded into memory. A file:// URL exercises the same capped-read path a
+    # remote fetch uses.
+    monkeypatch.setattr(BGD, "_MAX_BLUE_BYTES", 8)
+    blue = _write_json(tmp_path / "blue.json", _projection("demo", ["a"]))  # > 8 bytes
+    green = _write_json(tmp_path / "green.json", _projection("demo", ["a"]))
+    summary = tmp_path / "summary.md"
+    rc = BGD.main(["--blue", blue.as_uri(), "--new", str(green), "--summary-out", str(summary)])
+    assert rc == 0
+    text = summary.read_text(encoding="utf-8")
+    assert "BLUE/GREEN DIFF UNAVAILABLE" in text
+    assert "exceeds the 8-byte cap" in text
+
+
 # --- URL classification unit --------------------------------------------------
 
 
