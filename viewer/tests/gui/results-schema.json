@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gui-results/v1",
+  "title": "GUI regression run results (gui-results/v1)",
+  "description": "The AI-facing record of one GUI regression run (design authority: docs/testing/GUI-REGRESSION-STRATEGY.md, results contract). One entry per case. JSON Schema cannot enforce key order, so the order contract is stated here and the merge step writes it: run-level keys in the order listed under propertyOrder, case keys in the order listed under the case propertyOrder, and cases sorted by case id (natural sort: vector number, then case number). A fixing agent works from this file alone; it is complete enough that a failure never needs a re-run just to be understood.",
+  "type": "object",
+  "propertyOrder": ["schema", "run_id", "dataset", "app_url", "started_at", "finished_at", "summary", "cases"],
+  "required": ["schema", "run_id", "dataset", "started_at", "finished_at", "summary", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "gui-results/v1" },
+    "run_id": {
+      "type": "string",
+      "description": "UTC timestamp plus dataset key, e.g. 20260721-153000-dogfood. Also the results directory name."
+    },
+    "dataset": {
+      "type": "string",
+      "description": "Dataset key from datasets.yaml this run targeted. A case may override (V9 degradation cases run other datasets); the run-level key is the primary target."
+    },
+    "app_url": {
+      "type": "string",
+      "description": "Base URL the primary dataset was served at."
+    },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "summary": {
+      "type": "object",
+      "propertyOrder": ["total", "pass", "pass_flaky", "fail", "blocked", "exit_status"],
+      "required": ["total", "pass", "pass_flaky", "fail", "blocked", "exit_status"],
+      "additionalProperties": false,
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "pass": { "type": "integer", "minimum": 0 },
+        "pass_flaky": { "type": "integer", "minimum": 0 },
+        "fail": { "type": "integer", "minimum": 0 },
+        "blocked": { "type": "integer", "minimum": 0 },
+        "exit_status": {
+          "enum": ["GREEN", "FLAKY", "RED"],
+          "description": "GREEN: every case PASS. FLAKY: no FAIL or BLOCKED but at least one PASS_FLAKY (flaky is never green). RED: any FAIL or BLOCKED."
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "propertyOrder": ["id", "vector", "viewport", "dataset", "verdict", "step_reached", "steps_total", "attempts", "assertions", "console_errors", "network_errors", "evidence", "wall_time_seconds", "notes"],
+      "required": ["id", "vector", "viewport", "dataset", "verdict", "step_reached", "steps_total", "attempts", "assertions", "console_errors", "network_errors", "evidence", "wall_time_seconds"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^V[0-9]+\\.[0-9]+$",
+          "description": "Case id from the plan, e.g. V2.1."
+        },
+        "vector": { "type": "string", "description": "Vector slug from the plan, e.g. drill-to-code." },
+        "viewport": { "enum": ["desktop", "mobile", "mobile-landscape"] },
+        "dataset": { "type": "string", "description": "Dataset key this case ran against." },
+        "verdict": {
+          "enum": ["PASS", "PASS_FLAKY", "FAIL", "BLOCKED"],
+          "description": "PASS: all steps performed, all assertions met, first attempt. PASS_FLAKY: pass only on the single permitted reload-and-reattempt; never counted as green. FAIL: all steps performed but at least one assertion unmet, or a non-allowlisted console/network error occurred. BLOCKED: a step could not be performed (element genuinely absent, app crashed); step_reached names it."
+        },
+        "step_reached": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "1-based index of the last step successfully performed on the verdict-determining attempt. Equal to steps_total unless BLOCKED; the blocking step is step_reached + 1."
+        },
+        "steps_total": { "type": "integer", "minimum": 1 },
+        "attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2,
+          "description": "1 or 2. 2 means the single permitted reload-and-reattempt was used; a passing second attempt is PASS_FLAKY by contract."
+        },
+        "assertions": {
+          "type": "array",
+          "description": "One entry per pass_when line, in plan order.",
+          "items": {
+            "type": "object",
+            "propertyOrder": ["text", "outcome", "detail"],
+            "required": ["text", "outcome"],
+            "additionalProperties": false,
+            "properties": {
+              "text": { "type": "string", "description": "The pass_when line, verbatim." },
+              "outcome": { "enum": ["pass", "fail", "not-evaluated"], "description": "not-evaluated only when the case was BLOCKED before the assertion could be checked." },
+              "detail": { "type": "string", "description": "What was actually observed, stated plainly. Required in spirit for fail outcomes." }
+            }
+          }
+        },
+        "console_errors": {
+          "type": "array",
+          "description": "Non-allowlisted console error excerpts observed during the case (empty when clean). Allowlisted probe errors are excluded; they are declared in datasets.yaml.",
+          "items": { "type": "string" }
+        },
+        "network_errors": {
+          "type": "array",
+          "description": "Non-allowlisted failed requests as 'STATUS url' strings (empty when clean).",
+          "items": { "type": "string" }
+        },
+        "evidence": {
+          "type": "array",
+          "description": "Paths relative to the run directory (screenshots, traces). At least the end-state screenshot; BLOCKED and FAIL cases include the screenshot taken at the point of failure.",
+          "items": { "type": "string" }
+        },
+        "wall_time_seconds": { "type": "number", "minimum": 0 },
+        "notes": {
+          "type": "string",
+          "description": "Optional literal observations (what blocked, what looked different). Observation only, never interpretation."
+        }
+      }
+    }
+  }
+}

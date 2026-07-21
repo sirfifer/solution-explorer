@@ -1,0 +1,110 @@
+# Hand-maintained surface manifest (tier two of scripts/gui-plan-check.py;
+# design authority: docs/testing/GUI-REGRESSION-STRATEGY.md, Maintainability).
+#
+# Every interactive surface component that requires plan coverage is listed
+# under `surfaces`; a plan case claims it with a `covers: [component:<name>]`
+# token. Everything else under viewer/src/components/ must appear under
+# `ignore` with a reason. A file in neither list fails the check, so a new
+# surface cannot land invisibly. The check also cross-checks both directions:
+# a manifest entry no plan case covers fails, and a plan token naming a
+# component absent from this manifest fails.
+
+surfaces:
+  - component: ArchitectureGraph
+    file: ArchitectureGraph.tsx
+  - component: ComponentNode
+    file: ComponentNode.tsx
+  - component: AggregateNode
+    file: AggregateNode.tsx
+  - component: DetailPanel
+    file: DetailPanel.tsx
+  - component: CodePreview
+    file: CodePreview.tsx
+  - component: TreeNavigator
+    file: TreeNavigator.tsx
+  - component: ChangelogPanel
+    file: ChangelogPanel.tsx
+  - component: LensSwitcher
+    file: LensSwitcher.tsx
+  - component: FlowPanel
+    file: FlowPanel.tsx
+  - component: ActivityPanel
+    file: ActivityPanel.tsx
+  - component: CapabilityPanel
+    file: CapabilityPanel.tsx
+  - component: DataPanel
+    file: DataPanel.tsx
+  - component: RulesPanel
+    file: RulesPanel.tsx
+  - component: SearchOverlay
+    file: SearchOverlay.tsx
+  - component: HelpSystem
+    file: HelpSystem.tsx
+  - component: ToursEntry
+    file: ToursEntry.tsx
+  - component: TourPlayer
+    file: TourPlayer.tsx
+  - component: FindingsEntry
+    file: FindingsEntry.tsx
+  - component: FindingsSurface
+    file: FindingsSurface.tsx
+  - component: SupplyChainEntry
+    file: SupplyChainEntry.tsx
+  - component: SupplyChainSurface
+    file: SupplyChainSurface.tsx
+  - component: InventoryPanel
+    file: InventoryPanel.tsx
+  - component: CoverageBadge
+    file: CoverageBadge.tsx
+  - component: ErrorBoundary
+    file: ErrorBoundary.tsx
+  - component: ReviewModeButton
+    file: ReviewModeButton.tsx
+  - component: AnnotationInput
+    file: AnnotationInput.tsx
+  - component: ReviewSummary
+    file: ReviewSummary.tsx
+  - component: SelectionSetsSection
+    file: SelectionSetsSection.tsx
+
+ignore:
+  - file: MarkdownRenderer.tsx
+    reason: >
+      Presentational renderer; exercised implicitly wherever docs, help, and AI
+      content render (V3, V10). No standalone user flow.
+  - file: Tooltip.tsx
+    reason: >
+      Presentational wrapper; exercised implicitly by every labeled control the
+      plan touches. No standalone user flow.
+  - file: VirtualList.tsx
+    reason: >
+      Virtualization primitive; exercised implicitly by the long symbol and
+      entry lists the plan scrolls (V2, V11). No standalone user flow.
+  - file: RationaleStrip.tsx
+    reason: >
+      Passive context strip inside DetailPanel's overview; renders nothing
+      without rationale data. Exercised implicitly by V3 overview cases.
+  - file: StatusDashboard.tsx
+    reason: >
+      Requires architecture.live_status, which only a live fixture provides.
+      Phase 4 scope by design-doc decision (live and admin surfaces); recorded
+      deferral, not an oversight.
+  - file: AdminDashboard.tsx
+    reason: >
+      Live/admin surface requiring live-config.json; Phase 4 scope by
+      design-doc decision. Recorded deferral.
+  - file: admin/ActivityTab.tsx
+    reason: "Part of AdminDashboard; same Phase 4 deferral."
+  - file: admin/HealthTab.tsx
+    reason: "Part of AdminDashboard; same Phase 4 deferral."
+  - file: admin/HistoryTab.tsx
+    reason: "Part of AdminDashboard; same Phase 4 deferral."
+  - file: admin/ResourcesTab.tsx
+    reason: "Part of AdminDashboard; same Phase 4 deferral."
+  - file: admin/SettingsTab.tsx
+    reason: "Part of AdminDashboard; same Phase 4 deferral."
+  - file: SolutionIndex.tsx
+    reason: >
+      Requires a composed multi-repo solution dataset, which is not in the
+      Phase 1 dataset set (dogfood, split-mode, unenriched, gaps, old-format).
+      Recorded deferral to the multi-repo engagement; revisit with Phase 4.

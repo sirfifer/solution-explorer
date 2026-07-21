@@ -2347,6 +2347,41 @@ feature must be partially visible before it is done.
   incremental-equals-full contract, so a daily full regeneration is provably
   unnecessary.
 
+## GUI regression (viewer testing)
+
+Design authority: `docs/testing/GUI-REGRESSION-STRATEGY.md` (merged PR #80).
+Owner green-lit 2026-07-21: Phase 1 build plus ONE Phase 2 run and its report;
+fix cycles are a separate owner-triggered engagement.
+
+### GUI-1: Phase 1 harness (datasets, completeness check, runner skill)
+- Status: BUILT (2026-07-21, wt/gui-harness). The infrastructure half of
+  Phase 1; the walked plan (V1 through V13) lands as its own PR on top.
+- Delivered: `viewer/tests/gui/` scaffold (datasets.yaml with per-dataset
+  intentional-probe allowlists, surface.yaml manifest plus ignore list,
+  gui-results/v1 results-schema.json, gitignored results/), five datasets
+  (dogfood via the deploy pipeline's analyze+merge recipe, split-mode,
+  unenriched and gap-carrying via documented gui-datasets.py transforms, and
+  the frozen old-format fixture under fixtures/), `scripts/gui-datasets.py`
+  (generate, strip-ai, inject-gaps, assemble serve roots from the production
+  build; serve command verified against a real browser for monolith AND split
+  layouts), `scripts/gui-plan-check.py` (two-tier completeness check with
+  loud-parse-failure enumerators, explicit covers: tokens, visible waivers,
+  and the neither-manifest-nor-ignore file sweep; hermetic tests in
+  `tests/test_gui_plan_check.py`; hash-pinned CI job gui-plan-check.yml on
+  viewer changes, --bootstrap-ok removed when the plan lands), and
+  `.claude/skills/gui-test-cycle/SKILL.md` (orchestration cycle, Sonnet
+  runner prompt template with the closed action vocabulary, shard isolation
+  via one port per shard plus storage clear after verifying the extension
+  tooling cannot create browser contexts, results merge and blunt REPORT.md
+  contract, owner-decided evidence retention).
+
+### GUI-2: Phase 1 walked plan (V1 through V13)
+- Status: TODO (next PR on this card family). The cardinal rule applies: no
+  case ships unwalked; every case is executed against the running UI by its
+  author before commit. Discrepancies between the design's vectors and the
+  real UI are recorded as findings in the PR body and the Phase 2 report,
+  never bent into passing cases.
+
 ## Discovered during execution
 
 Add new findings here with a date and the task you were on; do not expand task scope inline.

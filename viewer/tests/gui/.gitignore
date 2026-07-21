@@ -1,0 +1,12 @@
+# Generated dataset staging payloads (materialized by scripts/gui-datasets.py
+# from datasets.yaml; regenerable, never committed).
+.datasets/
+
+# Assembled static serve roots (built dist plus a dataset payload; regenerable).
+.serve/
+
+# Run results and evidence are ignored by results/.gitignore (kept there so
+# the directory itself stays tracked). Never committed (owner decision,
+# 2026-07-21): evidence stays local, REPORT.md is pasted into the owner
+# report when a cycle is triggered. Retention: latest green run plus every
+# red run, prune the rest.
