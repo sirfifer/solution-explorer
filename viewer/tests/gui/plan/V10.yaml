@@ -1,0 +1,48 @@
+# V10 help and tours (vector V10): ? affordances open correct content; a
+# tour plays through its sequence. Sampling: three help points, one full
+# walkthrough. No dataset in Phase 1 carries ai_enhance tours, so the
+# TourPlayer/ToursEntry surfaces have no instance (see plan/waivers.yaml and
+# the recorded discrepancy); the app's own welcome walkthrough is played in
+# full instead (V10.2).
+# All cases executed against the running UI on 2026-07-21.
+
+- id: V10.1
+  vector: help-and-tours
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the help button labeled '?' on the component node titled 'arch-visualizer'"
+    - "Click the help button labeled '?' at the bottom right of the page"
+    - "Open the help panel tab labeled 'Shortcuts'"
+  pass_when:
+    - "step 3: a popover opens showing the component's role badge and description (help point 1)"
+    - "step 4: the Help panel opens with Guide, Shortcuts, and About tabs (help point 2)"
+    - "step 5: the Shortcuts tab lists keyboard shortcuts including 'Open search' and 'Replay welcome guide' (help point 3)"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - component:HelpSystem
+
+- id: V10.2
+  vector: help-and-tours
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the help button labeled '?' at the bottom right of the page"
+    - "Open the help panel tab labeled 'Shortcuts'"
+    - "Click the control labeled 'Replay welcome guide'"
+    - "Click the button labeled 'Next'"
+    - "Click the button labeled 'Next'"
+    - "Click the button labeled 'Next'"
+    - "Click the button labeled 'Next'"
+    - "Click the button labeled 'Get Started'"
+  pass_when:
+    - "step 5: the welcome walkthrough opens at its first step ('Welcome to Architecture Visualizer')"
+    - "steps 6 to 9: each Next advances one step through the five-step sequence"
+    - "step 10: 'Get Started' closes the walkthrough and the app is usable behind it"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot

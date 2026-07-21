@@ -1,0 +1,74 @@
+# Waived surfaces: enumerated obligations no Phase 1 dataset or tooling can
+# exercise. A waiver is a visible decision, printed on every check run,
+# never a silent gap. Each waiver names why, and what would retire it.
+
+- token: edge:action
+  reason: >
+    No UIAction with a target_view exists in any Phase 1 dataset, so the Flow
+    lens synthesizes no action edges. Retire with a fixture carrying a
+    tap-to-navigate action.
+- token: edge:cache
+  reason: "No cache relationship in any Phase 1 dataset. Retire with a fixture or the Phase 4 demo dataset."
+- token: edge:database
+  reason: "No database relationship in any Phase 1 dataset. Retire with a fixture or the Phase 4 demo dataset."
+- token: edge:event_bus
+  reason: "No event_bus relationship in any Phase 1 dataset. Retire with a fixture or the Phase 4 demo dataset."
+- token: edge:embed
+  reason: >
+    No embed (view composition) relationship in any Phase 1 dataset; the
+    SwiftUI embed detector has no SwiftUI fixture with embedded views here.
+    Retire with a SwiftUI fixture.
+- token: edge:ffi
+  reason: "No ffi relationship in any Phase 1 dataset. Retire with a fixture or the Phase 4 demo dataset."
+- token: edge:file
+  reason: "No file relationship in any Phase 1 dataset. Retire with a fixture or the Phase 4 demo dataset."
+- token: edge:grpc
+  reason: "No grpc relationship in any Phase 1 dataset. Retire with a fixture or the Phase 4 demo dataset."
+- token: edge:message_queue
+  reason: >
+    The dogfood carries a message_queue CAPABILITY but no message_queue
+    relationship edge. Retire with a fixture or the Phase 4 demo dataset.
+- token: edge:pubsub
+  reason: "No pubsub relationship in any Phase 1 dataset. Retire with a fixture or the Phase 4 demo dataset."
+- token: edge:tab
+  reason: "No tab-bar relationship in any Phase 1 dataset (the storyboard fixture has no TabView). Retire with a tabbed fixture."
+- token: edge:websocket
+  reason: "No websocket relationship in any Phase 1 dataset. Retire with a fixture or the Phase 4 demo dataset."
+- token: subview:flow/which-tab
+  reason: >
+    The which-tab gesture reads tab edges in a flow; no Phase 1 dataset has a
+    tab-bar flow. Retire together with edge:tab.
+- token: subview:rules/governs-data
+  reason: >
+    The documented gesture needs a rule carrying an entity link ('view in
+    Data lens'); zero of the dogfood's 204 rules carry entity_id. Data
+    instance gap, recorded in the Phase 2 report; retire with a fixture whose
+    io rules bind entities.
+- token: subview:rules/guards-contract
+  reason: >
+    The documented gesture needs a rule carrying a capability link; zero of
+    the dogfood's rules carry capability_id. Same disposition as
+    governs-data.
+- token: component:ToursEntry
+  reason: >
+    Tours live in ai_enhance.tours and no Phase 1 dataset carries any (the
+    committed AI baseline has none), so the entry point never renders.
+    Recorded discrepancy: the design's 'one full tour' sample has no data to
+    run against. Retire by enriching the dogfood with a tour.
+- token: component:TourPlayer
+  reason: "Same as ToursEntry: no tours data anywhere in Phase 1."
+- token: component:ErrorBoundary
+  reason: >
+    The design's 'induced render fault' has no user-reachable trigger in the
+    production build, and the runner's closed action vocabulary is
+    user-gestures only. Recorded discrepancy: exercising ErrorBoundary needs
+    a fault-injection affordance (a dev-only crash trigger) or a scripted
+    test harness. The malformed-dataset half of V12 is covered (V12.1).
+- token: component:StatusDashboard
+  reason: >
+    Requires architecture.live_status, which only a live fixture provides;
+    live surfaces are Phase 4 scope by design-doc decision.
+- token: component:SolutionIndex
+  reason: >
+    Requires a composed multi-repo solution dataset, which is not in the
+    Phase 1 dataset set. Recorded deferral to the multi-repo engagement.

@@ -2376,11 +2376,25 @@ fix cycles are a separate owner-triggered engagement.
   contract, owner-decided evidence retention).
 
 ### GUI-2: Phase 1 walked plan (V1 through V13)
-- Status: TODO (next PR on this card family). The cardinal rule applies: no
-  case ships unwalked; every case is executed against the running UI by its
-  author before commit. Discrepancies between the design's vectors and the
-  real UI are recorded as findings in the PR body and the Phase 2 report,
-  never bent into passing cases.
+- Status: BUILT (2026-07-21, wt/gui-plan). 47 cases across the 13 vectors,
+  every one executed against the running UI (production build, statically
+  served, real browser) before commit; 20 waivers, each a visible decision
+  with a retire condition (11 edge types plus embed with no instance in any
+  Phase 1 dataset, three lens sub-views with no data instance, tours, the
+  ErrorBoundary induced-fault gap, and the two Phase 4 deferrals). The
+  malformed dataset key and a write-malformed transform were added for
+  V12.1. The action vocabulary grew two verbs in this PR per the design
+  rule (press <key>, swipe <up|down>), both forced by walking (search
+  select, gesture-only bottom sheet). CI now runs gui-plan-check without
+  --bootstrap-ok.
+- Walk findings encoded as cases expected to fail or block, per the cardinal
+  rule (do not bend the case to pass): no reachable lens switcher at 390px
+  (V8.4), no reachable review mode on mobile (V8.8), R1 producer gaps
+  surface nowhere in the viewer (V9.2), Docs tab renders empty for
+  patterns-only components (V3.1 step 3). Also recorded: the open mobile
+  bottom sheet intercepts taps aimed at the bottom navigation, and the
+  drilled arch-visualizer level renders only the src child while its
+  sub-components list names two.
 
 ## Discovered during execution
 

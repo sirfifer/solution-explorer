@@ -84,6 +84,20 @@ datasets:
       - path: "/architecture/manifest.json"
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
 
+  malformed:
+    description: >
+      Resilience fixture (V12): a deterministic syntactically-invalid
+      architecture.json. The viewer must degrade to a legible error message
+      (never a blank page). Both boot probes fail by design.
+    layout: monolith
+    generate:
+      - "python3 scripts/gui-datasets.py write-malformed {staging}/architecture.json"
+    allow_errors:
+      - path: "/live-config.json"
+        reason: "Live-monitoring probe; 404s by design when served statically."
+      - path: "/architecture/manifest.json"
+        reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
+
   old-format:
     description: >
       Frozen pre-gap projection (analyzer 1.0.0, generated 2026-07-07), checked

@@ -1,0 +1,34 @@
+# V6 search (vector V6): a query finds a known component, a known symbol,
+# and a known file; selecting a result navigates to it.
+# Sampling rule: three queries of the three kinds, targets chosen as the
+# first stable instance of each kind walked in the UI.
+# All cases executed against the running UI on 2026-07-21.
+
+- id: V6.1
+  vector: search
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
+    - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the header button labeled 'Search'"
+    - "Type 'analyzer' into the search input"
+    - "Press Enter to select the first result"
+    - "Click the header button labeled 'Search'"
+    - "Type 'IncrementalAnalyzer' into the search input"
+    - "Press Enter to select the first result"
+    - "Click the header button labeled 'Search'"
+    - "Type 'conftest.py' into the search input"
+    - "Press Enter to select the first result"
+  pass_when:
+    - "step 4: the results list a component result 'analyzer' tagged as a module"
+    - "step 5: selecting it navigates to the analyzer component (URL carries component=analyzer)"
+    - "step 7: the results list the class 'IncrementalAnalyzer' with its file 'analyzer/incremental.py'"
+    - "step 8: selecting it opens the symbol in the detail panel"
+    - "step 10: the results list the file 'tests/conftest.py'"
+    - "step 11: selecting it opens a file detail view showing the file's line count and FILE DOCUMENTATION"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - component:SearchOverlay
+    - subview:structure/locate
