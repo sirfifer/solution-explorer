@@ -1,0 +1,99 @@
+# GUI regression datasets (design authority: docs/testing/GUI-REGRESSION-STRATEGY.md).
+#
+# Each key maps a dataset name to the commands that materialize it and to the
+# allowlist of KNOWN intentional console/network errors for runs against it.
+# `scripts/gui-datasets.py generate <key>` runs the `generate` commands from the
+# repo root with {staging} replaced by viewer/tests/gui/.datasets/<key>;
+# `scripts/gui-datasets.py assemble <key>` overlays the staged payload onto a
+# copy of the built viewer (viewer/dist) at viewer/tests/gui/.serve/<key>,
+# removing the architecture data baked in from viewer/public first so the
+# dataset fully controls what the app loads.
+#
+# Serve command (documented here as the single place runners read it from):
+#   python3 -m http.server <port> --directory viewer/tests/gui/.serve/<key>
+# The production build loads datasets correctly under this static server; this
+# was verified against a live browser before this file was written.
+#
+# The allowlist is part of the reviewed plan: anything NOT listed here that
+# appears in the console or as a failed network request FAILS the case. The two
+# seeded probes are made by the app by design on every boot: the
+# live-config.json fetch (404s in static mode, always) and the
+# architecture/manifest.json probe (404s on monolith-layout datasets, where the
+# split tree does not exist). Console "Failed to load resource" errors whose
+# source URL matches an allowlisted path are covered by the same entry.
+
+datasets:
+  dogfood:
+    description: >
+      The repo's own projection, AI-enriched the same way the deploy pipeline
+      does it: fresh v2 analysis merged with the committed AI-enhancement
+      baseline (repo-root architecture.json) under --strict preservation.
+    layout: monolith
+    generate:
+      - "python3 analyze.py . -o {staging}/architecture.json"
+      - "python3 scripts/merge-ai-enhancements.py --baseline architecture.json --target {staging}/architecture.json --strict"
+    allow_errors:
+      - path: "/live-config.json"
+        reason: "Live-monitoring probe; 404s by design when served statically."
+      - path: "/architecture/manifest.json"
+        reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
+
+  split-mode:
+    description: >
+      The same repo analyzed in split mode: manifest.json plus per-component
+      detail shards under data/, exercising lazy loading. Not AI-enriched (the
+      enrichment merge tool targets monolith files); the split path is about
+      the loading mechanics, not enrichment.
+    layout: split
+    generate:
+      - "python3 analyze.py . --split -o {staging}/architecture"
+    allow_errors:
+      - path: "/live-config.json"
+        reason: "Live-monitoring probe; 404s by design when served statically."
+
+  unenriched:
+    description: >
+      Degradation variant: the dogfood projection with every ai_enhance key
+      stripped (architecture, component, and relationship level), so
+      AI-dependent surfaces must be absent, not broken.
+    layout: monolith
+    generate:
+      - "python3 analyze.py . -o {staging}/architecture.json"
+      - "python3 scripts/merge-ai-enhancements.py --baseline architecture.json --target {staging}/architecture.json --strict"
+      - "python3 scripts/gui-datasets.py strip-ai {staging}/architecture.json"
+    allow_errors:
+      - path: "/live-config.json"
+        reason: "Live-monitoring probe; 404s by design when served statically."
+      - path: "/architecture/manifest.json"
+        reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
+
+  gaps:
+    description: >
+      Degradation variant: the enriched dogfood projection carrying an honest
+      producer-gap record (R1's `gaps` key). The entries are injected by a
+      documented transform and say so in their reason text; a real analyzer
+      failure is not reproducible deterministically, the shape is.
+    layout: monolith
+    generate:
+      - "python3 analyze.py . -o {staging}/architecture.json"
+      - "python3 scripts/merge-ai-enhancements.py --baseline architecture.json --target {staging}/architecture.json --strict"
+      - "python3 scripts/gui-datasets.py inject-gaps {staging}/architecture.json"
+    allow_errors:
+      - path: "/live-config.json"
+        reason: "Live-monitoring probe; 404s by design when served statically."
+      - path: "/architecture/manifest.json"
+        reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
+
+  old-format:
+    description: >
+      Frozen pre-gap projection (analyzer 1.0.0, generated 2026-07-07), checked
+      in under fixtures/ and never regenerated. Locks the additive-projection
+      promise at the UI level: today's viewer must render yesterday's data.
+    layout: monolith
+    generate:
+      - "cp viewer/tests/gui/fixtures/old-format/architecture.json {staging}/architecture.json"
+    allow_errors:
+      - path: "/live-config.json"
+        reason: "Live-monitoring probe; 404s by design when served statically."
+      - path: "/architecture/manifest.json"
+        reason: "Split-mode probe; 404s by design on a monolith-layout dataset."

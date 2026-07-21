@@ -1,0 +1,42 @@
+name: GUI Plan Check
+
+# Static completeness check for the GUI regression plan (design authority:
+# docs/testing/GUI-REGRESSION-STRATEGY.md). This is the ONLY part of the GUI
+# test system that runs in CI; the plan itself is executed by the AI runner
+# via the /gui-test-cycle skill, an attended activity, never a per-PR job.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "viewer/**"
+      - "scripts/gui-plan-check.py"
+      - ".github/workflows/gui-plan-check.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "viewer/**"
+      - "scripts/gui-plan-check.py"
+      - ".github/workflows/gui-plan-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  gui-plan-check:
+    name: GUI Plan Completeness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - run: pip install pyyaml
+
+      # --bootstrap-ok exists only for the window between the harness PR and
+      # the plan PR: it downgrades the no-plan-files-at-all state to a loud
+      # pass. The PR that lands the plan removes the flag.
+      - name: Plan completeness check
+        run: python3 scripts/gui-plan-check.py --bootstrap-ok
