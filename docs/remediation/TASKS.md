@@ -1913,9 +1913,13 @@ corpus). These cards are DESIGN-CARDED; the owner green-lights builds. Nothing
 here is started.
 
 ### R1: Output-contract plus honest-gap backbone
-- Status: IN PROGRESS (waves 1-4 BUILT). Backbone module, derive-driver
-  adoption, project-emitter isolation, and the enrich + MCP boundaries are
-  landed; only the cross-reference wave (5) remains.
+- Status: DONE (all waves 1-5 built). Backbone module, derive-driver adoption,
+  project-emitter isolation, the enrich + MCP boundaries, and the
+  cross-reference / count-consistency postconditions are all landed. Every
+  producer boundary (each derive pass, each projection emitter, each enrichment
+  partition and the architecture narrative, each MCP tool) now records a
+  deterministic honest gap or degrades to a well-formed error instead of
+  crashing or shipping a fracture.
 - Scope: generalize the coverage ledger's completeness guarantee to every
   producer (each derive pass, each emitter, each MCP tool, each enrichment pass)
   via Pydantic v2 output models and completeness postconditions (shape and
@@ -1986,17 +1990,24 @@ here is started.
   R4). Fail-before proved in `tests/test_enrich_partition_isolation.py` and
   `tests/test_mcp_result_postcondition.py`; existing enrich and MCP suites stay
   green. EXTRACT_TIER not bumped (gaps stay a derive/project-tier signal).
-- Remaining wave (its own PR, full protocol): (5) cross-reference-resolution and
-  total_components postconditions at the derive assembly boundary, validated
-  against both golden corpora. Empirically scoped 2026-07-21 (survey across
-  flask, fastapi, the storyboard fixture, and the real iOS demo, 530 rels):
-  component-id uniqueness and relationship-endpoint resolution to a tree node id
-  hold everywhere (UI-flow children ARE added to the assembled tree, so UI edges
-  resolve), so both are safe postconditions; `total_components == tree-node
-  count` is NOT safe (the iOS demo has 190 tree nodes vs 99 path components), but
-  `total_components <= unique tree-node ids` holds everywhere. Waves (2)
-  project-emitter and (6) `_assemble` skeleton-fallback already landed (PR #74
-  and PR #73).
+- Wave 5 delivered (2026-07-21, wt/r1-wave5-crossref): cross-reference and
+  count-consistency postconditions at the derive assembly boundary, the checks
+  wave 1 deferred pending per-corpus validation. `_check_output_contract` now
+  also asserts component-id UNIQUENESS across the tree, relationship ENDPOINT
+  RESOLUTION (every source and target resolves to a tree node id), and a
+  total_components BOUND (at least the root-component count, at most the distinct
+  tree-node ids). Empirically scoped and validated to produce ZERO gaps and no
+  drift across flask, fastapi, the storyboard fixture, and the real iOS demo (530
+  relationships, rich SwiftUI flows: 190 tree nodes vs 99 path components, 0
+  unresolved endpoints, 0 dups). The earlier deferral worried UI targets
+  reference ids outside the component map, but the flow passes ADD those UI-flow
+  children to the assembled tree, so UI edges resolve to them; `total_components
+  == tree-node count` stays unsafe (hence the bound, not equality). Ledger
+  completeness is already an output postcondition at the project tier, so it is
+  not re-checked here. Fail-before proved (injected duplicate id, unresolved
+  endpoint, inflated total_components each surface as a derive.output-contract
+  gap). EXTRACT_TIER unchanged. Waves (2) project-emitter and (6) `_assemble`
+  skeleton-fallback landed earlier (PR #74 and PR #73).
 
 ### R2: Retry, timeout, and cost ceiling on the AI-enrichment path
 - Status: TODO (candidate)
