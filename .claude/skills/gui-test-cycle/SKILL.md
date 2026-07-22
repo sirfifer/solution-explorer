@@ -214,6 +214,12 @@ ERROR ALLOWLIST per dataset (from datasets.yaml; these are KNOWN intentional
 probes and do NOT fail a case; everything else does; apply the allowlist of
 the dataset the case declares):
 {ALLOWLIST_BLOCK}
+ENVIRONMENT NOISE (distinct from the dataset allowlists so it cannot grow
+into one; console errors matching these exact patterns are automation-
+environment artifacts, recorded in the audit fields but never failing a
+case):
+- "Unchecked runtime.lastError" (browser-extension messaging noise; caused
+  the first run's only flaky verdict)
 A console error whose source URL (or whose text) matches an allowlisted path
 is covered by that entry. Failed requests to allowlisted paths are covered.
 Reset the capture arrays at the start of each case; evaluate them at its end.
@@ -269,6 +275,14 @@ After all shards land:
 1. Validate every shard parses and every case id from the plan appears
    exactly once across shards. A missing case is recorded BLOCKED at step 0
    with a note "runner shard incomplete", never silently dropped.
+   VALIDATE EACH SHARD against viewer/tests/gui/results-schema.json (case
+   objects, including the assertion outcome enum: pass, fail,
+   not-evaluated) as soon as it lands. An invalid shard goes BACK to the
+   same runner once (SendMessage) with the validation error, asking it to
+   rewrite the file; only if the second version is still invalid does the
+   orchestrator normalize it, and then the case gets a note naming what was
+   normalized. Silent normalization is not allowed (first run: two runners
+   drifted the enum to met/not_met and the merge hid it).
 2. Merge into `results.json` per `viewer/tests/gui/results-schema.json`:
    run-level keys in schema propertyOrder, cases sorted by id (natural sort:
    vector number then case number), case keys in the schema's case
