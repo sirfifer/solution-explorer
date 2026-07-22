@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/sirfifer/solution-explorer/actions/workflows/architecture-viz.yml"><img src="https://github.com/sirfifer/solution-explorer/actions/workflows/architecture-viz.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue.svg" alt="FSL-1.1-ALv2 License"></a>
   <a href="https://github.com/sirfifer/solution-explorer/releases"><img src="https://img.shields.io/github/v/release/sirfifer/solution-explorer" alt="Release"></a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/node-20%2B-green" alt="Node 20+">
@@ -716,4 +716,6 @@ solution-explorer/
 
 ## License
 
-[MIT](LICENSE) &copy; 2025-2026 sirfifer
+[Functional Source License, Version 1.1, ALv2 Future License](LICENSE) (FSL-1.1-ALv2, SPDX: FSL-1.1-Apache-2.0) &copy; 2025-2026 Richard Amerman (sirfifer).
+
+In plain terms: you can use, copy, modify, and redistribute this software freely for any purpose except offering a product or service that competes with it. Each release automatically becomes Apache-2.0 two years after its publication. Versions of this project published before the license change remain MIT; everything after is FSL. This is a source-available (Fair Source) license, not an OSI open source license, and we label it honestly as such.

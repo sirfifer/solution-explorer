@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "description": "Interactive architecture viewer for solution-explorer",
-  "license": "MIT",
+  "license": "FSL-1.1-Apache-2.0",
   "author": "sirfifer",
   "repository": {
     "type": "git",
