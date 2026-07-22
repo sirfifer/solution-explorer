@@ -11,7 +11,7 @@ export function ReviewModeButton() {
         <button
           onClick={toggleReviewMode}
           className={`
-            flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors
+            flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-sm transition-colors
             ${reviewMode
               ? darkMode
                 ? "bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/40"

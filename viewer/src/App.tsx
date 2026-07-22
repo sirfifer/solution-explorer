@@ -348,6 +348,17 @@ export function App() {
     }
   }, [activePanel]);
 
+  // Mobile: opening the review summary must expand the bottom sheet past its
+  // peek snap. The peek header only renders for a selected component, and in
+  // review mode there is none, so a peek-height sheet would show blank content
+  // (adversarial review of the mobile-parity PR). Snap to half so the summary
+  // is visible without a manual swipe.
+  useEffect(() => {
+    if (activePanel === "review") {
+      bottomSheet.setSnap("half");
+    }
+  }, [activePanel, bottomSheet.setSnap]);
+
   // Apply dark mode class
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);

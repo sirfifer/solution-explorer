@@ -112,12 +112,12 @@
   steps:
     - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
     - "Click the button titled 'Enter review mode'"
-    - "Click the component node titled 'extract'"
+    - "Click the component node labeled 'extract'"
     - "Type 'mobile annotation' into the feedback input"
     - "Click the button labeled 'Add Feedback'"
   pass_when:
     - "step 2: a review mode control is reachable at phone width and enters review mode (the banner 'Review Mode: click any component to add feedback' appears)"
-    - "step 3: selecting a component opens the feedback input in the mobile bottom sheet"
+    - "step 3: selecting a component opens the feedback input (a centered modal overlay)"
     - "step 5: the annotation saves (the review control shows a count of 1) and persists to localStorage; the V13 workflow is possible on a phone"
     - "the page does not scroll horizontally"
     - "no unexpected console or network errors during the flow"
