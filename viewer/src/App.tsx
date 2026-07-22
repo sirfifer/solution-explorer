@@ -348,6 +348,17 @@ export function App() {
     }
   }, [activePanel]);
 
+  // Mobile: opening the review summary must expand the bottom sheet past its
+  // peek snap. The peek header only renders for a selected component, and in
+  // review mode there is none, so a peek-height sheet would show blank content
+  // (adversarial review of the mobile-parity PR). Snap to half so the summary
+  // is visible without a manual swipe.
+  useEffect(() => {
+    if (activePanel === "review") {
+      bottomSheet.setSnap("half");
+    }
+  }, [activePanel, bottomSheet.setSnap]);
+
   // Apply dark mode class
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -493,13 +504,17 @@ export function App() {
             </kbd>
           </button>
 
-          {/* Lens switcher (P6-1) */}
+          {/* Lens switcher (P6-1). Visible on every viewport so lenses are
+              reachable on a phone (GUI run finding V8.4). */}
           <LensSwitcher />
 
-          {/* Desktop: show all buttons inline */}
-          <div className="hidden sm:flex items-center gap-2">
-            <ReviewModeButton />
+          {/* Review mode: reachable on every viewport so the annotation
+              workflow works on a phone (GUI run finding V8.8). The button is
+              already responsive (icon-only under sm). */}
+          <ReviewModeButton />
 
+          {/* Desktop: remaining secondary buttons inline */}
+          <div className="hidden sm:flex items-center gap-2">
             {liveConfig && (
               <button
                 onClick={() => setAdminOpen(!adminOpen)}

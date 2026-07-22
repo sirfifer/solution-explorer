@@ -3,10 +3,10 @@
 # path is exercised; no horizontal page scroll. Mobile is first-class: a
 # feature that only works with a mouse at 1440px is a failing test, not a
 # caveat.
-# All cases executed against the running UI on 2026-07-21. Two walk findings
-# are encoded as cases expected to block, per the cardinal rule (do not bend
-# the case to pass): at 390px there is no reachable lens switcher (V8.4) and
-# no reachable review mode control (V8.8); both are desktop-only today.
+# All cases executed against the running UI on 2026-07-21; V8.4 and V8.8
+# re-walked 2026-07-22 after the mobile-parity fix. V8.4 (lens switcher) and
+# V8.8 (review mode plus the annotation workflow) now assert working mobile
+# behavior; they were expected-BLOCKED on the first run and drove the fix.
 
 - id: V8.1
   vector: mobile
@@ -61,8 +61,11 @@
   steps:
     - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
     - "Open the lens switcher and choose 'Data'"
+    - "Open the lens switcher and choose 'Structure'"
   pass_when:
-    - "a lens switcher control is reachable at phone width and switches the lens (mobile parity: every lens available on desktop is available on a phone)"
+    - "step 2: a lens switcher control is reachable at phone width and switches to the Data lens (URL carries lens=data), rendering the Data panel (mobile parity: every lens available on desktop is available on a phone)"
+    - "step 3: switching back to Structure works and clears the lens param"
+    - "the page does not scroll horizontally"
     - "no unexpected console or network errors during the flow"
   evidence: screenshot
 
@@ -108,8 +111,14 @@
   dataset: dogfood
   steps:
     - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
-    - "Click the button labeled 'Review'"
+    - "Click the button titled 'Enter review mode'"
+    - "Click the component node labeled 'extract'"
+    - "Type 'mobile annotation' into the feedback input"
+    - "Click the button labeled 'Add Feedback'"
   pass_when:
-    - "a review mode control is reachable at phone width and enters review mode (the V13 workflow must be possible on a phone)"
+    - "step 2: a review mode control is reachable at phone width and enters review mode (the banner 'Review Mode: click any component to add feedback' appears)"
+    - "step 3: selecting a component opens the feedback input (a centered modal overlay)"
+    - "step 5: the annotation saves (the review control shows a count of 1) and persists to localStorage; the V13 workflow is possible on a phone"
+    - "the page does not scroll horizontally"
     - "no unexpected console or network errors during the flow"
   evidence: screenshot
