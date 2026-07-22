@@ -34,12 +34,15 @@ export function LensSwitcher() {
     <Tooltip content={activeDescription} position="bottom">
       <label
         className={`
-          hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs
+          flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs
           ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500"}
         `}
         aria-label={TOOLTIP_COPY.lens.switcher}
       >
-        <span className="text-[10px] uppercase tracking-wider">Lens</span>
+        {/* The label word is dropped on the smallest screens to save header
+            width; the select itself is the mobile-first lens control (every
+            lens reachable on a phone, GUI run finding V8.4). */}
+        <span className="hidden sm:inline text-[10px] uppercase tracking-wider">Lens</span>
         <select
           value={lens}
           onChange={(e) => setLens(e.target.value)}

@@ -493,13 +493,17 @@ export function App() {
             </kbd>
           </button>
 
-          {/* Lens switcher (P6-1) */}
+          {/* Lens switcher (P6-1). Visible on every viewport so lenses are
+              reachable on a phone (GUI run finding V8.4). */}
           <LensSwitcher />
 
-          {/* Desktop: show all buttons inline */}
-          <div className="hidden sm:flex items-center gap-2">
-            <ReviewModeButton />
+          {/* Review mode: reachable on every viewport so the annotation
+              workflow works on a phone (GUI run finding V8.8). The button is
+              already responsive (icon-only under sm). */}
+          <ReviewModeButton />
 
+          {/* Desktop: remaining secondary buttons inline */}
+          <div className="hidden sm:flex items-center gap-2">
             {liveConfig && (
               <button
                 onClick={() => setAdminOpen(!adminOpen)}
