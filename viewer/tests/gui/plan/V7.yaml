@@ -19,25 +19,29 @@
     - "Click the breadcrumb button labeled 'Up'"
     - "Press the browser back control"
   pass_when:
-    - "step 4: the breadcrumb bar reads Home / solution-explorer / arch-visualizer (organization: the drill path mirrors how the codebase is organized)"
+    - "step 4: the breadcrumb bar ends with / arch-visualizer after the drill (organization: the drill path mirrors how the codebase is organized; the root crumb's name is dataset-dependent and is not asserted)"
     - "step 5: Up returns to the root view (URL carries drill=root)"
-    - "step 6: browser back restores the drilled view (URL carries drill=arch-visualizer) and the graph re-renders"
+    - "step 6: browser back restores the drilled view: the URL's drill parameter returns to the exact value it had right after step 4, and the graph re-renders (the drill id is the component's folder-based id, which may differ from its display label)"
     - "no unexpected console or network errors during the flow"
   evidence: screenshot
   covers:
     - subview:structure/organization
 
+# V7.2 names the 'tests' row (a stable repo directory name) rather than the
+# root component row: the root takes the ANALYZED FOLDER's name, which is
+# environment-dependent (first-run plan defect: a worktree folder name broke
+# the case). Authoring rule: never name the root component in a case.
 - id: V7.2
   vector: navigation-state
   viewport: desktop
   dataset: dogfood
   steps:
     - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
-    - "Click the expand arrow on the tree row 'solution-explorer'"
-    - "Click the expand arrow on the tree row 'solution-explorer'"
-    - "Click the tree row labeled 'solution-explorer'"
+    - "Click the expand arrow on the tree row 'tests'"
+    - "Click the expand arrow on the tree row 'tests'"
+    - "Click the tree row labeled 'tests'"
   pass_when:
-    - "step 2: the tree row expands, showing child rows beneath solution-explorer"
+    - "step 2: the tree row expands, showing child rows beneath tests"
     - "step 3: the same arrow collapses the children again (round-trip)"
     - "step 4: clicking the row itself selects the component (its detail panel opens) without expanding it"
     - "no unexpected console or network errors during the flow"

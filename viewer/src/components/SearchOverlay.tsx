@@ -26,14 +26,18 @@ export function SearchOverlay() {
 
   // Focus input when opened, and lazily load the prebuilt search shards on first
   // open so search covers descriptions, docstrings, and AI help text without
-  // visiting each component (P6-4). Idempotent and silent when no shards exist.
+  // visiting each component (P6-4). Search shards are written only by split-mode
+  // projections, and the split manifest is the only loader that carries
+  // component_detail_index, so that key gates the probe: a monolith dataset
+  // never fetches a search index it cannot have (the fetch would 404 on every
+  // search open; GUI run 20260721 finding).
   useEffect(() => {
     if (searchOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
       setSelectedIndex(0);
-      void loadSearchShards();
+      if (architecture?.component_detail_index) void loadSearchShards();
     }
-  }, [searchOpen]);
+  }, [searchOpen, architecture]);
 
   // Keyboard shortcut to open
   useEffect(() => {

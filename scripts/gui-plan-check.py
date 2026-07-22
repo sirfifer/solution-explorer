@@ -248,6 +248,155 @@ def enumerate_edge_types(layout: Path, findings: list[str]) -> list[str]:
     return types
 
 
+FETCH_CALL_RE = re.compile(r"\bfetch\(")
+
+
+def _fetch_first_arg(text: str, start: int) -> str:
+    """Extract fetch's first argument with paren balancing (nested calls like
+    dataUrl(...) would truncate under a naive regex; proved on first run)."""
+    depth = 1
+    i = start
+    arg_end = None
+    while i < len(text) and depth > 0:
+        ch = text[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == "," and depth == 1 and arg_end is None:
+            arg_end = i
+        i += 1
+    return text[start : arg_end if arg_end is not None else i - 1].strip()
+
+
+def check_probe_inventory(
+    viewer_src: Path, registry: dict, findings: list[str]
+) -> None:
+    """Cross-check the viewer's fetch call sites against the probe inventory.
+
+    Both directions (adjustment from the first Phase 2 run, which was failed
+    by an undeclared search-index probe): every fetch call site's first
+    argument must literally equal exactly one inventory entry's `match`, and
+    every inventory entry must match at least one call site. Additionally,
+    every inventory entry whose can_404_on names a layout must be allowlisted
+    (by allow_path) in every dataset of that layout, so the reviewed
+    allowlists cannot drift from the code.
+    """
+    inventory = registry.get("probe_inventory") or []
+    if not inventory:
+        findings.append("probes: datasets.yaml has no probe_inventory section")
+        return
+    matches = {}
+    for entry in inventory:
+        m = str(entry.get("match", ""))
+        if m in matches:
+            findings.append(f"probes: duplicate inventory match {m!r}")
+        matches[m] = entry
+    call_sites: list[tuple[str, str]] = []
+    for f in sorted(viewer_src.rglob("*.ts")) + sorted(viewer_src.rglob("*.tsx")):
+        rel = str(f.relative_to(viewer_src))
+        if "__tests__" in rel or rel.endswith(".test.ts") or rel.endswith(".test.tsx"):
+            continue
+        text = f.read_text(encoding="utf-8")
+        for m in FETCH_CALL_RE.finditer(text):
+            call_sites.append((rel, _fetch_first_arg(text, m.end())))
+    if not call_sites:
+        findings.append(
+            "probes: enumerated zero fetch call sites in viewer/src; the "
+            "enumerator has rotted. Update gui-plan-check.py."
+        )
+        return
+    seen: set[str] = set()
+    for rel, arg in call_sites:
+        if arg in matches:
+            seen.add(arg)
+        else:
+            findings.append(
+                f"probes: fetch call site in {rel} with argument {arg!r} is "
+                "not in the probe_inventory (a new fetch path cannot land "
+                "undeclared; add an entry in the same PR)."
+            )
+    for m in sorted(set(matches) - seen):
+        findings.append(
+            f"probes: inventory entry {m!r} matches no fetch call site "
+            "(stale entry; remove or update it)."
+        )
+    datasets = registry.get("datasets") or {}
+    for entry in inventory:
+        layouts = entry.get("can_404_on") or []
+        allow_path = entry.get("allow_path")
+        if layouts and not allow_path:
+            findings.append(
+                f"probes: inventory entry {entry.get('match')!r} names "
+                "can_404_on layouts but no allow_path"
+            )
+            continue
+        for key, spec in datasets.items():
+            if spec.get("layout") in layouts:
+                allowed = {e.get("path") for e in spec.get("allow_errors") or []}
+                if allow_path not in allowed:
+                    findings.append(
+                        f"probes: dataset '{key}' (layout {spec.get('layout')}) "
+                        f"does not allowlist {allow_path} required by probe "
+                        f"{entry.get('match')!r}"
+                    )
+
+
+SKIP_STEP_MARKER = "welcome dialog"
+FIRST_LOAD_MARKER = "first load"
+
+
+def check_shard_conventions(
+    cases: list[dict], registry: dict, findings: list[str]
+) -> None:
+    """Lint the shard-order storage semantics (adjustment from the first run).
+
+    Within a plan file, per dataset (one origin per shard-dataset pair): the
+    FIRST case must dismiss the welcome dialog (unless the dataset declares
+    first_load_shows_welcome: false), later cases must NOT re-dismiss it, and
+    assertions scoped to the origin's first load may only live in that first
+    case. This is the convention the runner template states; the lint makes
+    drifting from it a CI failure instead of a review cycle.
+    """
+    datasets = registry.get("datasets") or {}
+    seen_first: dict[tuple[str, str], str] = {}
+    for case in cases:
+        fname = str(case.get("_file"))
+        ds = str(case.get("dataset"))
+        cid = str(case.get("id"))
+        origin = (fname, ds)
+        steps = [str(s).lower() for s in case.get("steps") or []]
+        has_skip = any(SKIP_STEP_MARKER in s for s in steps)
+        shows_welcome = (datasets.get(ds) or {}).get("first_load_shows_welcome", True)
+        if origin not in seen_first:
+            seen_first[origin] = cid
+            if shows_welcome and not has_skip:
+                findings.append(
+                    f"shard-order: {fname}:{cid} is the first case for dataset "
+                    f"'{ds}' in its shard but has no welcome-dialog dismissal "
+                    "step; the dialog will intercept its clicks."
+                )
+            if not shows_welcome and has_skip:
+                findings.append(
+                    f"shard-order: {fname}:{cid} dismisses the welcome dialog "
+                    f"but dataset '{ds}' declares it never appears."
+                )
+        else:
+            if has_skip:
+                findings.append(
+                    f"shard-order: {fname}:{cid} re-dismisses the welcome "
+                    f"dialog, but {seen_first[origin]} already dismissed it on "
+                    "this origin; the step would block."
+                )
+            for a in case.get("pass_when") or []:
+                if FIRST_LOAD_MARKER in str(a).lower():
+                    findings.append(
+                        f"shard-order: {fname}:{cid} asserts a first-load "
+                        f"state but is not the first case for dataset '{ds}' "
+                        "in its shard."
+                    )
+
+
 # --- Plan loading -----------------------------------------------------------
 
 
@@ -383,8 +532,11 @@ def run_check(repo_root: Path, bootstrap_ok: bool, list_only: bool) -> int:
 
     datasets_yaml = gui / "datasets.yaml"
     dataset_keys = set()
+    registry: dict = {}
     if datasets_yaml.exists():
-        dataset_keys = set((_load_yaml(datasets_yaml).get("datasets") or {}).keys())
+        registry = _load_yaml(datasets_yaml) or {}
+        dataset_keys = set((registry.get("datasets") or {}).keys())
+        check_probe_inventory(viewer / "src", registry, findings)
     else:
         findings.append(f"missing {datasets_yaml.relative_to(repo_root)}")
 
@@ -457,6 +609,7 @@ def run_check(repo_root: Path, bootstrap_ok: bool, list_only: bool) -> int:
     else:
         cases, covers = load_plan(plan_dir, dataset_keys, findings)
         waivers = load_waivers(plan_dir, findings)
+        check_shard_conventions(cases, registry, findings)
 
         # Tier one: every enumerated surface referenced or explicitly waived.
         for token in sorted(tier1):

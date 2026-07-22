@@ -32,3 +32,21 @@ The maintenance convention (review-blocking): any change that adds or alters
 GUI surface ships its plan delta in the same PR. `scripts/gui-plan-check.py`
 mechanizes the completeness half of that convention and runs in CI on viewer
 changes; it cannot judge depth, but it makes silent omission impossible.
+
+Authoring rules, learned from the first Phase 2 run:
+
+- The dogfood dataset moves with every commit. Exact counts and component
+  names may be asserted only against frozen data (the old-format fixture)
+  or the stable components under tests/fixtures/; everything else uses
+  ranges or structural assertions ("at least N", "a list with entries").
+- Never name the ROOT component in a case: its name is the analyzed
+  folder's name, which is environment-dependent (a worktree run renamed it
+  and blocked a case).
+- URL assertions bind to component IDS (folder-based), never display
+  labels; the two differ (id `viewer` renders as label `arch-visualizer`).
+- The shard-order storage convention (first case per origin dismisses the
+  welcome dialog; first-load-only assertions live in the shard's first
+  case) is linted by gui-plan-check, not just prose.
+- Every fetch path in viewer/src must appear in datasets.yaml's
+  probe_inventory; the check enforces the inventory against the code and
+  the allowlists in both directions.

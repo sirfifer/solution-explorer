@@ -21,6 +21,67 @@
 # architecture/manifest.json probe (404s on monolith-layout datasets, where the
 # split tree does not exist). Console "Failed to load resource" errors whose
 # source URL matches an allowlisted path are covered by the same entry.
+#
+# The probe inventory below is the mechanized source of those allowlists
+# (adjustment from the first Phase 2 run, which was failed by an undeclared
+# search-index probe). Every fetch call site in viewer/src must have exactly
+# one entry here, matched by the literal text of its first argument, and
+# every entry whose can_404_on names a layout must be allowlisted by every
+# dataset of that layout. scripts/gui-plan-check.py enforces both directions,
+# so a new fetch path cannot land undeclared and an allowlist cannot silently
+# drift from the code.
+
+probe_inventory:
+  - match: '"./live-config.json"'
+    source: hooks/useLiveMonitor.ts
+    fires: every boot
+    allow_path: "/live-config.json"
+    can_404_on: [monolith, split]
+  - match: 'dataUrl("manifest.json")'
+    source: App.tsx
+    fires: every boot (split probe, monolith falls through)
+    allow_path: "/architecture/manifest.json"
+    can_404_on: [monolith]
+  - match: '"./architecture.json"'
+    source: App.tsx
+    fires: boot fallback on monolith datasets; present there by construction
+    can_404_on: []
+  - match: 'dataUrl(`data/detail-${safeId}.json`)'
+    source: store.ts loadComponentDetail
+    fires: component selection on split datasets only (inline detail on monolith)
+    can_404_on: []
+  - match: 'dataUrl("coverage.json")'
+    source: store.ts loadCoverageRows
+    fires: coverage expand on split datasets only (rows ride inline on monolith)
+    can_404_on: []
+  - match: 'dataUrl("activity.json")'
+    source: store.ts loadActivityData
+    fires: Activity lens on split datasets only (data rides inline on monolith)
+    can_404_on: []
+  - match: '`${baseUrl}/manifest.json`'
+    source: utils/search.ts loadSearchShards
+    fires: first search open, split datasets only (gated on component_detail_index)
+    can_404_on: []
+  - match: '`${baseUrl}/${name}`'
+    source: utils/search.ts loadSearchShards
+    fires: after the search manifest loads, split datasets only
+    can_404_on: []
+  - match: '`${config.data_url}/version.json`'
+    source: hooks/useLiveMonitor.ts
+    fires: live monitoring only (requires a live-config.json)
+    can_404_on: []
+  - match: '`${config.data_url}/manifest.json`'
+    source: hooks/useLiveMonitor.ts
+    fires: live monitoring only
+    can_404_on: []
+  - match: '`${config.data_url}/status-overlay.json`'
+    source: hooks/useLiveMonitor.ts
+    fires: live monitoring only
+    can_404_on: []
+  - match: 'url'
+    source: hooks/useAdminData.ts
+    fires: admin dashboard only (Phase 4 surface)
+    can_404_on: []
 
 datasets:
   dogfood:
@@ -90,6 +151,9 @@ datasets:
       architecture.json. The viewer must degrade to a legible error message
       (never a blank page). Both boot probes fail by design.
     layout: monolith
+    # The app never reaches the graph on this dataset (error screen), so the
+    # welcome dialog never appears; the shard-convention lint reads this.
+    first_load_shows_welcome: false
     generate:
       - "python3 scripts/gui-datasets.py write-malformed {staging}/architecture.json"
     allow_errors:
