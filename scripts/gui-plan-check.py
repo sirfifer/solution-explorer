@@ -251,14 +251,71 @@ def enumerate_edge_types(layout: Path, findings: list[str]) -> list[str]:
 FETCH_CALL_RE = re.compile(r"\bfetch\(")
 
 
+def _mask_comments_and_strings(text: str) -> str:
+    """Blank // line comments, /* */ block comments, and string/template
+    bodies (delimiters kept) with spaces so a commented-out or stringified
+    `fetch(` is not found as a real call site (adversarial review F3), while
+    byte offsets are preserved. Used only to LOCATE fetch tokens; the argument
+    is then extracted from the original text so its real URL string survives."""
+    out = list(text)
+    i = 0
+    n = len(text)
+    while i < n:
+        two = text[i : i + 2]
+        if two == "//":
+            while i < n and text[i] != "\n":
+                out[i] = " "
+                i += 1
+        elif two == "/*":
+            out[i] = " "
+            i += 1
+            while i < n and text[i - 1 : i + 1] != "*/":
+                if text[i] != "\n":
+                    out[i] = " "
+                i += 1
+        elif text[i] in "'\"`":
+            i += 1  # keep the opening delimiter
+            while i < n and text[i] not in "'\"`":
+                if text[i] == "\\":
+                    i += 2
+                    continue
+                if text[i] != "\n":
+                    out[i] = " "
+                i += 1
+            # i now sits on the closing delimiter (or EOF); keep it, advance.
+            i += 1
+        else:
+            i += 1
+    return "".join(out)
+
+
+def _case_sort_key(case: dict) -> tuple[int, int]:
+    """Order cases by (vector number, case number) as the runner executes
+    them, independent of physical YAML order (adversarial review F6)."""
+    m = re.match(r"^V(\d+)\.(\d+)$", str(case.get("id", "")))
+    return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+
+
 def _fetch_first_arg(text: str, start: int) -> str:
-    """Extract fetch's first argument with paren balancing (nested calls like
-    dataUrl(...) would truncate under a naive regex; proved on first run)."""
+    """Extract fetch's first argument with paren balancing, string-aware so a
+    comma inside a string or template literal does not terminate the argument
+    early (adversarial review F2). `text` is the comment-stripped source."""
     depth = 1
     i = start
+    n = len(text)
     arg_end = None
-    while i < len(text) and depth > 0:
+    while i < n and depth > 0:
         ch = text[i]
+        if ch in "'\"`":
+            quote = ch
+            i += 1
+            while i < n and text[i] != quote:
+                if text[i] == "\\":
+                    i += 2
+                    continue
+                i += 1
+            i += 1
+            continue
         if ch == "(":
             depth += 1
         elif ch == ")":
@@ -275,50 +332,58 @@ def check_probe_inventory(
     """Cross-check the viewer's fetch call sites against the probe inventory.
 
     Both directions (adjustment from the first Phase 2 run, which was failed
-    by an undeclared search-index probe): every fetch call site's first
-    argument must literally equal exactly one inventory entry's `match`, and
-    every inventory entry must match at least one call site. Additionally,
-    every inventory entry whose can_404_on names a layout must be allowlisted
-    (by allow_path) in every dataset of that layout, so the reviewed
-    allowlists cannot drift from the code.
+    by an undeclared search-index probe): every fetch call site must match
+    exactly one inventory entry by (source file, first-argument text), and
+    every inventory entry must match at least one call site. Keying on the
+    source file as well as the arg means a bare-identifier match like `url`
+    cannot wildcard a same-text fetch in a different file (adversarial review
+    F1). Additionally, every inventory entry whose can_404_on names a layout
+    must be allowlisted (by allow_path) in every dataset of that layout, so
+    the reviewed allowlists cannot drift from the code.
     """
     inventory = registry.get("probe_inventory") or []
     if not inventory:
         findings.append("probes: datasets.yaml has no probe_inventory section")
         return
-    matches = {}
+    matches: dict[tuple[str, str], dict] = {}
     for entry in inventory:
-        m = str(entry.get("match", ""))
-        if m in matches:
-            findings.append(f"probes: duplicate inventory match {m!r}")
-        matches[m] = entry
+        key = (str(entry.get("source", "")), str(entry.get("match", "")))
+        if not key[0]:
+            findings.append(
+                f"probes: inventory entry {entry.get('match')!r} has no source file"
+            )
+        if key in matches:
+            findings.append(f"probes: duplicate inventory entry {key}")
+        matches[key] = entry
     call_sites: list[tuple[str, str]] = []
     for f in sorted(viewer_src.rglob("*.ts")) + sorted(viewer_src.rglob("*.tsx")):
         rel = str(f.relative_to(viewer_src))
         if "__tests__" in rel or rel.endswith(".test.ts") or rel.endswith(".test.tsx"):
             continue
-        text = f.read_text(encoding="utf-8")
-        for m in FETCH_CALL_RE.finditer(text):
-            call_sites.append((rel, _fetch_first_arg(text, m.end())))
+        original = f.read_text(encoding="utf-8")
+        masked = _mask_comments_and_strings(original)
+        for m in FETCH_CALL_RE.finditer(masked):
+            call_sites.append((rel, _fetch_first_arg(original, m.end())))
     if not call_sites:
         findings.append(
             "probes: enumerated zero fetch call sites in viewer/src; the "
             "enumerator has rotted. Update gui-plan-check.py."
         )
         return
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     for rel, arg in call_sites:
-        if arg in matches:
-            seen.add(arg)
+        if (rel, arg) in matches:
+            seen.add((rel, arg))
         else:
             findings.append(
                 f"probes: fetch call site in {rel} with argument {arg!r} is "
                 "not in the probe_inventory (a new fetch path cannot land "
-                "undeclared; add an entry in the same PR)."
+                "undeclared; add an entry naming this source file in the same "
+                "PR)."
             )
-    for m in sorted(set(matches) - seen):
+    for key in sorted(set(matches) - seen):
         findings.append(
-            f"probes: inventory entry {m!r} matches no fetch call site "
+            f"probes: inventory entry {key} matches no fetch call site "
             "(stale entry; remove or update it)."
         )
     datasets = registry.get("datasets") or {}
@@ -343,7 +408,12 @@ def check_probe_inventory(
 
 
 SKIP_STEP_MARKER = "welcome dialog"
-FIRST_LOAD_MARKER = "first load"
+# First-load-only state, phrased any of the ways an author might (adversarial
+# review F4: a single literal substring let variants slip into non-first cases).
+FIRST_LOAD_MARKERS = ("first load", "first visit", "initial render", "on first open", "fresh visit")
+# Verbs that touch the app; a dismissal must precede the first of these so the
+# welcome dialog does not intercept it (adversarial review F5).
+INTERACTION_VERBS = ("click", "open", "type", "scroll to", "press", "swipe")
 
 
 def check_shard_conventions(
@@ -352,44 +422,66 @@ def check_shard_conventions(
     """Lint the shard-order storage semantics (adjustment from the first run).
 
     Within a plan file, per dataset (one origin per shard-dataset pair): the
-    FIRST case must dismiss the welcome dialog (unless the dataset declares
-    first_load_shows_welcome: false), later cases must NOT re-dismiss it, and
-    assertions scoped to the origin's first load may only live in that first
-    case. This is the convention the runner template states; the lint makes
-    drifting from it a CI failure instead of a review cycle.
+    FIRST case must dismiss the welcome dialog before its first app
+    interaction (unless the dataset declares first_load_shows_welcome:
+    false), later cases must NOT re-dismiss it, and assertions scoped to the
+    origin's first load may only live in that first case. Cases are ordered
+    by id within a file (not physical YAML order), matching runner execution
+    (adversarial review F6). This is the convention the runner template
+    states; the lint makes drifting from it a CI failure, not a review cycle.
     """
     datasets = registry.get("datasets") or {}
     seen_first: dict[tuple[str, str], str] = {}
-    for case in cases:
+    ordered = sorted(cases, key=_case_sort_key)
+    for case in ordered:
         fname = str(case.get("_file"))
         ds = str(case.get("dataset"))
         cid = str(case.get("id"))
         origin = (fname, ds)
         steps = [str(s).lower() for s in case.get("steps") or []]
-        has_skip = any(SKIP_STEP_MARKER in s for s in steps)
+        skip_index = next(
+            (i for i, s in enumerate(steps) if SKIP_STEP_MARKER in s), None
+        )
+        first_interaction = next(
+            (i for i, s in enumerate(steps) if s.strip().startswith(INTERACTION_VERBS)),
+            None,
+        )
         shows_welcome = (datasets.get(ds) or {}).get("first_load_shows_welcome", True)
         if origin not in seen_first:
             seen_first[origin] = cid
-            if shows_welcome and not has_skip:
+            if shows_welcome and skip_index is None:
                 findings.append(
                     f"shard-order: {fname}:{cid} is the first case for dataset "
                     f"'{ds}' in its shard but has no welcome-dialog dismissal "
                     "step; the dialog will intercept its clicks."
                 )
-            if not shows_welcome and has_skip:
+            elif (
+                shows_welcome
+                and first_interaction is not None
+                and skip_index is not None
+                and skip_index > first_interaction
+                and str(steps[first_interaction]).find(SKIP_STEP_MARKER) < 0
+            ):
+                findings.append(
+                    f"shard-order: {fname}:{cid} interacts with the app (step "
+                    f"{first_interaction + 1}) before dismissing the welcome "
+                    f"dialog (step {skip_index + 1}); the dialog would "
+                    "intercept the earlier interaction."
+                )
+            if not shows_welcome and skip_index is not None:
                 findings.append(
                     f"shard-order: {fname}:{cid} dismisses the welcome dialog "
                     f"but dataset '{ds}' declares it never appears."
                 )
         else:
-            if has_skip:
+            if skip_index is not None:
                 findings.append(
                     f"shard-order: {fname}:{cid} re-dismisses the welcome "
                     f"dialog, but {seen_first[origin]} already dismissed it on "
                     "this origin; the step would block."
                 )
             for a in case.get("pass_when") or []:
-                if FIRST_LOAD_MARKER in str(a).lower():
+                if any(marker in str(a).lower() for marker in FIRST_LOAD_MARKERS):
                     findings.append(
                         f"shard-order: {fname}:{cid} asserts a first-load "
                         f"state but is not the first case for dataset '{ds}' "

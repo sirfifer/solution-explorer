@@ -467,6 +467,103 @@ def test_stale_inventory_entry_fails(tmp_path, capsys):
     assert "matches no fetch call site" in capsys.readouterr().out
 
 
+def test_same_arg_text_in_different_file_is_not_wildcarded(tmp_path, capsys):
+    # Adversarial review F1: a bare-identifier match like 'url' must not
+    # accept a same-text fetch in a DIFFERENT source file.
+    root = _make_tree(tmp_path)
+    _write_plan(root, FULL_PLAN)
+    (root / "viewer" / "tests" / "gui" / "datasets.yaml").write_text(
+        DATASETS_YAML
+        + "  - match: 'url'\n    source: hooks/useAdminData.ts\n"
+        + "    fires: admin\n    can_404_on: []\n"
+    )
+    (root / "viewer" / "src" / "hooks" / "useAdminData.ts").write_text(
+        "const r = await fetch(url);\n"
+    )
+    # Declared call site passes; an undeclared same-text fetch elsewhere fails.
+    assert _run(root) == 0
+    (root / "viewer" / "src" / "utils" / "evil.ts").write_text(
+        "const r = await fetch(url);\n"
+    )
+    assert _run(root) == 1
+    assert "evil.ts" in capsys.readouterr().out
+
+
+def test_commented_out_fetch_is_not_a_call_site(tmp_path):
+    # Adversarial review F3: a commented-out fetch must not trip the check.
+    root = _make_tree(tmp_path)
+    _write_plan(root, FULL_PLAN)
+    (root / "viewer" / "src" / "utils" / "legacy.ts").write_text(
+        '// old: const r = await fetch("gone.json");\n'
+        '/* also fetch("blk.json") */\n'
+        'const s = "not a fetch(\\"str.json\\") call";\n'
+    )
+    assert _run(root) == 0
+
+
+def test_comma_inside_url_literal_is_not_a_boundary(tmp_path):
+    # Adversarial review F2: a comma inside the URL string must not truncate
+    # the extracted argument.
+    root = _make_tree(tmp_path)
+    _write_plan(root, FULL_PLAN)
+    (root / "viewer" / "src" / "hooks" / "useLiveMonitor.ts").write_text(
+        'const res = await fetch("a,b.json");\n'
+    )
+    (root / "viewer" / "tests" / "gui" / "datasets.yaml").write_text(
+        DATASETS_YAML.replace(
+            "match: '\"./live-config.json\"'", "match: '\"a,b.json\"'"
+        )
+    )
+    assert _run(root) == 0
+
+
+def test_dismissal_after_first_interaction_fails(tmp_path, capsys):
+    # Adversarial review F5: the dismissal must precede the first app click.
+    root = _make_tree(tmp_path)
+    _write_plan(
+        root,
+        FULL_PLAN.replace(
+            '  steps:\n    - "Load the app and wait for the graph to render"\n'
+            "    - \"Click the button labeled 'Skip' in the welcome dialog\"\n",
+            '  steps:\n    - "Load the app and wait for the graph to render"\n'
+            '    - "Click the component node titled analyzer"\n'
+            "    - \"Click the button labeled 'Skip' in the welcome dialog\"\n",
+        ),
+    )
+    assert _run(root) == 1
+    assert "before dismissing the welcome dialog" in capsys.readouterr().out
+
+
+def test_first_load_variant_phrasing_in_later_case_fails(tmp_path, capsys):
+    # Adversarial review F4: a first-load assertion phrased as 'initial render'
+    # in a non-first case must still be caught.
+    root = _make_tree(tmp_path)
+    base = _two_case_plan(
+        second_steps='    - "Load the app and wait for the graph to render"\n'
+    )
+    head, _, tail = base.rpartition('    - "the graph renders at least one node"')
+    plan = head + '    - "on initial render a badge is shown"' + tail
+    _write_plan(root, plan)
+    assert _run(root) == 1
+    assert "asserts a first-load state" in capsys.readouterr().out
+
+
+def test_out_of_order_yaml_still_linted_by_id(tmp_path, capsys):
+    # Adversarial review F6: physical YAML order must not decide "first"; id
+    # order does (matching runner execution).
+    root = _make_tree(tmp_path)
+    # V1.2 physically first, but V1.1 is the id-first case and carries the
+    # dismissal; ordering by id must find no shard-order fault.
+    second = (
+        "- id: V1.2\n  vector: boot-and-render\n  viewport: desktop\n"
+        "  dataset: dogfood\n  steps:\n    - \"Reload the page\"\n"
+        '  pass_when:\n    - "the graph renders at least one node"\n'
+        "  evidence: screenshot\n"
+    )
+    _write_plan(root, second + FULL_PLAN)
+    assert _run(root) == 0
+
+
 def test_nested_call_argument_is_not_truncated(tmp_path, capsys):
     # Regression: a naive regex truncated dataUrl("x.json") at the inner close
     # paren, misreporting declared probes as undeclared.

@@ -47,23 +47,28 @@ probe_inventory:
     fires: boot fallback on monolith datasets; present there by construction
     can_404_on: []
   - match: 'dataUrl(`data/detail-${safeId}.json`)'
-    source: store.ts loadComponentDetail
+    source: store.ts
+    fn: loadComponentDetail
     fires: component selection on split datasets only (inline detail on monolith)
     can_404_on: []
   - match: 'dataUrl("coverage.json")'
-    source: store.ts loadCoverageRows
+    source: store.ts
+    fn: loadCoverageRows
     fires: coverage expand on split datasets only (rows ride inline on monolith)
     can_404_on: []
   - match: 'dataUrl("activity.json")'
-    source: store.ts loadActivityData
+    source: store.ts
+    fn: loadActivityData
     fires: Activity lens on split datasets only (data rides inline on monolith)
     can_404_on: []
   - match: '`${baseUrl}/manifest.json`'
-    source: utils/search.ts loadSearchShards
+    source: utils/search.ts
+    fn: loadSearchShards
     fires: first search open, split datasets only (gated on component_detail_index)
     can_404_on: []
   - match: '`${baseUrl}/${name}`'
-    source: utils/search.ts loadSearchShards
+    source: utils/search.ts
+    fn: loadSearchShards
     fires: after the search manifest loads, split datasets only
     can_404_on: []
   - match: '`${config.data_url}/version.json`'
