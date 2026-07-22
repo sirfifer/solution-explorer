@@ -42,6 +42,14 @@ probe_inventory:
     fires: every boot (split probe, monolith falls through)
     allow_path: "/architecture/manifest.json"
     can_404_on: [monolith]
+  - match: 'dataUrl("publication.json")'
+    source: App.tsx
+    fires: every boot (optional publication-metadata sidecar probe, resolved
+      through the same data base as the architecture fetch)
+    allow_path: "/architecture/publication.json"
+    # Optional sidecar: present only on the `publication` dataset, so it 404s on
+    # every other monolith AND split dataset by design.
+    can_404_on: [monolith, split]
   - match: '"./architecture.json"'
     source: App.tsx
     fires: boot fallback on monolith datasets; present there by construction
@@ -103,6 +111,8 @@ datasets:
         reason: "Live-monitoring probe; 404s by design when served statically."
       - path: "/architecture/manifest.json"
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
+      - path: "/architecture/publication.json"
+        reason: "Optional publication-metadata sidecar probe; 404s by design when absent."
 
   split-mode:
     description: >
@@ -116,6 +126,8 @@ datasets:
     allow_errors:
       - path: "/live-config.json"
         reason: "Live-monitoring probe; 404s by design when served statically."
+      - path: "/architecture/publication.json"
+        reason: "Optional publication-metadata sidecar probe; 404s by design (this split dataset carries no sidecar)."
 
   unenriched:
     description: >
@@ -132,6 +144,8 @@ datasets:
         reason: "Live-monitoring probe; 404s by design when served statically."
       - path: "/architecture/manifest.json"
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
+      - path: "/architecture/publication.json"
+        reason: "Optional publication-metadata sidecar probe; 404s by design when absent."
 
   gaps:
     description: >
@@ -149,6 +163,8 @@ datasets:
         reason: "Live-monitoring probe; 404s by design when served statically."
       - path: "/architecture/manifest.json"
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
+      - path: "/architecture/publication.json"
+        reason: "Optional publication-metadata sidecar probe; 404s by design when absent."
 
   malformed:
     description: >
@@ -166,6 +182,8 @@ datasets:
         reason: "Live-monitoring probe; 404s by design when served statically."
       - path: "/architecture/manifest.json"
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
+      - path: "/architecture/publication.json"
+        reason: "Optional publication-metadata sidecar probe; 404s by design when absent."
 
   old-format:
     description: >
@@ -180,3 +198,27 @@ datasets:
         reason: "Live-monitoring probe; 404s by design when served statically."
       - path: "/architecture/manifest.json"
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
+      - path: "/architecture/publication.json"
+        reason: "Optional publication-metadata sidecar probe; 404s by design when absent."
+
+  publication:
+    description: >
+      Publication-sidecar variant: the enriched dogfood projection plus a valid
+      publication.json written under architecture/ (so the viewer's
+      dataUrl("publication.json") resolves to it). The header must show
+      publication.subject.name ("Demo Publication Subject") instead of the
+      folder-derived architecture.name, and the header banner and footer
+      attribution must render with {{path}} substitution applied. Design
+      authority: docs/publication/PUBLICATION-METADATA.md.
+    layout: monolith
+    generate:
+      - "python3 analyze.py . -o {staging}/architecture.json"
+      - "python3 scripts/merge-ai-enhancements.py --baseline architecture.json --target {staging}/architecture.json --strict"
+      - "python3 scripts/gui-datasets.py write-publication {staging}/architecture/publication.json"
+    allow_errors:
+      - path: "/live-config.json"
+        reason: "Live-monitoring probe; 404s by design when served statically."
+      - path: "/architecture/manifest.json"
+        reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
+      - path: "/architecture/publication.json"
+        reason: "Publication-metadata sidecar; present on this dataset (200), allowlisted for parity with the monolith/split datasets where it 404s."

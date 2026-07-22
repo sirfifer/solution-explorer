@@ -2422,21 +2422,53 @@ fix cycles are a separate owner-triggered engagement.
   timer-cleared notice.
 
 ### GUI-3: Editable display name via publication.json subject.name
-- Status: TODO, owner-directed 2026-07-22, DECISION PENDING on prioritization.
-  The header display name should default to the contextual folder-derived
-  name (as today) but be editable in the publication.json sidecar's
-  `subject.name` field, not buried in projection data (fixes the root-name
-  leak Discovered row). The concept maps exactly onto the already-designed
-  publication metadata system (docs/publication/, schema + templates on
-  wt/publication-metadata, unmerged; viewer wiring is the planned follow-up).
-- Execution is the publication.json viewer-wiring increment: the viewer
-  fetches the optional publication.json sidecar and, when present, renders
-  `subject.name` as the header display name (falling back to
-  `architecture.name` when absent, so existing installs are unchanged). The
-  annotation identity key should also prefer a stable id over the display
-  name so an edited name does not orphan annotations. Owner to decide whether
-  to pull the publication.json viewer-wiring card forward now (starting with
-  this name slice) or keep it queued.
+- Status: IN PROGRESS (owner-directed 2026-07-22; pulled forward, wt/pub-name).
+  The header display name defaults to the contextual folder-derived name (as
+  today) but is editable in the publication.json sidecar's `subject.name`
+  field, not buried in projection data (fixes the root-name leak Discovered
+  row). The concept maps onto the already-designed publication metadata system
+  (docs/publication/, schema + templates originally on wt/publication-metadata).
+- Delivered in this increment (the name slice plus the minimal always-region
+  chrome): the six publication foundation files (docs/publication/) are brought
+  into the repo unchanged; the viewer fetches the OPTIONAL publication.json via
+  `dataUrl("publication.json")` (same data-base resolution as the architecture
+  fetch, so a composed-solution member loads its own sidecar), validates it
+  (`viewer/src/utils/publication.ts`), and stores it (`publication` in the
+  zustand store). When present, the header shows `subject.name`; when absent OR
+  invalid, it falls back to `architecture.name` and the viewer renders exactly
+  as today (design rule 2, byte-identical). The header banner (`header.banner`)
+  and footer attribution (`footer.always`) render in the always region with
+  `{{path}}` substitution (unresolved paths render loudly as `[missing: path]`).
+- Annotation identity is UNCHANGED and confirmed display-name-independent: the
+  key stays `architectureIdentity(arch)` (projection name plus repository) in
+  the store; the publication object is never fed to it, so an edited display
+  name cannot orphan annotations. A regression test asserts this.
+- GUI convention: a new `publication` dataset (documented `write-publication`
+  transform, mirroring the gaps/unenriched transforms) plus plan cases V1.1
+  (absent -> folder-derived name, no banner) and V1.3 (present -> subject.name,
+  banner and footer render). `scripts/gui-plan-check.py` stays green.
+
+### GUI-3b: Full publication rendering and deploy-time publish gate (follow-up)
+- Status: TODO (deferred from GUI-3, owner-gated on prioritization). Out of
+  scope for the GUI-3 name slice; tracked here so it is not lost.
+- Scope:
+  1. Render the remaining publication regions per the design doc: `header.front_page`
+     and `footer.front_page` (landing view only), the `context` narrative blocks,
+     the `disclaimers`, and the full `access.visibility: private-preview` loud
+     "unpublished preview" treatment (the current banner has only a minimal
+     private-preview marker). All at 390px with the wrap/stack rules in
+     docs/publication/PUBLICATION-METADATA.md (banner collapses to tap-to-expand,
+     footer stacks, no horizontal scroll, no hover-only affordances).
+  2. Enforce the publish gate (design rule 2, "always required at publish time"):
+     the deploy paths (`action.yml`, the deploy and install skills) fail loudly
+     when `publication.json` is missing or invalid, and the error names the
+     boilerplate to copy. The copy-paste default a deployer edits is
+     `docs/publication/templates/publication.default.json`; the showcase-program
+     variant is `docs/publication/templates/publication.showcase.json` and its
+     process is `docs/publication/DISCLOSURE-POLICY.md`. The viewer stays
+     backward compatible (absent -> renders as today); enforcement lives at the
+     publish gate, not the render.
+  3. Ship this as its own GUI change with its plan-delta per the convention.
 
 Add new findings here with a date and the task you were on; do not expand task scope inline.
 

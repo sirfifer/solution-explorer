@@ -32,6 +32,7 @@ import type {
   LiveVersion,
   StatusOverlay,
   ChangelogEntry,
+  Publication,
 } from "./types";
 import type { SearchResult } from "./utils/search";
 import { addToSearchIndex } from "./utils/search";
@@ -161,6 +162,13 @@ interface ArchStore {
   architecture: Architecture | null;
   loading: boolean;
   error: string | null;
+
+  // Publication metadata sidecar (publication.json). Optional and independent of
+  // the projection: it feeds only the presentation layer (display name, header
+  // banner, footer attribution) and never analysis. null when the sidecar is
+  // absent or invalid, in which case the viewer renders exactly as today.
+  publication: Publication | null;
+  setPublication: (publication: Publication | null) => void;
 
   // Navigation
   selectedComponentId: string | null;
@@ -818,6 +826,8 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   architecture: null,
   loading: true,
   error: null,
+  publication: null,
+  setPublication: (publication) => set({ publication }),
 
   selectedComponentId: null,
   breadcrumbs: [],
