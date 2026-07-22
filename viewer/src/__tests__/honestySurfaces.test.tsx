@@ -56,7 +56,10 @@ describe("GapsBanner (V9.2: producer gaps must surface visibly)", () => {
   it("shows the gap count and, when expanded, every producer, stage, and reason", () => {
     useArchStore.setState({ architecture: makeArch({ gaps }) });
     render(<GapsBanner />);
-    // Fail-before: with no GapsBanner wired, this text never appears.
+    // This drives GapsBanner in isolation; the App-level wiring (App.tsx) is
+    // exercised by GUI plan case V9.2 (covers: component:GapsBanner). A revert
+    // of the component's body fails this; a revert of only the App import is
+    // caught by the plan, not here.
     expect(screen.getByText(/2 producer gaps/)).toBeTruthy();
     // Collapsed: producers not yet listed.
     expect(screen.queryByText("derive.capabilities")).toBeNull();
@@ -87,8 +90,11 @@ describe("ChangelogPanel (V11.1: unread badge must persist until viewed, not on 
       render(<ChangelogPanel />);
       expect(screen.getByText("1")).toBeTruthy(); // unread badge
 
-      // Fail-before: the old 2s IntersectionObserver timer would mark it read.
-      // Advancing well past it must NOT clear the badge.
+      // Forward guard against re-introducing any time-based auto-read: advance
+      // fake time well past the old 2s mark and require the badge to persist.
+      // (The old code used an IntersectionObserver timer, which jsdom does not
+      // provide, so it would also fail this test by throwing on mount; either
+      // way the timer path is gone.)
       vi.advanceTimersByTime(10000);
       expect(screen.getByText("1")).toBeTruthy();
 
