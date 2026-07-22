@@ -12,6 +12,7 @@ import { ReviewSummary } from "./components/ReviewSummary";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { CoverageBadge } from "./components/CoverageBadge";
+import { GapsBanner } from "./components/GapsBanner";
 import { FindingsEntry } from "./components/FindingsEntry";
 import { FindingsSurface } from "./components/FindingsSurface";
 import { SupplyChainEntry } from "./components/SupplyChainEntry";
@@ -735,6 +736,11 @@ export function App() {
 
       {/* Coverage ledger badge and drill-in panel (P4-4, invariant I2) */}
       <CoverageBadge />
+
+      {/* Producer-gap banner (R1 honesty surface), directly under coverage
+          because both are honesty-about-scope; present only when the dataset
+          carries producer gaps. */}
+      <GapsBanner />
 
       {/* Findings surface entry point (P6-8), near the coverage badge; present
           whenever the dataset carries findings or concerns. */}

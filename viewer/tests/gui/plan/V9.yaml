@@ -28,11 +28,15 @@
   steps:
     - "Load the app for dataset 'gaps' and wait until the graph has rendered at least one node"
     - "Click the button labeled 'Skip' in the welcome dialog"
+    - "Click the banner labeled 'producer gaps'"
   pass_when:
     - "the graph renders at least 3 component nodes without an error screen"
-    - "the producer-gap record is surfaced visibly somewhere in the UI (the dataset carries two R1 gap entries naming derive.capabilities and project.emitters.activity)"
+    - "step 1: a producer-gap banner is visible showing a count of 2 producer gaps (the dataset carries two R1 gap entries)"
+    - "step 3: expanding the banner lists both gaps, naming the producers derive.capabilities and project.emitters.activity with their stage and reason"
     - "no unexpected console or network errors during the flow"
   evidence: screenshot+console
+  covers:
+    - component:GapsBanner
 
 - id: V9.3
   vector: degradation
