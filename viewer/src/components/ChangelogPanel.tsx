@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo } from "react";
+import { useState, useEffect, memo } from "react";
 import type { ChangelogEntry, ChangelogChange } from "../types";
 import { useArchStore } from "../store";
 import { formatRelativeTime, getTypeColors, TYPE_META } from "../utils/layout";
@@ -94,37 +94,6 @@ function ChangeItem({ change, darkMode }: { change: ChangelogChange; darkMode: b
   );
 }
 
-// Auto-read observer: marks entry as read after 2 seconds visible
-function useAutoMarkRead(serial: number, isRead: boolean) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { markChangelogEntryRead } = useArchStore();
-
-  useEffect(() => {
-    if (isRead || !ref.current) return;
-
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          timer = setTimeout(() => markChangelogEntryRead(serial), 2000);
-        } else if (timer) {
-          clearTimeout(timer);
-          timer = null;
-        }
-      },
-      { threshold: 0.5 },
-    );
-
-    observer.observe(ref.current);
-    return () => {
-      observer.disconnect();
-      if (timer) clearTimeout(timer);
-    };
-  }, [serial, isRead, markChangelogEntryRead]);
-
-  return ref;
-}
-
 // Single changelog entry card
 const ChangelogEntryCard = memo(function ChangelogEntryCard({
   entry,
@@ -134,9 +103,19 @@ const ChangelogEntryCard = memo(function ChangelogEntryCard({
   darkMode: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const { isChangelogEntryRead } = useArchStore();
+  const { isChangelogEntryRead, markChangelogEntryRead } = useArchStore();
   const isRead = isChangelogEntryRead(entry.serial);
-  const ref = useAutoMarkRead(entry.serial, isRead);
+
+  // Mark read on the user's own view action, never on a timer (owner's
+  // notification-persistence principle: an important notice persists until an
+  // actual viewing or clearing behavior). Expanding the entry to read its
+  // change list is that view; the "Mark all as read" control is the explicit
+  // clear. A badge that erased itself on a timer could not be relied on to be
+  // seen (GUI run finding V11.1).
+  const toggleExpanded = () => {
+    if (!isRead) markChangelogEntryRead(entry.serial);
+    setExpanded((v) => !v);
+  };
 
   // Summary badges (counts by kind)
   const counts = entry.changes.reduce(
@@ -150,12 +129,12 @@ const ChangelogEntryCard = memo(function ChangelogEntryCard({
   );
 
   return (
-    <div ref={ref} className={`${darkMode ? "border-zinc-800/50" : "border-zinc-100"}`}>
+    <div className={`${darkMode ? "border-zinc-800/50" : "border-zinc-100"}`}>
       <button
         className={`w-full text-left flex items-start gap-2 px-3 py-2 text-xs rounded-lg transition-colors ${
           darkMode ? "hover:bg-zinc-800/50" : "hover:bg-zinc-50"
         }`}
-        onClick={() => setExpanded(!expanded)}
+        onClick={toggleExpanded}
       >
         {/* Unread dot */}
         <span className="w-2 shrink-0 mt-1.5">

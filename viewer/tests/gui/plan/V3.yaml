@@ -25,7 +25,7 @@
   pass_when:
     - "step 1: the Docs tab renders README content including the heading 'Cloudflare Infrastructure for Solution Explorer'"
     - "step 3: the Docs tab renders documentation content of at least 3 lines"
-    - "step 4: the Docs tab is present AND renders content matching the component's docs data (analyzer carries one detected pattern); a tab that appears but renders 'No documentation files found' fails this assertion"
+    - "step 4: no tab labeled 'Docs' is shown for analyzer (its only docs data is a detected pattern, which the Docs tab does not render; the tab must not appear only to say 'No documentation files found')"
     - "step 5: no tab labeled 'Docs' is shown for analyzer/cra"
     - "no unexpected console or network errors during the flow"
   evidence: screenshot

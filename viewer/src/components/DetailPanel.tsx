@@ -223,9 +223,14 @@ function ComponentDetail({
   );
 
   const docs = component.docs;
-  const hasDocContent = docs && (docs.readme || docs.claude_md || docs.changelog ||
-    docs.architecture_notes || docs.api_docs || docs.api_endpoints?.length ||
-    docs.env_vars?.length || docs.patterns?.length || docs.key_decisions?.length);
+  // The Docs tab presence predicate must match EXACTLY what DocsTab renders
+  // (readme / claude_md / architecture_notes / api_docs / changelog sections,
+  // plus key_decisions), so the tab never appears only to say "No
+  // documentation files found" (GUI run finding V3.1). patterns, tech_stack,
+  // api_endpoints, and env_vars are surfaced in the Overview tab and the node
+  // hover, not the Docs tab, so they must not gate it. This is the single
+  // source of truth; DocsTab shares it via hasDocsTabContent below.
+  const hasDocContent = hasDocsTabContent(docs);
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: "overview", label: "Overview" },
@@ -693,6 +698,23 @@ function OverviewTab({
         </div>
       )}
     </div>
+  );
+}
+
+// Whether the Docs tab has anything to render: the documentation-file
+// sections DocsTab builds, or key decisions. Shared by the tab-presence
+// predicate so the tab and its content can never disagree (GUI run finding
+// V3.1). Does NOT count patterns/tech_stack/api_endpoints/env_vars, which the
+// Docs tab does not render.
+function hasDocsTabContent(docs: Component["docs"]): boolean {
+  if (!docs) return false;
+  return Boolean(
+    docs.readme ||
+      docs.claude_md ||
+      docs.architecture_notes ||
+      docs.api_docs ||
+      docs.changelog ||
+      (docs.key_decisions && docs.key_decisions.length > 0),
   );
 }
 

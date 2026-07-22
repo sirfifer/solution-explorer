@@ -56,6 +56,8 @@ surfaces:
     file: InventoryPanel.tsx
   - component: CoverageBadge
     file: CoverageBadge.tsx
+  - component: GapsBanner
+    file: GapsBanner.tsx
   - component: ErrorBoundary
     file: ErrorBoundary.tsx
   - component: ReviewModeButton
