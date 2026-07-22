@@ -26,7 +26,7 @@ export function PublicationFooter() {
     <footer
       data-testid="publication-footer"
       className={`
-        shrink-0 px-4 py-1.5 border-t text-[10px] leading-relaxed
+        shrink-0 px-4 py-1.5 border-t text-[11px] leading-relaxed
         ${darkMode
           ? "bg-zinc-950/95 border-zinc-800 text-zinc-500"
           : "bg-white/95 border-zinc-200 text-zinc-400"}
