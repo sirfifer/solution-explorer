@@ -2404,12 +2404,50 @@ fix cycles are a separate owner-triggered engagement.
   assertions run first in their shard, stateful cases are single-attempt for
   the retry rule. Icon-only controls are now findable by title attribute.
 
-## Discovered during execution
+### GUI fix engagement (first Phase 2 run remediation)
+- Status: COMPLETE + VERIFIED GREEN (2026-07-22). The first Phase 2 run was
+  RED 37/47; all findings fixed across four PRs and the full plan re-ran
+  GREEN 47/47. PRs: #84 (harness hardening: search-probe gate, probe
+  inventory + shard-order lint, V7 plan fixes), #85 (mobile parity: lens
+  switcher + review mode at 390px), #86 (honesty surfaces: producer-gap
+  banner, honest Docs tab, persistent changelog badge per the
+  notification-persistence principle), #87 (V11 count-drift plan fix +
+  browser tab-hygiene in the runner skill). Both run reports (RED first,
+  GREEN rerun) retained locally, gitignored. Low-priority review NITs and
+  the demo blockers are logged in the Discovered table above so nothing
+  slips.
+- Notification-persistence principle (owner 2026-07-21, site-wide, in
+  memory): important notices persist until an actual view/clear, never a
+  timer. Applied to the changelog badge; audit confirmed it was the only
+  timer-cleared notice.
+
+### GUI-3: Editable display name via publication.json subject.name
+- Status: TODO, owner-directed 2026-07-22, DECISION PENDING on prioritization.
+  The header display name should default to the contextual folder-derived
+  name (as today) but be editable in the publication.json sidecar's
+  `subject.name` field, not buried in projection data (fixes the root-name
+  leak Discovered row). The concept maps exactly onto the already-designed
+  publication metadata system (docs/publication/, schema + templates on
+  wt/publication-metadata, unmerged; viewer wiring is the planned follow-up).
+- Execution is the publication.json viewer-wiring increment: the viewer
+  fetches the optional publication.json sidecar and, when present, renders
+  `subject.name` as the header display name (falling back to
+  `architecture.name` when absent, so existing installs are unchanged). The
+  annotation identity key should also prefer a stable id over the display
+  name so an edited name does not orphan annotations. Owner to decide whether
+  to pull the publication.json viewer-wiring card forward now (starting with
+  this name slice) or keep it queued.
 
 Add new findings here with a date and the task you were on; do not expand task scope inline.
 
 | Date | Found while | Description | Disposition |
 |---|---|---|---|
+| 2026-07-22 | GUI fix engagement (root-name leak) | The viewer header shows `architecture.name`, which the analyzer defaults to the analyzed folder's name. A worktree run titled the UI "solution-explorer--gui-harness"; the folder name leaks into the header AND into the annotation identity key (localStorage keyed by architecture name). | Owner decision (2026-07-22): the contextual folder-derived default is fine, but the DISPLAY name belongs in the publication.json sidecar's `subject.name` (editable), not buried in projection data. Maps onto the already-designed publication metadata system (docs/publication/, wt/publication-metadata, unmerged). Captured in the GUI-3 tracking card below; execution is the publication.json viewer-wiring card. |
+| 2026-07-22 | GUI PR #86 review (F3, pre-existing) | `store.ts markAllChangelogRead` uses `changelog_serial ?? 0`; a dataset with changelog entries but a missing/stale `changelog_serial` would make "Mark all as read" a no-op for higher serials. Not exercised (real datasets carry `changelog_serial: 1`); store unchanged by that PR. | Tracked, low priority. Fix: derive the watermark from `max(entry.serial)` rather than the top-level field, or validate the field is present when entries exist. |
+| 2026-07-22 | GUI PR #86 review (F8, pre-existing) | The search-probe gate keys on `architecture.component_detail_index` truthiness. A degraded-split skeleton writer sets it to `{}` (truthy in JS), so a broken split with no `search/` dir would still probe and 404; a legacy split without shards likewise. Neither is in the GUI dataset matrix. | Tracked, low priority. Fix: gate on a non-empty index (`Object.keys(...).length > 0`) or a dedicated `has_search_shards` flag. |
+| 2026-07-22 | GUI PR #85 review (F3) | The newly-mobile lens control (32px) and review button (36px) are under the owner's ~44px finger-target guideline; bumped from 24/32 but not to full 44. The pre-existing mobile search button is also 32px, so full compliance is a header-wide restyle, not these two controls alone. | Tracked as a header-wide mobile tap-target pass (raise the header control row to 44px consistently), not a one-control patch. |
+| 2026-07-22 | GUI PR #85 review (F9) | Adding `architecture` to the SearchOverlay effect deps means a live-monitor refresh while the search overlay is open re-runs the effect (resets selectedIndex, re-fetches shards), dropping the user's arrow-key selection mid-navigation. Niche (live + search-open + navigating). | Tracked, low priority. Fix: split the shard-load effect from the focus/reset effect, or guard the reset on `searchOpen` transition only. |
+| 2026-07-22 | GUI fix engagement (demo deploy audit) | Open-source demo status: the FULL install (`architecture-full.yml`, solution-explorer.unamentis.org, downstream "Advanced Architecture Visualization") fails at "Create Cloudflare Pages project" with `Error: Authentication error` on every main push; the STATIC install (`architecture.yml`, um-arch.unamentis.org) deploys green but is pinned to stale `31145dc` (2026-03-06, pre-v2) behind a `# main` comment, so it serves a four-month-old engine with none of the recent work. Both are in UnaMentis/unamentis (owner-gated). | OWNER-GATED, reported 2026-07-22. Fixes: (1) replace/repair the Cloudflare API token so it has Pages:Edit on the correct account; (2) re-pin `architecture.yml` to `@main`. Neither demo shows current work until both are done. Not touched (owner-gated repo/credentials). |
 | 2026-07-21 | R1 wave 5 adversarial review (PR #76) | Pre-existing SwiftUI tab-id collision bug in `analyzer/swiftui_flow.py`, exposed as an honest gap by the new wave-5 postconditions (a TRUE positive, not a contract defect). Two realistic, compilable SwiftUI shapes produce genuinely malformed graphs: (a) two tabs with the SAME `.tabItem` label collide on `tab_id` (the id is derived from the label slug, swiftui_flow.py:450), yielding duplicate component ids in the assembled tree; (b) two tabs presenting the SAME content View collide in `tab_components` (keyed by view name, swiftui_flow.py:461), then the nesting loop (lines 631-637) nests one id twice and leaves a dangling tab-bar edge. On such repos the wave-5 contract records a deterministic `derive.output-contract` gap instead of silently shipping the collision. | Fix the collision at source in `swiftui_flow.py` (disambiguate tab ids beyond the label slug, and key `tab_components` so two tabs can share a content view) as its own small card with these two shapes as fixtures; not fixed inline in PR #76 (scope discipline: the contract change must not smuggle in a detector change). Until then the honest gap is the correct behavior. Wording in the R1 card and the contract docstring adjusted from "a clean run never trips it" to "a well-formed graph never trips it". |
 | 2026-07-21 | R1 wave 5 adversarial review (PR #76) | Multi-repo merge is neither contract-checked nor gap-honest: `analyzer/derive/multi.py::merge_architectures` never calls `_check_output_contract` on the merged result and copies only components/relationships/symbols/files/stats/repositories, so any per-repo `gaps` arrays are silently DROPPED from the merged projection (a per-repo honest gap disappears in multi-repo output). | Follow-up owned by the standing multi-repo unification family (the same family as the P4-7 coverage/incremental and P10-1 SBOM-aggregation deferrals): merge per-repo gaps into the merged arch (re-finalize, prefix or carry the repo attribution) and run the output contract on the merged result. Out of PR #76 scope (single-repo assembly boundary). |
 | 2026-07-21 | R1 waves 3+4 adversarial review (PR #75) | Two minor error-completeness edges: (1) in `mcp/server.py::_tools_call`, a KNOWN tool whose handler raises `KeyError` internally was caught by the `except KeyError` unknown-tool branch and mislabeled INVALID_PARAMS "unknown tool" instead of an INTERNAL_ERROR with attribution; (2) in `enrich/engine.py::run_enhance`, the architecture-narrative producer (`_enhance_architecture`) is a peer unit to the partitions but ran unguarded, so an unexpected exception there still crashed the run. | RESOLVED in PR #75. (1) unknown-tool resolution now happens BEFORE dispatch (`name not in TOOLS_BY_NAME`), so a handler KeyError reaches the generic INTERNAL_ERROR bulkhead with per-tool attribution. (2) the `_enhance_architecture` call is wrapped in the same degrade pattern (records a scrubbed note, leaves the narrative unenriched, catches only `Exception` so KeyboardInterrupt/SystemExit propagate). Each has a fail-before regression test. All other hard contracts held under adversarial pressure (selective partition failure with surviving siblings, all 9 tools through the postcondition, a real serve_stdio round trip with a crashing tool mid-stream, determinism). |
