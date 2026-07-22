@@ -474,9 +474,11 @@ export function App() {
         }}
       >
         <div className="flex items-center gap-3">
-          {/* Mobile sidebar toggle */}
+          {/* Mobile sidebar toggle. min-h/min-w-[44px] under sm meets the ~44px
+              mobile tap-target guideline (header-wide pass); sm:* reverts to the
+              original compact size. */}
           <button
-            className={`lg:hidden p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
+            className={`lg:hidden flex items-center justify-center p-2 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
             onClick={() => setSidebarOpen(!sidebarOpen)}
           >
             &#x2630;
@@ -533,11 +535,14 @@ export function App() {
             </button>
           )}
 
-          {/* Search button */}
+          {/* Search button. min-h-[44px] under sm meets the ~44px mobile tap-target
+              guideline; sm:min-h-0 keeps the compact desktop height (PR #85
+              review F3 header-wide follow-up). */}
           <button
             onClick={() => setSearchOpen(true)}
             className={`
               flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm
+              min-h-[44px] sm:min-h-0
               ${darkMode
                 ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300"
                 : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700"
@@ -593,11 +598,13 @@ export function App() {
             </button>
           </div>
 
-          {/* Mobile: overflow menu for secondary actions */}
+          {/* Mobile: overflow menu for secondary actions. This control is only
+              rendered under sm (the wrapper is sm:hidden), so a fixed 44px tap
+              target applies; there is no desktop size to preserve here. */}
           <div ref={moreMenuRef} className="sm:hidden relative">
             <button
               onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-              className={`p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
+              className={`flex items-center justify-center p-2 rounded-lg min-h-[44px] min-w-[44px] ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
               title="More options"
             >
               {"\u22EF"}
