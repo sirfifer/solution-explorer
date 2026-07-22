@@ -4,7 +4,7 @@ dynamic = ["version"]
 description = "Architecture visualization tool for any codebase"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = "FSL-1.1-Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
     { name = "sirfifer" },

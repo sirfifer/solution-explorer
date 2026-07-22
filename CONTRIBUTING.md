@@ -2,6 +2,10 @@
 
 Thank you for your interest in contributing to Solution Explorer! This guide will help you get started.
 
+## Licensing of contributions
+
+This project is licensed under the Functional Source License (FSL-1.1-ALv2); see [LICENSE](LICENSE). Because the project must retain a single copyright holder, code contributions require a signed contributor license agreement, and that agreement is not yet in place. Until it is, we welcome issues, discussions, and documentation feedback, but we cannot merge external code pull requests. This section will be updated when the CLA process is live.
+
 ## Getting Started
 
 1. **Fork the repository** on GitHub
