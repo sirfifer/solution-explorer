@@ -36,10 +36,10 @@
     - "Click the expand arrow on the first duplication finding"
     - "Open the surface tab labeled 'Concerns'"
   pass_when:
-    - "the findings strip shows the counts (78 findings, 6 concerns, unverified badge)"
+    - "the findings strip shows a findings count, a concerns count, and an unverified badge (exact counts move with the dogfood and are not asserted)"
     - "step 2: the surface opens with kind filters (duplication, inconsistency, unreferenced) and a findings list"
     - "step 3: the entry expands to its members, each with a file and line reference"
-    - "step 4: the Concerns tab lists 6 concerns including 'Auth' with member counts"
+    - "step 4: the Concerns tab lists the concerns including 'Auth' with member counts"
     - "no unexpected console or network errors during the flow"
   evidence: screenshot
   covers:
@@ -53,11 +53,11 @@
   steps:
     - "Load the app for dataset 'dogfood' and wait until the graph has rendered at least one node"
     - "Click the strip labeled 'Supply chain'"
-    - "Click the filter labeled 'direct (50)'"
+    - "Click the dependency filter chip beginning 'direct'"
   pass_when:
-    - "the supply chain strip shows dependency totals (569 dependencies, 2 ecosystems)"
+    - "the supply chain strip shows a dependency total and an ecosystem count (exact counts move with the dogfood and are not asserted)"
     - "step 2: the surface opens with the honest scope note ('Not a vulnerability scan'), language targets, and per-ecosystem dependency lists with source locations"
-    - "step 3: the list filters to the 50 direct dependencies"
+    - "step 3: the list filters to the direct dependencies only (fewer entries than the unfiltered list)"
     - "no unexpected console or network errors during the flow"
   evidence: screenshot
   covers:

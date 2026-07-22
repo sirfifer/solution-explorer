@@ -123,9 +123,19 @@ steps use the matching URL; the first line is the shard's primary):
 SHARD OUTPUT: {RUN_DIR}/shards/{VECTOR_ID}.json
 EVIDENCE DIR: {RUN_DIR}/evidence/
 
-TOOLING: drive the browser with mcp__playwriter__execute (Playwright `page`
-in scope). Open your OWN tab once at the start:
-  const p = await context.newPage(); state.p = p;
+TAB HYGIENE (mandatory, one-to-one open/close). Open EXACTLY ONE browser tab
+for this entire shard and reuse it across every case and every dataset origin
+(one tab per shard, never one per case, never one per dataset). Track it under
+a shard-unique state key (e.g. state.r{VECTOR_ID}) so concurrent shards never
+share or clobber a tab. As your VERY LAST action, AFTER writing the shard
+file, close it: `await p.close();`. Every tab you open must be closed by you;
+a shard that leaves a tab open is a defect. Never open a second tab; if the
+one tab is closed or broken, that is a BLOCKED condition to record, not a
+reason to open another.
+
+TOOLING: drive the browser with mcp__playwriter__execute (Playwright in
+scope). Open your one tab at the start:
+  const p = await context.newPage(); state.r{VECTOR_ID} = p;
 Then IMMEDIATELY, before loading the app, install capture hooks and clear
 storage for EVERY origin in the port map (visit each once and clear):
   state.consoleErrors = []; state.networkErrors = [];
@@ -298,7 +308,21 @@ After all shards land:
      own section; flaky is a first-class outcome, not a pass.
    - Banned phrases: "mostly working", "minor issues remain", and any
      construction that rounds a FAIL up.
-4. Kill the shard servers.
+4. TEAR DOWN, one-to-one with setup. Every resource this cycle opened is
+   closed by this cycle, on a per-run cadence, not left for a later sweep:
+   a. Kill the shard servers (track their task ids at launch; stop each).
+   b. Browser sweep: each runner closes its own tab, but the orchestrator
+      MUST verify none leaked. Run a final mcp__playwriter__execute that
+      closes every remaining page:
+        for (const pg of context.pages()) { try { await pg.close(); } catch (e) {} }
+      A run that ends with open tabs is a defect (the first fix-engagement
+      rerun leaked ~10 tabs before this rule existed). Reuse-within-a-shard
+      plus close-at-shard-end plus this orchestrator sweep gives a perfect
+      one-to-one: everything opened is closed.
+   c. Remove the assembled serve roots and staged datasets if this was a
+      one-off cycle (viewer/tests/gui/.serve and .datasets are gitignored
+      scratch; regenerable). Keep them only if another cycle will reuse them
+      immediately.
 
 ## Evidence retention (owner decision, 2026-07-21)
 
