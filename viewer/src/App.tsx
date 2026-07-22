@@ -533,11 +533,14 @@ export function App() {
             </button>
           )}
 
-          {/* Search button */}
+          {/* Search button. min-h-[44px] under sm meets the ~44px mobile tap-target
+              guideline; sm:min-h-0 keeps the compact desktop height (PR #85
+              review F3 header-wide follow-up). */}
           <button
             onClick={() => setSearchOpen(true)}
             className={`
               flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm
+              min-h-[44px] sm:min-h-0
               ${darkMode
                 ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300"
                 : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700"

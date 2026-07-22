@@ -35,6 +35,7 @@ export function LensSwitcher() {
       <label
         className={`
           flex items-center gap-1.5 px-2 py-2 sm:py-1 rounded-lg text-xs
+          min-h-[44px] sm:min-h-0
           ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-500"}
         `}
         aria-label={TOOLTIP_COPY.lens.switcher}

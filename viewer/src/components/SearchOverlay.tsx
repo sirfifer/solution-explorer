@@ -24,20 +24,36 @@ export function SearchOverlay() {
     [searchQuery],
   );
 
-  // Focus input when opened, and lazily load the prebuilt search shards on first
-  // open so search covers descriptions, docstrings, and AI help text without
-  // visiting each component (P6-4). Search shards are written only by split-mode
-  // projections, and the split manifest is the only loader that carries
-  // component_detail_index, so that key gates the probe: a monolith dataset
-  // never fetches a search index it cannot have (the fetch would 404 on every
-  // search open; GUI run 20260721 finding).
+  // Focus input and reset the selection whenever the overlay opens. Kept in its
+  // own effect, keyed only on searchOpen, so a live-monitor architecture
+  // refresh while the overlay is already open does not re-run it: that would
+  // steal focus and reset selectedIndex mid-navigation, dropping the user's
+  // arrow-key selection (PR #85 review F9).
   useEffect(() => {
     if (searchOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
       setSelectedIndex(0);
-      if (architecture?.component_detail_index) void loadSearchShards();
     }
-  }, [searchOpen, architecture]);
+  }, [searchOpen]);
+
+  // A non-empty component_detail_index is only ever produced by a split-mode
+  // projection's manifest; a monolith dataset omits the key entirely, and a
+  // degraded split's skeleton writer can set it to {} (truthy in JS but empty).
+  // Gate on non-empty so neither case probes a search index it cannot have
+  // (the fetch would 404 on every search open; GUI run 20260721 finding, and
+  // PR #86 review F8).
+  const hasSearchIndex =
+    !!architecture?.component_detail_index &&
+    Object.keys(architecture.component_detail_index).length > 0;
+
+  // Lazily load the prebuilt search shards so search covers descriptions,
+  // docstrings, and AI help text without visiting each component (P6-4). Kept
+  // separate from the focus/reset effect above so an architecture refresh
+  // while the overlay is open can safely re-run this (loadSearchShards is
+  // idempotent per session) without disturbing the current selection.
+  useEffect(() => {
+    if (searchOpen && hasSearchIndex) void loadSearchShards();
+  }, [searchOpen, hasSearchIndex]);
 
   // Keyboard shortcut to open
   useEffect(() => {

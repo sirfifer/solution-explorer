@@ -117,4 +117,46 @@ describe("ChangelogPanel (V11.1: unread badge must persist until viewed, not on 
     fireEvent.click(screen.getByText("Mark all as read"));
     expect(screen.queryByText("1")).toBeNull();
   });
+
+  it("derives the watermark from the entries' max serial when changelog_serial is missing (fail-before)", () => {
+    // changelog_serial is a top-level field that can be missing or stale
+    // relative to the entries actually present. markAllChangelogRead must not
+    // silently no-op on the higher-serial entries in that case.
+    const entries: ChangelogEntry[] = [
+      { ...entry, serial: 1, summary: "first" },
+      { ...entry, serial: 2, summary: "second" },
+      { ...entry, serial: 5, summary: "fifth" },
+    ];
+    useArchStore.setState({
+      architecture: makeArch({ changelog: entries }), // no changelog_serial at all
+      changelogReadState: { w: 0, r: [] },
+    });
+    expect(useArchStore.getState().getUnreadChangelogCount()).toBe(3);
+    useArchStore.getState().markAllChangelogRead();
+    expect(useArchStore.getState().getUnreadChangelogCount()).toBe(0);
+  });
+
+  it("derives the watermark from the entries' max serial when changelog_serial is stale", () => {
+    const entries: ChangelogEntry[] = [
+      { ...entry, serial: 1, summary: "first" },
+      { ...entry, serial: 2, summary: "second" },
+      { ...entry, serial: 3, summary: "third" },
+    ];
+    useArchStore.setState({
+      // changelog_serial lags behind the newest entries.
+      architecture: makeArch({ changelog: entries, changelog_serial: 1 }),
+      changelogReadState: { w: 0, r: [] },
+    });
+    useArchStore.getState().markAllChangelogRead();
+    expect(useArchStore.getState().getUnreadChangelogCount()).toBe(0);
+  });
+
+  it("falls back to changelog_serial when there are no entries", () => {
+    useArchStore.setState({
+      architecture: makeArch({ changelog: [], changelog_serial: 7 }),
+      changelogReadState: { w: 0, r: [] },
+    });
+    useArchStore.getState().markAllChangelogRead();
+    expect(useArchStore.getState().changelogReadState.w).toBe(7);
+  });
 });

@@ -12,6 +12,7 @@ export function ReviewModeButton() {
           onClick={toggleReviewMode}
           className={`
             flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-sm transition-colors
+            min-h-[44px] sm:min-h-0
             ${reviewMode
               ? darkMode
                 ? "bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/40"
@@ -42,7 +43,8 @@ export function ReviewModeButton() {
           <button
             onClick={() => setActivePanel("review")}
             className={`
-              p-1.5 rounded-lg text-sm transition-colors
+              flex items-center justify-center p-1.5 rounded-lg text-sm transition-colors
+              min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0
               ${darkMode
                 ? "hover:bg-zinc-700 text-zinc-400"
                 : "hover:bg-zinc-200 text-zinc-500"

@@ -1433,7 +1433,14 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   markAllChangelogRead: () => {
     const arch = get().architecture;
-    const serial = arch?.changelog_serial ?? 0;
+    const entries = arch?.changelog ?? [];
+    // Derive the watermark from the highest entry serial actually present, since
+    // the top-level changelog_serial can be missing or stale relative to the
+    // entries. Only fall back to it when there are no entries to read from.
+    const serial =
+      entries.length > 0
+        ? entries.reduce((max, e) => Math.max(max, e.serial), -Infinity)
+        : (arch?.changelog_serial ?? 0);
     const updated: ChangelogReadState = { w: serial, r: [] };
     saveStoredChangelogRead(updated);
     set({ changelogReadState: updated });
