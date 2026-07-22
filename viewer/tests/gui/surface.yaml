@@ -58,6 +58,10 @@ surfaces:
     file: CoverageBadge.tsx
   - component: GapsBanner
     file: GapsBanner.tsx
+  - component: PublicationBanner
+    file: PublicationBanner.tsx
+  - component: PublicationFooter
+    file: PublicationFooter.tsx
   - component: ErrorBoundary
     file: ErrorBoundary.tsx
   - component: ReviewModeButton

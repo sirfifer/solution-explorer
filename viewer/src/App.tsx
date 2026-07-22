@@ -13,6 +13,8 @@ import { AdminDashboard } from "./components/AdminDashboard";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { CoverageBadge } from "./components/CoverageBadge";
 import { GapsBanner } from "./components/GapsBanner";
+import { PublicationBanner } from "./components/PublicationBanner";
+import { PublicationFooter } from "./components/PublicationFooter";
 import { FindingsEntry } from "./components/FindingsEntry";
 import { FindingsSurface } from "./components/FindingsSurface";
 import { SupplyChainEntry } from "./components/SupplyChainEntry";
@@ -32,6 +34,7 @@ import type { SnapPoint } from "./hooks/useBottomSheet";
 import { initializeSearch } from "./utils/search";
 import { formatNumber, formatRelativeTime, getTypeColors } from "./utils/layout";
 import { dataUrl, getDataBase } from "./utils/dataSource";
+import { parsePublication, publicationDisplayName } from "./utils/publication";
 import { SolutionIndex } from "./components/SolutionIndex";
 import type { Architecture, Component, SolutionManifest } from "./types";
 import { SOLUTION_MANIFEST_KIND } from "./types";
@@ -145,6 +148,8 @@ function MobileBottomSheet({ darkMode, activePanel, bottomSheet }: {
 export function App() {
   const {
     architecture,
+    publication,
+    setPublication,
     loading,
     error,
     darkMode,
@@ -339,6 +344,38 @@ export function App() {
     load();
   }, [setArchitecture, setLoading, setError]);
 
+  // Load the OPTIONAL publication.json sidecar (design authority:
+  // docs/publication/PUBLICATION-METADATA.md). It sits alongside the projection
+  // and is resolved through the same data base as the architecture fetch, so a
+  // member of a composed solution loads its own sidecar via ?data=. It is
+  // publishing metadata, never analysis data, and only feeds the presentation
+  // layer (display name, header banner, footer attribution). When the file is
+  // absent, non-JSON (Vite SPA fallback), unparseable, or fails validation, the
+  // viewer renders exactly as today (design rule 2): publication stays null and
+  // every consumer falls back to architecture.name. A background 404 here is
+  // expected and harmless, mirroring the manifest and live-config probes.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPublication() {
+      try {
+        const res = await fetch(dataUrl("publication.json"));
+        if (!res.ok) return;
+        if (!(res.headers.get("content-type")?.includes("json") ?? false)) return;
+        const raw = await res.json();
+        const parsed = parsePublication(raw);
+        if (!cancelled && parsed) setPublication(parsed);
+      } catch {
+        // Absent or unreadable sidecar: render exactly as today (no-op).
+      }
+    }
+
+    loadPublication();
+    return () => {
+      cancelled = true;
+    };
+  }, [setPublication]);
+
   // Deep linking: two-way URL sync with popstate suppression (F-VW-2).
   useUrlSync();
 
@@ -413,8 +450,17 @@ export function App() {
 
   if (!architecture) return null;
 
+  // The DISPLAY name: publication.subject.name (editable sidecar) when present,
+  // else the folder-derived architecture.name (the contextual default). This is
+  // display only; the annotation identity key stays on architecture.name.
+  const displayName = publicationDisplayName(publication, architecture.name);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      {/* Publication header banner (always region), rendered at the very top per
+          the placement contract. Absent-file behavior: renders nothing. */}
+      <PublicationBanner />
+
       {/* Header */}
       <header
         className={`
@@ -438,7 +484,7 @@ export function App() {
 
           <div className="flex items-center gap-2">
             <h1 className={`font-bold text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
-              {architecture.name}
+              {displayName}
             </h1>
             <span className={`hidden sm:inline text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
               Architecture
@@ -462,7 +508,7 @@ export function App() {
                 `}
               >
                 <span>&#x1F517;</span>
-                <span>{architecture.name} Repository</span>
+                <span>{displayName} Repository</span>
               </a>
             )}
           </div>
@@ -896,6 +942,11 @@ export function App() {
           />
         )}
       </div>
+
+      {/* Publication footer attribution (always region), rendered at the bottom
+          per the placement contract, above the mobile bottom nav. Absent-file
+          behavior: renders nothing. */}
+      <PublicationFooter />
 
       {/* Mobile bottom nav */}
       <nav

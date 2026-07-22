@@ -1202,6 +1202,71 @@ export interface SolutionManifest {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Publication metadata (publication.json sidecar). Design authority:
+// docs/publication/PUBLICATION-METADATA.md and publication.schema.json in this
+// repo. This is PUBLISHING metadata, not analysis data: it never influences
+// extraction, enrichment, or scoring, only the presentation layer. It is
+// OPTIONAL. When the sidecar is absent or invalid the viewer renders exactly as
+// today (design rule 2), so every consumer treats a null publication as "not
+// present" and falls back to the folder-derived architecture.name.
+//
+// Shape mirrors publication.schema.json (draft-07). Fields the schema marks
+// required for a valid file are non-optional here; the runtime validator in
+// utils/publication.ts rejects a file that does not carry them, so a Publication
+// value in the store is always structurally valid.
+// ---------------------------------------------------------------------------
+
+export interface PublicationPublisher {
+  name: string;
+  contact: string;
+  url?: string;
+}
+
+export interface PublicationSubject {
+  name: string;
+  repo_url?: string;
+  license?: string;
+  commit: string;
+  snapshot_date: string;
+  affiliation: "owner" | "maintainer" | "contributor" | "none";
+}
+
+export interface PublicationHeader {
+  banner: string;
+  front_page?: string[];
+}
+
+export interface PublicationFooterContent {
+  always: string[];
+  front_page?: string[];
+}
+
+export interface PublicationAccess {
+  visibility: "public" | "private-preview" | "internal";
+  gate?: string | null;
+}
+
+export interface PublicationGeneratedBy {
+  tool: string;
+  version: string;
+}
+
+export interface Publication {
+  publication_version: 1;
+  publisher: PublicationPublisher;
+  subject: PublicationSubject;
+  purpose: "demo" | "documentation" | "internal" | "evaluation" | "other";
+  update_policy: "snapshot" | "periodic" | "continuous";
+  header: PublicationHeader;
+  footer: PublicationFooterContent;
+  context?: string[];
+  // Required by the schema but may be an empty array.
+  disclaimers: string[];
+  access: PublicationAccess;
+  generated_by: PublicationGeneratedBy;
+}
+
 // Navigation state
 export type ViewMode = "graph" | "tree" | "list";
 export type Panel = "tree" | "detail" | "review" | null;
