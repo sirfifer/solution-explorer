@@ -21,28 +21,28 @@
     "analyze": "python3 ../analyze.py ../.. -o public/architecture.json && npm run dev"
   },
   "dependencies": {
-    "@xyflow/react": "^12.6.0",
-    "elkjs": "^0.9.3",
-    "fuse.js": "^7.0.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "zustand": "^5.0.0"
+    "@xyflow/react": "^12.11.2",
+    "elkjs": "^0.12.0",
+    "fuse.js": "^7.5.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@tailwindcss/vite": "^4.1.0",
-    "@testing-library/jest-dom": "^6.9.1",
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
-    "@types/react": "^19.1.0",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.1.0",
-    "@vitejs/plugin-react": "^4.4.0",
-    "@vitest/coverage-v8": "^4.0.18",
-    "eslint": "^9.39.2",
-    "jsdom": "^27.4.0",
+    "@vitejs/plugin-react": "^6.0.4",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.8.0",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.1.0",
-    "typescript": "~5.7.0",
-    "typescript-eslint": "^8.54.0",
-    "vite": "^6.3.0",
+    "typescript": "~7.0.2",
+    "typescript-eslint": "^8.65.0",
+    "vite": "^8.1.5",
     "vitest": "^4.0.18"
   }
 }
