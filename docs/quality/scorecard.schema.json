@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Comprehension Review scorecard",
+  "description": "One persona's scored sitting. Design authority: docs/quality/COMPREHENSION-REVIEW.md",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["charter_version", "subject", "run_date", "persona", "dimensions", "trust_incidents", "blocked_paths", "battery"],
+  "properties": {
+    "charter_version": {
+      "type": "string",
+      "pattern": "^comprehension-review/v[0-9]+$",
+      "description": "Scores are comparable only within a charter version."
+    },
+    "subject": { "type": "string", "minLength": 1 },
+    "run_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "persona": { "enum": ["P1", "P2", "P3"] },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orientation", "model_accuracy", "navigation_efficiency", "trust", "unaided_recovery", "advertised_paths"],
+      "patternProperties": {
+        "^(orientation|model_accuracy|navigation_efficiency|trust|unaided_recovery|advertised_paths)$": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["score", "evidence"],
+          "properties": {
+            "score": { "type": "integer", "minimum": 0, "maximum": 4 },
+            "evidence": { "type": "string", "minLength": 1, "description": "Screenshot number or journal section. A score with no evidence is an opinion." },
+            "note": { "type": "string" }
+          }
+        }
+      }
+    },
+    "battery": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "verdict"],
+        "properties": {
+          "question": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "verdict": { "enum": ["correct", "partial", "wrong", "unscoreable"] },
+          "confidence": { "enum": ["high", "medium", "low"] },
+          "source": { "type": "string" },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "trust_incidents": {
+      "type": "array",
+      "description": "Counted, never scored away. Each becomes a finding.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["what", "severity"],
+        "properties": {
+          "what": { "type": "string", "minLength": 1 },
+          "severity": { "enum": ["low", "medium", "high"] },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "blocked_paths": {
+      "type": "array",
+      "description": "Advertised features that failed on first use.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feature"],
+        "properties": {
+          "feature": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "minutes_to_orientation": { "type": ["number", "null"] },
+    "verdict": { "type": "string" }
+  }
+}

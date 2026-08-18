@@ -144,6 +144,23 @@ jobs:
           path: viewer/coverage/
           retention-days: 14
 
+  preview-gate-test:
+    name: Preview Gate Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      # The private-preview gate is the thing standing between an unpublished
+      # demo and the open internet, and DISCLOSURE-POLICY.md rules out
+      # client-side gating as theater. No dependencies: Node's own test runner
+      # against the Pages Function, exercising the real onRequest handler.
+      - name: Run preview gate tests
+        run: node --test infrastructure/preview-gate/*.test.mjs
+
   build:
     name: Build Viewer
     needs: [viewer-lint, viewer-test]
@@ -179,7 +196,7 @@ jobs:
   gate:
     name: CI Gate
     if: always()
-    needs: [python-lint, python-test, viewer-lint, viewer-test, build]
+    needs: [python-lint, python-test, viewer-lint, viewer-test, build, preview-gate-test]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
