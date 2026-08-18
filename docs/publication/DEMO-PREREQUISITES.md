@@ -57,13 +57,53 @@ this is not a blocker for us, but it is a gap for anyone else adopting it.
 each a single repository. Kubernetes only looks multi-repo; `staging/src/k8s.io/*`
 lives inside the one repo and is correctly analyzed as one.
 
-## 2. Java is also not a Wave 1 prerequisite
+## 2. Java: the wall is much smaller than anyone documented
 
-Wave 1 is TypeScript, Go and Python, all in the full-parse tier. Java is needed
-before Spring Boot (Wave 2, Track B) and it is the largest enterprise-visible
-capability gap in the product, so it should be scheduled early. It should not be
-scheduled FIRST, because demo 1 will teach us things about parser-tier work on
-unfamiliar code that should inform how the Java tier is built.
+Wave 1 is TypeScript, Go and Python, all in the full-parse tier, so Java does not
+gate the start either way. But the reason it does not is different from what the
+program plan assumed, and the correction is worth more than the original point.
+
+**The README's language table is stale.** It lists Java, Kotlin, C/C++, C# and
+Dart as "detection + metrics only". In fact `analyzer/parsers/` contains
+`java_ts.py`, `cpp_ts.py` and `csharp_ts.py`, the `treesitter` extra already
+pulls `tree-sitter-java`, `tree-sitter-cpp` and `tree-sitter-c-sharp`, and all
+three are registered in `PARSERS` with `_ts_available` true once the extra is
+installed.
+
+Probed against the repo's own `tests/fixtures/java` (2026-08-18), Java produced:
+
+- **Symbols with kinds**: `record User`, `class UserService`, `class
+  UserController`, methods `find`, `save`, `getUser`, `createUser`, fields
+  `users`, `service`. Java records are recognised, so the grammar is current.
+- **Framework detection**: the web component came back `framework: Spring`.
+- **API endpoints**: `GET /users/{id}`, `POST /users`, `ANY /api`, extracted from
+  the controller's annotations.
+- **A relationship**: `web -> service (uses)`.
+
+That is not "detection and metrics". That is the full-parse feature set on a
+three-file fixture.
+
+What this changes:
+
+1. **Spring Boot may belong on Track A, not Track B.** The premise for putting it
+   on the capability-forcing track was that a Java map would be blank. It will
+   not be blank. Whether it is GOOD at forty-module, several-hundred-thousand-line
+   scale is unproven and is exactly what the reconnaissance pass should measure.
+2. **The 25 percent detect-only publishing gate needs recomputing** for any
+   subject, because the set of detect-only languages is smaller than the README
+   says.
+3. **The README is wrong in a way that costs us commercially.** "No Java" is the
+   kind of claim a buyer checks in the first five minutes, and we are currently
+   telling them we cannot do something we can. Fixing the table is minutes of
+   work and should happen with the next documentation pass.
+4. **Kotlin and Dart remain genuinely unparsed**, and C/C++ and C# now need the
+   same probe Java just had before anything is claimed either way.
+
+One near-miss worth recording as method: the Java symbols came back with
+`line_start: None`, which looked like a serious Java-specific defect until the
+same check on Flask's Python symbols showed `line_start: None` for all 1,569 of
+them. It is a property of that projection mode, not of the Java parser. Probing a
+second language before filing is what stopped a false finding.
 
 ---
 
@@ -193,7 +233,7 @@ Effort: half a day, mostly Cloudflare configuration.
 | Item | Why it can wait | When |
 |---|---|---|
 | **Multi-repo M2, cross-repo edges** | No Wave 1 subject is multi-repo | Before Supabase. Card M2, M3, M4 now so they stop being invisible |
-| **Java tier** | Wave 1 is TS, Go, Python | After demo 1, informed by what demo 1 teaches about parser work on unfamiliar code |
+| **Java tier** | Wave 1 is TS, Go, Python, and Java turns out to be far more built than documented (section 2) | Probe C/C++ and C# the same way, then re-rate Spring Boot's track from the recon pass rather than from the README |
 | **Blob read-before-size-check** | `_enumerate` calls `read_bytes()` before the `max_file_size` gate, so a large file is fully read into RAM regardless of the bound. VS Code peaked at 1.9 GB, which is fine. Kubernetes and Home Assistant are unmeasured | D0 measures it. Fix only if a subject actually blows up |
 | **Classification accuracy instrument** | The comprehension review will find this class by hand first, and what it finds should define the automated checks | After demo 1, specified by demo 1's findings |
 | **Retire `merge-ai-enhancements.py`** | Open and unowned since the Phase 7 gate | The demo program runs the enrichment path weekly on fresh datasets, which is exactly the parallel-run evidence that gate has been waiting for. Free byproduct, worth naming |
