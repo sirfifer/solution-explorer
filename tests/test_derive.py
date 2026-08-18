@@ -124,6 +124,10 @@ def test_http_edge_evidence_points_at_the_real_call_site():
 #   D9 correlations: concerns/findings flat indexes and the per-component
 #      concerns/findings id-reference lists are NEW optional keys (P5-6), masked
 #      like D6; they are asserted directly in tests/test_correlations.py.
+#   D10 line-class taxonomy: stats.lines_by_class and stats.total_path_components
+#      are NEW stats keys (owner line-count policy 2026-08-17) that did not exist
+#      when the snapshot was frozen, masked like D6. The taxonomy itself is
+#      asserted directly in test_lines_by_class_taxonomy below.
 
 _JUSTIFIED_COMPONENT_KEYS = {"testing"}          # D4
 _JUSTIFIED_REL_KEYS = {"evidence", "confidence", "origin"}  # D3
@@ -182,6 +186,8 @@ def _mask(arch: dict) -> dict:
     a.pop("symbols", None)      # D1/D2
     a.get("stats", {}).pop("total_symbols", None)           # D5
     a.get("stats", {}).pop("total_symbols_detected", None)  # D5
+    a.get("stats", {}).pop("lines_by_class", None)          # D10
+    a.get("stats", {}).pop("total_path_components", None)   # D10
     return a
 
 

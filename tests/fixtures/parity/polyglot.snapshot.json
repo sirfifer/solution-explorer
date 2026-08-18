@@ -195,7 +195,9 @@
             "architecture_notes": null,
             "changelog": null,
             "claude_md": null,
-            "env_vars": [],
+            "env_vars": [
+              "DATABASE_URL"
+            ],
             "key_decisions": [],
             "patterns": [],
             "purpose": "HTTP API service for the polyglot fixture",
