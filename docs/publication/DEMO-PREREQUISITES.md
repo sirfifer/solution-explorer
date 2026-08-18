@@ -4,6 +4,13 @@ Written 2026-08-18, after a review of the demo program plan against the actual
 state of the code. Companion to `DEMO-PROGRAM.md`. This is analysis; nothing
 here is built.
 
+## Status, 2026-08-18
+
+**All six prerequisites are built.** What remains before demo 1 starts is not
+construction: the calibration run of the comprehension review against UnaMentis
+(which turns the B+ into a number and proves the instrument), the Cloudflare
+project and passcode for the preview gate, and the pre-flight measurement pass.
+
 ## The short version
 
 Six prerequisites, one of which is bigger than the two the owner named. Neither
@@ -206,7 +213,7 @@ undiscoverable to anyone else. Options are a repo directory, git-lfs, or leaving
 it local with a pointer committed. Not urgent, but it should not stay
 undecided.
 
-### P3. The `publication.json` publish gate
+### P3. The `publication.json` publish gate. DONE 2026-08-18 (PR #97)
 
 `PUBLICATION-METADATA.md` design rule 2 says the deploy paths "fail loudly when
 `publication.json` is missing or invalid, and the error names the boilerplate to
@@ -220,28 +227,46 @@ not-affiliated banner, no upstream license line, no snapshot provenance. For a
 public map of a codebase we do not own, that banner is the entire legal and
 ethical framing, and its absence would be silent.
 
-Effort: half a day. A schema validator plus a gate in the deploy path plus a
-test that the gate bites.
+**Built:** `scripts/validate-publication.py`, stdlib-only so it runs inside
+`action.yml` (which installs almost nothing), with full JSON Schema validation
+layered on where `jsonschema` happens to exist and a test cross-checking the
+hardcoded contract against the schema file so they cannot drift. Wired into
+`action.yml` behind `require-publication` and `build.sh` behind
+`SE_REQUIRE_PUBLICATION`. Beyond the schema it enforces the obligations the
+schema cannot express: a non-owner publication must say it is unofficial, name
+the upstream license and repository, and ship the upstream license TEXT.
+Default warns when absent so the live installs keep deploying; `--require` makes
+absence fatal and is what demo publishes use; an INVALID file always fails.
 
-### P4. The comprehension review as a reproducible instrument
+### P4. The comprehension review as a reproducible instrument. DONE 2026-08-18 (PR #97)
 
 The owner's explicit ask, and the right one. Detail in section 4 below.
 
-Effort: one to one and a half days to design and write the charter, rubric and
-procedure. The first real run is the demo-1 work itself. The calibration run on
-UnaMentis (P1 step 3) is another half day to a day.
+**Built:** `docs/quality/COMPREHENSION-REVIEW.md` (versioned charter, personas,
+rules of engagement, enumerated outputs, the question battery, the answer-key
+method, the rubric, the subject-difficulty profile, and the retro rules), plus
+`scorecard.schema.json` and `scripts/comprehension-score.py`. The tool enforces
+the rules rather than documenting them: a run is the SET of persona scores and
+never their average, a score without evidence is refused, trust incidents are
+counted and never scored away, comparing across charter versions is refused
+until an offset run exists, and comparing different subjects is flagged.
 
-### P5. License review and upstream LICENSE shipping
+Still owed: the first real run. The calibration run on UnaMentis post-merge (P1
+step 3) is the next action and is what turns the B+ into a number.
+
+### P5. License review and upstream LICENSE shipping. DONE 2026-08-18 (PR #97)
 
 The license review that `DISCLOSURE-POLICY.md` has referenced since July does not
 exist. And the viewer renders upstream README, CLAUDE.md and documentation
 excerpts, so a deployed demo redistributes third-party copyrighted text, which
 MIT, BSD and Apache-2.0 all permit and all require the notice to accompany.
 
-Effort: half a day. A per-subject checklist, plus a harness step that copies the
-upstream LICENSE into the bundle and a gate that fails without it.
+**Built:** `docs/publication/LICENSE-REVIEW.md`, and the dangling cross-reference
+in `DISCLOSURE-POLICY.md` now resolves. The mechanical half is enforced rather
+than remembered: publishing a non-owner subject without `UPSTREAM-LICENSE.txt` in
+the bundle fails the publish gate.
 
-### P6. Private-preview gating that is not theater
+### P6. Private-preview gating that is not theater. DONE 2026-08-18 (PR #97)
 
 The owner wants demo 1 up but not public until confident. `DISCLOSURE-POLICY.md`
 already specifies how: Cloudflare Access (email allowlist or one-time PIN) or a
@@ -249,7 +274,19 @@ passcode enforced server-side by a Pages Function, and it explicitly rules out
 client-side-only gating as theater. That gate has to exist before demo 1
 deploys, not after.
 
-Effort: half a day, mostly Cloudflare configuration.
+**Built:** `infrastructure/preview-gate/_middleware.js`, a Pages Function that
+runs before any asset is served, so an ungated request never receives the
+architecture data. Fails closed with no passcode configured. Sessions are
+HMAC-signed over their expiry keyed by the passcode, so they cannot be forged or
+self-extended, and rotating the passcode revokes every outstanding session.
+Constant-time comparison, `noindex` on every response, and the gate page states
+the unofficial framing before anyone enters anything. 12 tests under Node's own
+runner, each asserting the asset handler was never called rather than that the
+response looked like a login; wired into CI with the CI gate depending on it.
+
+Still owed, and it needs the owner's Cloudflare account: creating the Pages
+project and setting the `PREVIEW_PASSCODE` secret. Cloudflare Access is the
+stronger option where the audience is known and is documented as the default.
 
 ---
 
@@ -412,9 +449,9 @@ pattern is set.
 |---|---|---|
 | ~~P2 rescue the persona corpus~~ | done | Copied and verified 2026-08-18 |
 | ~~P1 merge, re-baseline goldens, redeploy UnaMentis~~ | done | PR #96, CI green, both baselines re-approved after review |
-| P4 write the comprehension review charter and rubric | 1 to 1.5 days | Can run in parallel with P1 |
+| ~~P4 charter, schema and scoring tool~~ | done | PR #97 |
 | Calibration run: comprehension review v1 on UnaMentis, post-merge | 0.5 to 1 day | Validates the instrument and the nine fixes at once |
-| P3 publication gate, P5 license review, P6 private-preview gate | 1.5 days | Parallelizable |
+| ~~P3 publication gate, P5 license review, P6 private-preview gate~~ | done | PR #97 |
 | D0 pre-flight and the three-subject recon | 1 day | Ends with real numbers and the harness design settled |
 
 About five to seven working days before demo 1 starts, assuming the calibration
