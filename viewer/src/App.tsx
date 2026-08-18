@@ -195,6 +195,18 @@ export function App() {
     setSummaryExpanded(expanded);
     setStoredValue("arch-summary-expanded", expanded, localStorage);
   }, []);
+  // One detail/review panel instance per form factor (S4): matches the lg:
+  // breakpoint the panel classes already use.
+  const [isDesktopViewport, setIsDesktopViewport] = useState(
+    () => typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onChange = (e: MediaQueryListEvent) => setIsDesktopViewport(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   const bannerCritical = useMemo(
     () => (architecture ? collectCriticalComponents(architecture) : []),
     [architecture],
@@ -985,8 +997,11 @@ export function App() {
           </div>
         </main>
 
-        {/* Detail / Review panel - desktop */}
-        {(activePanel === "detail" || activePanel === "review") && (
+        {/* Detail / Review panel - desktop. Mounted only at desktop widths:
+            mounting both this and the bottom sheet duplicated every control in
+            the DOM (two Copy All buttons, two independent Clear All confirm
+            states; comprehension-study S4). */}
+        {isDesktopViewport && (activePanel === "detail" || activePanel === "review") && (
           <aside
             className={`
               hidden lg:flex flex-col shrink-0 border-l relative
@@ -1028,7 +1043,7 @@ export function App() {
         )}
 
         {/* Detail / Review panel - mobile bottom sheet */}
-        {(activePanel === "detail" || activePanel === "review") && (
+        {!isDesktopViewport && (activePanel === "detail" || activePanel === "review") && (
           <MobileBottomSheet
             darkMode={darkMode}
             activePanel={activePanel}

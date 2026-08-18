@@ -19,7 +19,7 @@ import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
 import { getLens, capabilityCountsByComponent, ruleCountsByComponent, type CapabilityKindCounts, type RuleKindCounts } from "../lenses";
-import type { Relationship } from "../types";
+import type { Component, Relationship } from "../types";
 
 const nodeTypes: NodeTypes = {
   component: ComponentNode,
@@ -46,6 +46,7 @@ export function ArchitectureGraph() {
     getLensGraph,
     selectComponent,
     navigateToBreadcrumb,
+    drillInto,
     drillUp,
     setMobileChromeHidden,
   } = useArchStore();
@@ -463,6 +464,22 @@ export function ArchitectureGraph() {
     selectComponent(null);
   }, [selectComponent]);
 
+  // Double-click drill at the React Flow level (comprehension-study S5). The
+  // node div's own onDoubleClick is swallowed by the node wrapper's
+  // drag/selection handling often enough that the tour-taught gesture read as
+  // broken, and the default double-click ZOOM made it worse ("zooms instead
+  // of drilling"). zoomOnDoubleClick is off below for the same reason.
+  const onNodeDoubleClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (node.type === "aggregate") return;
+      const comp = (node.data as { component?: Component })?.component;
+      if (comp && (comp.children.length > 0 || comp.files.length > 0)) {
+        drillInto(comp);
+      }
+    },
+    [drillInto],
+  );
+
   return (
     <div className="w-full h-full relative">
       <ReactFlow
@@ -471,10 +488,12 @@ export function ArchitectureGraph() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onPaneClick={onPaneClick}
         onMoveStart={onMoveStart}
         onMoveEnd={onMoveEnd}
         nodeTypes={nodeTypes}
+        zoomOnDoubleClick={false}
         fitView
         minZoom={0.1}
         maxZoom={2}

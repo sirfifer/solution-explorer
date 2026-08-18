@@ -640,7 +640,13 @@ function buildBreadcrumbs(components: Component[], targetId: string): Breadcrumb
   }
 
   search(components, []);
-  return trail;
+  // Collapse an immediately repeated name (comprehension-study S8): a repo
+  // whose root directory shares its name renders "Home / unamentis /
+  // unamentis / server", which reads as a bug. The deeper crumb is kept so
+  // clicking it still navigates to the real component.
+  return trail.filter(
+    (crumb, i) => i === 0 || crumb.name !== trail[i - 1].name,
+  );
 }
 
 // Persist the current in-memory annotations for the loaded architecture's
@@ -967,18 +973,17 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     }
     const comp = findComponent(arch.components, id);
     if (comp) {
-      if (get().reviewMode) {
-        set({
-          selectedComponentId: id,
-          annotatingComponentId: id,
-        });
-      } else {
-        set({
-          selectedComponentId: id,
-          detailItem: { type: "component", data: comp },
-          activePanel: "detail",
-        });
-      }
+      // Selection always shows the component's details, review mode included
+      // (comprehension-study S4: review mode used to withhold the panel, so
+      // tree and node clicks appeared dead and the Review Summary owned the
+      // right rail). In review mode the selection additionally becomes the
+      // annotation target; the Review button reopens the summary.
+      set({
+        selectedComponentId: id,
+        detailItem: { type: "component", data: comp },
+        activePanel: "detail",
+        ...(get().reviewMode ? { annotatingComponentId: id } : {}),
+      });
       // Predictive prefetch: warm the detail shards the user is most likely to
       // open next (children + breadcrumb ancestors) at idle time (P6-4).
       get().prefetchDetails(id);
