@@ -45,6 +45,10 @@ inputs:
     description: 'Name for the uploaded build artifact. Override when a caller repo also runs the reference workflow to avoid a collision.'
     required: false
     default: 'architecture-viz'
+  require-publication:
+    description: 'Fail the build when publication.json is missing or invalid. A deployed viewer is a publication, and for a codebase you do not own that sidecar carries the unofficial framing, the upstream license and the exact commit. Default false warns loudly instead of failing, so existing installs keep deploying; set true for any public demo of a codebase you do not own. An INVALID publication.json always fails, either way.'
+    required: false
+    default: 'false'
   diff-against-url:
     description: 'Opt-in two-slot health check (card G3). When set to the URL of your currently-live (blue) projection JSON (for example https://<cf-project>.pages.dev/architecture.json, or the split manifest.json), the just-built (green) projection is diffed against it and the report is written to the job step summary plus a projection-diff.json artifact. Non-blocking: a fetch or diff failure never fails the deploy. Default empty = skipped, zero behavior change.'
     required: false
@@ -154,6 +158,26 @@ runs:
         else
           echo "Using pre-built data, skipping merge"
         fi
+
+    - name: Validate Publication Metadata
+      shell: bash
+      env:
+        REQUIRE_PUBLICATION: ${{ inputs.require-publication }}
+      run: |
+        # A deployed viewer is a publication (docs/publication/PUBLICATION-METADATA.md).
+        # The sidecar carries the publisher, the exact snapshot, the disclaimers
+        # and, for a codebase we do not own, the unofficial-and-not-affiliated
+        # framing plus the upstream license. Its absence is otherwise silent.
+        PUBLIC_DIR=".solution-explorer/viewer/public"
+        if [ -f "publication.json" ] && [ ! -f "$PUBLIC_DIR/publication.json" ]; then
+          echo "Found publication.json in the repository root; copying it into the bundle."
+          cp publication.json "$PUBLIC_DIR/publication.json"
+        fi
+        ARGS="$PUBLIC_DIR"
+        if [ "$REQUIRE_PUBLICATION" = "true" ]; then
+          ARGS="$ARGS --require"
+        fi
+        python3 .solution-explorer/scripts/validate-publication.py $ARGS
 
     - name: Build Viewer
       shell: bash

@@ -61,7 +61,7 @@ publish of a codebase we do not own or maintain.
 
 ## What this policy is not
 
-It is not a legal shield (the license review in the showcase program does that
-work), not a security disclosure program (we do not hunt vulnerabilities), and not
-an approval process for demos of our own projects, which need only the default
-boilerplate and our normal gates.
+It is not a legal shield (the license review does that work, and now exists:
+`LICENSE-REVIEW.md` in this directory), not a security disclosure program (we do
+not hunt vulnerabilities), and not an approval process for demos of our own
+projects, which need only the default boilerplate and our normal gates.
