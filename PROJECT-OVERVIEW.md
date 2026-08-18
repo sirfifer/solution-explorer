@@ -188,9 +188,9 @@ How it works:
 
 | Tier | Languages | Capabilities |
 |------|-----------|-------------|
-| **Full parsing (regex)** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby | Components, symbols, relationships, frameworks, API endpoints |
-| **Full parsing (tree-sitter)** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby | Same as above, with more accurate AST-based extraction |
-| **Detection + metrics** | Java, Kotlin, C/C++, C#, Dart, Vue, Svelte, HTML/CSS, SQL, Shell | File counts, line counts, size, language breakdown |
+| **Full parsing (regex)** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby, Java, C#, C/C++ | Components, symbols, relationships, frameworks, API endpoints |
+| **Full parsing (tree-sitter)** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby, Java, C#, C/C++ | Same as above, with more accurate AST-based extraction |
+| **Detection + metrics** | Kotlin, Dart, Vue, Svelte, HTML/CSS, SQL, Shell | File counts, line counts, size, language breakdown |
 
 **SwiftUI flow detection** is a specialized capability. The SwiftUIFlowDetector identifies TabView tabs, NavigationLink targets, sheet and fullScreenCover modals, and embedded view composition. It uses distance-based breadth-first search to assign screens to their closest tab, preventing contamination across navigation hierarchies. The result is a faithful representation of an iOS app's navigation structure rendered as navigable nodes in the viewer.
 

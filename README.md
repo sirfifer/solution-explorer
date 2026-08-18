@@ -159,8 +159,8 @@ pip install -e ".[all]"          # Everything above
 
 | Tier | Languages | What's Extracted |
 |------|-----------|-----------------|
-| **Full parsing** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby | Components, symbols, relationships, frameworks, API endpoints |
-| **Detection + metrics** | Java, Kotlin, C/C++, C#, Dart, Vue, Svelte, HTML/CSS, SQL, Shell | File counts, line counts, size, language breakdown |
+| **Full parsing** | Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby, Java, C#, C/C++ | Components, symbols, relationships, frameworks, API endpoints |
+| **Detection + metrics** | Kotlin, Dart, Vue, Svelte, HTML/CSS, SQL, Shell | File counts, line counts, size, language breakdown |
 
 ### What It Detects
 
