@@ -56,6 +56,7 @@ import {
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
 import { dataUrl } from "./utils/dataSource";
+import { rollUpRelationships } from "./utils/relationshipRollup";
 import {
   architectureIdentity,
   loadAnnotations,
@@ -2129,8 +2130,14 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     const visible = get().getVisibleComponents();
     const visibleIds = new Set(visible.map((c) => c.id));
 
-    return architecture.relationships.filter(
-      (r) => visibleIds.has(r.source) && visibleIds.has(r.target)
+    // Roll edges up to their nearest visible ancestors (S1): an edge between
+    // descendants of two visible nodes draws between those nodes instead of
+    // silently dropping, so the client-to-server wiring is present at the
+    // level every visitor starts on. Exact-id edges pass through unchanged.
+    return rollUpRelationships(
+      architecture.relationships,
+      architecture.components,
+      visibleIds
     );
   },
 

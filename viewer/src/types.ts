@@ -519,6 +519,11 @@ export interface Relationship {
   queue_name?: string;
   connection_pattern?: string;
   ai_enhance?: RelationshipAIEnhance;
+  // Present only on viewer-side aggregated edges (S1 roll-up): edges between
+  // descendants of visible nodes drawn at the visible level. `count` is how
+  // many deep edges were folded in; `pairs` lists up to twelve of their real
+  // endpoint ids for provenance display. Never emitted by the analyzer.
+  rolled_up?: { count: number; pairs: Array<{ source: string; target: string }> };
 }
 
 // Coverage ledger (optional, present only for v2 single-repo projections).

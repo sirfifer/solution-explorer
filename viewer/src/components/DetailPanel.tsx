@@ -11,6 +11,7 @@ import {
   getRoleBadgeColors,
 } from "../utils/layout";
 import { getSourceUrl } from "../utils/sourceLinks";
+import { boundaryRelationships } from "../utils/relationshipRollup";
 import { parseUrlState, replaceUrlState } from "../utils/urlState";
 import { CodePreview } from "./CodePreview";
 import { VirtualList } from "./VirtualList";
@@ -214,13 +215,22 @@ function ComponentDetail({
     () => getComponentSymbols(component.id),
     [component.id, getComponentSymbols, detailCacheEntry],
   );
-  const relationships = useMemo(
-    () =>
-      architecture?.relationships.filter(
-        (r) => r.source === component.id || r.target === component.id,
-      ) || [],
-    [architecture, component.id],
-  );
+  // Boundary roll-up (S1): include every edge crossing this component's
+  // subtree boundary, not just edges naming the component id exactly. Before
+  // this, the iOS client's Links tab hid the WebSocket/HTTP edges its deep
+  // service modules make to the management server, while the server's own tab
+  // showed them; both sides now tell the same story.
+  const { relationships, relationshipSubtree } = useMemo(() => {
+    if (!architecture) {
+      return { relationships: [], relationshipSubtree: new Set<string>() };
+    }
+    const { relationships: rels, subtree } = boundaryRelationships(
+      architecture.relationships,
+      architecture.components,
+      component.id,
+    );
+    return { relationships: rels, relationshipSubtree: subtree };
+  }, [architecture, component.id]);
 
   const docs = component.docs;
   // The Docs tab presence predicate must match EXACTLY what DocsTab renders
@@ -477,7 +487,11 @@ function ComponentDetail({
           />
         )}
         {activeTab === "ai" && (
-          <AIInsightsTab component={component} relationships={relationships} />
+          <AIInsightsTab
+            component={component}
+            relationships={relationships}
+            subtree={relationshipSubtree}
+          />
         )}
         {activeTab === "testing" && component.testing && (
           <TestingTab component={component} />
@@ -486,7 +500,11 @@ function ComponentDetail({
           <StatusTab statuses={component.live_status.statuses} />
         )}
         {activeTab === "relationships" && (
-          <RelationshipsTab componentId={component.id} relationships={relationships} />
+          <RelationshipsTab
+            componentId={component.id}
+            relationships={relationships}
+            subtree={relationshipSubtree}
+          />
         )}
         {activeTab === "actions" && component.actions && (
           <ActionsTab actions={component.actions} />
@@ -1680,17 +1698,31 @@ function DataTab({ component }: { component: Component }) {
 function AIInsightsTab({
   component,
   relationships,
+  subtree,
 }: {
   component: Component;
   relationships: Relationship[];
+  subtree?: Set<string>;
 }) {
   const { darkMode } = useArchStore();
   const ai = component.ai_enhance;
   if (!ai) return null;
 
   const roleMeta = ai.architectural_role ? ROLE_META[ai.architectural_role] : null;
-  const incomingCount = relationships.filter((r) => r.target === component.id).length;
-  const outgoingCount = relationships.filter((r) => r.source === component.id).length;
+  // Same subtree-membership direction rule as the Links tab (S1), so the two
+  // surfaces never disagree about connection counts.
+  const inSubtree = (id: string) =>
+    subtree ? subtree.has(id) : id === component.id;
+  const incomingCount = relationships.filter((r) =>
+    inSubtree(r.target) && !inSubtree(r.source)
+      ? true
+      : inSubtree(r.source) && inSubtree(r.target) && r.target === component.id,
+  ).length;
+  const outgoingCount = relationships.filter((r) =>
+    inSubtree(r.source) && !inSubtree(r.target)
+      ? true
+      : inSubtree(r.source) && inSubtree(r.target) && r.source === component.id,
+  ).length;
 
   return (
     <div className="p-4 space-y-4">
@@ -2032,18 +2064,41 @@ function TestingTab({ component }: { component: Component }) {
 function RelationshipsTab({
   componentId,
   relationships,
+  subtree,
 }: {
   componentId: string;
   relationships: Relationship[];
+  subtree?: Set<string>;
 }) {
   const { darkMode, selectComponent, getComponentById } = useArchStore();
 
-  const incoming = relationships.filter((r) => r.target === componentId);
-  const outgoing = relationships.filter((r) => r.source === componentId);
+  // Direction by subtree membership (S1): a boundary-crossing edge whose deep
+  // endpoint lives inside this component is outgoing from it, even though the
+  // edge names the descendant. Without a subtree (legacy callers), fall back
+  // to exact-id classification.
+  const inSubtree = (id: string) =>
+    subtree ? subtree.has(id) : id === componentId;
+  const incoming = relationships.filter(
+    (r) => inSubtree(r.target) && !inSubtree(r.source),
+  );
+  const outgoing = relationships.filter(
+    (r) => inSubtree(r.source) && !inSubtree(r.target),
+  );
+  // Edges wholly inside the subtree that name the component directly (its own
+  // links to its children) keep their pre-roll-up placement.
+  const internal = relationships.filter(
+    (r) => inSubtree(r.source) && inSubtree(r.target),
+  );
+  const internalOutgoing = internal.filter((r) => r.source === componentId);
+  const internalIncoming = internal.filter((r) => r.target === componentId);
 
   const RelRow = ({ rel, direction }: { rel: Relationship; direction: "in" | "out" }) => {
     const otherId = direction === "in" ? rel.source : rel.target;
     const other = getComponentById(otherId);
+    // The endpoint on OUR side of a boundary-crossing edge; shown as a "via"
+    // hint when it is a descendant rather than the component itself.
+    const nearId = direction === "in" ? rel.target : rel.source;
+    const near = nearId !== componentId ? getComponentById(nearId) : null;
     const typeColors: Record<string, string> = {
       import: darkMode ? "text-zinc-400" : "text-zinc-600",
       http: darkMode ? "text-blue-400" : "text-blue-600",
@@ -2079,6 +2134,11 @@ function RelationshipsTab({
           </span>
           <span className={`flex-1 truncate ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
             {other?.name || otherId}
+            {near && (
+              <span className={`ml-1.5 text-[10px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                via {near.name}
+              </span>
+            )}
           </span>
           {(() => {
             const protoRef = getProtocolRef(rel.protocol || rel.type);
@@ -2208,33 +2268,36 @@ function RelationshipsTab({
     );
   };
 
+  const allOutgoing = [...outgoing, ...internalOutgoing];
+  const allIncoming = [...incoming, ...internalIncoming];
+
   return (
     <div className="p-3 space-y-4">
-      {outgoing.length > 0 && (
+      {allOutgoing.length > 0 && (
         <div>
           <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-            Outgoing ({outgoing.length})
+            Outgoing ({allOutgoing.length})
           </h4>
           <div className="space-y-1">
-            {outgoing.map((rel, i) => (
+            {allOutgoing.map((rel, i) => (
               <RelRow key={i} rel={rel} direction="out" />
             ))}
           </div>
         </div>
       )}
-      {incoming.length > 0 && (
+      {allIncoming.length > 0 && (
         <div>
           <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-            Incoming ({incoming.length})
+            Incoming ({allIncoming.length})
           </h4>
           <div className="space-y-1">
-            {incoming.map((rel, i) => (
+            {allIncoming.map((rel, i) => (
               <RelRow key={i} rel={rel} direction="in" />
             ))}
           </div>
         </div>
       )}
-      {incoming.length === 0 && outgoing.length === 0 && (
+      {allIncoming.length === 0 && allOutgoing.length === 0 && (
         <div className={`text-center py-8 text-sm ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
           No relationships detected
         </div>
