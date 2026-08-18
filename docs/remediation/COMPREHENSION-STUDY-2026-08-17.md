@@ -327,11 +327,25 @@ pushed; `main` is untouched.
 | S8 headline numbers, breadcrumb | Fixed | Code/data/docs/config taxonomy in header; breadcrumb dedup |
 | S9 help Escape, banner restore | Fixed | Browser: Escape closes help; "Show summary" restore |
 
-Deliberately NOT fixed, and why:
+Aggregation (the drill-level visibility rule) was investigated properly after
+the first report and turned out to be worse than a readability nuisance: the
+rule used SIZE as a proxy for IMPORTANCE ("not a hero type, no children, fewer
+than ten files"), which on the iOS client buried 31 of 44 children behind one
+box, ten of them tagged critical (STT, LLM, Voice, Session, Context,
+Curriculum, Config, Models, Protocols). Expanding put 45 nodes on the canvas at
+minimum zoom, 7px tall. Owner decision 2026-08-17 (options A + B, with the node
+count adjusting to the viewport rather than a fixed number), now implemented:
+visibility ranked by criticality then connections then size with hero types
+always shown; the node count derived from the actual canvas and remeasured on
+every change; a bounded shrink-only loop that measures the zoom each layout
+achieved and reduces the budget until readable; and aggregate expansion opening
+a ranked, filterable member list in the panel instead of adding nodes. Measured
+after: laptop 7 nodes at 0.72 zoom (179x79px), large display 10 nodes at 1.01
+zoom (251x97px). Known remaining case: a phone shows 8 hero nodes at 0.23 zoom,
+because heroes are never aggregated; the two ways to close it are in the
+decision document.
 
-- **Aggregate expansion readability.** `fitView` already runs on expansion, so
-  there is no missing auto-fit; ~50 tiny nodes at once is a graph-density
-  design problem that needs a real design decision, not a patch.
+Deliberately NOT fixed, and why:
 - **The console `querySelector` SyntaxError.** Not reproducible from any call
   site in `viewer/src`; it appears to originate in a dependency. Chasing it
   without a reproduction would be guesswork.
