@@ -41,6 +41,7 @@ from .prompts import (
     build_concern_name_prompt,
     build_edge_verify_prompt,
     build_finding_verify_prompt,
+    build_identity_verify_prompt,
     build_intent_conformance_prompt,
     build_intent_proposal_prompt,
 )
@@ -686,6 +687,183 @@ def verify_findings(
                 store.set_finding_verification(f["id"], new_status)
                 outcome.status = "done"
                 outcome.verdict = verdict
+            report.outcomes.append(outcome)
+        report.total_cost_usd = sum(o.cost_usd for o in report.outcomes)
+        store.commit()
+        return _finalize(report, config)
+    finally:
+        store.close()
+
+
+# --- S2 identity gate: verify published component identity --------------------
+
+_IDENTITY_FIELDS = ("name", "type", "framework", "port")
+_IDENTITY_STATUSES = frozenset({"confirmed", "corrected", "uncertain"})
+# Hero types plus infrastructure: the identities whose wrongness misleads a
+# newcomer hardest, and the promotion outputs the S2 guards cannot judge
+# statically. Components without any of the promotion signals are skipped: a
+# plain module named after its directory has nothing to get wrong.
+_IDENTITY_TARGET_TYPES = frozenset({
+    "ios-client", "android-client", "mobile-client", "web-client",
+    "api-server", "watch-app", "desktop-app", "cli-tool", "service",
+    "infrastructure",
+})
+
+
+def _identity_targets(comp_index: dict[str, dict]) -> list[dict]:
+    """Components whose published identity carries verifiable claims."""
+    out = []
+    for comp_id in sorted(comp_index):
+        comp = comp_index[comp_id]
+        docs = comp.get("docs") or {}
+        if (
+            comp.get("type") in _IDENTITY_TARGET_TYPES
+            or comp.get("port")
+            or comp.get("framework")
+            or docs.get("api_endpoints")
+        ):
+            out.append(comp)
+    return out
+
+
+def _identity_facts(comp: dict) -> dict:
+    """Compact evidence block for the identity prompt, from projected facts."""
+    docs = comp.get("docs") or {}
+    ai = comp.get("ai_enhance") or {}
+    endpoints = docs.get("api_endpoints") or []
+    return {
+        "file_sample": (comp.get("files") or [])[:15],
+        "file_count": len(comp.get("files") or []),
+        "config_files": comp.get("config_files") or [],
+        "endpoint_count": len(endpoints),
+        "endpoint_sample": endpoints[:5],
+        "env_vars": (docs.get("env_vars") or [])[:10],
+        "purpose": docs.get("purpose") or None,
+        "patterns": docs.get("patterns") or [],
+        "prose": {
+            "help_text": ai.get("help_text"),
+            "description": ai.get("description"),
+        },
+    }
+
+
+def _validate_identity(obj: dict) -> list[str]:
+    fields = obj.get("fields")
+    if not isinstance(fields, dict):
+        return ['"fields" must be an object']
+    errs: list[str] = []
+    for fname in _IDENTITY_FIELDS:
+        entry = fields.get(fname)
+        if not isinstance(entry, dict):
+            errs.append(f'fields.{fname} is required')
+            continue
+        status = entry.get("status")
+        if status not in _IDENTITY_STATUSES:
+            errs.append(
+                f"fields.{fname}.status must be one of {sorted(_IDENTITY_STATUSES)}"
+            )
+            continue
+        if status == "corrected":
+            if entry.get("value") in (None, ""):
+                errs.append(f"fields.{fname}: corrected requires a value")
+            if not (entry.get("reason") or "").strip():
+                errs.append(f"fields.{fname}: corrected requires a reason")
+            evidence = entry.get("evidence")
+            if not (isinstance(evidence, dict) and evidence.get("file")):
+                errs.append(f"fields.{fname}: corrected requires evidence.file")
+        if status == "uncertain" and not (entry.get("reason") or "").strip():
+            errs.append(f"fields.{fname}: uncertain requires a reason")
+    extra = set(fields) - set(_IDENTITY_FIELDS)
+    if extra:
+        errs.append(f"unknown fields: {sorted(extra)}")
+    prose = obj.get("prose_issues")
+    if prose is not None:
+        if not isinstance(prose, list):
+            errs.append('"prose_issues" must be a list')
+        else:
+            for i, issue in enumerate(prose):
+                if not (
+                    isinstance(issue, dict)
+                    and (issue.get("claim") or "").strip()
+                    and (issue.get("fact") or "").strip()
+                ):
+                    errs.append(f"prose_issues[{i}] needs claim and fact")
+    return errs
+
+
+def verify_identity(
+    config: VerifyConfig, *, invoker: Optional[Invoker] = None, clock: Clock = iso_now
+) -> PassReport:
+    """Verify published component identities against store facts (S2 gate).
+
+    The owner's ruling (2026-08-17): identity is resolved or flagged, never
+    published as a guess. Confirmations stamp a verdict row; corrections carry
+    the corrected value with cited evidence and are applied at projection with
+    an ``identity_corrections`` provenance marker; uncertains become honest-gap
+    entries at projection. Prose contradictions (numbers in enrichment prose
+    that disagree with analyzer facts) ride the same row for the re-enrichment
+    loop.
+    """
+    if invoker is None:
+        invoker = ClaudeCliInvoker(model=config.model)
+    store = FactStore(str(config.store_path))
+    try:
+        arch, index = _prepare(store, config)
+        comp_index = _component_index(arch)
+        commit_sha = current_commit_sha(str(config.root))
+
+        candidates = _identity_targets(comp_index)
+        mode = "update" if config.update else "full"
+        targets = [
+            comp for comp in candidates
+            if _missing_or_stale(store, index, "identity-verdict", comp["id"])
+        ]
+        if config.max_targets is not None:
+            targets = targets[: config.max_targets]
+
+        report = PassReport(
+            pass_name="verify-identity", mode=mode, dry_run=config.dry_run,
+            target_count=len(targets),
+        )
+        report.notes.append(
+            f"{len(candidates)} identity-bearing component(s); "
+            f"{len(targets)} to verify"
+        )
+
+        if config.dry_run:
+            for comp in targets:
+                prompt = build_identity_verify_prompt(comp, _identity_facts(comp))
+                report.plan_preview.append(
+                    {"id": comp["id"], "prompt_chars": len(prompt)}
+                )
+            return _finalize(report, config)
+
+        for comp in targets:
+            prompt = build_identity_verify_prompt(comp, _identity_facts(comp))
+            obj, cost, errs = _invoke_json(invoker, prompt, _validate_identity)
+            outcome = TargetOutcome(id=comp["id"], status="failed", cost_usd=cost)
+            if obj is None:
+                outcome.errors = errs
+            else:
+                payload = {
+                    "fields": obj["fields"],
+                    "prose_issues": obj.get("prose_issues") or [],
+                }
+                stamp_enrichment(
+                    store, "identity-verdict", comp["id"], payload,
+                    digest_index=index, commit_sha=commit_sha, clock=clock,
+                )
+                statuses = {
+                    f: (obj["fields"].get(f) or {}).get("status")
+                    for f in _IDENTITY_FIELDS
+                }
+                if "corrected" in statuses.values():
+                    outcome.verdict = "corrected"
+                elif "uncertain" in statuses.values():
+                    outcome.verdict = "uncertain"
+                else:
+                    outcome.verdict = "confirmed"
+                outcome.status = "done"
             report.outcomes.append(outcome)
         report.total_cost_usd = sum(o.cost_usd for o in report.outcomes)
         store.commit()

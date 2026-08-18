@@ -26,11 +26,12 @@ from .passes import (
     name_concerns,
     verify_edges,
     verify_findings,
+    verify_identity,
 )
 
 DEFAULT_STORE_RELPATH = Path(".solution-explorer") / "index.db"
 
-_VERIFY_TARGETS = ("edges", "intents", "findings", "all")
+_VERIFY_TARGETS = ("edges", "intents", "findings", "identity", "all")
 _NAME_TARGETS = ("concerns", "all")
 
 
@@ -129,6 +130,8 @@ def verify_main(argv: list[str]) -> int:
         )))
     if want in ("findings", "all"):
         reports.append(verify_findings(_config(args, root, store_path)))
+    if want in ("identity", "all"):
+        reports.append(verify_identity(_config(args, root, store_path)))
     return _run_and_report(reports)
 
 
