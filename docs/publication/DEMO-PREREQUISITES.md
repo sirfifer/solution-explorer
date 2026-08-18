@@ -109,7 +109,7 @@ second language before filing is what stopped a false finding.
 
 ## 3. The prerequisites
 
-### P1. Merge `wt/comprehension-fixes` (the big one)
+### P1. Merge `wt/comprehension-fixes`. DONE 2026-08-18 (PR #96, squashed as fcdeab5)
 
 Fifteen commits sitting unmerged and unpushed: all nine trust defects from the
 cold-start study (S1 to S9), the aggregation rework, and double-tap snap zoom.
@@ -128,7 +128,32 @@ is clean: tsc clean, eslint clean, viewer 381 passed with the 86 pre-existing
 failures unchanged and the failing file set diffed identical, Python 1451 passed
 with the 3 documented pre-existing failures.
 
-It is not just a merge, though. Three attached steps:
+**Outcome.** Merged with full CI green: Python tests, viewer tests, both golden
+diffs, GUI plan completeness, SBOM, build, lint and types. Three things surfaced
+during the merge that were worth more than the merge itself:
+
+1. **A false-finding regression, caught by the golden corpus and fixed.** The S2
+   identity guards stop test directories being promoted to hero types, and
+   FastAPI's tree carried 81 of them. But `_unreferenced_findings` skipped those
+   directories only because "api-server" happens to be an entry type, so fixing
+   the mislabel removed an accidental exclusion and produced 68 new bogus
+   "unreferenced" findings. The rule now recognises a test suite with the same
+   predicate the type guards use. Net effect on FastAPI: unreferenced findings go
+   DOWN, 7 to 3, clearing four that were already false in the old baseline.
+2. **A methodology trap worth remembering.** The first golden check ran in a venv
+   without tree-sitter. The analyzer falls back to regex parsers silently, and
+   the diff showed 989 phantom symbol losses and 5 phantom edges. The parity
+   snapshots are pinned to the tree-sitter tier and skip loudly on the regex lane,
+   which is correct, but it means a tree-sitter-less environment ALSO skips the
+   guard that catches snapshot drift. Two real failures were hidden that way.
+   Install `.[all,dev]` before trusting any local diff or test posture. The
+   earlier "1451 passed / 3 failed" posture in the handoff was measured in that
+   environment; the true figure is 1554 passed, 1 failed.
+3. **The GUI plan check caught the Inventory lens landing invisibly.** The S6
+   rollup surface added a panel and a lens with three subviews and registered none
+   of them. Covered now as case V5.7.
+
+It was not just a merge, though. Three attached steps:
 
 1. **Golden corpus re-baseline.** The branch changes `derive/pipeline.py`,
    `derive/roles.py`, `extract/entities.py`, `parsers/base.py` and
@@ -386,7 +411,7 @@ pattern is set.
 | Step | Effort | Note |
 |---|---|---|
 | ~~P2 rescue the persona corpus~~ | done | Copied and verified 2026-08-18 |
-| P1 merge the comprehension branch, re-baseline goldens, redeploy UnaMentis | 0.5 to 1 day | The largest single risk reduction available |
+| ~~P1 merge, re-baseline goldens, redeploy UnaMentis~~ | done | PR #96, CI green, both baselines re-approved after review |
 | P4 write the comprehension review charter and rubric | 1 to 1.5 days | Can run in parallel with P1 |
 | Calibration run: comprehension review v1 on UnaMentis, post-merge | 0.5 to 1 day | Validates the instrument and the nine fixes at once |
 | P3 publication gate, P5 license review, P6 private-preview gate | 1.5 days | Parallelizable |
