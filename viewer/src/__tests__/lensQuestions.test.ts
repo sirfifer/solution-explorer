@@ -32,7 +32,7 @@ function makeArchitecture(overrides: Partial<Architecture> = {}): Architecture {
 function resetStore() {
   useArchStore.setState({
     architecture: null, selectedComponentId: null, breadcrumbs: [],
-    drillLevel: null, expandedAggregates: {}, detailItem: null, activePanel: null,
+    drillLevel: null, detailItem: null, activePanel: null,
     lens: "structure", reviewMode: false,
   });
 }
@@ -86,11 +86,17 @@ const gestures: Record<string, () => void> = {
     const parent = makeComponent({ id: "app", type: "ios-client", children: [wrapper], files: [] });
     useArchStore.getState().setArchitecture(makeArchitecture({ components: [parent] }));
     useArchStore.getState().drillInto(parent);
+    // Overflow the viewport's node budget so something must aggregate.
+    useArchStore.setState({ nodeBudget: 1 });
     const aggs = useArchStore.getState().getAggregateNodes();
     expect(aggs.length).toBeGreaterThan(0);
-    // Expanding the aggregate reveals the grouped member in place.
-    useArchStore.getState().expandAggregate(aggs[0].id);
-    expect(useArchStore.getState().getVisibleComponents().map((c) => c.id)).toContain("helper");
+    // Opening the aggregate lists its members in the panel, where a row
+    // carries the name, purpose and criticality a canvas speck could not.
+    useArchStore.getState().toggleAggregate(aggs[0].id);
+    const item = useArchStore.getState().detailItem;
+    expect(item?.type).toBe("aggregate");
+    const members = (item?.data as { members: { id: string }[] }).members;
+    expect(members.map((m) => m.id)).toContain("helper");
   },
 
   locate: () => {

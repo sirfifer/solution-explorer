@@ -17,7 +17,13 @@ interface AggregateNodeProps {
 export const AggregateNode = memo(function AggregateNode({ data }: NodeProps) {
   const { aggregate } = data as AggregateNodeProps;
   const darkMode = useArchStore((s) => s.darkMode);
-  const expanded = useArchStore((s) => !!s.expandedAggregates[aggregate.id]);
+  // Expanded means "this aggregate's member list is the open panel". Derived
+  // rather than tracked separately so the node can never disagree with the
+  // panel (owner decision 2026-08-17: expansion opens a list, not more nodes).
+  const expanded = useArchStore(
+    (s) => s.detailItem?.type === "aggregate"
+      && (s.detailItem.data as AggregateNodeData).id === aggregate.id,
+  );
   const toggleAggregate = useArchStore((s) => s.toggleAggregate);
 
   const icon = TYPE_META[aggregate.aggregateType]?.icon ?? "▦"; // ▦

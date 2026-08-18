@@ -67,7 +67,7 @@ function makeUiArch(): Architecture {
 function resetStore() {
   useArchStore.setState({
     architecture: null, selectedComponentId: null, breadcrumbs: [],
-    drillLevel: null, expandedAggregates: {}, detailItem: null, activePanel: null,
+    drillLevel: null, detailItem: null, activePanel: null,
     lens: "structure", reviewMode: false, flowEntryId: null, flowStep: 0,
   });
 }

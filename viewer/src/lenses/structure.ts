@@ -31,8 +31,9 @@ export const STRUCTURE_QUESTIONS: LensQuestion[] = [
   },
   {
     id: "hidden",
-    question: "What small internal modules are grouped here?",
-    gesture: "Expand the aggregate node: its grouped members appear in place.",
+    question: "What else is here that did not fit on screen?",
+    gesture:
+      "Open the aggregate node: its members are listed in the panel, ranked by criticality then connections, each row navigating to that component.",
   },
   {
     id: "locate",

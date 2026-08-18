@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import type { Component, FileInfo, Symbol as ArchSymbol, Relationship, ComponentStatus, UIAction, Capability, DataEntity, EntityAccess, Evidence } from "../types";
+import type { Component, FileInfo, Symbol as ArchSymbol, Relationship, ComponentStatus, UIAction, Capability, DataEntity, EntityAccess, Evidence, AggregateNode as AggregateNodeData } from "../types";
 import { useArchStore } from "../store";
 import {
   getTypeColors,
@@ -125,6 +125,10 @@ export function DetailPanel() {
         setExpandedSymbol={setExpandedSymbol}
       />
     );
+  }
+
+  if (detailItem.type === "aggregate") {
+    return <AggregateDetail aggregate={detailItem.data as AggregateNodeData} />;
   }
 
   if (detailItem.type === "file") {
@@ -2481,6 +2485,114 @@ function SymbolDetail({ symbol }: { symbol: ArchSymbol }) {
               ))}
             </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// The ranked member list for an aggregate (owner decision 2026-08-17, option
+// B). Expanding an aggregate used to promote its members onto the canvas,
+// which took the iOS client's drill level to 45 nodes at minimum zoom where
+// each rendered 7px tall. A list instead: ranked the same way the canvas ranks
+// (criticality, then connections, then size), carrying the purpose and
+// criticality a speck could never show, and every row navigates.
+function AggregateDetail({ aggregate }: { aggregate: AggregateNodeData }) {
+  const { darkMode, navigateToComponent, closeDetail, architecture } = useArchStore();
+  const [filter, setFilter] = useState("");
+
+  const degree = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const rel of architecture?.relationships || []) {
+      if (rel.source === rel.target) continue;
+      map.set(rel.source, (map.get(rel.source) ?? 0) + 1);
+      map.set(rel.target, (map.get(rel.target) ?? 0) + 1);
+    }
+    return map;
+  }, [architecture]);
+
+  const rank = (c: Component) =>
+    c.ai_enhance?.criticality === "critical" ? 0
+      : c.ai_enhance?.criticality === "important" ? 1
+        : c.ai_enhance?.criticality === "supporting" ? 3 : 2;
+
+  const members = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    return [...aggregate.members]
+      .filter((c) => !q || c.name.toLowerCase().includes(q) || c.path.toLowerCase().includes(q))
+      .sort((a, b) =>
+        rank(a) - rank(b)
+        || (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0)
+        || b.files.length - a.files.length
+        || a.name.localeCompare(b.name),
+      );
+  }, [aggregate, filter, degree]);
+
+  const dot = (c: Component) =>
+    c.ai_enhance?.criticality === "critical" ? "bg-red-500"
+      : c.ai_enhance?.criticality === "important" ? "bg-amber-500"
+        : darkMode ? "bg-zinc-700" : "bg-zinc-300";
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className={`px-4 py-3 border-b shrink-0 ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <h2 className={`text-sm font-bold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
+              {aggregate.memberCount} more {aggregate.aggregateType}
+              {aggregate.memberCount !== 1 ? "s" : ""}
+            </h2>
+            <p className={`text-[11px] mt-0.5 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
+              Ranked by criticality, then connections. These did not fit the
+              canvas at a readable size.
+            </p>
+          </div>
+          <button
+            onClick={closeDetail}
+            className={`shrink-0 text-xs px-1.5 py-0.5 rounded ${darkMode ? "text-zinc-500 hover:bg-zinc-800" : "text-zinc-400 hover:bg-zinc-200"}`}
+            title="Close"
+          >
+            {"✕"}
+          </button>
+        </div>
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder={`Filter ${aggregate.memberCount} components...`}
+          className={`mt-2 w-full px-2 py-1 rounded text-xs outline-none border ${
+            darkMode
+              ? "bg-zinc-900 border-zinc-700 text-zinc-200 placeholder-zinc-600"
+              : "bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400"
+          }`}
+        />
+      </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+        {members.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => navigateToComponent(c.id)}
+            className={`w-full text-left px-2.5 py-2 rounded-lg ${darkMode ? "hover:bg-zinc-800/60" : "hover:bg-zinc-100"}`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${dot(c)}`} />
+              <span className={`text-sm font-medium truncate ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+                {c.name}
+              </span>
+              <span className={`ml-auto shrink-0 text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                {c.files.length} file{c.files.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            {(c.ai_enhance?.description || c.docs?.purpose) && (
+              <div className={`text-[11px] mt-0.5 line-clamp-2 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
+                {c.ai_enhance?.description || c.docs?.purpose}
+              </div>
+            )}
+          </button>
+        ))}
+        {members.length === 0 && (
+          <p className={`text-center text-xs py-6 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            Nothing matches "{filter}".
+          </p>
         )}
       </div>
     </div>

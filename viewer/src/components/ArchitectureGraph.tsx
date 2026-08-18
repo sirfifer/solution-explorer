@@ -14,7 +14,7 @@ import {
   MarkerType,
   Panel,
 } from "@xyflow/react";
-import { useArchStore } from "../store";
+import { useArchStore, nodeBudgetForCanvas, READABLE_ZOOM } from "../store";
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
@@ -34,7 +34,6 @@ export function ArchitectureGraph() {
     selectedComponentId,
     breadcrumbs,
     darkMode,
-    expandedAggregates,
     lens,
     flowEntryId,
     flowStep,
@@ -49,6 +48,9 @@ export function ArchitectureGraph() {
     drillInto,
     drillUp,
     setMobileChromeHidden,
+    setNodeBudget,
+    shrinkNodeBudget,
+    nodeBudget,
   } = useArchStore();
 
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
@@ -57,6 +59,7 @@ export function ArchitectureGraph() {
   // Measures the canvas so a selection can be tested for on-screen visibility.
   const containerRef = useRef<HTMLDivElement>(null);
   const layoutTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const readabilityTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobileRef = useRef(false);
   // Monotonic layout generation. Each layout run captures the current value;
@@ -68,6 +71,28 @@ export function ArchitectureGraph() {
   // depends on it so it re-runs after ELK resolves instead of centering on
   // pre-layout grid positions during a URL deep-link restore (F-VW-7).
   const [layoutVersion, setLayoutVersion] = useState(0);
+
+  // Bounded retries for the readability loop, reset per level/lens so a level
+  // that needed a small budget does not permanently constrain the next one.
+  const shrinkTries = useRef(0);
+  useEffect(() => { shrinkTries.current = 0; }, [drillLevel, lens]);
+
+  // The node budget follows the canvas the viewer actually has, remeasured
+  // whenever it changes: opening the detail panel, resizing the window, or
+  // rotating a phone all change how many nodes can render readably (owner
+  // decision 2026-08-17: it must adjust to the view, not to a fixed number).
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const { width, height } = el.getBoundingClientRect();
+      setNodeBudget(nodeBudgetForCanvas(width, height));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [setNodeBudget]);
 
   // Track if we're on a mobile viewport
   useEffect(() => {
@@ -324,7 +349,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, expandedAggregates, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, getLensGraph]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, nodeBudget, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, getLensGraph]);
 
   // Apply ELK layout
   useEffect(() => {
@@ -378,13 +403,23 @@ export function ArchitectureGraph() {
       // Delay fitView to allow rendering
       layoutTimeout.current = setTimeout(() => {
         fitView({ padding: 0.15, duration: 300 });
+        // After the fit lands, check what the layout actually achieved. If the
+        // level still had to render below a readable zoom, show fewer nodes
+        // and let it lay out again; the extras stay reachable in the
+        // aggregate's list. Bounded, and shrink-only, so it settles.
+        readabilityTimeout.current = setTimeout(() => {
+          if (getViewport().zoom >= READABLE_ZOOM) return;
+          if (shrinkTries.current >= 3) return;
+          if (shrinkNodeBudget()) shrinkTries.current += 1;
+        }, 420);
       }, 50);
     });
 
     return () => {
       if (layoutTimeout.current) clearTimeout(layoutTimeout.current);
+      if (readabilityTimeout.current) clearTimeout(readabilityTimeout.current);
     };
-  }, [rawNodes, rawEdges, lens, setNodes, setEdges, fitView]);
+  }, [rawNodes, rawEdges, lens, setNodes, setEdges, fitView, getViewport, shrinkNodeBudget]);
 
   // Pan to selected node and highlight its neighbors
   useEffect(() => {

@@ -50,7 +50,7 @@ describe("lens registry (P6-1)", () => {
   beforeEach(() => {
     useArchStore.setState({
       architecture: null, selectedComponentId: null, breadcrumbs: [],
-      drillLevel: null, expandedAggregates: {}, lens: DEFAULT_LENS_ID,
+      drillLevel: null, lens: DEFAULT_LENS_ID,
     });
   });
 
