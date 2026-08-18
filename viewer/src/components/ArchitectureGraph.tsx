@@ -53,7 +53,9 @@ export function ArchitectureGraph() {
 
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { fitView, setCenter, getNodes, getEdges } = useReactFlow();
+  const { fitView, setCenter, getNodes, getEdges, getViewport } = useReactFlow();
+  // Measures the canvas so a selection can be tested for on-screen visibility.
+  const containerRef = useRef<HTMLDivElement>(null);
   const layoutTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobileRef = useRef(false);
@@ -404,14 +406,33 @@ export function ArchitectureGraph() {
     const selectedNode = currentNodes.find((n) => n.id === selectedComponentId);
     if (!selectedNode) return;
 
-    // Pan to center on selected node
+    // Bring the selection into view, but ONLY when it is not already fully
+    // visible. Re-centering on every selection moved a node the user had just
+    // clicked out from under the cursor, so the second click of a double-click
+    // (and the resulting dblclick) landed on the empty pane instead of the
+    // node: the real cause of "double-click does not drill" and of the
+    // general click-target flakiness (comprehension-study S5, verified by
+    // event trace). Off-screen selections, which is what search results, tree
+    // clicks, and deep links produce, still animate into view.
     const nodeWidth = selectedNode.measured?.width ?? 280;
     const nodeHeight = selectedNode.measured?.height ?? 140;
-    setCenter(
-      selectedNode.position.x + nodeWidth / 2,
-      selectedNode.position.y + nodeHeight / 2,
-      { duration: 400 },
-    );
+    const centerX = selectedNode.position.x + nodeWidth / 2;
+    const centerY = selectedNode.position.y + nodeHeight / 2;
+    const viewport = getViewport();
+    const container = containerRef.current;
+    let fullyVisible = false;
+    if (container) {
+      const { width, height } = container.getBoundingClientRect();
+      // Node bounds in screen space under the current viewport transform.
+      const left = selectedNode.position.x * viewport.zoom + viewport.x;
+      const top = selectedNode.position.y * viewport.zoom + viewport.y;
+      const right = left + nodeWidth * viewport.zoom;
+      const bottom = top + nodeHeight * viewport.zoom;
+      fullyVisible = left >= 0 && top >= 0 && right <= width && bottom <= height;
+    }
+    if (!fullyVisible) {
+      setCenter(centerX, centerY, { duration: 400 });
+    }
 
     // Compute neighbor set from current edges (read via getEdges to avoid dependency loop)
     const currentEdges = getEdges();
@@ -450,11 +471,26 @@ export function ArchitectureGraph() {
     // restore centers on the laid-out node, not its pre-layout grid slot (F-VW-7).
   }, [selectedComponentId, layoutVersion, getNodes, getEdges, setCenter, setNodes, setEdges]);
 
+  // Where and when the last node click landed, in screen coordinates. Selecting
+  // a node opens the detail panel, which shrinks the canvas (measured: 1184px
+  // to 864px) and slides the node ~160px out from under a stationary cursor, so
+  // the second press of a double-click lands on the empty pane and no native
+  // dblclick ever reaches the node. Double-click is therefore detected from two
+  // presses at the same screen point rather than from the browser's event
+  // (comprehension-study S5).
+  const lastNodeClickRef = useRef<{ id: string; x: number; y: number; t: number } | null>(null);
+
   const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
+    (event: React.MouseEvent, node: Node) => {
       // Aggregate nodes handle their own expand/collapse (P6-4); they are not
       // selectable components, so do not route them through selectComponent.
       if (node.type === "aggregate") return;
+      lastNodeClickRef.current = {
+        id: node.id,
+        x: event.clientX,
+        y: event.clientY,
+        t: Date.now(),
+      };
       selectComponent(node.id);
     },
     [selectComponent],
@@ -463,6 +499,33 @@ export function ArchitectureGraph() {
   const onPaneClick = useCallback(() => {
     selectComponent(null);
   }, [selectComponent]);
+
+  // Second press at the same screen point within the double-click window drills
+  // the node the first press selected, wherever that press now lands. Capture
+  // phase so it runs before the pane's deselect.
+  // 500ms is the conventional OS/browser double-click threshold.
+  const DOUBLE_CLICK_MS = 500;
+  const DOUBLE_CLICK_SLOP_PX = 5;
+  useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      const last = lastNodeClickRef.current;
+      if (!last) return;
+      const stale = Date.now() - last.t > DOUBLE_CLICK_MS;
+      const moved =
+        Math.abs(event.clientX - last.x) > DOUBLE_CLICK_SLOP_PX ||
+        Math.abs(event.clientY - last.y) > DOUBLE_CLICK_SLOP_PX;
+      lastNodeClickRef.current = null;
+      if (stale || moved) return;
+      const node = getNodes().find((n) => n.id === last.id);
+      const comp = (node?.data as { component?: Component } | undefined)?.component;
+      if (!comp || (comp.children.length === 0 && comp.files.length === 0)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      drillInto(comp);
+    };
+    window.addEventListener("mousedown", onMouseDown, true);
+    return () => window.removeEventListener("mousedown", onMouseDown, true);
+  }, [drillInto, getNodes]);
 
   // Double-click drill at the React Flow level (comprehension-study S5). The
   // node div's own onDoubleClick is swallowed by the node wrapper's
@@ -481,7 +544,7 @@ export function ArchitectureGraph() {
   );
 
   return (
-    <div className="w-full h-full relative">
+    <div ref={containerRef} className="w-full h-full relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -494,6 +557,14 @@ export function ArchitectureGraph() {
         onMoveEnd={onMoveEnd}
         nodeTypes={nodeTypes}
         zoomOnDoubleClick={false}
+        // A node's drag behavior consumes the pointer events that would
+        // otherwise become a native dblclick, which is why double-click drill
+        // failed for a real mouse even with the handler wired
+        // (comprehension-study S5; verified: a synthetic dblclick drilled, a
+        // real one never fired). A few pixels of travel now separate a click
+        // from a drag, so clicking is reliable and deliberate dragging still
+        // works.
+        nodeDragThreshold={5}
         fitView
         minZoom={0.1}
         maxZoom={2}
