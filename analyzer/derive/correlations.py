@@ -49,6 +49,7 @@ from typing import Optional
 
 from ..extract.references import REFERENCE_LANGUAGES
 from .context import Deriver
+from .roles import is_test_suite_component
 from .testing import is_test_path
 
 __all__ = ["derive_correlations"]
@@ -573,6 +574,17 @@ def _unreferenced_findings(d: Deriver) -> list[dict]:
         if path in parent_paths or comp.id in child_parents:
             continue  # not a leaf
         if comp.type in _ENTRY_TYPES or comp.type in _TEST_TYPES or comp.type in _NONCODE_TYPES:
+            continue
+        # A test suite is unreferenced BY CONSTRUCTION: nothing imports a test.
+        # Type alone is not enough to recognise one. Before the S2 identity
+        # guards, test directories were promoted to hero types (FastAPI's tree
+        # carried 81 spurious "api-server" components) and were skipped here
+        # only because "api-server" is an entry type. Fixing that mislabel
+        # removed the accidental exclusion and turned every test directory into
+        # an "unreferenced" finding: 68 new ones on FastAPI alone, caught by the
+        # golden corpus. Recognise test suites the same way the type guards do,
+        # so the two cannot disagree.
+        if is_test_suite_component(comp, path):
             continue
         if getattr(comp, "entry_points", None):
             continue
