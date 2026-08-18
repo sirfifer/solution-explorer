@@ -57,6 +57,7 @@ import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
 import { dataUrl } from "./utils/dataSource";
 import { rollUpRelationships } from "./utils/relationshipRollup";
+import { buildDegreeIndex, compareByImportance } from "./utils/importance";
 import {
   architectureIdentity,
   loadAnnotations,
@@ -732,33 +733,16 @@ function computeDrillLevelView(
 
   // Degree from the relationship set: how many other components this one is
   // wired to, counted once per partner so a chatty pair does not dominate.
-  const degree = new Map<string, Set<string>>();
-  for (const rel of relationships) {
-    if (rel.source === rel.target) continue;
-    (degree.get(rel.source) ?? degree.set(rel.source, new Set()).get(rel.source)!).add(rel.target);
-    (degree.get(rel.target) ?? degree.set(rel.target, new Set()).get(rel.target)!).add(rel.source);
-  }
-
-  const criticalityRank = (c: Component): number => {
-    switch (c.ai_enhance?.criticality) {
-      case "critical": return 0;
-      case "important": return 1;
-      case "supporting": return 3;
-      default: return 2; // untagged sits between important and supporting
-    }
-  };
+  const degree = buildDegreeIndex(relationships);
 
   // Hero-typed children are the structural anchors of a level (the clients,
   // servers, screens); they are always shown, never aggregated, whatever the
   // budget, because hiding one would break the map's shape.
   const heroes = candidates.filter((c) => isHeroType(c.type));
   const others = candidates.filter((c) => !isHeroType(c.type));
-  others.sort((a, b) =>
-    criticalityRank(a) - criticalityRank(b)
-    || (degree.get(b.id)?.size ?? 0) - (degree.get(a.id)?.size ?? 0)
-    || b.files.length - a.files.length
-    || a.name.localeCompare(b.name),
-  );
+  // The same ordering the double-tap Read snap uses to pick what to frame
+  // (utils/importance), so what is shown and what is framed cannot drift.
+  others.sort((a, b) => compareByImportance(a, b, degree));
 
   shown.push(...heroes);
   const room = Math.max(0, nodeBudget - heroes.length);

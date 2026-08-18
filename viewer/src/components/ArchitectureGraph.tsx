@@ -13,8 +13,22 @@ import {
   type NodeTypes,
   MarkerType,
   Panel,
+  getNodesBounds,
+  getViewportForBounds,
 } from "@xyflow/react";
 import { useArchStore, nodeBudgetForCanvas, READABLE_ZOOM } from "../store";
+import { buildDegreeIndex } from "../utils/importance";
+import {
+  nextSnapState,
+  pickSnapTarget,
+  readViewport,
+  readZoomForFit,
+  FIT_PADDING,
+  GRAPH_MAX_ZOOM,
+  GRAPH_MIN_ZOOM,
+  SNAP_DURATION_MS,
+  type SnapState,
+} from "../utils/snapZoom";
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
@@ -55,13 +69,19 @@ export function ArchitectureGraph() {
 
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { fitView, setCenter, getNodes, getEdges, getViewport } = useReactFlow();
+  const { fitView, setCenter, setViewport, getNodes, getEdges, getViewport } = useReactFlow();
   // Measures the canvas so a selection can be tested for on-screen visibility.
   const containerRef = useRef<HTMLDivElement>(null);
   const layoutTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readabilityTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobileRef = useRef(false);
+  // Double-tap snap zoom state (see utils/snapZoom and the gesture effect
+  // below). pendingSnapRef survives a re-layout so a Read snap is not fitted
+  // over; applySnapRef lets the layout effect re-apply it without taking the
+  // snap callback as a dependency and re-running the layout.
+  const pendingSnapRef = useRef<{ state: SnapState; at: number } | null>(null);
+  const applySnapRef = useRef<(state: SnapState) => void>(() => {});
   // Monotonic layout generation. Each layout run captures the current value;
   // when its async ELK promise resolves it applies results only if it is still
   // the latest run, so a slow older layout cannot overwrite a newer one after
@@ -75,7 +95,10 @@ export function ArchitectureGraph() {
   // Bounded retries for the readability loop, reset per level/lens so a level
   // that needed a small budget does not permanently constrain the next one.
   const shrinkTries = useRef(0);
-  useEffect(() => { shrinkTries.current = 0; }, [drillLevel, lens]);
+  useEffect(() => {
+    shrinkTries.current = 0;
+    pendingSnapRef.current = null;
+  }, [drillLevel, lens]);
 
   // The node budget follows the canvas the viewer actually has, remeasured
   // whenever it changes: opening the detail panel, resizing the window, or
@@ -402,7 +425,17 @@ export function ArchitectureGraph() {
       setLayoutVersion((v) => v + 1);
       // Delay fitView to allow rendering
       layoutTimeout.current = setTimeout(() => {
-        fitView({ padding: 0.15, duration: 300 });
+        // A Read snap taken a moment ago has to survive the re-layout it may
+        // have caused: the first tap of the pair deselects, which closes the
+        // detail panel, which resizes the canvas and re-budgets the level. Fit
+        // over the top of it and the double tap would look like it did nothing.
+        const pending = pendingSnapRef.current;
+        pendingSnapRef.current = null;
+        if (pending && pending.state === "read" && Date.now() - pending.at < 1200) {
+          applySnapRef.current("read");
+        } else {
+          fitView({ padding: FIT_PADDING, duration: SNAP_DURATION_MS });
+        }
         // After the fit lands, check what the layout actually achieved. If the
         // level still had to render below a readable zoom, show fewer nodes
         // and let it lay out again; the extras stay reachable in the
@@ -578,6 +611,138 @@ export function ArchitectureGraph() {
     [drillInto],
   );
 
+  // ---------------------------------------------------------------------
+  // Double-tap snap zoom (owner idea 2026-08-18)
+  //
+  // Fit shows the whole level; Read zooms to a size the labels can be read at
+  // and centers on the most important component, because at that zoom not
+  // everything fits. Heroes are never aggregated (owner decision 2026-08-18),
+  // so on a phone Fit can be 0.23 zoom with ~46x29px nodes; this is the
+  // "zooming has to be easy" half of that decision.
+  // ---------------------------------------------------------------------
+
+  // The viewport the current level fits in, computed rather than guessed, so
+  // the toggle never depends on a magic zoom number.
+  const fitZoomNow = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return null;
+    const { width, height } = el.getBoundingClientRect();
+    const all = getNodes();
+    if (all.length === 0 || !(width > 0) || !(height > 0)) return null;
+    const bounds = getNodesBounds(all);
+    const vp = getViewportForBounds(
+      bounds, width, height, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, FIT_PADDING,
+    );
+    return { zoom: vp.zoom, bounds, canvas: { width, height } };
+  }, [getNodes]);
+
+  const applySnap = useCallback((state: SnapState) => {
+    const fit = fitZoomNow();
+    if (!fit) return;
+    if (state === "fit") {
+      pendingSnapRef.current = null;
+      fitView({ padding: FIT_PADDING, duration: SNAP_DURATION_MS });
+      return;
+    }
+    const all = getNodes();
+    const components = all
+      .map((n) => (n.data as { component?: Component } | undefined)?.component)
+      .filter((c): c is Component => Boolean(c));
+    // Ranked by the same importance ordering that decided which components are
+    // on the canvas at all (utils/importance), against the same relationship
+    // set the store ranks with, so the two can never disagree.
+    const degree = buildDegreeIndex(architecture?.relationships ?? []);
+    const target = pickSnapTarget(components, degree);
+    const node = target ? all.find((n) => n.id === target.id) : undefined;
+    if (!node) {
+      fitView({ padding: FIT_PADDING, duration: SNAP_DURATION_MS });
+      return;
+    }
+    const rect = {
+      x: node.position.x,
+      y: node.position.y,
+      width: node.measured?.width ?? 280,
+      height: node.measured?.height ?? 140,
+    };
+    pendingSnapRef.current = { state: "read", at: Date.now() };
+    setViewport(
+      readViewport(rect, fit.bounds, fit.canvas, readZoomForFit(fit.zoom)),
+      { duration: SNAP_DURATION_MS },
+    );
+  }, [architecture, fitView, fitZoomNow, getNodes, setViewport]);
+
+  useEffect(() => { applySnapRef.current = applySnap; }, [applySnap]);
+
+  const toggleSnap = useCallback(() => {
+    const fit = fitZoomNow();
+    if (!fit) return;
+    applySnap(nextSnapState(getViewport().zoom, fit.zoom, readZoomForFit(fit.zoom)));
+  }, [applySnap, fitZoomNow, getViewport]);
+
+  // Detected the same way the node drill is (comprehension-study S5): two
+  // presses at the same SCREEN POINT inside the double-click window, not the
+  // browser's dblclick. The first tap deselects, which closes the detail panel
+  // and slides the canvas ~160px sideways, so the second press can land on a
+  // different element entirely and no dblclick ever fires. pointerdown covers
+  // mouse and touch with one path; a pinch's second finger is not the primary
+  // pointer and lands far away, so it is rejected twice over.
+  const lastPaneDownRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const swallowClickUntilRef = useRef(0);
+  useEffect(() => {
+    const NON_PANE = ".react-flow__node, .react-flow__edge, .react-flow__controls,"
+      + " .react-flow__minimap, .react-flow__panel, button, a, input, select, textarea";
+    const isPaneTarget = (target: EventTarget | null): boolean => {
+      const el = target instanceof Element ? target : null;
+      const container = containerRef.current;
+      if (!el || !container || !container.contains(el)) return false;
+      return Boolean(el.closest(".react-flow__pane")) && !el.closest(NON_PANE);
+    };
+    const near = (a: { x: number; y: number }, e: PointerEvent | MouseEvent) =>
+      Math.abs(e.clientX - a.x) <= DOUBLE_CLICK_SLOP_PX
+      && Math.abs(e.clientY - a.y) <= DOUBLE_CLICK_SLOP_PX;
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!event.isPrimary) return;
+      const first = lastPaneDownRef.current;
+      // The SECOND press only has to be at the same point in time and space.
+      // Requiring it to land on the pane again would fail exactly when the
+      // canvas moved under it, which is the case this detection exists for.
+      if (first && Date.now() - first.t <= DOUBLE_CLICK_MS && near(first, event)) {
+        lastPaneDownRef.current = null;
+        swallowClickUntilRef.current = Date.now() + 400;
+        event.preventDefault();
+        event.stopPropagation();
+        toggleSnap();
+        return;
+      }
+      lastPaneDownRef.current = isPaneTarget(event.target)
+        ? { x: event.clientX, y: event.clientY, t: Date.now() }
+        : null;
+    };
+    // A pan is a press that travels. Drop the candidate so returning to the
+    // start point later cannot be mistaken for the second half of a tap pair.
+    const onPointerUp = (event: PointerEvent) => {
+      const first = lastPaneDownRef.current;
+      if (first && !near(first, event)) lastPaneDownRef.current = null;
+    };
+    // The press we swallowed above still produces a click; without this it
+    // would select whatever node had slid under the second tap.
+    const onClick = (event: MouseEvent) => {
+      if (Date.now() > swallowClickUntilRef.current) return;
+      swallowClickUntilRef.current = 0;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("pointerup", onPointerUp, true);
+    window.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("pointerup", onPointerUp, true);
+      window.removeEventListener("click", onClick, true);
+    };
+  }, [toggleSnap]);
+
   return (
     <div ref={containerRef} className="w-full h-full relative">
       <ReactFlow
@@ -601,8 +766,8 @@ export function ArchitectureGraph() {
         // works.
         nodeDragThreshold={5}
         fitView
-        minZoom={0.1}
-        maxZoom={2}
+        minZoom={GRAPH_MIN_ZOOM}
+        maxZoom={GRAPH_MAX_ZOOM}
         proOptions={{ hideAttribution: true }}
         className={darkMode ? "dark" : "light"}
       >
