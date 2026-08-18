@@ -1,6 +1,7 @@
 # The SysCorpus demo program
 
-Status: PLAN, awaiting owner decisions (written 2026-08-18). This is the
+Status: PLAN, four decisions taken 2026-08-18, ready to execute at phase D0
+(written 2026-08-18). This is the
 "showcase program" that `DISCLOSURE-POLICY.md` has referenced since 2026-07-21
 without one existing. It defines what we publish, in what order, how it stays
 current, and how each run feeds fixes back into the product.
@@ -529,10 +530,25 @@ pre-flight, first full enrichment, license review, sensitivity triage, deploy.
 
 ---
 
-## 9. Decisions needed
+## 9. Decisions (all four taken 2026-08-18)
 
-Four, each with options and a recommendation. Everything else in this plan is a
-recommendation I will execute as written unless told otherwise.
+| # | Decision | Owner call |
+|---|---|---|
+| D1 | Wave 1 composition | **A**: VS Code, Kubernetes, Home Assistant |
+| D2 | Hosting layout | **A**: one Pages project and subdomain per demo, separate hub |
+| D3 | Findings inbox | **A**: Issues as inbox, TASKS.md as campaign tracker, explicit seam |
+| D4 | Enrichment authentication | **B**: keep the `claude` CLI as it is |
+
+D4 note. The API-key invoker was declined, so the residual risk in 4.3 stands:
+an expired session on the Studio silently breaks weekly enrichment, and demo
+cost stays mixed into subscription usage rather than being attributable per
+demo. The mitigation is the one already in this plan and it is not optional
+under this choice: a refresh that fails must notify rather than write a log
+nobody reads, and the hub must show each demo's last SUCCESSFUL refresh date so
+a stalled demo is visible in public. Revisit only if that proves insufficient
+in practice.
+
+The options as presented:
 
 ### D1. Wave 1 composition
 
