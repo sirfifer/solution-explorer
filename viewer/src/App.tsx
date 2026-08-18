@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useArchStore } from "./store";
 import { ArchitectureGraph } from "./components/ArchitectureGraph";
@@ -23,6 +23,7 @@ import { ToursEntry } from "./components/ToursEntry";
 import { TourPlayer } from "./components/TourPlayer";
 import { LensSwitcher } from "./components/LensSwitcher";
 import { FlowPanel } from "./components/FlowPanel";
+import { InventoryLensPanel } from "./components/InventoryLensPanel";
 import { ActivityPanel } from "./components/ActivityPanel";
 import { CapabilityPanel } from "./components/CapabilityPanel";
 import { DataPanel } from "./components/DataPanel";
@@ -32,6 +33,7 @@ import { useUrlSync } from "./hooks/useUrlSync";
 import { useBottomSheet } from "./hooks/useBottomSheet";
 import type { SnapPoint } from "./hooks/useBottomSheet";
 import { initializeSearch } from "./utils/search";
+import { collectCriticalComponents, collectExternalDependencies } from "./lenses";
 import { formatNumber, formatRelativeTime, getTypeColors } from "./utils/layout";
 import { dataUrl, getDataBase } from "./utils/dataSource";
 import { parsePublication, publicationDisplayName } from "./utils/publication";
@@ -183,7 +185,24 @@ export function App() {
   // instead of the component graph. null for a normal single-repo dataset.
   const [solution, setSolution] = useState<SolutionManifest | null>(null);
   const [summaryDismissed, setSummaryDismissed] = useState(false);
-  const [summaryExpanded, setSummaryExpanded] = useState(false);
+  // Owner decision 2026-08-17: the summary starts EXPANDED for a first-time
+  // visitor (the rollup answers the first questions right up front) and
+  // remembers the collapse afterward.
+  const [summaryExpanded, setSummaryExpanded] = useState(() =>
+    getStoredValue("arch-summary-expanded", true, localStorage),
+  );
+  const setSummaryExpandedPersisted = useCallback((expanded: boolean) => {
+    setSummaryExpanded(expanded);
+    setStoredValue("arch-summary-expanded", expanded, localStorage);
+  }, []);
+  const bannerCritical = useMemo(
+    () => (architecture ? collectCriticalComponents(architecture) : []),
+    [architecture],
+  );
+  const bannerDependencies = useMemo(
+    () => (architecture ? collectExternalDependencies(architecture) : []),
+    [architecture],
+  );
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
@@ -703,9 +722,10 @@ export function App() {
             <div className="flex items-center gap-1 shrink-0">
               {(architecture.ai_enhance.tech_diversity || architecture.ai_enhance.test_health_summary ||
                 architecture.ai_enhance.recent_changes_summary || architecture.ai_enhance.data_flow_narrative ||
-                architecture.ai_enhance.component_groups?.length) && (
+                architecture.ai_enhance.component_groups?.length ||
+                bannerCritical.length > 0 || bannerDependencies.length > 0) && (
                 <button
-                  onClick={() => setSummaryExpanded(!summaryExpanded)}
+                  onClick={() => setSummaryExpandedPersisted(!summaryExpanded)}
                   className={`p-0.5 rounded ${darkMode ? "hover:bg-indigo-900/40 text-indigo-500" : "hover:bg-indigo-100 text-indigo-400"}`}
                   title={summaryExpanded ? "Show less" : "Show more"}
                 >
@@ -723,6 +743,45 @@ export function App() {
           </div>
           {summaryExpanded && (
             <div className={`mt-2 pt-2 space-y-2 border-t ${darkMode ? "border-indigo-800/30" : "border-indigo-200"}`}>
+              {/* Rollup rows (owner decision 2026-08-17): the first stakeholder
+                  questions answered up front, with the Inventory lens as the
+                  full surface one click away. */}
+              {bannerCritical.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <span className={`shrink-0 font-semibold uppercase tracking-wider ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>Critical</span>
+                  <p className="leading-relaxed">
+                    {bannerCritical.slice(0, 6).map((entry, i) => (
+                      <span key={entry.id}>
+                        {i > 0 && ", "}
+                        <button
+                          className="underline decoration-dotted underline-offset-2 hover:opacity-75"
+                          onClick={() => useArchStore.getState().navigateToComponent(entry.id)}
+                        >
+                          {entry.name}
+                        </button>
+                      </span>
+                    ))}
+                    {bannerCritical.length > 6 && ` and ${bannerCritical.length - 6} more`}
+                  </p>
+                </div>
+              )}
+              {bannerDependencies.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <span className={`shrink-0 font-semibold uppercase tracking-wider ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>Depends on</span>
+                  <p className="leading-relaxed">
+                    {bannerDependencies.slice(0, 8).map((d) => d.name).join(", ")}
+                    {bannerDependencies.length > 8 && ` and ${bannerDependencies.length - 8} more`}
+                  </p>
+                </div>
+              )}
+              {(bannerCritical.length > 0 || bannerDependencies.length > 0) && (
+                <button
+                  className={`text-[11px] font-semibold underline underline-offset-2 ${darkMode ? "text-indigo-400 hover:text-indigo-300" : "text-indigo-600 hover:text-indigo-500"}`}
+                  onClick={() => useArchStore.getState().setLens("inventory")}
+                >
+                  View critical components and dependencies in the Inventory lens
+                </button>
+              )}
               {architecture.ai_enhance.data_flow_narrative && (
                 <div className="flex items-start gap-2">
                   <span className={`shrink-0 font-semibold uppercase tracking-wider ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>Flow</span>
@@ -784,6 +843,20 @@ export function App() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Restore affordance (S9): a dismissed summary was one misclick from
+          gone with no way back short of a reload. */}
+      {architecture.ai_enhance?.summary && summaryDismissed && (
+        <div className={`px-4 py-1 shrink-0 ${darkMode ? "bg-zinc-950" : "bg-white"}`}>
+          <button
+            onClick={() => setSummaryDismissed(false)}
+            className={`text-[11px] ${darkMode ? "text-indigo-400 hover:text-indigo-300" : "text-indigo-600 hover:text-indigo-500"}`}
+            title="Show the AI summary banner again"
+          >
+            &#x2728; Show summary
+          </button>
         </div>
       )}
 
@@ -887,6 +960,7 @@ export function App() {
         {/* Graph (with the active lens's ranked panel docked left when present) */}
         <main className="flex-1 relative flex overflow-hidden">
           {lens === "flow" && <FlowPanel />}
+          {lens === "inventory" && <InventoryLensPanel />}
           {lens === "activity" && <ActivityPanel />}
           {lens === "capability" && <CapabilityPanel />}
           {lens === "data" && <DataPanel />}
