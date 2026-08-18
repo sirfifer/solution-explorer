@@ -70,12 +70,13 @@ Wave 1 is TypeScript, Go and Python, all in the full-parse tier, so Java does no
 gate the start either way. But the reason it does not is different from what the
 program plan assumed, and the correction is worth more than the original point.
 
-**The README's language table is stale.** It lists Java, Kotlin, C/C++, C# and
-Dart as "detection + metrics only". In fact `analyzer/parsers/` contains
-`java_ts.py`, `cpp_ts.py` and `csharp_ts.py`, the `treesitter` extra already
-pulls `tree-sitter-java`, `tree-sitter-cpp` and `tree-sitter-c-sharp`, and all
-three are registered in `PARSERS` with `_ts_available` true once the extra is
-installed.
+**The README's language table was stale, and is now fixed** (PR #98). It listed
+Java, C/C++ and C# as "detection + metrics only". In fact `analyzer/parsers/`
+carries full REGEX parsers for all three (`java.py`, `csharp.py`, `cpp.py`, each
+with `extract_symbols`, `extract_imports` and `detect_framework`) AND tree-sitter
+parsers (`java_ts.py`, `cpp_ts.py`, `csharp_ts.py`), the `treesitter` extra
+already pulls all three grammars, and all three are registered. So the claim was
+wrong in both tiers, not just the tree-sitter one.
 
 Probed against the repo's own `tests/fixtures/java` (2026-08-18), Java produced:
 
@@ -103,8 +104,14 @@ What this changes:
    kind of claim a buyer checks in the first five minutes, and we are currently
    telling them we cannot do something we can. Fixing the table is minutes of
    work and should happen with the next documentation pass.
-4. **Kotlin and Dart remain genuinely unparsed**, and C/C++ and C# now need the
-   same probe Java just had before anything is claimed either way.
+4. **C# and C/C++ were probed too, and both hold up.** C# gives 12 typed symbols
+   (class, method, interface, enum, record), ASP.NET Core and .NET framework
+   detection, and 3 API endpoints. C/C++ gives 17 symbols across namespaces,
+   classes, structs, methods and functions. **Kotlin and Dart remain genuinely
+   unparsed.**
+5. **Fixed and guarded** (PR #98). Both tables corrected, and
+   `tests/test_language_tiers.py` now keeps the documentation and the parsers
+   honest in both directions, verified to bite by stashing the fix.
 
 One near-miss worth recording as method: the Java symbols came back with
 `line_start: None`, which looked like a serious Java-specific defect until the
