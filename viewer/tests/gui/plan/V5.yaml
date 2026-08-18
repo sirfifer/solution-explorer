@@ -140,3 +140,29 @@
   covers:
     - lens:structure
     - component:LensSwitcher
+
+# V5.7 added 2026-08-18 with the Inventory lens (comprehension-study S6: the
+# first executive questions had no aggregate surface). The lens is available
+# for every dataset by design: dependencies and ports are deterministic, and
+# the criticality section states its absence honestly when the dataset is not
+# enriched. The dogfood IS enriched, so all three sections carry data here.
+- id: V5.7
+  vector: lenses
+  viewport: desktop
+  dataset: dogfood
+  steps:
+    - "Load the app for dataset 'dogfood' with the query string '?lens=inventory' and wait until the graph has rendered at least one node"
+    - "Click the first entry under the heading 'Critical components' in the Inventory panel"
+  pass_when:
+    - "the Inventory panel shows a section headed 'Critical components' listing components ranked critical before important, each with its one-line purpose (critical)"
+    - "the panel shows a section headed 'External dependencies' aggregating detected vendors and services, most-used first (dependencies)"
+    - "the panel shows a section headed 'Listening ports' naming each component that serves on a port, in ascending port order (ports)"
+    - "step 2: clicking a Critical row selects that component and the graph or detail panel moves to it"
+    - "no unexpected console or network errors during the flow"
+  evidence: screenshot
+  covers:
+    - lens:inventory
+    - component:InventoryLensPanel
+    - subview:inventory/critical
+    - subview:inventory/dependencies
+    - subview:inventory/ports

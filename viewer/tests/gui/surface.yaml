@@ -36,6 +36,8 @@ surfaces:
     file: DataPanel.tsx
   - component: RulesPanel
     file: RulesPanel.tsx
+  - component: InventoryLensPanel
+    file: InventoryLensPanel.tsx
   - component: SearchOverlay
     file: SearchOverlay.tsx
   - component: HelpSystem
