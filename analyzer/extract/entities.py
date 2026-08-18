@@ -417,8 +417,27 @@ def _prisma_entities(content: str) -> list[tuple[dict, int]]:
     return _dedupe(out)
 
 
+def _blank_sql_comments(content: str) -> str:
+    """Replace SQL comment text with spaces of identical length.
+
+    Length-preserving so every match position stays valid on the original
+    text. Without this, a comma inside a trailing comment (``VARCHAR(50),
+    -- ISO 8601 duration, e.g., "PT4H"``) splits the column list mid-comment
+    and comment fragments get published as columns (comprehension-study S2:
+    the garbled "PT4H: LANGUAGE" rows in the demo's schema browser).
+    """
+    content = re.sub(r"--[^\n]*", lambda m: " " * len(m.group(0)), content)
+    return re.sub(
+        r"/\*.*?\*/",
+        lambda m: re.sub(r"[^\n]", " ", m.group(0)),
+        content,
+        flags=re.S,
+    )
+
+
 def _sql_entities(content: str) -> list[tuple[dict, int]]:
     out: list[tuple[dict, int]] = []
+    content = _blank_sql_comments(content)
     for m in _SQL_CREATE.finditer(content):
         table = m.group(1)
         body = _paren_body(content, m.end() - 1)

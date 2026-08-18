@@ -70,12 +70,33 @@ class BaseParser:
         return None
 
     def extract_env_vars(self, content: str) -> list[str]:
-        """Extract environment variable references."""
+        """Extract environment variable READS: the component's config inputs.
+
+        Writes are excluded on purpose (S2): ``env["CFG_SCALE"] = "1.25"`` is
+        the component configuring a child process, not an input of its own, and
+        a bare dict named ``env`` is not environment access at all. Subscript
+        matches therefore require an environ/ENV receiver and reject
+        assignment; ``==`` comparisons still count as reads.
+        """
         env_vars = set()
-        # os.environ / os.getenv / process.env / std::env
-        for m in re.finditer(r'(?:environ|getenv|env)\[?\(?\s*["\'](\w+)["\']', content):
+        # os.environ["X"] / ENV["X"] (ruby), excluding writes. The whitespace
+        # lives INSIDE the lookahead: outside it would backtrack to empty and
+        # let `] = value` through.
+        for m in re.finditer(
+            r'(?:environ|ENV)\[\s*["\'](\w+)["\']\s*\](?!\s*=[^=])', content
+        ):
             env_vars.add(m.group(1))
-        for m in re.finditer(r'process\.env\.(\w+)', content):
+        # os.getenv("X") / getenv("X") / environ.get("X")
+        for m in re.finditer(r'(?:getenv|environ\.get)\(\s*["\'](\w+)["\']', content):
+            env_vars.add(m.group(1))
+        # process.env.X, excluding writes (\b stops the name capture from
+        # backtracking a character to sneak past the lookahead)
+        for m in re.finditer(r'process\.env\.(\w+)\b(?!\s*=[^=])', content):
+            env_vars.add(m.group(1))
+        # process.env["X"], excluding writes
+        for m in re.finditer(
+            r'process\.env\[\s*["\'](\w+)["\']\s*\](?!\s*=[^=])', content
+        ):
             env_vars.add(m.group(1))
         for m in re.finditer(r'env::var\(\s*"(\w+)"', content):
             env_vars.add(m.group(1))

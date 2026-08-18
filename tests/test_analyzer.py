@@ -604,3 +604,42 @@ class TestBaseParserUtilities:
         code = "port = 42\n"  # below 80, should be ignored
         ports = parser.detect_ports(code)
         assert 42 not in ports
+
+
+class TestEnvVarReadsOnly:
+    """Env-var extraction is reads only (comprehension-study S2): a write like
+    env["CFG_SCALE"] = "1.25" configures a child process and must not be
+    published as this component's config input."""
+
+    def test_write_into_env_dict_is_not_an_input(self):
+        parser = BaseParser()
+        code = (
+            "env = os.environ.copy()\n"
+            'env["CFG_SCALE"] = "1.25"\n'
+            'os.environ["SELF_FLAG"] = "on"\n'
+        )
+        assert parser.extract_env_vars(code) == []
+
+    def test_reads_still_detected(self):
+        parser = BaseParser()
+        code = (
+            'os.environ["DATABASE_URL"]\n'
+            "os.environ.get('CACHE_DIR')\n"
+            "os.getenv('SECRET_KEY')\n"
+            "process.env.NODE_ENV\n"
+            'process.env["API_BASE"]\n'
+            'ENV["RAILS_ENV"]\n'
+            'env::var("RUST_LOG")\n'
+            'if os.environ["MODE"] == "prod":\n'
+        )
+        got = parser.extract_env_vars(code)
+        for name in (
+            "DATABASE_URL", "CACHE_DIR", "SECRET_KEY", "NODE_ENV",
+            "API_BASE", "RAILS_ENV", "RUST_LOG", "MODE",
+        ):
+            assert name in got
+
+    def test_js_write_is_not_an_input(self):
+        parser = BaseParser()
+        code = 'process.env.NODE_ENV = "test"\nprocess.env["DEBUG"] = "1"\n'
+        assert parser.extract_env_vars(code) == []

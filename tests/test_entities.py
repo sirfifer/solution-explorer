@@ -431,3 +431,23 @@ def test_entity_emission_is_deterministic():
            json.dumps(a2["data_entities"], sort_keys=True)
     assert json.dumps(a1["entity_access"], sort_keys=True) == \
            json.dumps(a2["entity_access"], sort_keys=True)
+
+
+def test_sql_columns_ignore_comment_commas():
+    """Commas inside SQL comments must not split the column list; comment
+    fragments were published as columns (comprehension-study S2, the demo's
+    'PT4H: LANGUAGE' rows)."""
+    src = (
+        "CREATE TABLE curricula (\n"
+        "    id UUID PRIMARY KEY,\n"
+        '    typical_learning_time VARCHAR(50), -- ISO 8601 duration, e.g., "PT4H"\n'
+        "    primary_language VARCHAR(10), /* BCP 47, e.g., en-US, course: IS */\n"
+        "    title TEXT NOT NULL\n"
+        ");\n"
+    )
+    t = next(
+        v for v, _ in extract_schema_entities(src, "sql", "db/schema.sql")
+        if v["name"] == "curricula"
+    )
+    names = {f["name"] for f in t["fields"]}
+    assert names == {"id", "typical_learning_time", "primary_language", "title"}

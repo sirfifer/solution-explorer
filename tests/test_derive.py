@@ -517,3 +517,86 @@ def test_multi_repo_total_components_counts_the_merged_tree():
     stats = merged["stats"]
     assert stats["total_components"] == count_nodes(merged["components"])
     assert stats["total_path_components"] <= stats["total_components"]
+
+
+# ---------------------------------------------------------------------------
+# Identity-scoping guards (comprehension-study S2)
+# ---------------------------------------------------------------------------
+
+_AIOHTTP_SERVER = (
+    "from aiohttp import web\n"
+    "app = web.Application()\n"
+    "async def health(request):\n"
+    "    return web.json_response({})\n"
+    "app.router.add_get('/api/health', health)\n"
+    "web.run_app(app, port=8766)\n"
+)
+
+
+def _s2_repo(tmp_path):
+    repo = tmp_path / "repo"
+    server = repo / "server"
+    server.mkdir(parents=True)
+    (server / "pyproject.toml").write_text('[project]\nname = "server"\n')
+    (server / "app.py").write_text(_AIOHTTP_SERVER)
+    tests = server / "tests"
+    tests.mkdir()
+    (tests / "pyproject.toml").write_text('[project]\nname = "server-tests"\n')
+    (tests / "test_api.py").write_text(
+        "from aiohttp import web\n"
+        "async def test_health(aiohttp_client):\n"
+        "    app = web.Application()\n"
+        "    app.router.add_get('/test', lambda r: None)\n"
+        "    assert True\n"
+    )
+    scripts = repo / "scripts"
+    scripts.mkdir()
+    (scripts / "pyproject.toml").write_text('[project]\nname = "scripts"\n')
+    (scripts / "check_style.py").write_text("print('lint')\n")
+    (scripts / "log_server.py").write_text(
+        "import http.server\n"
+        "PORT = 8765\n"
+        "# Remote Log Server\n"
+        "http.server.HTTPServer(('', PORT), None).serve_forever()\n"
+    )
+    docs = repo / "docs"
+    docs.mkdir()
+    (docs / "pyproject.toml").write_text('[project]\nname = "docs"\n')
+    (docs / "guide.md").write_text("# Guide\n")
+    (docs / "example_plugin.py").write_text(_AIOHTTP_SERVER)
+    return repo
+
+
+def test_s2_guards_scope_identity(tmp_path):
+    """Test suites, docs trees, and utility script directories keep neutral
+    identity no matter what their contents import; the real server still
+    promotes (positive control)."""
+    repo = _s2_repo(tmp_path)
+    store = FactStore(":memory:")
+    extract_repo(repo, store)
+    _, arch = derive_all(store, "repo")
+
+    def walk(cs):
+        for c in cs:
+            yield c
+            yield from walk(c.get("children", []))
+
+    comps = {c["id"]: c for c in walk(arch["components"])}
+    hero = {"ios-client", "android-client", "mobile-client", "web-client",
+            "api-server", "watch-app", "desktop-app", "cli-tool", "service"}
+
+    server = comps["server"]
+    assert server["type"] == "api-server", "positive control lost"
+
+    tests_comp = comps["server/tests"]
+    assert tests_comp["type"] not in hero
+    assert (tests_comp.get("docs") or {}).get("api_endpoints") in (None, []), (
+        "fixture endpoints published as a test suite's contract")
+
+    scripts = comps["scripts"]
+    assert scripts["type"] not in hero
+    assert scripts["name"] == "scripts", "renamed after an embedded server script"
+    assert not scripts.get("port"), "took an embedded server script's port"
+
+    docs_comp = comps["docs"]
+    assert docs_comp["type"] not in hero
