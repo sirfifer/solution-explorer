@@ -345,6 +345,36 @@ zoom (251x97px). Known remaining case: a phone shows 8 hero nodes at 0.23 zoom,
 because heroes are never aggregated; the two ways to close it are in the
 decision document.
 
+### Aggregation follow-ups (owner decisions, 2026-08-18)
+
+1. **Heroes are NOT allowed to aggregate, even as a last resort.** REJECTED
+   explicitly. The ideal is a readable default view sized to the device, but
+   where hero types clash with that ideal it is acceptable for the view not to
+   be fully readable. The user zooms and scrolls instead, and that has to be
+   easy. So the phone case (8 hero nodes at 0.23 zoom on the iOS client) stands
+   as-is by decision, not by omission.
+
+2. **Double-tap snap zoom (owner idea, to build and try).** Pinch zoom on touch
+   is a given. On top of it, a double tap ON EMPTY CANVAS toggles between two
+   snap states:
+   - **Fit**: the whole level on screen under the device's constraints.
+   - **Read**: zoomed to a readable scale. Because not everything will fit at
+     that scale, the snap CENTERS ON PRIORITY: the most important thing at this
+     level (criticality first, then connections) decides what the read state
+     frames.
+   Which state a tap goes to depends on where the view currently is, so it
+   toggles. The owner's framing: it is best-effort for one of the two
+   scenarios, and "the only way we'll know whether this actually works or is
+   plausible is to give it a go", with physical experimentation on real devices
+   expected afterward. Tapping empty space is acknowledged as sometimes awkward;
+   try it anyway.
+
+   Note for the implementer: `zoomOnDoubleClick` is already disabled (it was
+   fighting the node double-click drill fix, S5), so the pane double-tap is free
+   to use. Detect it by two presses at the same point within the double-tap
+   window, the same way the node drill does, because a first tap can close the
+   detail panel and resize the canvas underneath the second one.
+
 Deliberately NOT fixed, and why:
 - **The console `querySelector` SyntaxError.** Not reproducible from any call
   site in `viewer/src`; it appears to originate in a dependency. Chasing it
