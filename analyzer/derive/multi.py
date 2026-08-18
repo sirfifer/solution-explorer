@@ -72,6 +72,7 @@ def merge_architectures(
         "stats": {
             "total_files": 0, "total_lines": 0, "total_size_bytes": 0,
             "total_symbols": 0, "total_components": 0,
+            "total_path_components": 0,
             "total_relationships": 0, "languages": {},
         },
         "repositories": [],
@@ -131,7 +132,8 @@ def merge_architectures(
             merged["files"].append(f)
 
         for key in ("total_files", "total_lines", "total_size_bytes",
-                    "total_symbols", "total_components", "total_relationships"):
+                    "total_symbols", "total_components",
+                    "total_path_components", "total_relationships"):
             merged["stats"][key] += stats.get(key, 0)
         for lang, lines in stats.get("languages", {}).items():
             merged["stats"]["languages"][lang] = (
@@ -150,7 +152,10 @@ def merge_architectures(
         })
         merged["stats"]["total_relationships"] += 1
 
+    # The repo wrapper nodes join both counts: they are tree nodes and they are
+    # path-level components.
     merged["stats"]["total_components"] += len(architectures)
+    merged["stats"]["total_path_components"] += len(architectures)
     return merged
 
 

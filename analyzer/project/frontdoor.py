@@ -38,6 +38,7 @@ __all__ = [
     "FRONT_DOOR_VERSION",
     "build_front_door",
     "write_front_door",
+    "refresh_front_door",
     "AI_JSON_NAME",
     "LLMS_TXT_NAME",
 ]
@@ -53,7 +54,7 @@ LLMS_TXT_NAME = "llms.txt"
 _MANIFEST_SECTIONS: tuple[tuple[str, str], ...] = (
     ("components", "Component tree (nested via `children`); each node carries id, name, path, type, files, relationships refs, and optional `ai_enhance`."),
     ("relationships", "Flat list of edges between components (source, target, type; optional `evidence`, `confidence`, `origin`, `ai_enhance`)."),
-    ("stats", "Roll-up counts: total_components, total_files, total_lines, total_symbols, total_relationships, languages."),
+    ("stats", "Roll-up counts: total_components (distinct component tree nodes; matches the tree and the search index), total_path_components (path-level components only, excluding derived UI-flow nodes), total_files, total_lines, total_symbols, total_relationships, languages."),
     ("coverage", "Manifest-embedded coverage summary (counts per disposition + total + parsed). Full ledger with per-file rows and non-source inventory is in coverage.json."),
     ("activity", "Manifest-embedded activity summary (hotspots/knowledge headline). Full activity lens is in activity.json."),
     ("findings", "Ranked flat list of findings (rule violations, duplication, intent conformance, AI-verified issues). Each finding carries kind, summary, detail, rank_score, confidence, and verification_status; filter on those."),
@@ -656,3 +657,73 @@ def write_front_door(
             fh.write("\n")
 
     return ai_path, llms_path
+
+
+def refresh_front_door(target_path) -> Optional[tuple[Path, Path]]:
+    """Regenerate ``ai.json``/``llms.txt`` beside a projection mutated in place.
+
+    The deploy pipeline's AI-enhancement merge edits ``manifest.json`` (or the
+    monolith ``architecture.json``) AFTER projection wrote the front door, which
+    left deployed datasets whose ``ai.json`` asserted ``enriched: false`` while
+    the manifest carried ``ai_enhance`` on nearly every component (the
+    comprehension-study S3 finding). Any step that rewrites a projected entry
+    document calls this afterward so the front door describes the file as it
+    now is.
+
+    Every optional endpoint is gated on what actually exists on disk beside the
+    target, mirroring the projection's own link-integrity rule (only files that
+    are emitted are listed) without re-running the projection. Returns the
+    written ``(ai.json, llms.txt)`` paths, or ``None`` when no front door exists
+    beside the target (a projection that never emitted one keeps not having
+    one).
+    """
+    target_path = Path(target_path)
+    output_dir = target_path.parent
+    if not (output_dir / AI_JSON_NAME).is_file():
+        return None
+    with open(target_path, encoding="utf-8") as fh:
+        arch = json.load(fh)
+    mode = "split" if target_path.name == "manifest.json" else "monolith"
+
+    def _sibling_json(rel_name: str) -> Optional[dict]:
+        path = output_dir / rel_name
+        if not path.is_file():
+            return None
+        try:
+            with open(path, encoding="utf-8") as sibling:
+                loaded = json.load(sibling)
+        except (json.JSONDecodeError, OSError):
+            return None
+        return loaded if isinstance(loaded, dict) else None
+
+    if mode == "split":
+        # In split mode the full coverage/activity payloads live in sibling
+        # files; their presence on disk is exactly the emit-time gate.
+        coverage = _sibling_json("coverage.json")
+        activity = _sibling_json("activity.json")
+        search_manifest = _sibling_json("search/manifest.json")
+    else:
+        # In monolith mode the writer injected the full blocks into the entry
+        # document itself, which is the file just loaded.
+        coverage = arch.get("coverage")
+        activity = arch.get("activity")
+        search_manifest = None
+
+    supply_chain = (
+        arch.get("supply_chain")
+        if (output_dir / "sbom.json").is_file()
+        else None
+    )
+    cra_present = (output_dir / "cra-readiness.json").is_file()
+
+    return write_front_door(
+        arch,
+        output_dir,
+        mode=mode,
+        coverage=coverage,
+        activity=activity,
+        search_manifest=search_manifest,
+        supply_chain=supply_chain,
+        cra_present=cra_present,
+        monolith_filename=target_path.name,
+    )

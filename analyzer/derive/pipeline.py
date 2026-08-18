@@ -76,13 +76,13 @@ def _check_output_contract(arch: dict) -> None:
         UI-flow children to the assembled tree, so UI edges resolve to them (0
         unresolved endpoints on the iOS demo's 530 edges). A dangling endpoint is
         a real inconsistency worth surfacing.
-      - total_components BOUND: total_components counts the path-component map,
-        which UI-flow children legitimately exceed in the tree (iOS demo: 99 vs
-        190 nodes), so it is NOT equated to the node count. It is bounded instead:
-        at least the number of root components (which are all path components) and
-        at most the number of distinct tree node ids. This catches a count that
-        is grossly inflated or below the roots it must contain, without the
-        false-positive the naive tree-equality check would raise on UI repos.
+      - total_components EQUALITY: total_components is the distinct-tree-node
+        count by construction (assembly recounts it from the assembled tree), so
+        the contract requires exact equality with the tree. The path-component
+        map count, which UI-flow children legitimately exceed (iOS demo: 99 vs
+        190 nodes), is preserved as total_path_components and bounded instead:
+        at least the number of root components (which are all path components)
+        and at most the number of distinct tree node ids.
     """
     require(isinstance(arch, dict), "derive output is not a dict")
     for key in _REQUIRED_ARCH_KEYS:
@@ -121,10 +121,16 @@ def _check_output_contract(arch: dict) -> None:
     )
     total_components = stats.get("total_components")
     require(
-        isinstance(total_components, int)
-        and len(arch["components"]) <= total_components <= len(id_set),
-        "stats.total_components is out of the [root components, distinct tree ids] bound",
+        isinstance(total_components, int) and total_components == len(id_set),
+        "stats.total_components does not match the distinct component tree ids",
     )
+    total_path_components = stats.get("total_path_components")
+    if total_path_components is not None:
+        require(
+            isinstance(total_path_components, int)
+            and len(arch["components"]) <= total_path_components <= len(id_set),
+            "stats.total_path_components is out of the [root components, distinct tree ids] bound",
+        )
 
 
 def _skeleton_arch(root_name: str, root_path: str, description: str) -> dict:
@@ -162,6 +168,7 @@ def _skeleton_arch(root_name: str, root_path: str, description: str) -> dict:
             "total_symbols": 0,
             "total_symbols_detected": 0,
             "total_components": 0,
+            "total_path_components": 0,
             "total_relationships": 0,
         },
         "repositories": [],
@@ -291,6 +298,14 @@ def _assemble(d: Deriver, root_name: str, root_path: str, description: str) -> d
     _attach_id_refs(components, d._concerns_by_component, "concerns")
     _attach_id_refs(components, d._findings_by_component, "findings")
     relationships = _relationship_dicts(d)
+    stats = _stats(d, relationships)
+    # One authoritative component count, derived from the assembled tree the
+    # viewer and search index actually show. The path-component map count (which
+    # UI-flow children legitimately exceed) stays available as
+    # total_path_components; publishing two different numbers under one word was
+    # the comprehension-study S3 count-drift finding.
+    stats["total_path_components"] = stats["total_components"]
+    stats["total_components"] = len(set(_tree_component_ids(components)))
     return {
         "name": root_name,
         "description": description,
@@ -309,7 +324,7 @@ def _assemble(d: Deriver, root_name: str, root_path: str, description: str) -> d
         "findings": d.findings,           # ranked flat index (P5-6); optional key
         "symbols": [to_dict(s) for s in d._all_symbols],
         "files": [_file_dict(fi) for fi in d._all_files],
-        "stats": _stats(d, relationships),
+        "stats": stats,
         "repositories": [],
     }
 

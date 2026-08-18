@@ -490,3 +490,30 @@ def test_components_and_edges_are_flushed_to_the_store():
     # a second derive run replaces, not duplicates
     derive_all(store, "polyglot")
     assert len(store.components()) == len(comps)
+
+
+def test_total_components_counts_the_assembled_tree():
+    """One authoritative count (comprehension-study S3): stats.total_components
+    equals the distinct node count of the assembled tree the viewer and search
+    index show, while the path-component map count survives as
+    total_path_components."""
+    _, d, arch = _extract_and_derive(POLYGLOT, "poly")
+
+    def count_nodes(comps):
+        return sum(1 + count_nodes(c.get("children", [])) for c in comps)
+
+    stats = arch["stats"]
+    assert stats["total_components"] == count_nodes(arch["components"])
+    assert stats["total_path_components"] == len(d._component_map)
+    assert stats["total_path_components"] <= stats["total_components"]
+
+
+def test_multi_repo_total_components_counts_the_merged_tree():
+    merged = derive_multi_from_config(MULTI_CONFIG)
+
+    def count_nodes(comps):
+        return sum(1 + count_nodes(c.get("children", [])) for c in comps)
+
+    stats = merged["stats"]
+    assert stats["total_components"] == count_nodes(merged["components"])
+    assert stats["total_path_components"] <= stats["total_components"]
