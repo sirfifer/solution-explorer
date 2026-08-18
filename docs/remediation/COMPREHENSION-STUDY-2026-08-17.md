@@ -375,6 +375,17 @@ decision document.
    window, the same way the node drill does, because a first tap can close the
    detail panel and resize the canvas underneath the second one.
 
+   **Built and measured 2026-08-18.** Verdict: it works, and it earns its place
+   on a phone only, where fit is the one case below the readability floor
+   (0.304 zoom, 91x46px nodes, to 0.85 zoom and 255x128px framed on the Tab
+   Bar). On a laptop and a large display the node-budget work already keeps fit
+   readable, so the same gesture trades a quarter to a third of the visible
+   nodes for 25 to 35 percent more size. Two follow-up decisions were taken the
+   same day (clamp the Read view inside the level rather than centring
+   literally; leave Read as a plain look-closer step on big displays). Real
+   touch hardware is still unverified. Full evidence, measurements and the
+   decision packets: `SNAP-ZOOM-2026-08-18.md`.
+
 Deliberately NOT fixed, and why:
 - **The console `querySelector` SyntaxError.** Not reproducible from any call
   site in `viewer/src`; it appears to originate in a dependency. Chasing it
