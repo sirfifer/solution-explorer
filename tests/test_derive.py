@@ -600,3 +600,56 @@ def test_s2_guards_scope_identity(tmp_path):
 
     docs_comp = comps["docs"]
     assert docs_comp["type"] not in hero
+
+
+def test_lines_by_class_taxonomy(tmp_path):
+    """Owner line-count policy (2026-08-17): every counted line in exactly one
+    of code/data/docs/config, gray zones by role, summing to total_lines."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text('[project]\nname = "t"\n')
+    (repo / "app.py").write_text("x = 1\n" * 10)
+    (repo / "README.md").write_text("# T\n" * 5)
+    (repo / "config.json").write_text('{"a": 1}\n')
+    fixtures = repo / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "seed.json").write_text('{"rows": []}\n' * 3)
+    (repo / "big.json").write_text('{"x": "' + "y" * 20000 + '"}\n')
+    (repo / "schema.sql").write_text("CREATE TABLE t (id INT);\n" * 4)
+
+    store = FactStore(":memory:")
+    extract_repo(repo, store)
+    _, arch = derive_all(store, "t", root_path=str(repo))
+    stats = arch["stats"]
+    by_class = stats["lines_by_class"]
+    assert sum(by_class.values()) == stats["total_lines"]
+    assert by_class["docs"] >= 5
+    # app.py (10) + schema.sql (4) are code
+    assert by_class["code"] >= 14
+    # fixtures/seed.json (3, data dir) + big.json (1, oversize) are data
+    assert by_class["data"] >= 4
+    # config.json (1) + pyproject.toml are config
+    assert by_class["config"] >= 2
+
+
+def test_component_language_prefers_code_over_docs(tmp_path):
+    """A component whose markdown outweighs its code must still read as its
+    code language (S2: the server-manager 'markdown Desktop App' case)."""
+    repo = tmp_path / "repo"
+    app = repo / "app"
+    app.mkdir(parents=True)
+    (app / "pyproject.toml").write_text('[project]\nname = "app"\n')
+    (app / "main.py").write_text("x = 1\n" * 5)
+    (app / "GUIDE.md").write_text("words\n" * 500)
+
+    store = FactStore(":memory:")
+    extract_repo(repo, store)
+    _, arch = derive_all(store, "repo", root_path=str(repo))
+
+    def walk(cs):
+        for c in cs:
+            yield c
+            yield from walk(c.get("children", []))
+
+    comp = next(c for c in walk(arch["components"]) if c["id"] == "app")
+    assert comp["language"] == "python"

@@ -666,7 +666,20 @@ export function App() {
           <div className={`hidden md:flex items-center gap-3 text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
             <span>{formatNumber(architecture.stats.total_components)} components</span>
             <span>{formatNumber(architecture.stats.total_files)} files</span>
-            <span>{formatNumber(architecture.stats.total_lines)} lines</span>
+            {architecture.stats.lines_by_class ? (
+              // Honest headline numbers (S8): lead with code lines; the rest
+              // of the taxonomy is visible inline and detailed on hover.
+              <span
+                title={`Code ${formatNumber(architecture.stats.lines_by_class.code)} · Data ${formatNumber(architecture.stats.lines_by_class.data)} · Docs ${formatNumber(architecture.stats.lines_by_class.docs)} · Config ${formatNumber(architecture.stats.lines_by_class.config)} · Total ${formatNumber(architecture.stats.total_lines)} lines`}
+              >
+                {formatNumber(architecture.stats.lines_by_class.code)} code lines
+                <span className={darkMode ? "text-zinc-600" : "text-zinc-300"}>
+                  {" "}+ {formatNumber(architecture.stats.total_lines - architecture.stats.lines_by_class.code)} data/docs
+                </span>
+              </span>
+            ) : (
+              <span>{formatNumber(architecture.stats.total_lines)} lines</span>
+            )}
             {architecture.generated_at && (
               <>
                 <span className={darkMode ? "text-zinc-700" : "text-zinc-300"}>|</span>

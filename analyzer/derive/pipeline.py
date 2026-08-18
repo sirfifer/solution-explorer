@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from ..constants import CODE_LANGUAGES
 from ..contracts import Isolator, finalize_gaps, require, unresolved_reference_count
 from ..models import Component, to_dict
 from ..store import FactStore
@@ -103,6 +104,13 @@ def _check_output_contract(arch: dict) -> None:
         stats.get("total_files") == len(arch["files"]),
         "stats.total_files does not match the files array",
     )
+    lines_by_class = stats.get("lines_by_class")
+    if lines_by_class is not None:
+        require(
+            isinstance(lines_by_class, dict)
+            and sum(lines_by_class.values()) == stats.get("total_lines"),
+            "stats.lines_by_class does not sum to total_lines",
+        )
 
     # Cross-reference and count consistency (wave 5).
     tree_ids = _tree_component_ids(arch["components"])
@@ -163,6 +171,7 @@ def _skeleton_arch(root_name: str, root_path: str, description: str) -> dict:
         "stats": {
             "total_files": 0,
             "total_lines": 0,
+            "lines_by_class": {"code": 0, "data": 0, "docs": 0, "config": 0},
             "total_size_bytes": 0,
             "languages": {},
             "total_symbols": 0,
@@ -267,7 +276,14 @@ def _compute_metrics(d: Deriver) -> None:
             "languages": dict(lang_counts),
         }
         if lang_counts and not comp.language:
-            comp.language = max(lang_counts, key=lang_counts.get)
+            # Dominant language is picked among CODE languages when any exist:
+            # a SwiftUI app whose docs outweigh its Swift must read as swift,
+            # not markdown (comprehension-study S2, the server-manager case).
+            code_counts = {
+                lang: n for lang, n in lang_counts.items() if lang in CODE_LANGUAGES
+            }
+            pick = code_counts or lang_counts
+            comp.language = max(pick, key=pick.get)
         for child in comp.children:
             if isinstance(child, Component):
                 compute(child)
@@ -429,11 +445,54 @@ def _build_component_tree(d: Deriver) -> list[dict]:
     return [serialize(p) for p in sorted(root_paths)]
 
 
+# Line-class taxonomy (comprehension-study S8; owner line-count policy,
+# 2026-08-17, Linguist/cloc conventions). Every counted line lands in exactly
+# one of code/data/docs/config, so the header can lead with Code and a reader
+# can see that a 3.7M-line headline is 87% JSON data instead of refusing to
+# believe it. Gray zones resolve by role: structured files under data-shaped
+# paths or above a size threshold are data, small structured files are config,
+# migrations and schema SQL are code, giant SQL dumps are data.
+_DATA_DIR_SEGMENTS = frozenset({
+    "fixtures", "seeds", "corpora", "datasets", "data", "content",
+    "curriculum", "assets", "resources",
+})
+_STRUCTURED_LANGS = frozenset({"json", "yaml", "xml"})
+_CONFIG_SIZE_LIMIT = 16 * 1024      # a structured file above this is a payload
+_SQL_DUMP_SIZE_LIMIT = 256 * 1024   # schema/migrations below, dumps above
+
+
+def _file_line_class(path: str, language: str, size_bytes: int) -> str:
+    if language == "markdown":
+        return "docs"
+    if language == "toml":
+        return "config"
+    if language in _STRUCTURED_LANGS:
+        segments = {seg.lower() for seg in path.split("/") if seg}
+        if segments & _DATA_DIR_SEGMENTS or size_bytes > _CONFIG_SIZE_LIMIT:
+            return "data"
+        return "config"
+    if language == "sql":
+        return "data" if size_bytes > _SQL_DUMP_SIZE_LIMIT else "code"
+    if language in ("csv", "tsv"):
+        return "data"
+    # CODE_LANGUAGES plus markup that is authored source (css/scss/html,
+    # storyboards, Core Data models) and anything unrecognized.
+    return "code"
+
+
+def _lines_by_class(files) -> dict:
+    out = {"code": 0, "data": 0, "docs": 0, "config": 0}
+    for fi in files:
+        out[_file_line_class(fi.path, fi.language or "", fi.size_bytes or 0)] += fi.lines or 0
+    return out
+
+
 def _stats(d: Deriver, relationships: list[dict]) -> dict:
     total_symbols = len(d._all_symbols)
     return {
         "total_files": len(d._all_files),
         "total_lines": d._total_lines,
+        "lines_by_class": _lines_by_class(d._all_files),
         "total_size_bytes": d._total_size,
         "languages": dict(d._language_counts),
         "total_symbols": total_symbols,

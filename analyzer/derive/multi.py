@@ -70,7 +70,9 @@ def merge_architectures(
         "symbols": [],
         "files": [],
         "stats": {
-            "total_files": 0, "total_lines": 0, "total_size_bytes": 0,
+            "total_files": 0, "total_lines": 0,
+            "lines_by_class": {"code": 0, "data": 0, "docs": 0, "config": 0},
+            "total_size_bytes": 0,
             "total_symbols": 0, "total_components": 0,
             "total_path_components": 0,
             "total_relationships": 0, "languages": {},
@@ -135,6 +137,10 @@ def merge_architectures(
                     "total_symbols", "total_components",
                     "total_path_components", "total_relationships"):
             merged["stats"][key] += stats.get(key, 0)
+        for cls, lines in (stats.get("lines_by_class") or {}).items():
+            merged["stats"]["lines_by_class"][cls] = (
+                merged["stats"]["lines_by_class"].get(cls, 0) + lines
+            )
         for lang, lines in stats.get("languages", {}).items():
             merged["stats"]["languages"][lang] = (
                 merged["stats"]["languages"].get(lang, 0) + lines

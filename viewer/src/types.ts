@@ -717,10 +717,17 @@ export interface ActivityManifestSummary {
 export interface ArchitectureStats {
   total_files: number;
   total_lines: number;
+  // Line-class taxonomy (owner line-count policy, 2026-08-17): every counted
+  // line in exactly one class, summing to total_lines. Absent on datasets
+  // projected before the taxonomy shipped; the header then shows the plain
+  // total.
+  lines_by_class?: { code: number; data: number; docs: number; config: number };
   total_size_bytes: number;
   languages: Record<string, number>;
   total_symbols: number;
   total_components: number;
+  // Path-level components only (excludes derived UI-flow nodes); informational.
+  total_path_components?: number;
   total_relationships: number;
 }
 
