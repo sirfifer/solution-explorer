@@ -61,16 +61,23 @@ export function HelpSystem() {
     }
   }, []);
 
-  // ? key toggles help
+  // ? key toggles help; Escape closes it. The help dialog lists its own
+  // shortcuts, so Escape not closing it read as broken (comprehension-study
+  // S9). Escape is handled only while a help surface is open, so it never
+  // competes with the other Escape consumers.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "?" && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement)) {
         setShowHelp((v) => !v);
+        return;
+      }
+      if (e.key === "Escape" && showHelp) {
+        setShowHelp(false);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [showHelp]);
 
   const dismissWelcome = () => {
     setShowWelcome(false);

@@ -56,6 +56,8 @@ import {
 import { isHeroType, isClientType, isServerType } from "./utils/layout";
 import { safeComponentId } from "./utils/componentId";
 import { dataUrl } from "./utils/dataSource";
+import { rollUpRelationships } from "./utils/relationshipRollup";
+import { buildDegreeIndex, compareByImportance } from "./utils/importance";
 import {
   architectureIdentity,
   loadAnnotations,
@@ -239,7 +241,7 @@ interface ArchStore {
 
   // Panels
   activePanel: Panel;
-  detailItem: { type: "component" | "file" | "symbol"; data: Component | FileInfo | Symbol } | null;
+  detailItem: { type: "component" | "file" | "symbol" | "aggregate"; data: Component | FileInfo | Symbol | AggregateNode } | null;
 
   // Search
   searchOpen: boolean;
@@ -272,6 +274,12 @@ interface ArchStore {
   setViewMode: (mode: ViewMode) => void;
   setActivePanel: (panel: Panel) => void;
   showDetail: (type: "component" | "file" | "symbol", data: Component | FileInfo | Symbol) => void;
+  // Node budget derived from the rendered canvas; see nodeBudgetForCanvas.
+  nodeBudget: number;
+  setNodeBudget: (n: number) => void;
+  // Reduce the budget one step when a laid-out level came out unreadable.
+  // Returns false once it has bottomed out. See shrinkNodeBudget.
+  shrinkNodeBudget: () => boolean;
   closeDetail: () => void;
 
   setSearchOpen: (open: boolean) => void;
@@ -507,10 +515,7 @@ interface ArchStore {
   // otherwise hide silently are grouped by type into expandable aggregate nodes
   // so every child at a drill level is visible or visibly aggregated.
   // Expansion state is keyed by aggregate id and reset on architecture reload.
-  expandedAggregates: Record<string, boolean>;
   toggleAggregate: (id: string) => void;
-  expandAggregate: (id: string) => void;
-  collapseAggregate: (id: string) => void;
   getAggregateNodes: () => AggregateNode[];
 
   // Helpers
@@ -639,7 +644,13 @@ function buildBreadcrumbs(components: Component[], targetId: string): Breadcrumb
   }
 
   search(components, []);
-  return trail;
+  // Collapse an immediately repeated name (comprehension-study S8): a repo
+  // whose root directory shares its name renders "Home / unamentis /
+  // unamentis / server", which reads as a bug. The deeper crumb is kept so
+  // clicking it still navigates to the real component.
+  return trail.filter(
+    (crumb, i) => i === 0 || crumb.name !== trail[i - 1].name,
+  );
 }
 
 // Persist the current in-memory annotations for the loaded architecture's
@@ -705,25 +716,39 @@ function setMemberFromFinding(m: Finding["members"][number], finding: Finding): 
 function computeDrillLevelView(
   promoted: Component[],
   drillLevel: string | null,
+  nodeBudget: number,
+  relationships: Relationship[],
 ): { shown: Component[]; aggregates: AggregateNode[] } {
-  const hasHero = promoted.some((c) => isHeroType(c.type));
   const shown: Component[] = [];
   const hiddenByType: Record<string, Component[]> = {};
 
-  for (const c of promoted) {
-    if (c.type === "content") continue; // deliberate exclusion, not aggregated
-    const isSmallInternal =
-      hasHero &&
-      !isHeroType(c.type) &&
-      c.type !== "library" &&
-      c.type !== "infrastructure" &&
-      c.children.length === 0 &&
-      c.files.length < 10;
-    if (isSmallInternal) {
-      (hiddenByType[c.type] ??= []).push(c);
-    } else {
-      shown.push(c);
-    }
+  // Rank, do not hide by size (LENS-DESIGN I11; owner decision 2026-08-17).
+  // The old rule folded away any non-hero child with no children and fewer
+  // than ten files, using SIZE as a proxy for IMPORTANCE. On the UnaMentis
+  // demo that buried 31 modules behind one box, ten of them tagged critical
+  // (STT, LLM, Voice, Session, Context, ...), because Swift modules are small
+  // by construction. Visibility is now decided by importance, and the number
+  // of visible nodes by what the viewport can actually render readably.
+  const candidates = promoted.filter((c) => c.type !== "content");
+
+  // Degree from the relationship set: how many other components this one is
+  // wired to, counted once per partner so a chatty pair does not dominate.
+  const degree = buildDegreeIndex(relationships);
+
+  // Hero-typed children are the structural anchors of a level (the clients,
+  // servers, screens); they are always shown, never aggregated, whatever the
+  // budget, because hiding one would break the map's shape.
+  const heroes = candidates.filter((c) => isHeroType(c.type));
+  const others = candidates.filter((c) => !isHeroType(c.type));
+  // The same ordering the double-tap Read snap uses to pick what to frame
+  // (utils/importance), so what is shown and what is framed cannot drift.
+  others.sort((a, b) => compareByImportance(a, b, degree));
+
+  shown.push(...heroes);
+  const room = Math.max(0, nodeBudget - heroes.length);
+  for (const [i, c] of others.entries()) {
+    if (i < room) shown.push(c);
+    else (hiddenByType[c.type] ??= []).push(c);
   }
 
   const levelKey = drillLevel ?? "root";
@@ -747,6 +772,7 @@ function computeDrillLevelView(
 function drillView(
   architecture: Architecture,
   drillLevel: string | null,
+  nodeBudget: number,
 ): { shown: Component[]; aggregates: AggregateNode[] } {
   if (!drillLevel) {
     const shown = flattenTopLevel(architecture.components, architecture.relationships)
@@ -757,8 +783,49 @@ function drillView(
   if (!parent) return { shown: [], aggregates: [] };
   const children = parent.children.length > 0 ? parent.children : [parent];
   const promoted = promoteDrillChildren(children);
-  return computeDrillLevelView(promoted, drillLevel);
+  return computeDrillLevelView(
+    promoted, drillLevel, nodeBudget, architecture.relationships,
+  );
 }
+
+// How many nodes a drill level should show, derived from the canvas the viewer
+// actually has (owner decision 2026-08-17: "It needs to adjust to the view" —
+// a phone and a 40-inch 4K display must not get the same budget). A node is
+// ~280x140 at zoom 1; requiring it to stay at or above READABLE_ZOOM fixes how
+// much canvas each one needs, and the canvas size then decides how many fit.
+const NODE_W = 280;
+const NODE_H = 140;
+const NODE_GAP = 40;
+// Below roughly this zoom the labels stop being readable; the failure this
+// replaces bottomed out at 0.1, where nodes rendered 7px tall.
+export const READABLE_ZOOM = 0.6;
+// Comprehension floor and ceiling. The ceiling is not a pixel limit: past a few
+// dozen nodes a diagram stops being comprehensible however large the display
+// (the "hairy ball" the lens research warns about), so more pixels stop buying
+// more understanding.
+const MIN_NODE_BUDGET = 6;
+const MAX_NODE_BUDGET = 40;
+
+// A laid-out graph consumes far more canvas than its nodes' own area: ELK adds
+// rank separation, edge-routing channels, and layer depth, and device-framed
+// nodes are taller than the base box. Measured on the real dataset, a naive
+// grid model over-budgeted by roughly 3x (it allowed 21 nodes on a laptop,
+// which fitView then had to render at 0.14 zoom). This factor is the empirical
+// correction, calibrated so a typical drill level lands at or above
+// READABLE_ZOOM.
+const LAYOUT_SPREAD = 1.75;
+
+export function nodeBudgetForCanvas(width: number, height: number): number {
+  if (!(width > 0) || !(height > 0)) return DEFAULT_NODE_BUDGET;
+  const cellW = NODE_W * READABLE_ZOOM * LAYOUT_SPREAD + NODE_GAP;
+  const cellH = NODE_H * READABLE_ZOOM * LAYOUT_SPREAD + NODE_GAP;
+  const capacity = Math.max(Math.floor(width / cellW), 1)
+    * Math.max(Math.floor(height / cellH), 1);
+  return Math.min(MAX_NODE_BUDGET, Math.max(MIN_NODE_BUDGET, capacity));
+}
+
+// Used before the canvas has been measured (first render, tests, SSR).
+export const DEFAULT_NODE_BUDGET = 15;
 
 // Predictive prefetch targets (P6-4): the children of the selected component plus
 // the breadcrumb ancestors, deduplicated and bounded. These are the components a
@@ -853,7 +920,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   componentDetailCache: {},
   componentDetailLoading: {},
   componentDetailErrors: {},
-  expandedAggregates: {},
+  nodeBudget: DEFAULT_NODE_BUDGET,
   coverageRows: null,
   coverageRowsLoading: false,
   coverageRowsError: null,
@@ -914,7 +981,6 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       componentDetailErrors: {},
       // Aggregate expansion belongs to a specific tree; drop it on reload so a
       // new scan starts from collapsed aggregates (P6-4).
-      expandedAggregates: {},
       // Drop any coverage rows fetched for a previous scan; the panel refetches
       // (or reads the new inline rows) on next open.
       coverageRows: null,
@@ -966,18 +1032,17 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     }
     const comp = findComponent(arch.components, id);
     if (comp) {
-      if (get().reviewMode) {
-        set({
-          selectedComponentId: id,
-          annotatingComponentId: id,
-        });
-      } else {
-        set({
-          selectedComponentId: id,
-          detailItem: { type: "component", data: comp },
-          activePanel: "detail",
-        });
-      }
+      // Selection always shows the component's details, review mode included
+      // (comprehension-study S4: review mode used to withhold the panel, so
+      // tree and node clicks appeared dead and the Review Summary owned the
+      // right rail). In review mode the selection additionally becomes the
+      // annotation target; the Review button reopens the summary.
+      set({
+        selectedComponentId: id,
+        detailItem: { type: "component", data: comp },
+        activePanel: "detail",
+        ...(get().reviewMode ? { annotatingComponentId: id } : {}),
+      });
       // Predictive prefetch: warm the detail shards the user is most likely to
       // open next (children + breadcrumb ancestors) at idle time (P6-4).
       get().prefetchDetails(id);
@@ -1035,6 +1100,25 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   // Switch lens WITHOUT disturbing the current selection, breadcrumbs, or drill
   // level (invariant I12: the same element stays selected across lens switches).
   // An unknown or unavailable id resolves to the default lens.
+  setNodeBudget: (n) => {
+    if (get().nodeBudget !== n) set({ nodeBudget: n });
+  },
+
+  // Close the loop on readability. The budget a viewport can hold depends on
+  // the laid-out graph's shape, not just its node count: two levels with the
+  // same number of children can differ several-fold in the canvas they need,
+  // because ELK's layer depth follows the edges. So the formula sets the
+  // starting point and this shrinks it when a real layout still came out below
+  // READABLE_ZOOM. Shrink-only and bounded by the caller, so it converges.
+  shrinkNodeBudget: () => {
+    const next = Math.max(MIN_NODE_BUDGET, Math.floor(get().nodeBudget * 0.7));
+    if (next < get().nodeBudget) {
+      set({ nodeBudget: next });
+      return true;
+    }
+    return false;
+  },
+
   setLens: (id) => set((s) => ({ lens: resolveLensId(id, s.architecture, resolveChannel()) })),
 
   // The active lens's node/edge selection, fed to the graph pipeline. For
@@ -1768,23 +1852,26 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     }
   },
 
-  toggleAggregate: (id) =>
-    set((s) => ({
-      expandedAggregates: { ...s.expandedAggregates, [id]: !s.expandedAggregates[id] },
-    })),
-  expandAggregate: (id) =>
-    set((s) => ({ expandedAggregates: { ...s.expandedAggregates, [id]: true } })),
-  collapseAggregate: (id) =>
-    set((s) => {
-      const next = { ...s.expandedAggregates };
-      delete next[id];
-      return { expandedAggregates: next };
-    }),
+  // Expanding an aggregate opens its ranked member LIST in the detail panel
+  // rather than promoting 31 more nodes onto the canvas (owner decision
+  // 2026-08-17, option B). The canvas exploding to 45 nodes at minimum zoom,
+  // where each rendered 7px tall, is impossible by construction now, and a
+  // list can carry purpose and criticality that a speck cannot.
+  toggleAggregate: (id) => {
+    const agg = get().getAggregateNodes().find((a) => a.id === id);
+    if (!agg) return;
+    const open = get().detailItem;
+    if (open?.type === "aggregate" && (open.data as AggregateNode).id === id) {
+      set({ detailItem: null, activePanel: null });
+      return;
+    }
+    set({ detailItem: { type: "aggregate", data: agg }, activePanel: "detail" });
+  },
 
   getAggregateNodes: () => {
     const { architecture, drillLevel } = get();
     if (!architecture) return [];
-    return drillView(architecture, drillLevel).aggregates;
+    return drillView(architecture, drillLevel, get().nodeBudget).aggregates;
   },
 
   loadCoverageRows: async () => {
@@ -2106,20 +2193,17 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   },
 
   getVisibleComponents: () => {
-    const { architecture, drillLevel, expandedAggregates } = get();
+    const { architecture, drillLevel } = get();
     if (!architecture) return [];
 
-    // Top level and drill levels share one computation (drillView), which returns
-    // the shown components plus the aggregates that stand in for the small
-    // internal modules the old hero filter used to drop silently (P6-4). Members
-    // of an expanded aggregate are promoted back to real nodes here; the
-    // aggregate marker itself still renders (getAggregateNodes) so the grouping
-    // stays visible. Nothing is ever hidden without a visible, counted trace.
-    const { shown, aggregates } = drillView(architecture, drillLevel);
-    const expandedMembers = aggregates
-      .filter((agg) => expandedAggregates[agg.id])
-      .flatMap((agg) => agg.members);
-    return [...shown, ...expandedMembers];
+    // Top level and drill levels share one computation (drillView), which
+    // returns the ranked shown set plus the aggregates standing in for what did
+    // not fit the viewport's node budget. Aggregate members are NOT promoted
+    // onto the canvas; they are browsed as a ranked list in the panel, so the
+    // canvas can never degrade into unreadable specks. Nothing is ever hidden
+    // without a visible, counted trace.
+    const { shown } = drillView(architecture, drillLevel, get().nodeBudget);
+    return shown;
   },
 
   getComponentRelationships: () => {
@@ -2129,8 +2213,14 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     const visible = get().getVisibleComponents();
     const visibleIds = new Set(visible.map((c) => c.id));
 
-    return architecture.relationships.filter(
-      (r) => visibleIds.has(r.source) && visibleIds.has(r.target)
+    // Roll edges up to their nearest visible ancestors (S1): an edge between
+    // descendants of two visible nodes draws between those nodes instead of
+    // silently dropping, so the client-to-server wiring is present at the
+    // level every visitor starts on. Exact-id edges pass through unchanged.
+    return rollUpRelationships(
+      architecture.relationships,
+      architecture.components,
+      visibleIds
     );
   },
 

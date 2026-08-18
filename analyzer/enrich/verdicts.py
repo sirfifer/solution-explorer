@@ -32,8 +32,12 @@ from .staleness import staleness_of
 __all__ = ["apply_verdict_overlay"]
 
 _VERDICT_KINDS = frozenset(
-    {"edge-verdict", "concern", "finding", "finding-verdict"}
+    {"edge-verdict", "concern", "finding", "finding-verdict", "identity-verdict"}
 )
+
+# Identity fields a verdict row may correct on the projected component (the S2
+# gate). Kept in lockstep with passes._IDENTITY_FIELDS.
+_IDENTITY_FIELDS = ("name", "type", "framework", "port")
 
 
 def _stale_marker(
@@ -67,6 +71,7 @@ def apply_verdict_overlay(
     concern_names: dict[str, dict] = {}
     ai_findings: dict[str, dict] = {}
     finding_verdicts: dict[str, dict] = {}
+    identity_verdicts: dict[str, dict] = {}
     for row in rows:
         kind = row["target_kind"]
         tid = row["target_id"]
@@ -78,10 +83,60 @@ def apply_verdict_overlay(
             ai_findings[tid] = row
         elif kind == "finding-verdict":
             finding_verdicts[tid] = row
+        elif kind == "identity-verdict":
+            identity_verdicts[tid] = row
 
     def staleness(row: dict) -> Optional[bool]:
         current = index.for_target(row["target_kind"], row["target_id"])
         return staleness_of(row.get("derived_from_hash"), current)
+
+    # --- identity verdicts (S2 gate) -----------------------------------------
+    # Corrections are applied to the projected component with a provenance
+    # marker; uncertains land in the honest-gaps record. A stale verdict is
+    # NOT applied (the component's content changed since the verdict), so the
+    # deterministic value stands until the next verification run.
+    if identity_verdicts:
+        identity_gaps: list[dict] = []
+
+        def _apply_identity(comps: list) -> None:
+            for comp in comps:
+                row = identity_verdicts.get(comp.get("id"))
+                if row is not None and staleness(row) is not True:
+                    fields = (row.get("payload") or {}).get("fields") or {}
+                    corrections: dict = {}
+                    for fname in _IDENTITY_FIELDS:
+                        entry = fields.get(fname) or {}
+                        status = entry.get("status")
+                        if status == "corrected":
+                            corrections[fname] = {
+                                "from": comp.get(fname),
+                                "to": entry.get("value"),
+                                "reason": entry.get("reason"),
+                                "evidence": entry.get("evidence"),
+                            }
+                            comp[fname] = entry.get("value")
+                        elif status == "uncertain":
+                            identity_gaps.append({
+                                "producer": "enrich.verify-identity",
+                                "stage": f"{comp.get('id')}:{fname}",
+                                "status": "unresolved",
+                                "reason": entry.get("reason") or "",
+                            })
+                    if corrections:
+                        comp["identity_corrections"] = corrections
+                _apply_identity(comp.get("children", []) or [])
+
+        _apply_identity(arch.get("components", []))
+        if identity_gaps:
+            gaps = arch.setdefault("gaps", [])
+            existing = {(g.get("producer"), g.get("stage")) for g in gaps}
+            for gap in identity_gaps:
+                if (gap["producer"], gap["stage"]) not in existing:
+                    gaps.append(gap)
+            gaps.sort(key=lambda g: (
+                g.get("producer", ""), g.get("stage", ""),
+                g.get("status", ""), g.get("reason", ""),
+            ))
 
     # --- edge verdicts (P7-3) ------------------------------------------------
     for rel in arch.get("relationships", []):

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import type { Component, FileInfo, Symbol as ArchSymbol, Relationship, ComponentStatus, UIAction, Capability, DataEntity, EntityAccess, Evidence } from "../types";
+import type { Component, FileInfo, Symbol as ArchSymbol, Relationship, ComponentStatus, UIAction, Capability, DataEntity, EntityAccess, Evidence, AggregateNode as AggregateNodeData } from "../types";
 import { useArchStore } from "../store";
 import {
   getTypeColors,
@@ -11,6 +11,7 @@ import {
   getRoleBadgeColors,
 } from "../utils/layout";
 import { getSourceUrl } from "../utils/sourceLinks";
+import { boundaryRelationships } from "../utils/relationshipRollup";
 import { parseUrlState, replaceUrlState } from "../utils/urlState";
 import { CodePreview } from "./CodePreview";
 import { VirtualList } from "./VirtualList";
@@ -126,6 +127,10 @@ export function DetailPanel() {
     );
   }
 
+  if (detailItem.type === "aggregate") {
+    return <AggregateDetail aggregate={detailItem.data as AggregateNodeData} />;
+  }
+
   if (detailItem.type === "file") {
     return <FileDetail file={detailItem.data as FileInfo} />;
   }
@@ -214,13 +219,22 @@ function ComponentDetail({
     () => getComponentSymbols(component.id),
     [component.id, getComponentSymbols, detailCacheEntry],
   );
-  const relationships = useMemo(
-    () =>
-      architecture?.relationships.filter(
-        (r) => r.source === component.id || r.target === component.id,
-      ) || [],
-    [architecture, component.id],
-  );
+  // Boundary roll-up (S1): include every edge crossing this component's
+  // subtree boundary, not just edges naming the component id exactly. Before
+  // this, the iOS client's Links tab hid the WebSocket/HTTP edges its deep
+  // service modules make to the management server, while the server's own tab
+  // showed them; both sides now tell the same story.
+  const { relationships, relationshipSubtree } = useMemo(() => {
+    if (!architecture) {
+      return { relationships: [], relationshipSubtree: new Set<string>() };
+    }
+    const { relationships: rels, subtree } = boundaryRelationships(
+      architecture.relationships,
+      architecture.components,
+      component.id,
+    );
+    return { relationships: rels, relationshipSubtree: subtree };
+  }, [architecture, component.id]);
 
   const docs = component.docs;
   // The Docs tab presence predicate must match EXACTLY what DocsTab renders
@@ -477,7 +491,11 @@ function ComponentDetail({
           />
         )}
         {activeTab === "ai" && (
-          <AIInsightsTab component={component} relationships={relationships} />
+          <AIInsightsTab
+            component={component}
+            relationships={relationships}
+            subtree={relationshipSubtree}
+          />
         )}
         {activeTab === "testing" && component.testing && (
           <TestingTab component={component} />
@@ -486,7 +504,11 @@ function ComponentDetail({
           <StatusTab statuses={component.live_status.statuses} />
         )}
         {activeTab === "relationships" && (
-          <RelationshipsTab componentId={component.id} relationships={relationships} />
+          <RelationshipsTab
+            componentId={component.id}
+            relationships={relationships}
+            subtree={relationshipSubtree}
+          />
         )}
         {activeTab === "actions" && component.actions && (
           <ActionsTab actions={component.actions} />
@@ -1680,17 +1702,31 @@ function DataTab({ component }: { component: Component }) {
 function AIInsightsTab({
   component,
   relationships,
+  subtree,
 }: {
   component: Component;
   relationships: Relationship[];
+  subtree?: Set<string>;
 }) {
   const { darkMode } = useArchStore();
   const ai = component.ai_enhance;
   if (!ai) return null;
 
   const roleMeta = ai.architectural_role ? ROLE_META[ai.architectural_role] : null;
-  const incomingCount = relationships.filter((r) => r.target === component.id).length;
-  const outgoingCount = relationships.filter((r) => r.source === component.id).length;
+  // Same subtree-membership direction rule as the Links tab (S1), so the two
+  // surfaces never disagree about connection counts.
+  const inSubtree = (id: string) =>
+    subtree ? subtree.has(id) : id === component.id;
+  const incomingCount = relationships.filter((r) =>
+    inSubtree(r.target) && !inSubtree(r.source)
+      ? true
+      : inSubtree(r.source) && inSubtree(r.target) && r.target === component.id,
+  ).length;
+  const outgoingCount = relationships.filter((r) =>
+    inSubtree(r.source) && !inSubtree(r.target)
+      ? true
+      : inSubtree(r.source) && inSubtree(r.target) && r.source === component.id,
+  ).length;
 
   return (
     <div className="p-4 space-y-4">
@@ -2032,18 +2068,41 @@ function TestingTab({ component }: { component: Component }) {
 function RelationshipsTab({
   componentId,
   relationships,
+  subtree,
 }: {
   componentId: string;
   relationships: Relationship[];
+  subtree?: Set<string>;
 }) {
   const { darkMode, selectComponent, getComponentById } = useArchStore();
 
-  const incoming = relationships.filter((r) => r.target === componentId);
-  const outgoing = relationships.filter((r) => r.source === componentId);
+  // Direction by subtree membership (S1): a boundary-crossing edge whose deep
+  // endpoint lives inside this component is outgoing from it, even though the
+  // edge names the descendant. Without a subtree (legacy callers), fall back
+  // to exact-id classification.
+  const inSubtree = (id: string) =>
+    subtree ? subtree.has(id) : id === componentId;
+  const incoming = relationships.filter(
+    (r) => inSubtree(r.target) && !inSubtree(r.source),
+  );
+  const outgoing = relationships.filter(
+    (r) => inSubtree(r.source) && !inSubtree(r.target),
+  );
+  // Edges wholly inside the subtree that name the component directly (its own
+  // links to its children) keep their pre-roll-up placement.
+  const internal = relationships.filter(
+    (r) => inSubtree(r.source) && inSubtree(r.target),
+  );
+  const internalOutgoing = internal.filter((r) => r.source === componentId);
+  const internalIncoming = internal.filter((r) => r.target === componentId);
 
   const RelRow = ({ rel, direction }: { rel: Relationship; direction: "in" | "out" }) => {
     const otherId = direction === "in" ? rel.source : rel.target;
     const other = getComponentById(otherId);
+    // The endpoint on OUR side of a boundary-crossing edge; shown as a "via"
+    // hint when it is a descendant rather than the component itself.
+    const nearId = direction === "in" ? rel.target : rel.source;
+    const near = nearId !== componentId ? getComponentById(nearId) : null;
     const typeColors: Record<string, string> = {
       import: darkMode ? "text-zinc-400" : "text-zinc-600",
       http: darkMode ? "text-blue-400" : "text-blue-600",
@@ -2079,6 +2138,11 @@ function RelationshipsTab({
           </span>
           <span className={`flex-1 truncate ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
             {other?.name || otherId}
+            {near && (
+              <span className={`ml-1.5 text-[10px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                via {near.name}
+              </span>
+            )}
           </span>
           {(() => {
             const protoRef = getProtocolRef(rel.protocol || rel.type);
@@ -2208,33 +2272,36 @@ function RelationshipsTab({
     );
   };
 
+  const allOutgoing = [...outgoing, ...internalOutgoing];
+  const allIncoming = [...incoming, ...internalIncoming];
+
   return (
     <div className="p-3 space-y-4">
-      {outgoing.length > 0 && (
+      {allOutgoing.length > 0 && (
         <div>
           <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-            Outgoing ({outgoing.length})
+            Outgoing ({allOutgoing.length})
           </h4>
           <div className="space-y-1">
-            {outgoing.map((rel, i) => (
+            {allOutgoing.map((rel, i) => (
               <RelRow key={i} rel={rel} direction="out" />
             ))}
           </div>
         </div>
       )}
-      {incoming.length > 0 && (
+      {allIncoming.length > 0 && (
         <div>
           <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-            Incoming ({incoming.length})
+            Incoming ({allIncoming.length})
           </h4>
           <div className="space-y-1">
-            {incoming.map((rel, i) => (
+            {allIncoming.map((rel, i) => (
               <RelRow key={i} rel={rel} direction="in" />
             ))}
           </div>
         </div>
       )}
-      {incoming.length === 0 && outgoing.length === 0 && (
+      {allIncoming.length === 0 && allOutgoing.length === 0 && (
         <div className={`text-center py-8 text-sm ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
           No relationships detected
         </div>
@@ -2418,6 +2485,114 @@ function SymbolDetail({ symbol }: { symbol: ArchSymbol }) {
               ))}
             </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// The ranked member list for an aggregate (owner decision 2026-08-17, option
+// B). Expanding an aggregate used to promote its members onto the canvas,
+// which took the iOS client's drill level to 45 nodes at minimum zoom where
+// each rendered 7px tall. A list instead: ranked the same way the canvas ranks
+// (criticality, then connections, then size), carrying the purpose and
+// criticality a speck could never show, and every row navigates.
+function AggregateDetail({ aggregate }: { aggregate: AggregateNodeData }) {
+  const { darkMode, navigateToComponent, closeDetail, architecture } = useArchStore();
+  const [filter, setFilter] = useState("");
+
+  const degree = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const rel of architecture?.relationships || []) {
+      if (rel.source === rel.target) continue;
+      map.set(rel.source, (map.get(rel.source) ?? 0) + 1);
+      map.set(rel.target, (map.get(rel.target) ?? 0) + 1);
+    }
+    return map;
+  }, [architecture]);
+
+  const rank = (c: Component) =>
+    c.ai_enhance?.criticality === "critical" ? 0
+      : c.ai_enhance?.criticality === "important" ? 1
+        : c.ai_enhance?.criticality === "supporting" ? 3 : 2;
+
+  const members = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    return [...aggregate.members]
+      .filter((c) => !q || c.name.toLowerCase().includes(q) || c.path.toLowerCase().includes(q))
+      .sort((a, b) =>
+        rank(a) - rank(b)
+        || (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0)
+        || b.files.length - a.files.length
+        || a.name.localeCompare(b.name),
+      );
+  }, [aggregate, filter, degree]);
+
+  const dot = (c: Component) =>
+    c.ai_enhance?.criticality === "critical" ? "bg-red-500"
+      : c.ai_enhance?.criticality === "important" ? "bg-amber-500"
+        : darkMode ? "bg-zinc-700" : "bg-zinc-300";
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className={`px-4 py-3 border-b shrink-0 ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <h2 className={`text-sm font-bold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
+              {aggregate.memberCount} more {aggregate.aggregateType}
+              {aggregate.memberCount !== 1 ? "s" : ""}
+            </h2>
+            <p className={`text-[11px] mt-0.5 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
+              Ranked by criticality, then connections. These did not fit the
+              canvas at a readable size.
+            </p>
+          </div>
+          <button
+            onClick={closeDetail}
+            className={`shrink-0 text-xs px-1.5 py-0.5 rounded ${darkMode ? "text-zinc-500 hover:bg-zinc-800" : "text-zinc-400 hover:bg-zinc-200"}`}
+            title="Close"
+          >
+            {"✕"}
+          </button>
+        </div>
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder={`Filter ${aggregate.memberCount} components...`}
+          className={`mt-2 w-full px-2 py-1 rounded text-xs outline-none border ${
+            darkMode
+              ? "bg-zinc-900 border-zinc-700 text-zinc-200 placeholder-zinc-600"
+              : "bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400"
+          }`}
+        />
+      </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+        {members.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => navigateToComponent(c.id)}
+            className={`w-full text-left px-2.5 py-2 rounded-lg ${darkMode ? "hover:bg-zinc-800/60" : "hover:bg-zinc-100"}`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${dot(c)}`} />
+              <span className={`text-sm font-medium truncate ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+                {c.name}
+              </span>
+              <span className={`ml-auto shrink-0 text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                {c.files.length} file{c.files.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            {(c.ai_enhance?.description || c.docs?.purpose) && (
+              <div className={`text-[11px] mt-0.5 line-clamp-2 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
+                {c.ai_enhance?.description || c.docs?.purpose}
+              </div>
+            )}
+          </button>
+        ))}
+        {members.length === 0 && (
+          <p className={`text-center text-xs py-6 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            Nothing matches "{filter}".
+          </p>
         )}
       </div>
     </div>

@@ -165,7 +165,7 @@ describe("LensSwitcher labeling and URL-param override", () => {
     useArchStore.setState({
       architecture: makeArchitecture(),
       selectedComponentId: null, breadcrumbs: [],
-      drillLevel: null, expandedAggregates: {}, lens: DEFAULT_LENS_ID,
+      drillLevel: null, lens: DEFAULT_LENS_ID,
     });
     window.history.pushState({}, "", "/");
   });

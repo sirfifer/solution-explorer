@@ -493,6 +493,40 @@ def main():
 
     _print_report(comp_counts, rel_stats)
 
+    _refresh_front_door(target_path)
+
+
+def _refresh_front_door(target_path):
+    """Regenerate ai.json/llms.txt beside the merged target when they exist.
+
+    The projection writes the AI front door BEFORE this merge runs, so without a
+    refresh the deployed ai.json keeps asserting enriched=false on a dataset
+    whose manifest now carries ai_enhance on nearly every component (the
+    comprehension-study S3 finding). A refresh failure is a hard error, not a
+    warning: publishing a front door that misdescribes the dataset is exactly
+    the defect this step exists to prevent.
+    """
+    if not (target_path.parent / "ai.json").is_file():
+        return
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    try:
+        from analyzer.project.frontdoor import refresh_front_door
+
+        written = refresh_front_door(target_path)
+    except Exception as exc:  # noqa: BLE001 - any failure here must be loud
+        print(
+            f"ERROR: front-door refresh failed after merge: {exc}", file=sys.stderr
+        )
+        print(
+            "  The merged target was written, but ai.json/llms.txt beside it "
+            "still describe the pre-merge dataset. Fix the refresh and re-run.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if written:
+        ai_path, llms_path = written
+        print(f"Front door refreshed: {ai_path.name}, {llms_path.name}")
+
 
 if __name__ == "__main__":
     main()

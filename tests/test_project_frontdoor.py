@@ -331,3 +331,81 @@ def test_dataset_carries_the_enriched_flag():
         mode="monolith", monolith_filename="architecture.json",
     )
     assert rich["dataset"]["enriched"] is True
+
+
+# ---------------------------------------------------------------------------
+# refresh after in-place mutation (comprehension-study S3)
+
+
+def test_refresh_split_reflects_post_merge_enrichment(tmp_path):
+    """The deploy's enrichment merge mutates manifest.json after the front door
+    was written; refresh must flip dataset.enriched without re-projecting."""
+    from analyzer.project.frontdoor import refresh_front_door
+
+    out = tmp_path / "arch"
+    _project_split(POLYGLOT, "poly", out)
+    manifest_path = out / "manifest.json"
+    ai_before = json.loads((out / "ai.json").read_text())
+    assert ai_before["dataset"]["enriched"] is False
+
+    manifest = json.loads(manifest_path.read_text())
+    manifest["ai_enhance"] = {"summary": "s"}
+    manifest["components"][0]["ai_enhance"] = {"help_text": "h"}
+    manifest_path.write_text(json.dumps(manifest))
+
+    written = refresh_front_door(manifest_path)
+    assert written is not None
+
+    ai_after = json.loads((out / "ai.json").read_text())
+    assert ai_after["dataset"]["enriched"] is True
+    # Link integrity survives: the same endpoints are listed, and the search
+    # section is rebuilt identically from the on-disk shards.
+    assert [e["path"] for e in ai_after["endpoints"]] == [
+        e["path"] for e in ai_before["endpoints"]
+    ]
+    assert ai_after["search"] == ai_before["search"]
+
+
+def test_refresh_monolith_reflects_post_merge_enrichment(tmp_path):
+    from analyzer.project.frontdoor import refresh_front_door
+
+    out_file = tmp_path / "architecture.json"
+    _project_monolith(POLYGLOT, "poly", out_file)
+    ai_before = json.loads((tmp_path / "ai.json").read_text())
+    assert ai_before["dataset"]["enriched"] is False
+
+    doc = json.loads(out_file.read_text())
+    doc["ai_enhance"] = {"summary": "s"}
+    out_file.write_text(json.dumps(doc))
+
+    assert refresh_front_door(out_file) is not None
+    ai_after = json.loads((tmp_path / "ai.json").read_text())
+    assert ai_after["dataset"]["enriched"] is True
+    assert [e["path"] for e in ai_after["endpoints"]] == [
+        e["path"] for e in ai_before["endpoints"]
+    ]
+
+
+def test_refresh_is_a_byte_level_noop_on_an_unchanged_projection(tmp_path):
+    """Determinism (I4): refreshing without mutating the entry document must
+    reproduce ai.json and llms.txt byte for byte."""
+    from analyzer.project.frontdoor import refresh_front_door
+
+    out = tmp_path / "arch"
+    _project_split(POLYGLOT, "poly", out)
+    ai_bytes = (out / "ai.json").read_bytes()
+    llms_bytes = (out / "llms.txt").read_bytes()
+
+    assert refresh_front_door(out / "manifest.json") is not None
+    assert (out / "ai.json").read_bytes() == ai_bytes
+    assert (out / "llms.txt").read_bytes() == llms_bytes
+
+
+def test_refresh_without_a_front_door_stays_absent(tmp_path):
+    """A projection that never emitted a front door keeps not having one."""
+    from analyzer.project.frontdoor import refresh_front_door
+
+    target = tmp_path / "manifest.json"
+    target.write_text(json.dumps({"name": "d", "components": []}))
+    assert refresh_front_door(target) is None
+    assert not (tmp_path / "ai.json").exists()

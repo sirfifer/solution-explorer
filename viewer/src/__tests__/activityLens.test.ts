@@ -85,8 +85,7 @@ function archWithActivity(): Architecture {
 
 function resetStore() {
   useArchStore.setState({
-    architecture: null, selectedComponentId: null, breadcrumbs: [], drillLevel: null,
-    expandedAggregates: {}, detailItem: null, activePanel: null, lens: "structure",
+    architecture: null, selectedComponentId: null, breadcrumbs: [], drillLevel: null, detailItem: null, activePanel: null, lens: "structure",
     activityData: null, activityLoading: false, activityError: null,
   });
 }

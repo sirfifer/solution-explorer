@@ -139,8 +139,17 @@ export function initializeSearch(arch: Architecture) {
         path: comp.path,
         kind: comp.type,
         language: comp.language || undefined,
-        // Seed description text so search covers it even before shards load.
-        text: comp.description || comp.docs?.purpose || undefined,
+        // Seed description text so search covers it even before shards load,
+        // plus the component's API endpoints and env vars: those were absent
+        // from every index, so "/ws/audio" and a config-variable name found
+        // nothing relevant (comprehension-study S7).
+        text: [
+          comp.description || comp.docs?.purpose || "",
+          ...(comp.docs?.api_endpoints || []).map((e) => `${e.method} ${e.path}`),
+          ...(comp.docs?.env_vars || []),
+        ]
+          .filter(Boolean)
+          .join(" ") || undefined,
         score: 0,
       });
       indexComponents(comp.children);
@@ -266,11 +275,33 @@ export async function loadSearchShards(baseUrl = "./architecture/search"): Promi
   }
 }
 
+// Relevance gate (comprehension-study S7). `ignoreLocation` lets Fuse's Bitap
+// find a short query's letters scattered anywhere in a long field, and it
+// scores those hits as near-perfect: "billing", absent from the codebase,
+// matched "KBLinguisticMatcher" at 0.007. Score cannot separate that from a
+// real match, so admission is decided by literal containment instead and Fuse
+// is kept for RANKING only. A single word must appear as a substring; a
+// multi-word query must have every word present. "No results" is a correct,
+// honest answer, and substring matching is what someone typing an identifier
+// or a path already expects.
+function matchesLiterally(item: SearchResult, query: string): boolean {
+  const haystack = [item.name, item.path, item.kind, item.text]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const needle = query.toLowerCase().trim();
+  if (haystack.includes(needle)) return true;
+  const tokens = needle.split(/[^a-z0-9_./-]+/).filter(Boolean);
+  return tokens.length > 1 && tokens.every((t) => haystack.includes(t));
+}
+
 export function search(query: string, limit: number = 50): SearchResult[] {
-  if (!componentFuse || !query.trim()) return [];
+  const q = query.trim();
+  if (!componentFuse || !q) return [];
 
   return componentFuse
-    .search(query)
+    .search(q)
+    .filter((r) => matchesLiterally(r.item, q))
     .slice(0, limit)
     .map((r) => ({
       ...r.item,

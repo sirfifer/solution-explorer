@@ -38,6 +38,42 @@ from .context import Deriver
 _DATA_LENS_DIRS = {"models", "migrations", "schemas"}
 _V2_CONTENT_DIR_NAMES = CONTENT_DIR_NAMES - _DATA_LENS_DIRS
 
+# Identity-scoping guards (comprehension-study S2). A component's published
+# identity must come from what it IS, not from what its examples and fixtures
+# import: a pytest suite importing aiohttp is not an API server, a docs tree
+# with an example plugin is not a service, and a scripts directory containing
+# one server script is not that server. These sets gate hero-type promotion
+# and, for test suites, endpoint/env-var aggregation (derive/docs.py).
+TEST_DIR_NAMES = frozenset({
+    "tests", "test", "spec", "specs", "__tests__",
+    "testing", "test_suite", "e2e", "integration",
+})
+_TEST_FILE_RE = re.compile(
+    r"(?:^|/)(?:test_[^/]+|[^/]+_test\.[^/.]+|[^/]+\.(?:test|spec)\.[^/.]+"
+    r"|[^/]+Tests?\.(?:swift|java|kt|cs|m))$"
+)
+# Documentation trees never promote, including their subdirectories: example
+# code inside docs is illustration, not identity.
+_DOCS_PATH_SEGMENTS = frozenset({"docs", "doc", "documentation"})
+# Example/sample/fixture DIRECTORIES never promote themselves; their children
+# may (an example app genuinely is an app, and showing it as one is truthful).
+_EXAMPLE_DIR_NAMES = frozenset({
+    "examples", "example", "samples", "sample", "fixtures",
+})
+_UTILITY_DIR_NAMES = frozenset({
+    "scripts", "bin", "tools", "utils", "ci", "build", "devops", "deploy",
+})
+
+
+def is_test_suite_component(comp: Component, rel_path: str) -> bool:
+    """Whether a component is a test suite by directory name or file share."""
+    if os.path.basename(rel_path).lower() in TEST_DIR_NAMES:
+        return True
+    if not comp.files:
+        return False
+    matches = sum(1 for f in comp.files if _TEST_FILE_RE.search(f))
+    return matches / len(comp.files) > 0.6
+
 
 def _safe_iterdir(fs_dir) -> list:
     try:
@@ -115,6 +151,19 @@ def _classify_architectural_role(d: Deriver, comp: Component, rel_path: str) -> 
     framework = (comp.framework or "").lower()
     comp_dir = (d.root / rel_path) if rel_path else d.root
     dir_name = os.path.basename(rel_path).lower()
+
+    # Identity-scoping guards (S2): test suites, documentation trees, and
+    # example/fixture directories keep their neutral type no matter what
+    # frameworks their contents import. Wrong-but-confident classification is
+    # the failure mode this prevents (owner ruling 2026-08-17: resolve or stay
+    # neutral, never publish a guess).
+    if is_test_suite_component(comp, rel_path):
+        return None
+    path_segments = {seg.lower() for seg in rel_path.split(os.sep) if seg}
+    if path_segments & _DOCS_PATH_SEGMENTS:
+        return None
+    if dir_name in _EXAMPLE_DIR_NAMES:
+        return None
 
     has_info_plist = (comp_dir / "Info.plist").exists()
     has_xcodeproj = any(
@@ -206,10 +255,11 @@ def _classify_architectural_role(d: Deriver, comp: Component, rel_path: str) -> 
         if ruby_deps & {"rails", "sinatra", "grape", "hanami", "roda"}:
             return "api-server"
 
-    test_dir_names = {"tests", "test", "spec", "specs", "__tests__",
-                      "testing", "test_suite", "e2e", "integration"}
+    # A utility directory (scripts/, tools/, ...) containing one server script
+    # must not take that server's name, type, and port as the identity of the
+    # whole directory (S2: unamentis/scripts became "Remote Log Server").
     python_files = [f for f in comp.files if f.endswith(".py")]
-    if python_files and dir_name not in test_dir_names:
+    if python_files and dir_name not in _UTILITY_DIR_NAMES:
         server_file_patterns = re.compile(
             r'(?:^|/)(?:.*server.*|.*gateway.*|.*daemon.*)\.py$', re.I)
         server_imports = {
@@ -232,10 +282,9 @@ def _classify_architectural_role(d: Deriver, comp: Component, rel_path: str) -> 
                             comp.name = _name_from_server_script(fpath, content)
                         return "service"
 
-    utility_dir_names = {"scripts", "bin", "tools", "utils", "ci", "build", "devops", "deploy"}
     server_languages = {"python", "rust", "go", "ruby", "typescript", "javascript"}
     if (comp.port and comp.language in server_languages
-            and not (pkg_deps & client_deps) and dir_name not in utility_dir_names):
+            and not (pkg_deps & client_deps) and dir_name not in _UTILITY_DIR_NAMES):
         return "api-server"
 
     logging_dir_patterns = {"log", "logger", "logging", "logs", "metrics",

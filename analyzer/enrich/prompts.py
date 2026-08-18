@@ -30,6 +30,7 @@ __all__ = [
     "build_intent_proposal_prompt",
     "build_finding_verify_prompt",
     "build_identify_unknowns_prompt",
+    "build_identity_verify_prompt",
 ]
 
 # The architectural role vocabulary (RESOURCES.md). Kept in sync with the
@@ -589,3 +590,69 @@ def _group_by(rows: list[dict], key: str) -> dict:
         if k:
             out.setdefault(k, []).append(row)
     return out
+
+
+def build_identity_verify_prompt(comp: dict, facts: dict) -> str:
+    """Prompt to verify one component's published identity claims (S2 gate).
+
+    ``comp`` is the projected component dict; ``facts`` is a compact evidence
+    summary (file sample, endpoint sample and count, env vars, config files,
+    prose excerpt). The owner's ruling (2026-08-17): identity is resolved or
+    flagged, never published as a guess, so the model must confirm each claim,
+    correct it with cited evidence, or mark it uncertain for the honest-gaps
+    record.
+    """
+    contract = """\
+Return ONLY a single JSON object, no prose, no fences:
+
+{ "fields": {
+    "name":      { "status": "confirmed | corrected | uncertain", "value": "...", "reason": "...", "evidence": { "file": "...", "line": 1 } },
+    "type":      { ... same shape ... },
+    "framework": { ... },
+    "port":      { ... }
+  },
+  "prose_issues": [
+    { "claim": "the prose statement", "fact": "the contradicting analyzer fact" }
+  ]
+}
+
+RULES:
+- Judge each field of CLAIMS against the EVIDENCE below, nothing else.
+- confirmed: the evidence genuinely supports the claimed value; omit "value",
+  "reason", and "evidence".
+- corrected: the evidence contradicts the claim and shows what the value
+  should be. "value" (the corrected value), "reason" (one sentence), and
+  "evidence" (a file from the evidence below, line if known) are REQUIRED.
+  For "type", correct toward the neutral end when in doubt: a test suite,
+  docs tree, or script collection is "module" or "package", never a server.
+- uncertain: the evidence cannot decide. "reason" is REQUIRED. Never guess.
+- Every field in CLAIMS must appear in "fields". A field absent from CLAIMS
+  (value null) is confirmed-as-absent unless evidence shows a real value.
+- prose_issues: list every statement in PROSE whose numbers or facts
+  contradict the EVIDENCE (for example a stated endpoint count that differs
+  from the actual count). Empty list when the prose is consistent or absent.
+"""
+    return "\n".join([
+        "You are auditing the PUBLISHED IDENTITY of one component in an "
+        "architecture map. The static analyzer classified it; wrong "
+        "classifications ship in the same confident voice as right ones, so "
+        "your verdicts gate what gets published.",
+        "",
+        contract,
+        "",
+        "CLAIMS:",
+        json.dumps({
+            "id": comp.get("id"),
+            "name": comp.get("name"),
+            "type": comp.get("type"),
+            "framework": comp.get("framework"),
+            "port": comp.get("port"),
+            "language": comp.get("language"),
+            "path": comp.get("path"),
+        }, indent=2, default=str),
+        "",
+        "EVIDENCE:",
+        json.dumps(facts, indent=2, default=str),
+        "",
+        "Return the JSON object now.",
+    ])

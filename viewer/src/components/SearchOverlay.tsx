@@ -11,6 +11,7 @@ export function SearchOverlay() {
     setSearchQuery,
     navigateToComponent,
     showDetail,
+    openFileDeepLink,
     architecture,
     darkMode,
     createSetFromSearchResults,
@@ -89,10 +90,13 @@ export function SearchOverlay() {
       const file = architecture?.files.find((f) => f.path === result.id);
       if (file) {
         showDetail("file", file);
-      } else if (result.componentId) {
-        // Split-mode file only present in the shard index: open its owning
-        // component so its Files tab loads the detail (P6-4).
-        navigateToComponent(result.componentId);
+      } else {
+        // Split-mode file present only in the shard index. Route through the
+        // inbound deep-link resolver rather than a bare component navigation:
+        // it drills to the owning component, opens the panel, and marks the
+        // file in the Files tab. The old path landed on the parent's Overview
+        // with the file nowhere in sight (comprehension-study S7).
+        void openFileDeepLink(result.path || result.id, null);
       }
     } else if (result.type === "symbol") {
       const sym = architecture?.symbols.find((s) => s.id === result.id);

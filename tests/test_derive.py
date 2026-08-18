@@ -124,6 +124,10 @@ def test_http_edge_evidence_points_at_the_real_call_site():
 #   D9 correlations: concerns/findings flat indexes and the per-component
 #      concerns/findings id-reference lists are NEW optional keys (P5-6), masked
 #      like D6; they are asserted directly in tests/test_correlations.py.
+#   D10 line-class taxonomy: stats.lines_by_class and stats.total_path_components
+#      are NEW stats keys (owner line-count policy 2026-08-17) that did not exist
+#      when the snapshot was frozen, masked like D6. The taxonomy itself is
+#      asserted directly in test_lines_by_class_taxonomy below.
 
 _JUSTIFIED_COMPONENT_KEYS = {"testing"}          # D4
 _JUSTIFIED_REL_KEYS = {"evidence", "confidence", "origin"}  # D3
@@ -182,6 +186,8 @@ def _mask(arch: dict) -> dict:
     a.pop("symbols", None)      # D1/D2
     a.get("stats", {}).pop("total_symbols", None)           # D5
     a.get("stats", {}).pop("total_symbols_detected", None)  # D5
+    a.get("stats", {}).pop("lines_by_class", None)          # D10
+    a.get("stats", {}).pop("total_path_components", None)   # D10
     return a
 
 
@@ -490,3 +496,166 @@ def test_components_and_edges_are_flushed_to_the_store():
     # a second derive run replaces, not duplicates
     derive_all(store, "polyglot")
     assert len(store.components()) == len(comps)
+
+
+def test_total_components_counts_the_assembled_tree():
+    """One authoritative count (comprehension-study S3): stats.total_components
+    equals the distinct node count of the assembled tree the viewer and search
+    index show, while the path-component map count survives as
+    total_path_components."""
+    _, d, arch = _extract_and_derive(POLYGLOT, "poly")
+
+    def count_nodes(comps):
+        return sum(1 + count_nodes(c.get("children", [])) for c in comps)
+
+    stats = arch["stats"]
+    assert stats["total_components"] == count_nodes(arch["components"])
+    assert stats["total_path_components"] == len(d._component_map)
+    assert stats["total_path_components"] <= stats["total_components"]
+
+
+def test_multi_repo_total_components_counts_the_merged_tree():
+    merged = derive_multi_from_config(MULTI_CONFIG)
+
+    def count_nodes(comps):
+        return sum(1 + count_nodes(c.get("children", [])) for c in comps)
+
+    stats = merged["stats"]
+    assert stats["total_components"] == count_nodes(merged["components"])
+    assert stats["total_path_components"] <= stats["total_components"]
+
+
+# ---------------------------------------------------------------------------
+# Identity-scoping guards (comprehension-study S2)
+# ---------------------------------------------------------------------------
+
+_AIOHTTP_SERVER = (
+    "from aiohttp import web\n"
+    "app = web.Application()\n"
+    "async def health(request):\n"
+    "    return web.json_response({})\n"
+    "app.router.add_get('/api/health', health)\n"
+    "web.run_app(app, port=8766)\n"
+)
+
+
+def _s2_repo(tmp_path):
+    repo = tmp_path / "repo"
+    server = repo / "server"
+    server.mkdir(parents=True)
+    (server / "pyproject.toml").write_text('[project]\nname = "server"\n')
+    (server / "app.py").write_text(_AIOHTTP_SERVER)
+    tests = server / "tests"
+    tests.mkdir()
+    (tests / "pyproject.toml").write_text('[project]\nname = "server-tests"\n')
+    (tests / "test_api.py").write_text(
+        "from aiohttp import web\n"
+        "async def test_health(aiohttp_client):\n"
+        "    app = web.Application()\n"
+        "    app.router.add_get('/test', lambda r: None)\n"
+        "    assert True\n"
+    )
+    scripts = repo / "scripts"
+    scripts.mkdir()
+    (scripts / "pyproject.toml").write_text('[project]\nname = "scripts"\n')
+    (scripts / "check_style.py").write_text("print('lint')\n")
+    (scripts / "log_server.py").write_text(
+        "import http.server\n"
+        "PORT = 8765\n"
+        "# Remote Log Server\n"
+        "http.server.HTTPServer(('', PORT), None).serve_forever()\n"
+    )
+    docs = repo / "docs"
+    docs.mkdir()
+    (docs / "pyproject.toml").write_text('[project]\nname = "docs"\n')
+    (docs / "guide.md").write_text("# Guide\n")
+    (docs / "example_plugin.py").write_text(_AIOHTTP_SERVER)
+    return repo
+
+
+def test_s2_guards_scope_identity(tmp_path):
+    """Test suites, docs trees, and utility script directories keep neutral
+    identity no matter what their contents import; the real server still
+    promotes (positive control)."""
+    repo = _s2_repo(tmp_path)
+    store = FactStore(":memory:")
+    extract_repo(repo, store)
+    _, arch = derive_all(store, "repo")
+
+    def walk(cs):
+        for c in cs:
+            yield c
+            yield from walk(c.get("children", []))
+
+    comps = {c["id"]: c for c in walk(arch["components"])}
+    hero = {"ios-client", "android-client", "mobile-client", "web-client",
+            "api-server", "watch-app", "desktop-app", "cli-tool", "service"}
+
+    server = comps["server"]
+    assert server["type"] == "api-server", "positive control lost"
+
+    tests_comp = comps["server/tests"]
+    assert tests_comp["type"] not in hero
+    assert (tests_comp.get("docs") or {}).get("api_endpoints") in (None, []), (
+        "fixture endpoints published as a test suite's contract")
+
+    scripts = comps["scripts"]
+    assert scripts["type"] not in hero
+    assert scripts["name"] == "scripts", "renamed after an embedded server script"
+    assert not scripts.get("port"), "took an embedded server script's port"
+
+    docs_comp = comps["docs"]
+    assert docs_comp["type"] not in hero
+
+
+def test_lines_by_class_taxonomy(tmp_path):
+    """Owner line-count policy (2026-08-17): every counted line in exactly one
+    of code/data/docs/config, gray zones by role, summing to total_lines."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text('[project]\nname = "t"\n')
+    (repo / "app.py").write_text("x = 1\n" * 10)
+    (repo / "README.md").write_text("# T\n" * 5)
+    (repo / "config.json").write_text('{"a": 1}\n')
+    fixtures = repo / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "seed.json").write_text('{"rows": []}\n' * 3)
+    (repo / "big.json").write_text('{"x": "' + "y" * 20000 + '"}\n')
+    (repo / "schema.sql").write_text("CREATE TABLE t (id INT);\n" * 4)
+
+    store = FactStore(":memory:")
+    extract_repo(repo, store)
+    _, arch = derive_all(store, "t", root_path=str(repo))
+    stats = arch["stats"]
+    by_class = stats["lines_by_class"]
+    assert sum(by_class.values()) == stats["total_lines"]
+    assert by_class["docs"] >= 5
+    # app.py (10) + schema.sql (4) are code
+    assert by_class["code"] >= 14
+    # fixtures/seed.json (3, data dir) + big.json (1, oversize) are data
+    assert by_class["data"] >= 4
+    # config.json (1) + pyproject.toml are config
+    assert by_class["config"] >= 2
+
+
+def test_component_language_prefers_code_over_docs(tmp_path):
+    """A component whose markdown outweighs its code must still read as its
+    code language (S2: the server-manager 'markdown Desktop App' case)."""
+    repo = tmp_path / "repo"
+    app = repo / "app"
+    app.mkdir(parents=True)
+    (app / "pyproject.toml").write_text('[project]\nname = "app"\n')
+    (app / "main.py").write_text("x = 1\n" * 5)
+    (app / "GUIDE.md").write_text("words\n" * 500)
+
+    store = FactStore(":memory:")
+    extract_repo(repo, store)
+    _, arch = derive_all(store, "repo", root_path=str(repo))
+
+    def walk(cs):
+        for c in cs:
+            yield c
+            yield from walk(c.get("children", []))
+
+    comp = next(c for c in walk(arch["components"]) if c["id"] == "app")
+    assert comp["language"] == "python"

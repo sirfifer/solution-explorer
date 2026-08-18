@@ -122,8 +122,7 @@ function archWithFindings(): Architecture {
 function resetStore() {
   localStorage.clear();
   useArchStore.setState({
-    architecture: null, selectedComponentId: null, breadcrumbs: [], drillLevel: null,
-    expandedAggregates: {}, detailItem: null, activePanel: null, lens: "structure",
+    architecture: null, selectedComponentId: null, breadcrumbs: [], drillLevel: null, detailItem: null, activePanel: null, lens: "structure",
     reviewMode: false, annotatingComponentId: null, annotatingTarget: null, annotations: [],
     selectionSets: [], setAnnotations: [],
     findingsSurface: { open: false, tab: "findings", kindFilter: null, elementFilter: null },

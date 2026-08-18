@@ -125,7 +125,7 @@ function makeBareArch(): Architecture {
 function resetStore() {
   useArchStore.setState({
     architecture: null, selectedComponentId: null, breadcrumbs: [],
-    drillLevel: null, expandedAggregates: {}, detailItem: null, activePanel: null,
+    drillLevel: null, detailItem: null, activePanel: null,
     lens: DEFAULT_LENS_ID, reviewMode: false, flowEntryId: null, flowStep: 0,
     selectedCapabilityId: null, selectedEntityId: null, selectedRuleId: null, pendingDetailTab: null,
   });

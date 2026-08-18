@@ -492,3 +492,60 @@ def test_strict_threshold_rejects_out_of_range_values(tmp_path):
             baseline_path, target_path, "--strict", "--strict-threshold", good
         )
         assert result.returncode == 0, f"threshold {good}: {result.stderr}"
+
+
+def test_merge_refreshes_a_sibling_front_door(tmp_path):
+    """A target with an ai.json beside it gets the front door regenerated after
+    the merge, so the deployed contract reflects the post-merge dataset
+    (comprehension-study S3: the demo shipped enriched=false beside a manifest
+    with 250 enriched components)."""
+    baseline = {
+        "ai_enhance": {"summary": "arch-level AI"},
+        "components": [_component("app/core", ai=True)],
+        "relationships": [],
+    }
+    target = {
+        "name": "demo",
+        "generated_at": "2025-01-01T00:00:00Z",
+        "analyzer_version": "1.2.0",
+        "components": [_component("app/core")],
+        "relationships": [],
+        "stats": {"total_components": 1},
+    }
+    out = tmp_path / "arch"
+    out.mkdir()
+    baseline_path = tmp_path / "baseline.json"
+    target_path = out / "architecture.json"
+    _write(baseline_path, baseline)
+    _write(target_path, target)
+    # A stale pre-merge front door, as the projection leaves it.
+    _write(out / "ai.json", {"dataset": {"enriched": False}})
+
+    result = _run_merge(baseline_path, target_path)
+
+    assert result.returncode == 0, result.stderr
+    assert "Front door refreshed" in result.stdout
+    refreshed = json.loads((out / "ai.json").read_text())
+    assert refreshed["dataset"]["enriched"] is True
+    assert refreshed["kind"] == "solution-explorer-front-door"
+    # The markdown companion is rewritten alongside.
+    assert (out / "llms.txt").is_file()
+
+
+def test_merge_without_a_front_door_leaves_none_behind(tmp_path):
+    """No ai.json beside the target: the merge must not invent one."""
+    baseline = {
+        "components": [_component("app/core", ai=True)],
+        "relationships": [],
+    }
+    target = {"components": [_component("app/core")], "relationships": []}
+    baseline_path = tmp_path / "baseline.json"
+    target_path = tmp_path / "target.json"
+    _write(baseline_path, baseline)
+    _write(target_path, target)
+
+    result = _run_merge(baseline_path, target_path)
+
+    assert result.returncode == 0, result.stderr
+    assert "Front door refreshed" not in result.stdout
+    assert not (tmp_path / "ai.json").exists()

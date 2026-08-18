@@ -89,7 +89,11 @@ from .signals import extract_entity_signals, extract_rule_signals, extract_signa
 # suppressed. Bumping the tier invalidates the content-hash cache so a warm
 # store re-extracts once and never serves cached facts that predate the new
 # signal kind (one-time re-extract disclosure).
-EXTRACT_TIER = "p5-extract/6"
+# /7 (comprehension-study S2): env-var extraction became reads-only (writes
+# like env["CFG_SCALE"] = ... are no longer inputs) and SQL entity parsing
+# blanks comments before splitting columns, so cached env_var and entity
+# signals from /6 are wrong under the new rules and must re-extract.
+EXTRACT_TIER = "p5-extract/7"
 INLINE_THRESHOLD = 8  # below this many cache misses, parse inline (no pool)
 
 # In-run retry for transient extraction failures (P4-8). A worker crash, an

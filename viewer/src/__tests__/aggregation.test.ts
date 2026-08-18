@@ -61,21 +61,26 @@ describe("aggregation nodes (P6-4)", () => {
   beforeEach(() => {
     useArchStore.setState({
       architecture: null, selectedComponentId: null, breadcrumbs: [],
-      drillLevel: null, expandedAggregates: {},
+      drillLevel: null, detailItem: null, activePanel: null, nodeBudget: 15,
     });
   });
 
-  it("aggregates a small internal module instead of dropping it silently", () => {
+  // Aggregation now fires when a level exceeds the viewport's node budget,
+  // not when a child happens to be small (owner decision 2026-08-17). The
+  // guarantee these tests protect is unchanged and is the important one:
+  // nothing is ever silently dropped. Every child not on the canvas sits in a
+  // visible, counted aggregate and stays reachable.
+  it("aggregates the overflow instead of dropping it silently", () => {
     const { arch, parent } = makeHeroWithHiddenModule();
     useArchStore.getState().setArchitecture(arch);
     useArchStore.getState().drillInto(parent);
+    // A budget of one: the hero screen takes the only slot.
+    useArchStore.setState({ nodeBudget: 1 });
 
     const visible = useArchStore.getState().getVisibleComponents();
     const aggregates = useArchStore.getState().getAggregateNodes();
 
-    // The hero screen is shown as a real node.
     expect(visible.map((c) => c.id)).toContain("screen-1");
-    // The helper module is NOT a real node; it is a member of a visible aggregate.
     expect(visible.map((c) => c.id)).not.toContain("helper-1");
     expect(aggregates).toHaveLength(1);
     expect(aggregates[0].aggregateType).toBe("module");
@@ -85,43 +90,34 @@ describe("aggregation nodes (P6-4)", () => {
     expect(aggregates[0].label).toBe("1 module");
   });
 
-  it("reveals the member as a real node when its aggregate is expanded, in place", () => {
+  it("opens the member list in the panel rather than adding canvas nodes", () => {
     const { arch, parent } = makeHeroWithHiddenModule();
     useArchStore.getState().setArchitecture(arch);
     useArchStore.getState().drillInto(parent);
+    useArchStore.setState({ nodeBudget: 1 });
 
     const aggId = useArchStore.getState().getAggregateNodes()[0].id;
-    useArchStore.getState().expandAggregate(aggId);
-
-    const visible = useArchStore.getState().getVisibleComponents();
-    expect(visible.map((c) => c.id)).toContain("helper-1");
-    // The aggregate marker stays present so the grouping remains visible.
-    expect(useArchStore.getState().getAggregateNodes()).toHaveLength(1);
-
-    // Collapse hides the member again.
     useArchStore.getState().toggleAggregate(aggId);
-    expect(useArchStore.getState().getVisibleComponents().map((c) => c.id)).not.toContain("helper-1");
+
+    const state = useArchStore.getState();
+    // The member is reachable, as a list row, not as a 7px speck on the canvas.
+    expect(state.detailItem?.type).toBe("aggregate");
+    expect(state.getVisibleComponents().map((c) => c.id)).not.toContain("helper-1");
+    // The aggregate marker stays present so the grouping remains visible.
+    expect(state.getAggregateNodes()).toHaveLength(1);
+
+    // Toggling again closes the list.
+    useArchStore.getState().toggleAggregate(aggId);
+    expect(useArchStore.getState().detailItem).toBeNull();
   });
 
-  it("keys aggregate ids by drill level so expansion never leaks across levels", () => {
+  it("keys aggregate ids by drill level so they never collide across levels", () => {
     const { arch, parent } = makeHeroWithHiddenModule();
     useArchStore.getState().setArchitecture(arch);
     useArchStore.getState().drillInto(parent);
+    useArchStore.setState({ nodeBudget: 1 });
     const aggId = useArchStore.getState().getAggregateNodes()[0].id;
     expect(aggId).toContain("app"); // embeds the drill level
-  });
-
-  it("resets aggregate expansion when the architecture reloads", () => {
-    const { arch, parent } = makeHeroWithHiddenModule();
-    useArchStore.getState().setArchitecture(arch);
-    useArchStore.getState().drillInto(parent);
-    const aggId = useArchStore.getState().getAggregateNodes()[0].id;
-    useArchStore.getState().expandAggregate(aggId);
-    expect(useArchStore.getState().expandedAggregates[aggId]).toBe(true);
-
-    // A fresh scan must start from collapsed aggregates.
-    useArchStore.getState().setArchitecture(makeHeroWithHiddenModule().arch);
-    expect(useArchStore.getState().expandedAggregates).toEqual({});
   });
 
   it("does not aggregate when there is no hero at the level (nothing hidden)", () => {
@@ -179,7 +175,7 @@ describe("prefetchDetails wiring (P6-4)", () => {
     vi.stubGlobal("fetch", fetchSpy);
     useArchStore.setState({
       architecture: null, selectedComponentId: null, breadcrumbs: [],
-      drillLevel: null, expandedAggregates: {},
+      drillLevel: null,
       componentDetailCache: {}, componentDetailLoading: {}, componentDetailErrors: {},
     });
   });

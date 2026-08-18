@@ -16,6 +16,7 @@ import re
 from ..constants import LANGUAGE_MAP
 from ..models import ComponentDoc, to_dict
 from .context import Deriver
+from .roles import is_test_suite_component
 
 
 def extract_component_docs(d: Deriver) -> None:
@@ -40,7 +41,12 @@ def extract_component_docs(d: Deriver) -> None:
 
         _architecture_notes(d, doc, comp_dir)
         _purpose(d, doc, comp)
-        _signals_docs(d, doc, comp)
+        # A test suite's endpoints and env vars are fixture scaffolding (GET
+        # /test, mock env), not the component's contract; publishing them as
+        # facts was comprehension-study S2. Everything else about the suite
+        # (docs, patterns, tech stack) still aggregates.
+        if not is_test_suite_component(comp, rel_path):
+            _signals_docs(d, doc, comp)
         doc.patterns = detect_patterns(comp)
         doc.tech_stack = _tech_stack(d, comp)
         comp.docs = to_dict(doc)

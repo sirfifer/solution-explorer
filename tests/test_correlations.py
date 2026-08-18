@@ -205,6 +205,33 @@ def test_min_fragment_threshold_is_enforced(tmp_path):
 # Orphans
 # ---------------------------------------------------------------------------
 
+def test_test_suites_are_never_unreferenced(tmp_path):
+    # A test suite is unreferenced by construction: nothing imports a test.
+    # Before the S2 identity guards, test directories were promoted to hero
+    # types and skipped here only because "api-server" is an entry type.
+    # Fixing that mislabel removed the accidental exclusion, and the golden
+    # corpus caught the result: 68 new bogus "unreferenced" findings on FastAPI.
+    _write(tmp_path, "app/main.py", _FILLER_A)
+    _write(tmp_path, "app/more.py", _FILLER_B)
+    # A test directory with real symbols, no incoming edges, nothing importing it.
+    _write(tmp_path, "tests/test_main.py", _UNIQUE)
+    _write(tmp_path, "tests/test_extra.py", _FILLER_A)
+    _, arch = _derive(tmp_path)
+    unref = {f["members"][0]["id"] for f in _findings_by_kind(arch, "unreferenced")}
+    assert not any("tests" in i for i in unref), (
+        f"a test suite must never be reported unreferenced; got {sorted(unref)}"
+    )
+
+
+def test_the_test_suite_guard_does_not_suppress_real_findings(tmp_path):
+    # The guard must be narrow: a plain unreferenced module still surfaces, so
+    # the exclusion cannot be quietly swallowing real signal.
+    _build_repo(tmp_path)
+    _, arch = _derive(tmp_path)
+    unref = {f["members"][0]["id"] for f in _findings_by_kind(arch, "unreferenced")}
+    assert "orphanage" in unref, f"orphanage must still surface; got {sorted(unref)}"
+
+
 def test_orphan_component_surfaces_as_finding(tmp_path):
     # Reframed from "orphan" to "unreferenced" (D4): honest copy plus symbol and
     # churn counter-evidence. orphanage is Python (a mature reference extractor)

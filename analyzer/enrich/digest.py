@@ -273,4 +273,8 @@ class DigestIndex:
             return self.concern.get(target_id)
         if target_kind in ("finding", "finding-verdict"):
             return self.finding.get(target_id)
+        if target_kind == "identity-verdict":
+            # Reuses the component digest (invariant I5): an identity verdict
+            # goes stale when the component's own content changes.
+            return self.component.get(target_id)
         return None

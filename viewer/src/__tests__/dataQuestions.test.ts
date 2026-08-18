@@ -28,8 +28,7 @@ function makeArchitecture(overrides: Partial<Architecture> = {}): Architecture {
 
 function seed(): void {
   useArchStore.setState({
-    architecture: null, selectedComponentId: null, breadcrumbs: [], drillLevel: null,
-    expandedAggregates: {}, detailItem: null, activePanel: null, lens: "structure",
+    architecture: null, selectedComponentId: null, breadcrumbs: [], drillLevel: null, detailItem: null, activePanel: null, lens: "structure",
     selectedCapabilityId: null, selectedEntityId: null, pendingDetailTab: null,
   });
   const models = makeComponent({ id: "models", name: "Models", type: "module" });
