@@ -39,6 +39,53 @@ diff; this is what gates a demo going public.
 6. **Nothing is softened.** A defect the personas hit is recorded at the
    severity they hit it, whatever it costs us.
 
+## Who can be a persona
+
+This constrains staffing more than it looks, and it was nearly violated on the
+first attempt at a calibration run.
+
+**A persona must have no exposure to the repository, the fixes, or the known
+defect list.** That is not a preference, it is the measurement. An observer who
+knows the map is not measuring whether the map teaches; they are recognising
+what they already know, and every score inflates.
+
+Consequences:
+
+- **The orchestrator cannot be a persona.** Whoever verifies claims, builds the
+  answer key, or has worked on the product is disqualified from the sittings for
+  that subject, permanently.
+- **A persona is a fresh context**, not a role a contaminated one adopts. In
+  practice: a separate session or subagent that has never read this repository,
+  briefed only with its persona, its mission, its battery and the URL.
+- **Personas do not read each other's output**, and they run against separate
+  origins so one persona's storage state cannot leak into another's cold start.
+- **Nobody who ran a sitting writes the answer key** for the same subject.
+
+The orchestrator's job is everything else: the key, the profile, the independent
+verification, the scoring, the retro, and the report.
+
+## A calibration run, and why the first one is a special case
+
+A score means nothing on its own. It means something against another score. So
+the first run on a subject should be a **calibration run**: the same subject
+measured before and after a known change, with the same instrument, so the
+instrument and the change are validated together.
+
+For UnaMentis specifically, the "before" does not need a new sitting. The
+2026-08-17 study's raw material survives (three journals, two findings
+documents, 124 screenshots, at
+`/Volumes/Studio/dev/.evidence/solution-explorer/persona-runs/20260817/`) and it
+already records what the rubric needs: answers with confidence and source,
+ranked confusions and blockers, trust issues, and a verdict. **Score it
+retrospectively against the v1 rubric** to produce the before-baseline, marking
+any dimension the artifacts cannot support (`minutes_to_orientation` is likely
+one) rather than inventing it. Then run the three live sittings for the "after".
+
+Retrospective scoring is legitimate for a run that predates the rubric, and only
+for that. It is not a substitute for a sitting and must be labelled
+`"retrospective": true` in the run record so no later comparison treats it as a
+live measurement.
+
 ## Required outputs, enumerated
 
 Enumerated because the first run did not produce them uniformly: two of the

@@ -66,7 +66,16 @@ def _validate(card: dict, path: Path) -> None:
         if node is None:
             raise ScoreError(f"{path.name}: missing dimension {dim!r}")
         score = node.get("score")
-        if not isinstance(score, int) or not 0 <= score <= MAX_PER_DIMENSION:
+        # A null score is legitimate ONLY on a retrospective card, where the
+        # surviving artifacts of a pre-rubric sitting genuinely cannot support
+        # one. Inventing a number there would be worse than admitting the gap.
+        if score is None:
+            if not card.get("retrospective"):
+                raise ScoreError(
+                    f"{path.name}: {dim}.score is null, which is only legitimate on a "
+                    f"retrospective card; score it or mark the card retrospective"
+                )
+        elif not isinstance(score, int) or not 0 <= score <= MAX_PER_DIMENSION:
             raise ScoreError(f"{path.name}: {dim}.score must be an integer 0 to {MAX_PER_DIMENSION}")
         # A score with no evidence is an opinion, and the whole point of this
         # instrument is that it is not one.
@@ -127,7 +136,12 @@ def load_run(run_dir: Path) -> dict:
 
 
 def total(card: dict) -> int:
-    return sum(card["dimensions"][d]["score"] for d in DIMENSIONS)
+    return sum(card["dimensions"][d]["score"] or 0 for d in DIMENSIONS)
+
+
+def unscored(card: dict) -> list[str]:
+    """Dimensions the evidence could not support. Reported, never hidden."""
+    return [d for d in DIMENSIONS if card["dimensions"][d]["score"] is None]
 
 
 def summarize(run: dict) -> dict:
@@ -170,6 +184,19 @@ def render(summary: dict, run: dict) -> str:
             f"{battery:>22} {trust:>7} {summary['blocked_paths'][p]:>8}"
         )
     lines.append("")
+    for p in PERSONAS:
+        if p in run["cards"]:
+            gaps = unscored(run["cards"][p])
+            if gaps:
+                lines.append(
+                    f"{p}: {len(gaps)} dimension(s) unscoreable from the evidence "
+                    f"({', '.join(gaps)}), so this total is a FLOOR, not a score."
+                )
+    if any(c.get("retrospective") for c in run["cards"].values()):
+        lines.append(
+            "RETROSPECTIVE: scored from the artifacts of a sitting that predates "
+            "the rubric. Not a live measurement."
+        )
     # The set, never the average. Stated so nobody is tempted to average it later.
     lines.append("Reported as the SET of persona scores. An average would hide the one that failed.")
     if summary["missing_personas"]:
@@ -194,6 +221,12 @@ def compare(run: dict, baseline: dict) -> tuple[str, bool]:
             f"change is indistinguishable from a product regression."
         )
         return "\n".join(lines), False
+    if run.get("cards") and any(c.get("retrospective") for c in run["cards"].values()):
+        lines.append(
+            "NOTE: the LATER run is retrospective. A retrospective card is a "
+            "baseline, never the thing being measured against one."
+        )
+        legitimate = False
     same_subject = run["subject"] == baseline["subject"]
     lines.append(
         f"{baseline['subject']} -> {run['subject']} ({run['charter_version']})"

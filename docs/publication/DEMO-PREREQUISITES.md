@@ -1,5 +1,7 @@
 # Prerequisites before demo work starts
 
+**Starting a fresh session? Read `HANDOFF-DEMO-PROGRAM.md` first.**
+
 Written 2026-08-18, after a review of the demo program plan against the actual
 state of the code. Companion to `DEMO-PROGRAM.md`. This is analysis; nothing
 here is built.

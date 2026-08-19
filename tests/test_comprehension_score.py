@@ -187,3 +187,36 @@ def test_the_rubric_matches_the_charter_and_the_schema():
         pretty = dim.replace("_", " ")
         assert pretty in charter.lower(), f"{dim} is scored but not documented in the charter"
     assert f"out of {cs.MAX_TOTAL}" in charter or f"/{cs.MAX_TOTAL}" in charter
+
+
+# ---------------------------------------------------------------------------
+# Retrospective cards: legitimate for a pre-rubric sitting, never a measurement
+# ---------------------------------------------------------------------------
+
+def test_a_null_score_needs_the_retrospective_flag(tmp_path):
+    bad = card()
+    bad["dimensions"]["orientation"]["score"] = None
+    run = write_run(tmp_path / "r", [bad])
+    assert cs.main(["score", str(run)]) == 2, "inventing a number would be worse, but so is hiding the gap"
+
+
+def test_a_retrospective_card_may_leave_a_dimension_unscored_and_says_so(tmp_path, capsys):
+    c = card("P1", 3)
+    c["retrospective"] = True
+    c["dimensions"]["orientation"]["score"] = None
+    c["dimensions"]["orientation"]["evidence"] = "journal records no timings"
+    run = write_run(tmp_path / "r", [c])
+    cs.main(["score", str(run)])
+    out = capsys.readouterr().out
+    assert "unscoreable" in out and "FLOOR" in out
+    assert "RETROSPECTIVE" in out
+
+
+def test_a_retrospective_run_cannot_be_the_later_side_of_a_comparison(tmp_path, capsys):
+    before = card("P1", 3)
+    after = card("P1", 4)
+    after["retrospective"] = True
+    a = write_run(tmp_path / "a", [before])
+    b = write_run(tmp_path / "b", [after])
+    assert cs.main(["compare", str(b), str(a)]) == 1
+    assert "never the thing being measured" in capsys.readouterr().out

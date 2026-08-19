@@ -6,6 +6,8 @@ Status: PLAN, four decisions taken 2026-08-18, ready to execute at phase D0
 without one existing. It defines what we publish, in what order, how it stays
 current, and how each run feeds fixes back into the product.
 
+**Starting a fresh session? Read `HANDOFF-DEMO-PROGRAM.md` first.**
+
 Domain: `syscorpus.com` (owner also holds the `.org`). Commercial intent is
 explicit: the product is being built to sell, so this program is both a test
 harness and the shop window a buyer will look at first. That double duty drives
