@@ -4,29 +4,74 @@
   "description": "One persona's scored sitting. Design authority: docs/quality/COMPREHENSION-REVIEW.md",
   "type": "object",
   "additionalProperties": false,
-  "required": ["charter_version", "subject", "run_date", "persona", "dimensions", "trust_incidents", "blocked_paths", "battery"],
+  "required": [
+    "charter_version",
+    "subject",
+    "run_date",
+    "persona",
+    "dimensions",
+    "trust_incidents",
+    "blocked_paths",
+    "battery"
+  ],
   "properties": {
     "charter_version": {
       "type": "string",
       "pattern": "^comprehension-review/v[0-9]+$",
       "description": "Scores are comparable only within a charter version."
     },
-    "subject": { "type": "string", "minLength": 1 },
-    "run_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-    "persona": { "enum": ["P1", "P2", "P3"] },
+    "subject": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "persona": {
+      "enum": [
+        "P1",
+        "P2",
+        "P3"
+      ]
+    },
     "dimensions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["orientation", "model_accuracy", "navigation_efficiency", "trust", "unaided_recovery", "advertised_paths"],
+      "required": [
+        "orientation",
+        "model_accuracy",
+        "navigation_efficiency",
+        "trust",
+        "unaided_recovery",
+        "advertised_paths"
+      ],
       "patternProperties": {
         "^(orientation|model_accuracy|navigation_efficiency|trust|unaided_recovery|advertised_paths)$": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["score", "evidence"],
+          "required": [
+            "score",
+            "evidence"
+          ],
           "properties": {
-            "score": { "type": "integer", "minimum": 0, "maximum": 4 },
-            "evidence": { "type": "string", "minLength": 1, "description": "Screenshot number or journal section. A score with no evidence is an opinion." },
-            "note": { "type": "string" }
+            "score": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 4,
+              "description": "0 to 4 against the charter anchors, or null when the evidence cannot support a score (only legitimate on a retrospective card, and the evidence field must say why)."
+            },
+            "evidence": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Screenshot number or journal section. A score with no evidence is an opinion."
+            },
+            "note": {
+              "type": "string"
+            }
           }
         }
       }
@@ -38,13 +83,37 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["question", "verdict"],
+        "required": [
+          "question",
+          "verdict"
+        ],
         "properties": {
-          "question": { "type": "integer", "minimum": 1, "maximum": 5 },
-          "verdict": { "enum": ["correct", "partial", "wrong", "unscoreable"] },
-          "confidence": { "enum": ["high", "medium", "low"] },
-          "source": { "type": "string" },
-          "note": { "type": "string" }
+          "question": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "verdict": {
+            "enum": [
+              "correct",
+              "partial",
+              "wrong",
+              "unscoreable"
+            ]
+          },
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
         }
       }
     },
@@ -54,11 +123,25 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["what", "severity"],
+        "required": [
+          "what",
+          "severity"
+        ],
         "properties": {
-          "what": { "type": "string", "minLength": 1 },
-          "severity": { "enum": ["low", "medium", "high"] },
-          "evidence": { "type": "string" }
+          "what": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "evidence": {
+            "type": "string"
+          }
         }
       }
     },
@@ -68,14 +151,32 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["feature"],
+        "required": [
+          "feature"
+        ],
         "properties": {
-          "feature": { "type": "string", "minLength": 1 },
-          "evidence": { "type": "string" }
+          "feature": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "string"
+          }
         }
       }
     },
-    "minutes_to_orientation": { "type": ["number", "null"] },
-    "verdict": { "type": "string" }
+    "minutes_to_orientation": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "verdict": {
+      "type": "string"
+    },
+    "retrospective": {
+      "type": "boolean",
+      "description": "True when scored from the artifacts of a sitting that predates this rubric, rather than from a live sitting. Never a substitute for a run; recorded so no later comparison treats it as a live measurement."
+    }
   }
 }
