@@ -132,6 +132,42 @@ gate and a comprehension review.
 Blocked on the owner: creating the Cloudflare Pages projects and setting
 `PREVIEW_PASSCODE`.
 
+## Deferred to the Wave 1 retrospective
+
+**The rule (owner decision, 2026-08-20).** Do not be shy about cheap
+performance, quality-of-life and fine-tuning work; do it as it comes up. But
+work whose value is *hard to establish* waits until we have more data, meaning
+late in Wave 1 or at the end of it, when a wider sampling of projects makes it
+possible to decide what is actually worth doing rather than guessing from one
+subject.
+
+**Why this rule earned its place immediately.** The search index looked
+demo-blocking on 2026-08-20: 61 MB across 84 shards, fetched sequentially. A
+restructure was scoped and approved. Measurement then showed the origin already
+serves brotli (2.9 MB over the wire, not 61 MB), that search returns usable
+results in 451 ms because it matches against the already-loaded architecture
+while shards enrich it afterwards, and that the obvious two-tier design was not
+even viable, because matching needs the `text` field so it cannot be deferred.
+The restructure was dropped for two small fixes. One subject could not tell the
+difference between "expensive at scale" and "expensive-looking on paper".
+
+**How to use this register.** Each item records what we know now and, more
+importantly, **what evidence would settle it**. At the Wave 1 retrospective,
+answer them from three subjects rather than one.
+
+| Deferred item | What we know | What would settle it |
+|---|---|---|
+| Search index restructure | Not warranted on VS Code. Brotli makes it ~2.9 MB on the wire; results are usable in 451 ms. Client-side memory and Fuse index-build cost at 167,693 entries were never measured | Whether any Wave 1 subject makes search slow *in the browser*, and the measured index-build time and memory at the largest subject's scale |
+| External dependency detection completeness | Only the honest labelling was fixed. Detection is still a hardcoded 18-domain match that counts GitHub from a CI script and misses Unleash and LiveKit entirely | Whether the same class of miss recurs across three unrelated subjects, which would show it is systemic rather than a UnaMentis quirk. Also whether declared-dependency manifests are a better signal than URL matching |
+| Cross-surface agreement gates | `ai.json`, the manifest and the admin summary each passed their own validity checks while contradicting each other. Two of this run's deepest defects shared that signature | Whether disagreements recur on other subjects, and which surface pairs are worth gating. Cheap to build, and unlike the comprehension review it could run every weekly refresh |
+| Classification accuracy audit | Does not exist. `DEMO-PROGRAM.md` 5.3 already says to specify it from what the first demo's review finds by hand, rather than guessing now | The by-hand findings from demo one, which is exactly the wider-sampling logic applied to a smaller scope |
+| Compact index encoding | Measured at 47% smaller uncompressed, but brotli already captures the same redundancy, so the benefit is client-side only | Only worth revisiting if browser memory or parse time turns out to be the real constraint at Wave 1 scale |
+
+**What is NOT deferred**, because it is cheap and its value is obvious: the
+bounded-concurrency shard fetch and the partial-results indicator; anything that
+stops a surface asserting something it cannot support; and any defect a persona
+or a gate reproduces.
+
 ### N4. Card M2, M3 and M4
 
 Multi-repo has M1 only (composition, no cross-repo edges), and M2, M3 and M4

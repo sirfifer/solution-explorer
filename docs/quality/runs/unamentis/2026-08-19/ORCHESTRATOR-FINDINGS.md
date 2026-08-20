@@ -403,3 +403,53 @@ correct.
 **Owner action required**, outside this repository: repoint or remove the
 committed `architecture.json` in `UnaMentis/unamentis` so the Live overlay is
 built from a fresh scan.
+
+
+## O13 CORRECTED, 2026-08-20. The search index was not demo-blocking, and I said it was
+
+O13 above is left standing as written so the error is visible. It is wrong in
+its severity and in its proposed remedy, and the correction is more useful than
+the finding.
+
+**What I got wrong.** I reported that the first visitor to open search on VS
+Code would wait on 61 MB across 84 requests. I measured a directory listing and
+never checked what the origin actually transmits.
+
+**Measured against the live origin.** Cloudflare already serves these files
+brotli-compressed. One shard: 685,776 bytes on disk, **93,718 bytes over the
+wire**, 7.3x. The whole VS Code index compresses to **2.9 MB**, not 61 MB.
+
+**Measured against the real product.** Running VS Code's dataset through the
+actual viewer: search returns usable results in **451 ms**, with only 36 of 85
+shards loaded. Matching runs against the already-loaded architecture and the
+shards *enrich* an index that is usable from the start. Nobody waits for the
+full load.
+
+**The design I was about to propose was not viable either.** A two-tier split
+with a small match tier fails because matching reads `name`, `path`, `kind` and
+`text`, so `text` cannot be deferred. The only droppable field is `component`,
+7.17% of bytes. The best-case match tier is 40.5 MB, two-thirds of the index.
+
+**What was actually wrong, and is now fixed.** Two real but small things: 85
+sequential round trips, and a silent partial-results window where search looked
+complete while still filling.
+
+Both fixed. Bounded-concurrency fetching at 6 workers, assembled in shard
+manifest order rather than arrival order so ranking stays deterministic, plus an
+"Indexing…" indicator that becomes "Index incomplete" if shard loading fails
+outright, so a failure never reads as a complete index.
+
+Verified in a real browser on the VS Code dataset: max concurrency 6, all 84
+shards in **276 ms** against 1,171 ms sequential, indicator clearing correctly.
+
+**Why this belongs in the record.** It is the second time in this run that I
+confirmed something without holding it to the standard I hold refutations to.
+The first was O11, the dependency cards. Both followed the same shape: a
+plausible fact, a partial check, a confident conclusion. Refutation felt like it
+needed justifying and confirmation felt pre-justified. That asymmetry is a bias
+worth designing against, and it is now rule 7 in the charter.
+
+**The wider lesson, which the owner turned into policy.** One subject could not
+distinguish "expensive at scale" from "expensive-looking on paper". Work whose
+value is hard to establish now waits for a wider sampling of projects. See the
+Wave 1 retrospective register in `docs/publication/HANDOFF-DEMO-PROGRAM.md`.

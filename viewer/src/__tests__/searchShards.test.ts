@@ -1,10 +1,13 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   initializeSearch,
   addShardEntries,
   search,
   resetDetailSearchEntries,
   resetShardSearchEntries,
+  loadSearchShards,
+  getShardLoadState,
+  subscribeShardLoadState,
   type ShardEntry,
 } from "../utils/search";
 import type { Architecture, Component } from "../types";
@@ -101,5 +104,104 @@ describe("shard-backed search (P6-4)", () => {
     // The base component type is preserved for the badge, not overwritten by the
     // generic shard "component" kind.
     expect(compHits[0].kind).toBe("service");
+  });
+});
+
+// loadSearchShards: bounded-concurrency fetch + the loading-state signal
+// (viewer fix). Sequential per-shard `await` in a `for` loop made the shard
+// set load in a time proportional to round trips × shard count over a real
+// network; these tests cover the parallel fetch (assembly order must stay
+// deterministic regardless of completion order) and the loading indicator
+// that keeps the UI from presenting a still-filling index as complete.
+describe("loadSearchShards: bounded-parallel fetch and loading state", () => {
+  beforeEach(() => {
+    resetShardSearchEntries();
+    resetDetailSearchEntries();
+    initializeSearch(makeSplitArchitecture());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function manifestResponse(shards: string[]) {
+    return {
+      ok: true,
+      headers: { get: (h: string) => (h.toLowerCase() === "content-type" ? "application/json" : null) },
+      json: async () => ({ shards }),
+    };
+  }
+
+  it("fetches shards in parallel yet assembles entries in shard-manifest order, not completion order", async () => {
+    const shardNames = Array.from({ length: 8 }, (_, i) => `shard-${i}.json`);
+
+    const fetchMock = vi.fn((url: string) => {
+      if (url.endsWith("manifest.json")) return Promise.resolve(manifestResponse(shardNames));
+      const i = shardNames.findIndex((n) => url.endsWith(n));
+      const entry: ShardEntry = {
+        ref_kind: "component",
+        ref_id: `s${i}`,
+        // Identical searchable fields across every shard: any two entries
+        // score identically, so a stable result order proves assembly order,
+        // not an artifact of one entry outscoring another.
+        name: "ShardMatch",
+        path: "p",
+        component: "c",
+        text: "",
+      };
+      // Later-indexed shards resolve first (inverted delay), so completion
+      // order is the reverse of manifest order.
+      const delayMs = (shardNames.length - i) * 3;
+      return new Promise((resolve) => {
+        setTimeout(() => resolve({ ok: true, json: async () => [entry] }), delayMs);
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await loadSearchShards();
+
+    // All 8 shard requests were issued (bounded concurrency still reaches
+    // every shard), and results are assembled in shard-manifest order.
+    const shardFetchCalls = fetchMock.mock.calls.filter(([url]) => !String(url).endsWith("manifest.json"));
+    expect(shardFetchCalls).toHaveLength(8);
+    const ids = search("ShardMatch").map((r) => r.id);
+    expect(ids).toEqual(shardNames.map((_, i) => `s${i}`));
+  });
+
+  it("reports loading while the fetch is in flight and loaded once it settles, notifying subscribers", async () => {
+    expect(getShardLoadState()).toBe("idle");
+
+    let releaseManifest!: (value: unknown) => void;
+    const manifestPromise = new Promise((resolve) => {
+      releaseManifest = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => (url.endsWith("manifest.json") ? manifestPromise : Promise.resolve({ ok: true, json: async () => [] }))),
+    );
+
+    const seen: string[] = [];
+    const unsubscribe = subscribeShardLoadState((s) => seen.push(s));
+
+    const loadPromise = loadSearchShards();
+    // The function runs synchronously up to its first `await`, so the state
+    // flips to "loading" before this call returns.
+    expect(getShardLoadState()).toBe("loading");
+
+    releaseManifest(manifestResponse([]));
+    await loadPromise;
+
+    expect(getShardLoadState()).toBe("loaded");
+    expect(seen).toEqual(["loading", "loaded"]);
+    unsubscribe();
+  });
+
+  it("marks the load failed, not loaded, when the fetch throws, so callers can't mistake it for a complete index", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+
+    // Non-fatal to the caller: still resolves rather than throwing (a missing
+    // or unreachable shard set must not break the app).
+    await expect(loadSearchShards()).resolves.toBeUndefined();
+    expect(getShardLoadState()).toBe("failed");
   });
 });
