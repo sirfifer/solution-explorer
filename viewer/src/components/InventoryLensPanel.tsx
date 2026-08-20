@@ -7,6 +7,25 @@ import {
   hasCriticalityData,
 } from "../lenses";
 import { Tooltip } from "./Tooltip";
+import { TOOLTIP_COPY } from "../utils/tooltipCopy";
+
+// External dependencies are a domain-string match against a fixed list of
+// known API domains (O2), not a scan of every possible integration, so the
+// count is never presented as a complete fact. Same visual convention as the
+// confidence "inferred" markers elsewhere (DetailPanel's ConfidenceBadge,
+// RulesPanel's InferredMarker): a small badge plus a tooltip carrying the
+// basis, focusable so keyboard users get it too.
+function DetectedMarker({ darkMode }: { darkMode: boolean }) {
+  return (
+    <Tooltip content={TOOLTIP_COPY.inventoryLens.externalDependencies} focusable>
+      <span
+        className={`text-[9px] px-1 py-0.5 rounded uppercase tracking-wide ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}
+      >
+        detected
+      </span>
+    </Tooltip>
+  );
+}
 
 // The Inventory lens surface (owner decision 2026-08-17). Ranked, bounded
 // lists first (I11): criticality, external dependencies, listening ports.
@@ -29,7 +48,10 @@ const CATEGORY_COLORS: Record<string, string> = {
   monitoring: "bg-amber-500/15 text-amber-500",
 };
 
-export function InventoryLensPanel() {
+// `mobile` (O10): see FlowPanel's comment on the same prop (this panel's
+// version of it, since it inlines its wrapper class rather than using a
+// `containerClass` local like the other five lens panels).
+export function InventoryLensPanel({ mobile = false }: { mobile?: boolean } = {}) {
   const darkMode = useArchStore((s) => s.darkMode);
   const architecture = useArchStore((s) => s.architecture);
   const navigateToComponent = useArchStore((s) => s.navigateToComponent);
@@ -59,13 +81,14 @@ export function InventoryLensPanel() {
   }`;
   const nameClass = `font-medium truncate ${darkMode ? "text-zinc-200" : "text-zinc-800"}`;
   const subClass = `text-[11px] truncate ${darkMode ? "text-zinc-500" : "text-zinc-500"}`;
+  const containerClass = mobile
+    ? `flex flex-col w-full h-full overflow-hidden ${darkMode ? "bg-zinc-950" : "bg-zinc-50"}`
+    : `hidden md:flex flex-col w-80 shrink-0 border-r overflow-hidden ${
+        darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"
+      }`;
 
   return (
-    <div
-      className={`hidden md:flex flex-col w-80 shrink-0 border-r overflow-hidden ${
-        darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"
-      }`}
-    >
+    <div className={containerClass}>
       <div className={`px-4 py-3 border-b shrink-0 ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
         <div className="flex items-center gap-1.5">
           <span>{"\u{1F4CB}"}</span>
@@ -73,7 +96,7 @@ export function InventoryLensPanel() {
         </div>
         <p className={`mt-0.5 text-[10px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
           {critical.length} critical/important · {dependencies.length} external{" "}
-          {dependencies.length === 1 ? "dependency" : "dependencies"} · {ports.length} ports
+          {dependencies.length === 1 ? "dependency" : "dependencies"} detected · {ports.length} ports
         </p>
       </div>
 
@@ -121,7 +144,10 @@ export function InventoryLensPanel() {
         </div>
 
         <div className="space-y-1.5">
-          <SectionLabel darkMode={darkMode}>External dependencies</SectionLabel>
+          <div className="flex items-center gap-1.5">
+            <SectionLabel darkMode={darkMode}>External dependencies</SectionLabel>
+            {dependencies.length > 0 && <DetectedMarker darkMode={darkMode} />}
+          </div>
           {dependencies.length === 0 ? (
             <p className={`px-1 text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
               No external services detected.

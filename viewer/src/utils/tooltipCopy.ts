@@ -186,6 +186,15 @@ export const TOOLTIP_COPY = {
     acceptance: "Conditions this directive must satisfy to be considered done.",
   },
 
+  // The Inventory lens (external dependency count honesty, O2). The count is
+  // a domain-string match against a fixed list of known API domains, not a
+  // scan of every possible integration, so nowhere it appears may read as a
+  // complete count.
+  inventoryLens: {
+    externalDependencies:
+      "Matched by known API domain in source. Not an exhaustive list of dependencies.",
+  },
+
   // The rationale strip fields (the colleague stand-in).
   rationale: {
     role: "The architectural role inferred for this element.",
@@ -228,6 +237,7 @@ export const SWEPT_SURFACES = [
   "supplyChain.pinStatus",
   "supplyChain.scope",
   "evidence.link",
+  "inventoryLens.externalDependencies",
   "tours.stale",
   "directive.export",
   "directive.exemption",

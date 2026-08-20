@@ -353,7 +353,8 @@ function RuleRow({ rule, selected }: { rule: Rule; selected: boolean }) {
   );
 }
 
-export function RulesPanel() {
+// `mobile` (O10): see FlowPanel's comment on the same prop.
+export function RulesPanel({ mobile = false }: { mobile?: boolean } = {}) {
   const darkMode = useArchStore((s) => s.darkMode);
   const architecture = useArchStore((s) => s.architecture);
   const selectedRuleId = useArchStore((s) => s.selectedRuleId);
@@ -376,9 +377,11 @@ export function RulesPanel() {
       return next;
     });
 
-  const containerClass = `hidden md:flex flex-col w-80 shrink-0 border-r overflow-hidden ${
-    darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"
-  }`;
+  const containerClass = mobile
+    ? `flex flex-col w-full h-full overflow-hidden ${darkMode ? "bg-zinc-950" : "bg-zinc-50"}`
+    : `hidden md:flex flex-col w-80 shrink-0 border-r overflow-hidden ${
+        darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"
+      }`;
 
   const header = (
     <div className={`px-4 py-3 border-b shrink-0 ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>

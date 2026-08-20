@@ -354,3 +354,52 @@ not solve it: 61 MB is 61 MB. A real fix needs the index restructured so a query
 touches a small part of it, for example a compact match index loaded first with
 text fetched on demand, or term-based sharding. That is a design task, not a
 patch, and it is recorded here rather than attempted inside a fix pass.
+
+## O14. The flagship demo's "Live" overlay serves six-month-old data, republished daily so it looks current. VERIFIED
+
+This began as P3's 254-versus-251 finding and turned out to be the shallowest
+symptom of it.
+
+**Measured directly against the live origins, 2026-08-20:**
+
+| Surface | generated_at | analyzer_version | components |
+|---|---|---|---|
+| `solution-explorer.unamentis.org/architecture/manifest.json`, what the viewer renders | 2026-08-19T02:35:45Z | 1.2.0 | 254 |
+| `unamentis.github.io/unamentis/architecture.json`, what the admin and Live overlay is built from | **2026-02-23T17:09:13Z** | **1.0.0** | 173 |
+
+The stale file's HTTP `last-modified` is 2026-08-19T02:38:46Z. It is
+**republished every run**, so every freshness signal available over the wire says
+it is current while its contents are six months old and two analyzer versions
+behind.
+
+**Why nobody caught it.** The published number was 251, which is close enough to
+254 to look like a rounding or scoping difference. It is not a count of anything:
+`scripts/generate-admin-summary.py` re-walks the component tree itself rather
+than trusting `stats.total_components`, and re-walking that old-schema file
+yields 251, a number matching neither the file's own declared 173 nor the live
+254. A plausible wrong number is far more dangerous than an obviously wrong one.
+
+**Root cause is split across two repositories:**
+- **Ours:** `generate-admin-summary.py` reimplements the count instead of using
+  the analyzer's own contract-guaranteed total. Fixed here, with tests.
+- **Not ours:** the `live-monitor.yml` running in `UnaMentis/unamentis` has
+  drifted from both this repo's workflow and the shipped template, gaining a
+  branch that prefers a committed root-level `architecture.json` over running a
+  fresh scan. That committed file was last updated 2026-02-23. **This cannot be
+  fixed from this repository** and is reported rather than patched.
+
+**This is exactly the failure the demo programme exists to prevent**, sitting on
+the flagship demo: a maintained map that presents stale output as live. It also
+fully explains O9. The 2026-08-19 P2 persona flagged "Generated 18h ago" beside a
+"Live" badge as a wording ambiguity worth a precise definition. The reality is
+that the two surfaces were describing different datasets six months apart.
+
+**Consequence of the fix, and it is a feature.** With the count taken from the
+file's own stats, the admin summary will now report 173 against the viewer's 254,
+and the new mismatch warning fires. The failure becomes loud instead of
+plausible. Given the alternative is a number that silently looks right, loud is
+correct.
+
+**Owner action required**, outside this repository: repoint or remove the
+committed `architecture.json` in `UnaMentis/unamentis` so the Live overlay is
+built from a fresh scan.

@@ -21,7 +21,12 @@ function SectionLabel({ children, darkMode }: { children: React.ReactNode; darkM
   );
 }
 
-export function FlowPanel() {
+// `mobile` (O10): renders the same panel full width and unhidden, for use
+// inside the mobile lens bottom sheet instead of the desktop-docked column.
+// The desktop wrapper (`hidden md:flex w-80 shrink-0 border-r`) is display:none
+// below the md breakpoint, which is exactly why a lens picked on a phone used
+// to render nothing.
+export function FlowPanel({ mobile = false }: { mobile?: boolean } = {}) {
   const darkMode = useArchStore((s) => s.darkMode);
   const flowEntryId = useArchStore((s) => s.flowEntryId);
   const flowStep = useArchStore((s) => s.flowStep);
@@ -35,9 +40,11 @@ export function FlowPanel() {
   const getComponentById = useArchStore((s) => s.getComponentById);
   const selectedComponentId = useArchStore((s) => s.selectedComponentId);
 
-  const containerClass = `hidden md:flex flex-col w-80 shrink-0 border-r overflow-hidden ${
-    darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"
-  }`;
+  const containerClass = mobile
+    ? `flex flex-col w-full h-full overflow-hidden ${darkMode ? "bg-zinc-950" : "bg-zinc-50"}`
+    : `hidden md:flex flex-col w-80 shrink-0 border-r overflow-hidden ${
+        darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"
+      }`;
 
   const entries = getFlowEntries();
   const totalScreens = entries.reduce((m, e) => Math.max(m, e.screenCount), 0);

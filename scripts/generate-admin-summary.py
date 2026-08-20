@@ -21,7 +21,32 @@ def now_iso() -> str:
 
 
 def count_components(arch: dict) -> int:
-    """Recursively count all components including children."""
+    """Return the architecture's authoritative component count.
+
+    ``stats.total_components`` is the value the analyzer itself computes and,
+    for any current-schema projection, guarantees equals the distinct
+    component-tree node count (see analyzer/derive/pipeline.py's
+    ``_check_output_contract``). Preferring it here, instead of independently
+    re-walking the tree, is what keeps this dashboard's number in agreement
+    with the same architecture.json's other consumers (e.g. architecture/
+    manifest.json's stats.total_components) rather than silently drifting
+    from it.
+
+    Older or hand-edited architecture.json files can predate that contract
+    (their own stats.total_components was computed under a different,
+    narrower rule, such as counting only path-level components and excluding
+    derived UI-flow children). For those, a raw recursive walk of the tree
+    would silently disagree with the file's own declared total instead of
+    reporting it honestly. So the recursive walk here is only a fallback for
+    when stats.total_components is absent or malformed, never a competing
+    computation that overrides a present, well-formed value.
+    """
+    stats = arch.get("stats")
+    if isinstance(stats, dict):
+        total = stats.get("total_components")
+        if isinstance(total, int) and not isinstance(total, bool):
+            return total
+
     total = 0
     for comp in arch.get("components", []):
         total += 1

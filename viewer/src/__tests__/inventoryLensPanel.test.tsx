@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { InventoryLensPanel } from "../components/InventoryLensPanel";
 import { useArchStore } from "../store";
+import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 import type { Architecture, Component } from "../types";
 
 // Fix 3 (a reviewer's "the OpenAI entry never opens" complaint, checked and
@@ -82,5 +83,34 @@ describe("InventoryLensPanel: external dependency entries are interactive (Fix 3
     useArchStore.setState({ architecture: makeArchitecture({ components: [] }), darkMode: false });
     render(<InventoryLensPanel />);
     expect(screen.getByText("No external services detected.")).toBeTruthy();
+  });
+});
+
+// O2: the dependency count is a domain-string match against a fixed list of
+// known API domains, not a scan of every possible integration. Nowhere it
+// appears may present the count as a complete fact without saying so.
+describe("InventoryLensPanel: external dependency count is honest about its basis (O2)", () => {
+  it("marks the count as detected, not asserted complete, and explains the basis on hover/focus", () => {
+    const architecture = makeArchitecture({
+      components: [
+        comp({ id: "usm-core", name: "USM Core", external_services: [{ name: "OpenAI", category: "ai" }] }),
+      ],
+    });
+    useArchStore.setState({ architecture, darkMode: false });
+    render(<InventoryLensPanel />);
+
+    // The compact header stat line says "detected", not a bare count.
+    expect(screen.getByText(/1 external dependency detected/)).toBeTruthy();
+
+    // The section carries a "detected" marker wired to the honesty tooltip.
+    const marker = screen.getByLabelText(TOOLTIP_COPY.inventoryLens.externalDependencies);
+    expect(marker).toBeTruthy();
+    expect(marker.textContent).toBe("detected");
+  });
+
+  it("omits the detected marker when there is nothing to caveat", () => {
+    useArchStore.setState({ architecture: makeArchitecture({ components: [] }), darkMode: false });
+    render(<InventoryLensPanel />);
+    expect(screen.queryByLabelText(TOOLTIP_COPY.inventoryLens.externalDependencies)).toBeNull();
   });
 });
