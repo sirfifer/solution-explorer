@@ -1,0 +1,122 @@
+{
+  "charter_version": "comprehension-review/v1",
+  "subject": "unamentis",
+  "run_date": "2026-08-17",
+  "persona": "P2",
+  "retrospective": true,
+  "verdict": "Retrospective v1 score, not comparable to the informal B+ the sitting itself recorded (FINDINGS.md 'Verdict'), which predates the rubric and used different criteria. Note the miss on the single highest-value executive fact (Q4, single-laptop hosting) below, flagged by the answer key as a finding regardless of score.",
+  "minutes_to_orientation": null,
+  "dimensions": {
+    "orientation": {
+      "score": 4,
+      "evidence": "JOURNAL.md 'First five minutes': 'I answered my question #1 in ninety seconds without clicking anything.'",
+      "note": "Prose only, no measured timestamp, but the persona's own stated figure ('ninety seconds') is unambiguously inside the anchor-4 five-minute bar."
+    },
+    "model_accuracy": {
+      "score": 2,
+      "evidence": "FINDINGS.md 'Answers to my five questions' Q1-Q5",
+      "note": "Q1 correct (teaching/tutoring, voice, AI all present, board-safe). Q2 partial: identifies the provider-fallback/degradation design but never states the unprotected centre (the Management API has no documented fallback), matching the key's partial definition verbatim. Q3 correct (2+ named providers, explicit substitutability observation). Q4 wrong: the key's single highest-value executive fact, that the entire backend runs on one MacBook Pro with no redundancy, is absent from both JOURNAL.md and FINDINGS.md; the persona's risk answer instead names vendor pricing and team surface area, missing the required fact entirely. Q5 correct on the key's reasoning/self-assessment basis (comprehensive brief, honest 'directionally yes, contractually no' self-grade). 3 of 5 correct, 1 partial, 1 wrong on the fact the key flags as most commercially important."
+    },
+    "navigation_efficiency": {
+      "score": 2,
+      "evidence": "FINDINGS.md 'Where the tool helped vs. abandoned me' and 'The single change that would most improve my sitting'",
+      "note": "Search reached most targets efficiently ('the best tool in the box'), but the persona explicitly states 'Eighty percent of my clicking was manually building' the two rollups (critical components, external dependencies) that do not exist as single screens, plus real detours: the accidentally-dismissed summary banner recoverable only by a full reload, and the exploded '31 Modules' cluster view."
+    },
+    "trust": {
+      "score": 2,
+      "evidence": "FINDINGS.md 'Trust assessment': 'Directionally yes, contractually no ... I'd quote the shape confidently, re-verify any single number before putting it on a slide.'",
+      "note": "Multiple issues spent trust (69-vs-265 endpoint contradiction, mislabeled Remote Log Server, /api/foo scaffolding, doubled breadcrumb, stale snapshot) but the persona recovers a working, stated level of confidence rather than describing permanent verify-everything mode."
+    },
+    "unaided_recovery": {
+      "score": 2,
+      "evidence": "JOURNAL.md 'Minutes 5-20' (69-vs-265 contradiction) and 'The help detour and a self-inflicted wound' (lost summary banner)",
+      "note": "Contradictions are consistently detected and logged but not resolved to a single correct answer using the tool alone (e.g. '69+ HTTP endpoints... Overview tab counts 265. Which is it?' is left open, as is the Remote Log Server naming conflict: 'One of them is wrong.'). The lost summary banner was recovered only via a full page reload, a workaround rather than an in-tool resolution."
+    },
+    "advertised_paths": {
+      "score": 0,
+      "evidence": "JOURNAL.md 'The help detour and a self-inflicted wound', 'The drill-down wall of boxes', and 'Mobile hallway check (390x844)'",
+      "note": "Several advertised/taught interactions failed on first use with no clean retry: the pinned summary banner, once dismissed, had 'no button to bring it back' and returned only after a full reload; clicking a module inside the expanded '31 Modules' cluster 'apparently hit nothing'; and on mobile, after drilling, an empty 'Select a component' sheet covered the entire screen and required a Home-breadcrumb tap to escape."
+    }
+  },
+  "battery": [
+    {
+      "question": 1,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "FINDINGS.md 'The 2-minute summary I'd give the founder'; JOURNAL.md 'First five minutes'",
+      "note": "Teaching/tutoring, voice/conversation, and AI all present in board-appropriate language."
+    },
+    {
+      "question": 2,
+      "verdict": "partial",
+      "confidence": "medium",
+      "source": "FINDINGS.md 'The architectural bet is provider flexibility' paragraph",
+      "note": "Names the graceful-degradation/fallback design for LLM/STT/TTS providers but never identifies the Management API as the one unprotected central component, matching the key's stated partial definition exactly."
+    },
+    {
+      "question": 3,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "FINDINGS.md Q4 'Outside services, bills, risks?'",
+      "note": "Names Anthropic, OpenAI, ElevenLabs, Deepgram plus self-hosted/on-device alternatives, and explicitly frames them as substitutable ('genuine cost/risk mitigation'). No payment/auth vendor wrongly claimed."
+    },
+    {
+      "question": 4,
+      "verdict": "wrong",
+      "confidence": "medium",
+      "source": "FINDINGS.md 'The 2-minute summary' risk paragraph and 'Verdict'",
+      "note": "Required fact (single-laptop hosting / no redundancy, per SERVER_INFRASTRUCTURE.md) is absent from all surviving text; the persona's risk answer substitutes vendor-pricing dependence and team surface area, which does not satisfy the must-appear criterion."
+    },
+    {
+      "question": 5,
+      "verdict": "correct",
+      "source": "FINDINGS.md 'The 2-minute summary I'd give the founder' and 'Verdict'",
+      "note": "Graded on the key's reasoning/self-assessment basis. The written brief gives a correct, board-appropriate picture, and the closing self-assessment ('Directionally yes, contractually no') is honest about its own limits."
+    }
+  ],
+  "trust_incidents": [
+    {
+      "what": "'Remote Log Server' (Ruby, :8765) has an About blurb describing 'build, test, and deployment automation scripts' and lives at unamentis/scripts; name and description describe two different things.",
+      "severity": "high",
+      "evidence": "JOURNAL.md 'Odds and ends' (24-remotelog-attempt.png)"
+    },
+    {
+      "what": "AI Insights states '69+ HTTP endpoints' for unamentis-management while the Overview tab counts 265 for the same component.",
+      "severity": "medium",
+      "evidence": "JOURNAL.md 'Minutes 5-20: clicking the middle of the map' (05-ai-insights.png vs 04-detail-panel.png)"
+    },
+    {
+      "what": "Breadcrumb reads 'Home / unamentis / unamentis / server', a doubled path segment.",
+      "severity": "low",
+      "evidence": "JOURNAL.md 'Minutes 20-45: chasing the dependency question' (13-lambda-node.png)"
+    },
+    {
+      "what": "Endpoint list includes leftover scaffolding (GET/POST /api/foo) presented alongside real production endpoints with no distinguishing marker.",
+      "severity": "low",
+      "evidence": "JOURNAL.md 'Minutes 5-20: clicking the middle of the map'"
+    },
+    {
+      "what": "Dataset generated 7/22/2026, viewed 8/17/2026, with no in-app nudge that it is a month stale.",
+      "severity": "low",
+      "evidence": "JOURNAL.md 'Odds and ends' ('What's New')"
+    }
+  ],
+  "blocked_paths": [
+    {
+      "feature": "Pinned AI summary banner, once dismissed",
+      "evidence": "JOURNAL.md 'The help detour and a self-inflicted wound': 'I discovered I had also dismissed the summary banner ... and could not find any button to bring it back. It only returned when I reloaded the page.' (11-search-lambda.png shows the banner missing)"
+    },
+    {
+      "feature": "Clicking a component inside the expanded '31 Modules' cluster view",
+      "evidence": "JOURNAL.md 'The drill-down wall of boxes': 'An explosion of ~50 tiny unreadable chips ... my click on \"STT\" apparently hit nothing.' (18-llm-click.png)"
+    },
+    {
+      "feature": "Mobile swipe-up gesture on the detail sheet",
+      "evidence": "JOURNAL.md 'Mobile hallway check (390x844)': 'my drag-to-swipe selected page text instead of moving the sheet'"
+    },
+    {
+      "feature": "Mobile post-drill detail sheet",
+      "evidence": "JOURNAL.md 'Mobile hallway check (390x844)': 'an empty \"Select a component to view details\" sheet covered most of the screen with the graph nowhere in sight; I had to tap Home breadcrumb to recover.' (29-mobile-drill.png, 30-mobile-after-drill.png)"
+    }
+  ]
+}

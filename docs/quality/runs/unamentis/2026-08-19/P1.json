@@ -1,0 +1,98 @@
+{
+  "charter_version": "comprehension-review/v1",
+  "subject": "unamentis",
+  "run_date": "2026-08-19",
+  "persona": "P1",
+  "minutes_to_orientation": 2,
+  "verdict": "B+ (persona's own grade). Scored 17/24, up from a baseline floor of 11/24.",
+  "dimensions": {
+    "orientation": {
+      "score": 4,
+      "evidence": "JOURNAL.md '[t+~2m] First correct one-paragraph description'; 02-overview-text.png",
+      "note": "Inside five minutes. Self-reported elapsed marker, corroborated by an in-page new Date() read at start."
+    },
+    "model_accuracy": {
+      "score": 3,
+      "evidence": "FINDINGS.md section 3, Q1-Q5 with confidence and source per answer",
+      "note": "Q1, Q2, Q3 correct against the key; Q4 partial, naming Postgres and the provider set but omitting on-device storage (Core Data, Room), which the key requires. Q2 exceeded the key by catching that the web client uses WebRTC where iOS uses WebSocket."
+    },
+    "navigation_efficiency": {
+      "score": 3,
+      "evidence": "JOURNAL.md; 41 screenshots across ~15 components; 04-structure-tree-protocols.png, 11-mgmt-links.png",
+      "note": "Reached every named target. Cost real time to the symbol-search defect (O3) before routing around it via the Files tab."
+    },
+    "trust": {
+      "score": 3,
+      "evidence": "FINDINGS.md section 5; 26-inventory-lens.png against 02-overview-text.png",
+      "note": "One medium incident, the external-dependency contradiction, which the orchestrator independently confirmed as a genuine product defect (O2). P1 recorded it as unverified rather than false, which was the correct call. One low, self-attributed to near-duplicate component naming. Far short of the baseline's verify-everything posture."
+    },
+    "unaided_recovery": {
+      "score": 2,
+      "evidence": "FINDINGS.md section 5, first bullet",
+      "note": "Detected the dependency contradiction using the tool alone but could not resolve it from inside the tool, which is the anchor for 2. Scored no higher because P1 also asserted a defect that does not exist (O7)."
+    },
+    "advertised_paths": {
+      "score": 2,
+      "evidence": "FINDINGS.md section 6; 16-audiowebsockethandler.png, 20-idlemanager-detail.png",
+      "note": "Symbol-level search failed on first use and never worked, verified as a real UI defect (O3), but the Files tab achieved the same goal, which is the anchor for 2. The reported graph-view blocker is EXCLUDED: verified false (O7), P1's own 31-root-view.png shows the graph rendered."
+    }
+  },
+  "battery": [
+    {
+      "question": 1,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "02-overview-text.png, 03-structure-lens.png"
+    },
+    {
+      "question": 2,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "11-mgmt-links.png",
+      "note": "Port 8766, REST plus WebSocket, /ws/audio, JWT versus session auth. usm-core :8767 accepted without hedge, but the key marks that port unscoreable."
+    },
+    {
+      "question": 3,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "FINDINGS.md Q3",
+      "note": "KEY CORRECTION: the key required linking the absent error to the product's deliberate fallback design. That design lives only in a markdown file, and doc content is unsearchable (O1), so the key demanded an insight the tool cannot deliver. P1 named the audio WebSocket and audio_ws.py first and supplied a better-grounded mechanism, NAT idle-timeout killing a long-lived socket silently."
+    },
+    {
+      "question": 4,
+      "verdict": "partial",
+      "confidence": "medium",
+      "source": "24-database-files.png, 26-inventory-lens.png",
+      "note": "Postgres and the provider set correct; on-device storage omitted."
+    },
+    {
+      "question": 5,
+      "verdict": "correct",
+      "confidence": "medium",
+      "source": "FINDINGS.md Q5",
+      "note": "Not graded against facts. Sketch shape correct, blanks stated as blanks."
+    }
+  ],
+  "trust_incidents": [
+    {
+      "what": "Inventory lens counts 5 external dependencies while the tool's own Flow narrative names ElevenLabs, Piper, Chatterbox and Ollama, which it does not count",
+      "severity": "medium",
+      "evidence": "26-inventory-lens.png against 02-overview-text.png; confirmed by orchestrator as O2"
+    },
+    {
+      "what": "Three distinct components named 'auth' make it easy to misattribute a claim to the wrong one",
+      "severity": "low",
+      "evidence": "34-auth-module.png, 37-mgmt-auth-module.png"
+    }
+  ],
+  "blocked_paths": [
+    {
+      "feature": "Symbol-level search results open the parent file or folder instead of the symbol",
+      "evidence": "16-audiowebsockethandler.png, 18-idle-manager-file.png; root-caused as O3"
+    },
+    {
+      "feature": "'Switch to classic frames' control does not do what its label implies",
+      "evidence": "32-classic-frames.png"
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "charter_version": "comprehension-review/v1",
+  "subject": "unamentis",
+  "run_date": "2026-08-19",
+  "persona": "P3",
+  "minutes_to_orientation": 3,
+  "verdict": "C+ (persona's own grade, the harshest of the three). Scored 16/24 against a baseline floor of 6/24, though that baseline is a floor because P3's 2026-08-17 findings document did not survive.",
+  "dimensions": {
+    "orientation": {
+      "score": 4,
+      "evidence": "JOURNAL.md '[t+~3m] I could already give a correct one-paragraph description'",
+      "note": "P3 honestly recorded not capturing a t+0 clock read rather than fabricating one."
+    },
+    "model_accuracy": {
+      "score": 4,
+      "evidence": "FINDINGS.md Q1-Q3; verified independently by the orchestrator",
+      "note": "Every factual claim survived independent verification. The 254-versus-251 disagreement reproduced exactly. The ID-namespace claim reproduced precisely: 253 of 254 added ids carry a 'unamentis/' prefix and stripping it recovers 250 of 256 removed ids. One minor overstatement, 'all-zero' diff_summary, where files_changed is in fact non-zero; P3 hedged it at medium confidence."
+    },
+    "navigation_efficiency": {
+      "score": 3,
+      "evidence": "JOURNAL.md; deep links, search, and direct fetch of the machine front door",
+      "note": "Went from question to citable answer efficiently and used the machine surfaces as intended."
+    },
+    "trust": {
+      "score": 1,
+      "evidence": "FINDINGS.md sections 3 and 5; 06-changelog-expanded.png, 12-admin-dashboard.png",
+      "note": "Between the anchors and placed deliberately. The tool states something false 254 times over ('New component discovered'), and two of its own front doors disagree about a basic count, which is the language of the 0 anchor. But the falsehoods are confined to change reporting, structural facts cross-checked cleanly every time, and P3 detected all of it. Verdict adopted verify-everything mode for change data specifically."
+    },
+    "unaided_recovery": {
+      "score": 4,
+      "evidence": "JOURNAL.md '[t+~28m] Cross-check #2'; 06-changelog-expanded.png",
+      "note": "Detected the false change narrative and resolved it using the tool alone, by fetching the raw manifest through the tool's own machine front door and comparing added against removed ids. This is exactly the 4 anchor."
+    },
+    "advertised_paths": {
+      "score": 0,
+      "evidence": "FINDINGS.md section 6",
+      "note": "Review mode toggles state with no discoverable visible change and the 'More options' menu never appears; neither resolved. Those two are persona-reported and not independently reproduced. Independently confirmed: four /architecture/*.json paths the bundle references return 200 with index.html, which matches the live origin exactly and is therefore a real product behaviour rather than a mirror artifact."
+    }
+  },
+  "battery": [
+    {
+      "question": 1,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "12-admin-dashboard.png, 13-admin-dashboard-repos.png",
+      "note": "Verified: manifest says 254 at 02:35:45Z, admin summary says 251 at 02:38:43Z, same repo, same run."
+    },
+    {
+      "question": 2,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "FINDINGS.md Q2"
+    },
+    {
+      "question": 3,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "06-changelog-expanded.png",
+      "note": "Verified in full for the changelog claim; the diff_summary claim confirmed with one correction."
+    },
+    {
+      "question": 4,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "FINDINGS.md Q4"
+    },
+    {
+      "question": 5,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "FINDINGS.md Q5",
+      "note": "Not graded against facts."
+    }
+  ],
+  "trust_incidents": [
+    {
+      "what": "254 changelog rows read 'New component discovered' for components that already existed under a different id prefix; an id-namespace migration reported as real churn",
+      "severity": "high",
+      "evidence": "06-changelog-expanded.png; verified by the orchestrator against manifest.json changelog serial 2"
+    },
+    {
+      "what": "Two of the tool's own surfaces disagree about the repository's component count, 254 against 251, generated three minutes apart",
+      "severity": "high",
+      "evidence": "12-admin-dashboard.png; verified against the live admin-summary.json"
+    },
+    {
+      "what": "Per-commit diff_summary reports zero component and relationship change for all 20 commits inspected while reporting non-zero files_changed",
+      "severity": "medium",
+      "evidence": "13-admin-dashboard-repos.png; reproduced by the orchestrator"
+    }
+  ],
+  "blocked_paths": [
+    {
+      "feature": "/architecture/coverage.json, activity.json, publication.json return 200 with index.html rather than data",
+      "evidence": "Reproduced against the live origin; real behaviour, not a mirror artifact"
+    },
+    {
+      "feature": "live-config.json's data_url points at a manifest.json that 404s",
+      "evidence": "FINDINGS.md section 6"
+    },
+    {
+      "feature": "Cmd+K did not open search on first use",
+      "evidence": "FINDINGS.md section 6; resolved via the visible Search button"
+    },
+    {
+      "feature": "Review mode toggles state with no visible change",
+      "evidence": "FINDINGS.md section 6; persona-reported, not independently reproduced"
+    },
+    {
+      "feature": "'More options' menu never renders",
+      "evidence": "FINDINGS.md section 6; persona-reported, not independently reproduced"
+    }
+  ]
+}

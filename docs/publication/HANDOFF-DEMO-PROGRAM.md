@@ -13,8 +13,9 @@ published on `syscorpus.com`, refreshed weekly from the owner's Mac Studio, with
 every refresh feeding fixes back into the tool. The plan, the project register
 and the execution design are agreed and decided. **All six prerequisites are
 built and merged** (PRs #96, #97, #98; `main` is green at `71e7a8d` or later).
-Nothing of the demo program itself is built yet. The next unit of work is the
-calibration run, then pre-flight measurement, then demo one.
+**N1, the calibration run, is complete** (2026-08-19,
+`docs/quality/runs/unamentis/2026-08-19/`). Nothing of the demo program itself
+is built yet. The next unit of work is pre-flight measurement, then demo one.
 
 ## State of the world
 
@@ -60,7 +61,15 @@ Decided, do not re-litigate (owner decisions 2026-08-18):
    unavailable in the local Node). They pass in CI. Do not chase them, and do not
    let a real failure hide among them: capture the failing FILE set before and
    after a change and diff the two lists.
-4. **Fixing a classification can remove an accidental exclusion elsewhere.**
+4. **The changelog reports an id-namespace migration as real churn, and every
+   pathway agrees with it.** The current UnaMentis publication shows 254 "New
+   component discovered" rows and 256 removals. Roughly 250 of those are the
+   same components re-identified with a `unamentis/` prefix; about six changed
+   for real. Verified 2026-08-19, see `ORCHESTRATOR-FINDINGS.md`. **Do not rely
+   on the projection diff for N2 or N3 until this is resolved**, or the weekly
+   findings loop will be swamped by phantom churn. This is the same shape as the
+   989-phantom-symbol-losses trap above.
+5. **Fixing a classification can remove an accidental exclusion elsewhere.**
    Stopping test directories being typed `api-server` produced 68 bogus
    "unreferenced" findings on FastAPI, because the unreferenced rule had been
    skipping them only as a side effect of the mislabel. The golden corpus caught
@@ -68,32 +77,34 @@ Decided, do not re-litigate (owner decisions 2026-08-18):
 
 ## What to do next, in order
 
-### N1. The calibration run of the Comprehension Review
+### N1. The calibration run. DONE, 2026-08-19
 
-The charter is `docs/quality/COMPREHENSION-REVIEW.md`. Read the two sections
-"Who can be a persona" and "A calibration run" before planning anything: **a
-persona must have no exposure to this repository**, which disqualifies the
-orchestrating session from the sittings and means each persona is a fresh
-context briefed only with its persona, mission, battery and URL.
+Run at `docs/quality/runs/unamentis/2026-08-19/`, baseline at
+`.../2026-08-17/`, raw persona material at
+`/Volumes/Studio/dev/.evidence/solution-explorer/persona-runs/20260819/`.
 
-Three parts:
+```
+P1 senior engineer, unfamiliar language   11/24 -> 17/24  (+6)
+P2 non-coding executive                   12/24 -> 13/24  (+1)
+P3 staff engineer, AI power user           6/24 -> 16/24  (+10, lower bound)
+Trust incidents: 17 -> 8
+```
 
-- **Before**: retrospectively score the 2026-08-17 sitting from its preserved
-  artifacts at `/Volumes/Studio/dev/.evidence/solution-explorer/persona-runs/20260817/`
-  (three journals, two findings documents, 124 screenshots). Mark
-  `"retrospective": true`, and leave any dimension the artifacts cannot support
-  as `null` rather than inventing it. This is the baseline.
-- **After**: three live sittings against `solution-explorer.unamentis.org`,
-  which now carries the fixes.
-- **Report**: `scripts/comprehension-score.py compare <after> <before>`, plus a
-  `REVIEW.md` with independent verification and the instrument retro.
+Read `REVIEW.md` in the run directory before quoting any of that. The headline
+caveats: the baseline is a floor because P3's 2026-08-17 findings document did
+not survive; P2, the commercially important persona, moved by one point; and
+advertised paths did not improve at all, scoring 2, 0 and 0.
 
-Outstanding decision for the owner: **how the personas are staffed.** Subagents
-(a fresh subagent per persona, never having read the repo) or separate sessions.
-The session that wrote this could not do it itself without invalidating the
-measurement.
+**Staffing is solved and reusable.** `scripts/comprehension-sitting.sh` gives a
+persona isolation by construction rather than by instruction: a working
+directory outside the repository, browser-only MCP, no skills, and a deny list
+removing Read, Bash, Grep, Glob, WebFetch, WebSearch and Agent. Verified: the
+persona has only `ToolSearch`, `Write`, `TodoWrite` and the browser. Personas
+and briefs are in `docs/quality/personas/`. Reuse both for every subject.
 
-Run directory: `docs/quality/runs/unamentis/<date>/`.
+**The charter's "B+ maps to 17 to 19 of 24" is wrong** and should be struck. The
+same sittings score 11, 12 and 6. A letter grade and the rubric measure
+different things.
 
 ### N2. Pre-flight measurement and the three-subject reconnaissance
 

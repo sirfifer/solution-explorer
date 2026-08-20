@@ -1,0 +1,120 @@
+{
+  "charter_version": "comprehension-review/v1",
+  "subject": "unamentis",
+  "run_date": "2026-08-17",
+  "persona": "P1",
+  "retrospective": true,
+  "verdict": "Retrospective v1 score, not comparable to the informal B+ the sitting itself recorded (FINDINGS.md 'Verdict'), which predates the rubric and used different criteria.",
+  "minutes_to_orientation": null,
+  "dimensions": {
+    "orientation": {
+      "score": 2,
+      "evidence": "JOURNAL.md '## 2. The tour actually paid off' (02-tour-overview.png) and '## 3. Main view orientation' (04-main-view.png)",
+      "note": "Prose only, no measured time. The tour paragraph answered 'half of question 1' within the first two minutes, but the persona does not call herself oriented enough to whiteboard until '## 3': 'Feeling: oriented. Ten minutes in I could already sketch a first draft of the whiteboard.' Ten minutes is inside the 60-90 minute time box but exceeds the anchor-4 five-minute bar, so scored at the anchor-2 level."
+    },
+    "model_accuracy": {
+      "score": 3,
+      "evidence": "FINDINGS.md 'Answers to my five questions' Q1-Q5",
+      "note": "Q1 correct (HIGH conf, matches must-appear: voice tutoring, learners, 6+ moving parts). Q2 correct (port 8766, REST+WS, audio on WS). Q3 partial: names Core/Audio then Services/Voice before the audio WebSocket (3rd, not 1st/2nd) and never explicitly links 'no error shown' to the deliberate fallback design, matching the key's partial definition verbatim. Q4 correct (Postgres, on-device Core Data, 5+ named external providers, no wrong claims). Q5 correct on the key's shape+honesty basis (clients/hub/USM/Postgres/external shape right, explicit honesty about under-reported edges and the Lambda unknown). 4 of 5 correct, 1 partial with the gap self-stated."
+    },
+    "navigation_efficiency": {
+      "score": 2,
+      "evidence": "JOURNAL.md '## 12. The iOS-to-backend question, solved from the server side' and FINDINGS.md 'Top confusions and blockers, ranked' items 1-4",
+      "note": "Reached every named target (management server, iOS client, Audio module, database, usm-core) but the persona's own cost accounting adds to roughly 45 of ~75 minutes spent recovering from friction: ~20 min on the client-to-backend edge (found only from the server's INCOMING list), ~10 min on the Remote Log Server identity confusion, ~10 min on click-flakiness and the lens dropdown, ~5 min on garbled SQL columns. Well over an optimum path."
+    },
+    "trust": {
+      "score": 0,
+      "evidence": "FINDINGS.md 'Data trust issues' and 'Verdict' ('...forced me into verify-everything mode')",
+      "note": "Persona explicitly names entering verify-everything mode and lists six distinct trust issues: Remote Log Server/scripts identity fusion, docs node classified as an API server, garbled SQL column names, UIKit vs SwiftUI contradiction for the iOS client, an unexplained 3.77M line count, and a stale/uncovered snapshot."
+    },
+    "unaided_recovery": {
+      "score": 2,
+      "evidence": "JOURNAL.md '## 6. Into the iOS app' (UIKit/SwiftUI contradiction) and '## 12. The iOS-to-backend question' (resolved via management's INCOMING links)",
+      "note": "Mixed record. The iOS-to-management edge gap was fully detected and resolved using the tool alone by flipping to the server's Links tab. The UIKit-vs-SwiftUI contradiction was detected but explicitly left unresolved: 'exactly the kind of detail I would have to verify in code.'"
+    },
+    "advertised_paths": {
+      "score": 2,
+      "evidence": "JOURNAL.md '## 8. Lens dropdown, a small fight' (16-lens-menu.png, 17-lens-open.png, 18-lens-open2.png) and '## 4. First real click fought me' (05-after-click-attempt.png)",
+      "note": "LENS control appeared unresponsive on the first two clicks before revealing itself as a native select; node-label-text clicks repeatedly did nothing while node-body clicks worked ('through the session this repeated'). Both eventually worked on retry or with a workaround; nothing stayed permanently broken."
+    }
+  },
+  "battery": [
+    {
+      "question": 1,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "FINDINGS.md Q1, tour step 2 summary banner, per-component AI Insights, README Docs tabs",
+      "note": "Voice-first AI tutoring for students named as purpose/audience; 6+ moving parts named (iOS, watch, two web frontends, management server, usm-core, importers, lambda, database)."
+    },
+    {
+      "question": 2,
+      "verdict": "correct",
+      "confidence": "medium",
+      "source": "FINDINGS.md Q2 (stated confidence 'MEDIUM-HIGH'), management INCOMING links (34-mgmt-incoming-links.png), endpoint list (07-mgmt-endpoints.png)",
+      "note": "Port 8766, REST and WebSocket both present, audio explicitly on WS (/ws/audio). Persona's own stated confidence was 'MEDIUM-HIGH', mapped down to 'medium' since the schema has no compound value; the caveat is that this required cross-referencing the server's side rather than the client's."
+    },
+    {
+      "question": 3,
+      "verdict": "partial",
+      "confidence": "medium",
+      "source": "FINDINGS.md Q3 (stated 'HIGH for where to start, MEDIUM that the list is complete'), Audio module AI Insights and Files tab, Voice module AI Insights",
+      "note": "Names Core/Audio and Services/Voice first, the audio WebSocket third, and provider fallback fourth; never states the explicit 'no error is shown because a fallback exists' link the key is testing for."
+    },
+    {
+      "question": 4,
+      "verdict": "correct",
+      "confidence": "medium",
+      "source": "FINDINGS.md Q4 (stated 'MEDIUM-HIGH on database and providers, LOW on anything operational'), database Data tab (29-db-data-tab.png, 30-db-tables.png), per-module EXTERNAL SERVICES badges",
+      "note": "Postgres, on-device Core Data, and 5+ named external providers (OpenAI, Anthropic, AssemblyAI, Groq, ElevenLabs plus self-hosted Ollama/Whisper/Piper) all present; no wrong claims (no unsupported cloud DB, no third-party auth or payment vendor claimed)."
+    },
+    {
+      "question": 5,
+      "verdict": "correct",
+      "confidence": "medium",
+      "source": "FINDINGS.md Q5 (stated 'HIGH on components and protocols, MEDIUM on edges the graph under-reports')",
+      "note": "Graded per the key's shape-plus-honesty basis, not against facts. Sketch shape (clients / management hub / USM Core / Postgres / external providers) matches, and the persona is explicit about which edges and relationships she is unsure of."
+    }
+  ],
+  "trust_incidents": [
+    {
+      "what": "Component named 'Remote Log Server' (Ruby, :8765) actually maps to the unamentis/scripts directory and self-describes as CI/build/deployment automation (SwiftLint, clippy, App Store validation), fusing two identities into one node.",
+      "severity": "high",
+      "evidence": "JOURNAL.md '## 14. The Remote Log Server that is actually a scripts directory' (37-remote-log-mislabel.png)"
+    },
+    {
+      "what": "A 'docs' node renders in the graph header as 'API Server, aiohttp, Plugin Architecture' for a directory of Markdown files, while the detail panel calls the same or a related node 'Content, Markdown, 26 files'.",
+      "severity": "medium",
+      "evidence": "JOURNAL.md '## 14', FINDINGS.md 'Data trust issues'"
+    },
+    {
+      "what": "Database Data tab presents parser garbage as real column names: 'PT4H: LANGUAGE', 'course: IS', 'ACM: COMPUTING', 'true_false: QUESTION', 'c: OPTION'.",
+      "severity": "medium",
+      "evidence": "JOURNAL.md '## 11. Where data lives' (30-db-tables.png)"
+    },
+    {
+      "what": "iOS client node badge/header says UIKit while the AI Insights text says 'Built with SwiftUI' for the same component.",
+      "severity": "medium",
+      "evidence": "JOURNAL.md '## 6. Into the iOS app' (09-ios-detail.png, 10-ios-drilldown.png)"
+    },
+    {
+      "what": "Header states 3,767,918 total lines with no first-party vs. vendored/generated breakdown available anywhere in the UI.",
+      "severity": "low",
+      "evidence": "JOURNAL.md '## 3. Main view orientation' (04-main-view.png)"
+    },
+    {
+      "what": "Dataset generated 7/22/2026, viewed 8/17/2026 (26 days stale), with a 'Coverage unavailable for this dataset' strip and no prompt to regenerate.",
+      "severity": "low",
+      "evidence": "JOURNAL.md '## 3. Main view orientation' (04-main-view.png)"
+    }
+  ],
+  "blocked_paths": [
+    {
+      "feature": "LENS dropdown (Structure/Flow control)",
+      "evidence": "JOURNAL.md '## 8. Lens dropdown, a small fight': 'would not visibly open for me, I clicked it twice and only got a tooltip' before it was found to be a native select (16-lens-menu.png, 17-lens-open.png, 18-lens-open2.png)"
+    },
+    {
+      "feature": "Clicking a node's title/label text to open its detail panel",
+      "evidence": "JOURNAL.md '## 4. First real click fought me': 'Clicking the text ... did nothing visible ... clicking the node body worked. Through the session this repeated.' (05-after-click-attempt.png)"
+    }
+  ]
+}
