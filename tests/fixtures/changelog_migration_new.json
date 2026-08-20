@@ -1,0 +1,4336 @@
+{
+ "components": [
+  {
+   "children": [
+    {
+     "children": [
+      {
+       "children": [],
+       "id": "unamentis/shared/watchmodels",
+       "metrics": {},
+       "name": "WatchModels",
+       "type": "module"
+      },
+      {
+       "children": [
+        {
+         "children": [
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/modulesview",
+             "metrics": {},
+             "name": "Modules",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/curriculumdetailview",
+             "metrics": {},
+             "name": "Curriculum Detail",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbdashboardview",
+             "metrics": {},
+             "name": "KBDashboard",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/topicdetailview",
+             "metrics": {},
+             "name": "Topic Detail",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbwrittensessionview",
+             "metrics": {},
+             "name": "KBWritten Session",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kboralsessionview",
+             "metrics": {},
+             "name": "KBOral Session",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbmatchsimulationview",
+             "metrics": {},
+             "name": "KBMatch Simulation",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbconferencetrainingview",
+             "metrics": {},
+             "name": "KBConference Training",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbreboundtrainingview",
+             "metrics": {},
+             "name": "KBRebound Training",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbdomaindrillview",
+             "metrics": {},
+             "name": "KBDomain Drill",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbsettingsview",
+             "metrics": {},
+             "name": "KBSettings",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbquickstartsettingsview",
+             "metrics": {},
+             "name": "KBQuickstart Settings",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbgettingstartedhelpview",
+             "metrics": {},
+             "name": "KBGetting Started Help",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbtrainingmodeshelpview",
+             "metrics": {},
+             "name": "KBTraining Modes Help",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbstrategyhelpview",
+             "metrics": {},
+             "name": "KBStrategy Help",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbregionalruleshelpview",
+             "metrics": {},
+             "name": "KBRegional Rules Help",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbdomainmixview",
+             "metrics": {},
+             "name": "KBDomain Mix",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbcreatepackview",
+             "metrics": {},
+             "name": "KBCreate Pack",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/curriculumdownloadflowview",
+             "metrics": {},
+             "name": "Curriculum Download Flow",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/curriculumview",
+             "metrics": {},
+             "name": "Curriculum",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbdomainmasteryview",
+             "metrics": {},
+             "name": "KBDomain Mastery",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kbenhancedvalidationsetupview",
+             "metrics": {},
+             "name": "KBEnhanced Validation Setup",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/kyutaipocketsettingsview",
+             "metrics": {},
+             "name": "Kyutai Pocket Settings",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/servercurriculumdetailview",
+             "metrics": {},
+             "name": "Server Curriculum Detail",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/topicselectionview",
+             "metrics": {},
+             "name": "Topic Selection",
+             "type": "screen"
+            }
+           ],
+           "id": "unamentis/unamentis/__ui__/tab-learning",
+           "metrics": {},
+           "name": "Learning",
+           "type": "tab"
+          },
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/sessionview",
+             "metrics": {},
+             "name": "Session",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/voicesettingsview",
+             "metrics": {},
+             "name": "Voice Settings",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/transcriptview",
+             "metrics": {},
+             "name": "Transcript",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/chatterboxsettingsview",
+             "metrics": {},
+             "name": "Chatterbox Settings",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/audiorecorderview",
+             "metrics": {},
+             "name": "Audio Recorder",
+             "type": "screen"
+            }
+           ],
+           "id": "unamentis/unamentis/__ui__/tab-chat",
+           "metrics": {},
+           "name": "Chat",
+           "type": "tab"
+          },
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/todolistview",
+             "metrics": {},
+             "name": "Todo List",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/readinglistview",
+             "metrics": {},
+             "name": "Reading List",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/reviewlistview",
+             "metrics": {},
+             "name": "Review List",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/todoitemdetailview",
+             "metrics": {},
+             "name": "Todo Item Detail",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/activetodolistview",
+             "metrics": {},
+             "name": "Active Todo List",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/completedtodolistview",
+             "metrics": {},
+             "name": "Completed Todo List",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/archivedtodolistview",
+             "metrics": {},
+             "name": "Archived Todo List",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/readingreaderview",
+             "metrics": {},
+             "name": "Reading Reader",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/readingplaybackview",
+             "metrics": {},
+             "name": "Reading Playback",
+             "type": "screen"
+            }
+           ],
+           "id": "unamentis/unamentis/__ui__/tab-assistant",
+           "metrics": {},
+           "name": "Assistant",
+           "type": "tab"
+          },
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/sessionlistview",
+             "metrics": {},
+             "name": "Session List",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/sessiondetailview",
+             "metrics": {},
+             "name": "Session Detail",
+             "type": "screen"
+            }
+           ],
+           "id": "unamentis/unamentis/__ui__/tab-history",
+           "metrics": {},
+           "name": "History",
+           "type": "tab"
+          },
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/ttsplaybacktuningview",
+             "metrics": {},
+             "name": "TTSPlayback Tuning",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/analyticsview",
+             "metrics": {},
+             "name": "Analytics",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/settingsview",
+             "metrics": {},
+             "name": "Settings",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/quickstatsview",
+             "metrics": {},
+             "name": "Quick Stats",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/apiproviderdetailview",
+             "metrics": {},
+             "name": "APIProvider Detail",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/sessioncostoverviewview",
+             "metrics": {},
+             "name": "Session Cost Overview",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/ondevicellmsettingsview",
+             "metrics": {},
+             "name": "On Device LLMSettings",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/serversettingsview",
+             "metrics": {},
+             "name": "Server Settings",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/diagnosticsview",
+             "metrics": {},
+             "name": "Diagnostics",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/devicemetricsview",
+             "metrics": {},
+             "name": "Device Metrics",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/audiotestview",
+             "metrics": {},
+             "name": "Audio Test",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/providertestview",
+             "metrics": {},
+             "name": "Provider Test",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/debugconversationtestview",
+             "metrics": {},
+             "name": "Debug Conversation Test",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/helpview",
+             "metrics": {},
+             "name": "Help",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/voicecommandshelpview",
+             "metrics": {},
+             "name": "Voice Commands Help",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/onboardingview",
+             "metrics": {},
+             "name": "Onboarding",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/serversetupguideview",
+             "metrics": {},
+             "name": "Server Setup Guide",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/qrcodescannerview",
+             "metrics": {},
+             "name": "QRCode Scanner",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/freeformchathelpview",
+             "metrics": {},
+             "name": "Freeform Chat Help",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/curriculumhelpview",
+             "metrics": {},
+             "name": "Curriculum Help",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/handsfreehelpview",
+             "metrics": {},
+             "name": "Hands Free Help",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/settingshelpview",
+             "metrics": {},
+             "name": "Settings Help",
+             "type": "screen"
+            },
+            {
+             "children": [],
+             "id": "unamentis/unamentis/__ui__/onboardingpageview",
+             "metrics": {},
+             "name": "Onboarding Page",
+             "type": "screen"
+            }
+           ],
+           "id": "unamentis/unamentis/__ui__/tab-more",
+           "metrics": {},
+           "name": "More",
+           "type": "tab"
+          }
+         ],
+         "id": "unamentis/unamentis/__ui__/tab-bar",
+         "metrics": {},
+         "name": "Tab Bar",
+         "type": "tab-container"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/__ui__/kbdomaindetailview",
+         "metrics": {},
+         "name": "KBDomain Detail",
+         "type": "screen"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/__ui__/kbpracticelauncherview",
+         "metrics": {},
+         "name": "KBPractice Launcher",
+         "type": "screen"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/__ui__/kbpracticesessionview",
+         "metrics": {},
+         "name": "KBPractice Session",
+         "type": "screen"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/__ui__/unamentis-launchscreen-storyboard/01J-lp-oVM",
+         "metrics": {},
+         "name": "LaunchScreen",
+         "type": "screen"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/audio",
+         "metrics": {},
+         "name": "Audio",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/config",
+         "metrics": {},
+         "name": "Config",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/context",
+         "metrics": {},
+         "name": "Context",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/curriculum",
+         "metrics": {},
+         "name": "Curriculum",
+         "type": "module"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/unamentis/core/discovery/tiers",
+           "metrics": {},
+           "name": "Tiers",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/unamentis/core/discovery",
+         "metrics": {},
+         "name": "Discovery",
+         "type": "module"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/unamentis/core/knowledgebowl/team",
+           "metrics": {},
+           "name": "Team",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/unamentis/core/knowledgebowl",
+         "metrics": {},
+         "name": "KnowledgeBowl",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/modules",
+         "metrics": {},
+         "name": "Modules",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/persistence/managedobjects",
+         "metrics": {},
+         "name": "ManagedObjects",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/questions",
+         "metrics": {},
+         "name": "Questions",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/readinglist",
+         "metrics": {},
+         "name": "ReadingList",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/routing/models",
+         "metrics": {},
+         "name": "Models",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/session",
+         "metrics": {},
+         "name": "Session",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/telemetry",
+         "metrics": {},
+         "name": "Telemetry",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/todo",
+         "metrics": {},
+         "name": "Todo",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/core/tools",
+         "metrics": {},
+         "name": "Tools",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/intents",
+         "metrics": {},
+         "name": "Intents",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/modules/knowledgebowl/services",
+         "metrics": {},
+         "name": "Services",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/modules/knowledgebowl/views",
+         "metrics": {},
+         "name": "Views",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/services/curriculum",
+         "metrics": {},
+         "name": "Curriculum",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/services/featureflags",
+         "metrics": {},
+         "name": "FeatureFlags",
+         "type": "module"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/unamentis/services/knowledgebowl/algorithms",
+           "metrics": {},
+           "name": "Algorithms",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/unamentis/services/knowledgebowl/ml",
+           "metrics": {},
+           "name": "ML",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/unamentis/services/knowledgebowl/team",
+           "metrics": {},
+           "name": "Team",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/unamentis/services/knowledgebowl",
+         "metrics": {},
+         "name": "KnowledgeBowl",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/services/llm",
+         "metrics": {},
+         "name": "LLM",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/services/protocols",
+         "metrics": {},
+         "name": "Protocols",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/services/readingplayback",
+         "metrics": {},
+         "name": "ReadingPlayback",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/services/stt",
+         "metrics": {},
+         "name": "STT",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/services/tts",
+         "metrics": {},
+         "name": "TTS",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/services/voice",
+         "metrics": {},
+         "name": "Voice",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/services/websearch",
+         "metrics": {},
+         "name": "WebSearch",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/testing/kbaudiotestharness",
+         "metrics": {},
+         "name": "KBAudioTestHarness",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/testing/latencyharness",
+         "metrics": {},
+         "name": "LatencyHarness",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/ui/components",
+         "metrics": {},
+         "name": "Components",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/ui/curriculum",
+         "metrics": {},
+         "name": "Curriculum",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/ui/debug",
+         "metrics": {},
+         "name": "Debug",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/ui/knowledgebowl",
+         "metrics": {},
+         "name": "KnowledgeBowl",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/ui/learning",
+         "metrics": {},
+         "name": "Learning",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/ui/readinglist",
+         "metrics": {},
+         "name": "ReadingList",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/ui/session",
+         "metrics": {},
+         "name": "Session",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/ui/settings",
+         "metrics": {},
+         "name": "Settings",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis/ui/todolist",
+         "metrics": {},
+         "name": "TodoList",
+         "type": "module"
+        }
+       ],
+       "id": "unamentis/unamentis",
+       "metrics": {},
+       "name": "UnaMentis",
+       "type": "ios-client"
+      },
+      {
+       "children": [
+        {
+         "children": [],
+         "id": "unamentis/unamentis-watch-app/__ui__/activesessionview",
+         "metrics": {},
+         "name": "Active Session",
+         "type": "screen"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis-watch-app/__ui__/kbwatchdomaindrillview",
+         "metrics": {},
+         "name": "KBWatch Domain Drill",
+         "type": "screen"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis-watch-app/__ui__/kbwatchflashcardsview",
+         "metrics": {},
+         "name": "KBWatch Flash Cards",
+         "type": "screen"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis-watch-app/__ui__/kbwatchmainview",
+         "metrics": {},
+         "name": "KBWatch Main",
+         "type": "screen"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis-watch-app/__ui__/kbwatchquicksessionview",
+         "metrics": {},
+         "name": "KBWatch Quick Session",
+         "type": "screen"
+        },
+        {
+         "children": [],
+         "id": "unamentis/unamentis-watch-app/services",
+         "metrics": {},
+         "name": "Services",
+         "type": "module"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/unamentis-watch-app/views/components",
+           "metrics": {},
+           "name": "Components",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/unamentis-watch-app/views/knowledgebowl",
+           "metrics": {},
+           "name": "KnowledgeBowl",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/unamentis-watch-app/views",
+         "metrics": {},
+         "name": "Views",
+         "type": "module"
+        }
+       ],
+       "id": "unamentis/unamentis-watch-app",
+       "metrics": {},
+       "name": "UnaMentis Watch App",
+       "type": "watch-app"
+      },
+      {
+       "children": [
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/unamentistests/integration/knowledgebowl",
+           "metrics": {},
+           "name": "KnowledgeBowl",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/unamentistests/integration",
+         "metrics": {},
+         "name": "Integration",
+         "type": "module"
+        },
+        {
+         "children": [
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/unamentistests/unit/knowledgebowl/validation",
+             "metrics": {},
+             "name": "Validation",
+             "type": "module"
+            }
+           ],
+           "id": "unamentis/unamentistests/unit/knowledgebowl",
+           "metrics": {},
+           "name": "KnowledgeBowl",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/unamentistests/unit/routing",
+           "metrics": {},
+           "name": "Routing",
+           "type": "module"
+          },
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/unamentistests/unit/services/voice",
+             "metrics": {},
+             "name": "Voice",
+             "type": "module"
+            }
+           ],
+           "id": "unamentis/unamentistests/unit/services",
+           "metrics": {},
+           "name": "Services",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/unamentistests/unit/todo",
+           "metrics": {},
+           "name": "Todo",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/unamentistests/unit",
+         "metrics": {},
+         "name": "Unit",
+         "type": "module"
+        }
+       ],
+       "id": "unamentis/unamentistests",
+       "metrics": {},
+       "name": "UnaMentisTests",
+       "type": "application"
+      },
+      {
+       "children": [
+        {
+         "children": [],
+         "id": "unamentis/curriculum/examples/knowledge-bowl",
+         "metrics": {},
+         "name": "knowledge-bowl",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/curriculum/examples/sat-prep",
+         "metrics": {},
+         "name": "sat-prep",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/curriculum/importers",
+         "metrics": {},
+         "name": "importers",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/curriculum/spec",
+         "metrics": {},
+         "name": "spec",
+         "type": "content"
+        }
+       ],
+       "id": "unamentis/curriculum",
+       "metrics": {},
+       "name": "curriculum",
+       "type": "content"
+      },
+      {
+       "children": [
+        {
+         "children": [],
+         "id": "unamentis/demo/tests",
+         "metrics": {},
+         "name": "tests",
+         "type": "module"
+        }
+       ],
+       "id": "unamentis/demo",
+       "metrics": {},
+       "name": "demo",
+       "type": "content"
+      },
+      {
+       "children": [
+        {
+         "children": [],
+         "id": "unamentis/docs/ai-ml",
+         "metrics": {},
+         "name": "ai-ml",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/api-spec",
+         "metrics": {},
+         "name": "api-spec",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/architecture",
+         "metrics": {},
+         "name": "architecture",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/archive",
+         "metrics": {},
+         "name": "archive",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/client-spec",
+         "metrics": {},
+         "name": "client-spec",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/design",
+         "metrics": {},
+         "name": "design",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/effort-reports",
+         "metrics": {},
+         "name": "effort-reports",
+         "type": "module"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/explorations",
+         "metrics": {},
+         "name": "explorations",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/ios",
+         "metrics": {},
+         "name": "ios",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/knowledgebowl",
+         "metrics": {},
+         "name": "knowledgebowl",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/modules",
+         "metrics": {},
+         "name": "modules",
+         "type": "content"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/docs/quality/co-agent/work",
+           "metrics": {},
+           "name": "work",
+           "type": "content"
+          }
+         ],
+         "id": "unamentis/docs/quality",
+         "metrics": {},
+         "name": "quality",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/research",
+         "metrics": {},
+         "name": "research",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/reviews",
+         "metrics": {},
+         "name": "reviews",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/server",
+         "metrics": {},
+         "name": "server",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/setup",
+         "metrics": {},
+         "name": "setup",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/tasks",
+         "metrics": {},
+         "name": "tasks",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/testing",
+         "metrics": {},
+         "name": "testing",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/tools",
+         "metrics": {},
+         "name": "tools",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/docs/user-guides",
+         "metrics": {},
+         "name": "user-guides",
+         "type": "content"
+        }
+       ],
+       "id": "unamentis/docs",
+       "metrics": {},
+       "name": "docs",
+       "type": "content"
+      },
+      {
+       "children": [],
+       "id": "unamentis/prompts",
+       "metrics": {},
+       "name": "prompts",
+       "type": "content"
+      },
+      {
+       "children": [],
+       "id": "unamentis/scripts",
+       "metrics": {},
+       "name": "scripts",
+       "type": "package"
+      },
+      {
+       "children": [
+        {
+         "children": [],
+         "id": "unamentis/server/data/latency_harness/runs",
+         "metrics": {},
+         "name": "runs",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/server/data/latency_harness/suites",
+         "metrics": {},
+         "name": "suites",
+         "type": "content"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/server/database/migrations",
+           "metrics": {},
+           "name": "migrations",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/server/database",
+         "metrics": {},
+         "name": "database",
+         "type": "infrastructure"
+        },
+        {
+         "children": [],
+         "id": "unamentis/server/devlake",
+         "metrics": {},
+         "name": "devlake",
+         "type": "content"
+        },
+        {
+         "children": [],
+         "id": "unamentis/server/feature-flags",
+         "metrics": {},
+         "name": "feature-flags",
+         "type": "infrastructure"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/server/importers/analysis",
+           "metrics": {},
+           "name": "analysis",
+           "type": "api-server"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/importers/core",
+           "metrics": {},
+           "name": "core",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/importers/data",
+           "metrics": {},
+           "name": "data",
+           "type": "content"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/importers/docs",
+           "metrics": {},
+           "name": "docs",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/importers/enrichment",
+           "metrics": {},
+           "name": "enrichment",
+           "type": "api-server"
+          },
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/server/importers/output/test_repro/6-001-structure-and-interpretation-of-computer-programs-spring-2005",
+             "metrics": {},
+             "name": "6-001-structure-and-interpretation-of-computer-programs-spring-2005",
+             "type": "content"
+            }
+           ],
+           "id": "unamentis/server/importers/output",
+           "metrics": {},
+           "name": "output",
+           "type": "content"
+          },
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/server/importers/plugins/sources/data",
+             "metrics": {},
+             "name": "data",
+             "type": "content"
+            },
+            {
+             "children": [],
+             "id": "unamentis/server/importers/plugins/sources/output",
+             "metrics": {},
+             "name": "output",
+             "type": "content"
+            }
+           ],
+           "id": "unamentis/server/importers/plugins/sources",
+           "metrics": {},
+           "name": "sources",
+           "type": "api-server"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/importers/tests",
+           "metrics": {},
+           "name": "tests",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/server/importers",
+         "metrics": {},
+         "name": "unamentis-importers",
+         "type": "package"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/server/lambda/services/auth",
+           "metrics": {},
+           "name": "auth",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/lambda/services/curriculum",
+           "metrics": {},
+           "name": "curriculum",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/lambda/services/kb",
+           "metrics": {},
+           "name": "kb",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/lambda/services/metrics",
+           "metrics": {},
+           "name": "metrics",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/lambda/services/shared",
+           "metrics": {},
+           "name": "shared",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/server/lambda",
+         "metrics": {},
+         "name": "lambda",
+         "type": "infrastructure"
+        },
+        {
+         "children": [],
+         "id": "unamentis/server/latency_harness",
+         "metrics": {},
+         "name": "latency_harness",
+         "type": "module"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/server/management/auth",
+           "metrics": {},
+           "name": "auth",
+           "type": "api-server"
+          },
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/server/management/fov_context/tests",
+             "metrics": {},
+             "name": "tests",
+             "type": "module"
+            }
+           ],
+           "id": "unamentis/server/management/fov_context",
+           "metrics": {},
+           "name": "fov_context",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/management/static",
+           "metrics": {},
+           "name": "static",
+           "type": "web-client"
+          },
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/server/management/tests/property",
+             "metrics": {},
+             "name": "property",
+             "type": "module"
+            }
+           ],
+           "id": "unamentis/server/management/tests",
+           "metrics": {},
+           "name": "tests",
+           "type": "module"
+          },
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/server/management/tts_cache/tests",
+             "metrics": {},
+             "name": "tests",
+             "type": "module"
+            }
+           ],
+           "id": "unamentis/server/management/tts_cache",
+           "metrics": {},
+           "name": "tts_cache",
+           "type": "api-server"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/management/tts_pregen",
+           "metrics": {},
+           "name": "tts_pregen",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/server/management",
+         "metrics": {},
+         "name": "unamentis-management",
+         "type": "api-server"
+        },
+        {
+         "children": [
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/server/server-manager/usmxcode/usm",
+             "metrics": {},
+             "name": "USM",
+             "type": "desktop-app"
+            },
+            {
+             "children": [],
+             "id": "unamentis/server/server-manager/usmxcode/usmpackage",
+             "metrics": {},
+             "name": "USMPackage",
+             "type": "package"
+            }
+           ],
+           "id": "unamentis/server/server-manager/usmxcode",
+           "metrics": {},
+           "name": "USMXcode",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/server-manager/usmxcode-ffi/usmffi/core",
+           "metrics": {},
+           "name": "Core",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/server-manager/usmxcode-ffi/usmffi/views",
+           "metrics": {},
+           "name": "Views",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/server-manager/usmxcode-ffi/usmffipackage",
+           "metrics": {},
+           "name": "USMFFIPackage",
+           "type": "package"
+          }
+         ],
+         "id": "unamentis/server/server-manager",
+         "metrics": {},
+         "name": "server-manager",
+         "type": "desktop-app"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/server/ttfa_harness/tests",
+           "metrics": {},
+           "name": "tests",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/server/ttfa_harness",
+         "metrics": {},
+         "name": "ttfa_harness",
+         "type": "module"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/server/usm-core/crates/usm-cli",
+           "metrics": {},
+           "name": "usm-cli",
+           "type": "cli-tool"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/usm-core/crates/usm-core",
+           "metrics": {},
+           "name": "usm-core",
+           "type": "api-server"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/usm-core/crates/usm-ffi",
+           "metrics": {},
+           "name": "usm-ffi",
+           "type": "package"
+          }
+         ],
+         "id": "unamentis/server/usm-core",
+         "metrics": {},
+         "name": "usm-core",
+         "type": "api-server"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/server/web/src/app",
+           "metrics": {},
+           "name": "app",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web/src/components/charts",
+           "metrics": {},
+           "name": "charts",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web/src/components/curriculum",
+           "metrics": {},
+           "name": "curriculum",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web/src/components/dashboard",
+           "metrics": {},
+           "name": "dashboard",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web/src/components/latency-dashboard",
+           "metrics": {},
+           "name": "latency-dashboard",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web/src/components/question-packs",
+           "metrics": {},
+           "name": "question-packs",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web/src/components/tts-pregen",
+           "metrics": {},
+           "name": "tts-pregen",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web/src/components/ui",
+           "metrics": {},
+           "name": "ui",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web/src/hooks",
+           "metrics": {},
+           "name": "hooks",
+           "type": "web-client"
+          },
+          {
+           "children": [
+            {
+             "children": [],
+             "id": "unamentis/server/web/src/lib/feature-flags",
+             "metrics": {},
+             "name": "feature-flags",
+             "type": "web-client"
+            },
+            {
+             "children": [],
+             "id": "unamentis/server/web/src/lib/latency-harness",
+             "metrics": {},
+             "name": "latency-harness",
+             "type": "module"
+            }
+           ],
+           "id": "unamentis/server/web/src/lib",
+           "metrics": {},
+           "name": "lib",
+           "type": "api-server"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web/src/test",
+           "metrics": {},
+           "name": "test",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web/src/types",
+           "metrics": {},
+           "name": "types",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/server/web",
+         "metrics": {},
+         "name": "web",
+         "type": "web-client"
+        },
+        {
+         "children": [
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/docs",
+           "metrics": {},
+           "name": "docs",
+           "type": "content"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/app",
+           "metrics": {},
+           "name": "app",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/components/auth",
+           "metrics": {},
+           "name": "auth",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/components/curriculum",
+           "metrics": {},
+           "name": "curriculum",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/components/help",
+           "metrics": {},
+           "name": "help",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/components/session",
+           "metrics": {},
+           "name": "session",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/components/ui",
+           "metrics": {},
+           "name": "ui",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/components/visual",
+           "metrics": {},
+           "name": "visual",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/contexts",
+           "metrics": {},
+           "name": "contexts",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/lib/api",
+           "metrics": {},
+           "name": "api",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/lib/audio",
+           "metrics": {},
+           "name": "audio",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/lib/help",
+           "metrics": {},
+           "name": "help",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/lib/providers",
+           "metrics": {},
+           "name": "providers",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/lib/session",
+           "metrics": {},
+           "name": "session",
+           "type": "web-client"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/lib/utils",
+           "metrics": {},
+           "name": "utils",
+           "type": "module"
+          },
+          {
+           "children": [],
+           "id": "unamentis/server/web-client/src/types",
+           "metrics": {},
+           "name": "types",
+           "type": "module"
+          }
+         ],
+         "id": "unamentis/server/web-client",
+         "metrics": {},
+         "name": "unamentis-web-client",
+         "type": "web-client"
+        }
+       ],
+       "id": "unamentis/server",
+       "metrics": {},
+       "name": "server",
+       "type": "module"
+      }
+     ],
+     "id": "unamentis/root",
+     "metrics": {},
+     "name": "unamentis",
+     "type": "package"
+    }
+   ],
+   "id": "repo:unamentis",
+   "metrics": {},
+   "name": "unamentis",
+   "type": "repository"
+  }
+ ],
+ "relationships": [
+  {
+   "source": "unamentis/server/importers/core",
+   "target": "unamentis/server/importers",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/importers/core",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/importers/docs",
+   "target": "unamentis/server/importers",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/importers/tests",
+   "target": "unamentis/server/importers",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/lambda/services/auth",
+   "target": "unamentis/server/lambda/services/shared",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/lambda/services/curriculum",
+   "target": "unamentis/server/lambda/services/shared",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/lambda/services/kb",
+   "target": "unamentis/server/lambda/services/shared",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/lambda/services/metrics",
+   "target": "unamentis/server/lambda/services/shared",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/latency_harness",
+   "target": "unamentis/unamentis/testing/latencyharness",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/server/management/fov_context",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/server/importers",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/unamentis/testing/latencyharness",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/server/lambda/services/auth",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management/tests/property",
+   "target": "unamentis/server/management/fov_context",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management/tests/property",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management/tests/property",
+   "target": "unamentis/server/management/tts_pregen",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/lambda/services/auth",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/management/fov_context",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/importers",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/management/tts_pregen",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management/tts_cache/tests",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management/tts_pregen",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/server/management/tts_pregen",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/ttfa_harness/tests",
+   "target": "unamentis/server/ttfa_harness",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/usm-core/crates/usm-cli",
+   "target": "unamentis/server/usm-core",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/usm-core/crates/usm-core",
+   "target": "unamentis/unamentis/core/config",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/usm-core/crates/usm-ffi",
+   "target": "unamentis/server/usm-core",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/demo/tests",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/latency_harness",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode/usm",
+   "target": "unamentis/server/feature-flags",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode/usm",
+   "target": "unamentis/server/usm-core",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/web-client",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/web-client/src/app",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/web-client/src/lib/api",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/web/src/app",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/web/src/components/dashboard",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/web/src/components/latency-dashboard",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/web/src/components/tts-pregen",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/web/src/hooks",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/web/src/lib",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/web/src/lib/latency-harness",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/server/web",
+   "target": "unamentis/server/management",
+   "type": "http"
+  },
+  {
+   "source": "unamentis/unamentis-watch-app",
+   "target": "unamentis/unamentis",
+   "type": "import"
+  },
+  {
+   "source": "unamentis/server/latency_harness",
+   "target": "unamentis/unamentis/testing/latencyharness",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/server/latency_harness",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/server/management/auth",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/server/management/fov_context",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/server/management/tts_pregen",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management",
+   "target": "unamentis/unamentis/testing/latencyharness",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/management/auth",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/management/fov_context",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/management/tts_pregen",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management/tests/property",
+   "target": "unamentis/server/management/fov_context",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management/tests/property",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management/tests/property",
+   "target": "unamentis/server/management/tts_pregen",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management/tts_cache/tests",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/management/tts_pregen",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/server-manager",
+   "target": "unamentis/server/server-manager/usmxcode-ffi/usmffi/core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/server-manager",
+   "target": "unamentis/server/server-manager/usmxcode-ffi/usmffipackage",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/server-manager",
+   "target": "unamentis/server/server-manager/usmxcode/usm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/server-manager",
+   "target": "unamentis/unamentis/ui/settings",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode-ffi/usmffi/core",
+   "target": "unamentis/server/server-manager/usmxcode/usm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode-ffi/usmffi/views",
+   "target": "unamentis/server/server-manager/usmxcode-ffi/usmffi/core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode-ffi/usmffi/views",
+   "target": "unamentis/server/server-manager/usmxcode/usm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode-ffi/usmffipackage",
+   "target": "unamentis/server/server-manager",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode-ffi/usmffipackage",
+   "target": "unamentis/server/server-manager/usmxcode/usm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode/usm",
+   "target": "unamentis/server/server-manager/usmxcode-ffi/usmffi/views",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode/usm",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/ttfa_harness/tests",
+   "target": "unamentis/server/ttfa_harness",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web-client",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web-client/src/app",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web-client/src/components/auth",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web-client/src/components/curriculum",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web-client/src/components/session",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web-client/src/components/visual",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web-client/src/contexts",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web-client/src/lib/api",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web-client/src/lib/providers",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web-client/src/lib/session",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/app",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/app",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/components/curriculum",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/components/curriculum",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/components/dashboard",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/components/dashboard",
+   "target": "unamentis/server/web/src/lib",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/components/dashboard",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/components/dashboard",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/components/latency-dashboard",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/components/question-packs",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/components/question-packs",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/components/tts-pregen",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/components/tts-pregen",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/hooks",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/lib",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/lib/latency-harness",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/server/web/src/test",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/shared/watchmodels",
+   "target": "unamentis/unamentis/ui/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/scripts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/server/server-manager/usmxcode/usm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/server/ttfa_harness",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/shared/watchmodels",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis-watch-app/services",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/core/audio",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/core/config",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/core/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/core/modules",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/core/readinglist",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/core/routing/models",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/core/session",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/modules/knowledgebowl/views",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/services/featureflags",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/services/llm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/ui/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/ui/learning",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/ui/readinglist",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/ui/session",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis",
+   "target": "unamentis/unamentis/ui/todolist",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis-watch-app",
+   "target": "unamentis/unamentis-watch-app/services",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis-watch-app/services",
+   "target": "unamentis/shared/watchmodels",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis-watch-app/services",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis-watch-app/views",
+   "target": "unamentis/shared/watchmodels",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis-watch-app/views",
+   "target": "unamentis/unamentis-watch-app/services",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis-watch-app/views",
+   "target": "unamentis/unamentis-watch-app/views/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis-watch-app/views/components",
+   "target": "unamentis/shared/watchmodels",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/audio",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/audio",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/audio",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/audio",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/audio",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/config",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/config",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/config",
+   "target": "unamentis/unamentis/core/discovery",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/context",
+   "target": "unamentis/server/management/fov_context",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/context",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/context",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/context",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/context",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/context",
+   "target": "unamentis/unamentis/core/tools",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/context",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/context",
+   "target": "unamentis/unamentis/services/readingplayback",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/context",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/curriculum",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/curriculum",
+   "target": "unamentis/server/web/src/app",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/curriculum",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/curriculum",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/curriculum",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/curriculum",
+   "target": "unamentis/unamentis/services/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/curriculum",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/curriculum",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/discovery",
+   "target": "unamentis/unamentis/core/discovery/tiers",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/discovery/tiers",
+   "target": "unamentis/unamentis/core/discovery",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/knowledgebowl",
+   "target": "unamentis/server/importers/plugins/sources",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/knowledgebowl",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/knowledgebowl",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/knowledgebowl",
+   "target": "unamentis/unamentis/services/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/knowledgebowl",
+   "target": "unamentis/unamentis/ui/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/knowledgebowl/team",
+   "target": "unamentis/unamentis/core/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/modules",
+   "target": "unamentis/server/web/src/components/dashboard",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/persistence/managedobjects",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/persistence/managedobjects",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/persistence/managedobjects",
+   "target": "unamentis/unamentis/core/readinglist",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/persistence/managedobjects",
+   "target": "unamentis/unamentis/core/todo",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/questions",
+   "target": "unamentis/server/web/src/components/dashboard",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/questions",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/questions",
+   "target": "unamentis/unamentis/core/modules",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/readinglist",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/readinglist",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/readinglist",
+   "target": "unamentis/unamentis/services/readingplayback",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/routing/models",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/routing/models",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/routing/models",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/session",
+   "target": "unamentis/server/management/fov_context",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/session",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/session",
+   "target": "unamentis/unamentis/core/audio",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/session",
+   "target": "unamentis/unamentis/core/context",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/session",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/session",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/session",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/session",
+   "target": "unamentis/unamentis/services/featureflags",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/session",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/session",
+   "target": "unamentis/unamentis/services/voice",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/telemetry",
+   "target": "unamentis/server/ttfa_harness",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/telemetry",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/telemetry",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/telemetry",
+   "target": "unamentis/unamentis/core/session",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/telemetry",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/todo",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/todo",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/tools",
+   "target": "unamentis/unamentis/core/todo",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/core/tools",
+   "target": "unamentis/unamentis/services/websearch",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/intents",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/services",
+   "target": "unamentis/server/management/tts_cache",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/services",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/services",
+   "target": "unamentis/unamentis/core/audio",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/services",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/services",
+   "target": "unamentis/unamentis/modules/knowledgebowl/views",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/services",
+   "target": "unamentis/unamentis/services/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/services",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/services",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/services",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/services",
+   "target": "unamentis/unamentis/ui/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/views",
+   "target": "unamentis/server/web/src/components/dashboard",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/views",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/views",
+   "target": "unamentis/unamentis/core/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/views",
+   "target": "unamentis/unamentis/core/modules",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/views",
+   "target": "unamentis/unamentis/modules/knowledgebowl/services",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/views",
+   "target": "unamentis/unamentis/services/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/views",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/modules/knowledgebowl/views",
+   "target": "unamentis/unamentis/ui/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/curriculum",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/featureflags",
+   "target": "unamentis/server/web/src/lib/feature-flags",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/server/importers/plugins/sources",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/unamentis/core/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/unamentis/core/questions",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/unamentis/services/knowledgebowl/algorithms",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/unamentis/services/knowledgebowl/ml",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl",
+   "target": "unamentis/unamentis/ui/session",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl/algorithms",
+   "target": "unamentis/unamentis/services/voice",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl/ml",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl/ml",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/knowledgebowl/team",
+   "target": "unamentis/unamentis/core/knowledgebowl/team",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/llm",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/llm",
+   "target": "unamentis/unamentis/core/config",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/llm",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/llm",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/protocols",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/protocols",
+   "target": "unamentis/unamentis/core/context",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/protocols",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/readingplayback",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/readingplayback",
+   "target": "unamentis/unamentis/core/audio",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/readingplayback",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/readingplayback",
+   "target": "unamentis/unamentis/core/readinglist",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/readingplayback",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/readingplayback",
+   "target": "unamentis/unamentis/services/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/readingplayback",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/stt",
+   "target": "unamentis/server/server-manager/usmxcode/usm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/stt",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/stt",
+   "target": "unamentis/server/web-client/src/lib/providers",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/stt",
+   "target": "unamentis/unamentis/core/config",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/stt",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/stt",
+   "target": "unamentis/unamentis/services/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/stt",
+   "target": "unamentis/unamentis/services/llm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/stt",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/tts",
+   "target": "unamentis/server/web-client/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/tts",
+   "target": "unamentis/unamentis/core/config",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/tts",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/tts",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/voice",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/voice",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/voice",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/voice",
+   "target": "unamentis/unamentis/services/knowledgebowl/algorithms",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/voice",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/kbaudiotestharness",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/kbaudiotestharness",
+   "target": "unamentis/unamentis/core/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/kbaudiotestharness",
+   "target": "unamentis/unamentis/services/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/kbaudiotestharness",
+   "target": "unamentis/unamentis/services/knowledgebowl/algorithms",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/kbaudiotestharness",
+   "target": "unamentis/unamentis/services/knowledgebowl/ml",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/kbaudiotestharness",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/kbaudiotestharness",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/kbaudiotestharness",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/kbaudiotestharness",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/latencyharness",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/latencyharness",
+   "target": "unamentis/unamentis/core/audio",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/latencyharness",
+   "target": "unamentis/unamentis/core/config",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/latencyharness",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/latencyharness",
+   "target": "unamentis/unamentis/services/llm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/latencyharness",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/latencyharness",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/testing/latencyharness",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/components",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/components",
+   "target": "unamentis/unamentis/ui/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/curriculum",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/curriculum",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/curriculum",
+   "target": "unamentis/unamentis/core/todo",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/curriculum",
+   "target": "unamentis/unamentis/services/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/curriculum",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/curriculum",
+   "target": "unamentis/unamentis/ui/session",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/debug",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/debug",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/debug",
+   "target": "unamentis/unamentis/core/config",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/debug",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/debug",
+   "target": "unamentis/unamentis/services/llm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/debug",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/debug",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/knowledgebowl",
+   "target": "unamentis/scripts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/knowledgebowl",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/knowledgebowl",
+   "target": "unamentis/unamentis/core/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/knowledgebowl",
+   "target": "unamentis/unamentis/core/knowledgebowl/team",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/knowledgebowl",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/knowledgebowl",
+   "target": "unamentis/unamentis/modules/knowledgebowl/services",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/knowledgebowl",
+   "target": "unamentis/unamentis/modules/knowledgebowl/views",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/knowledgebowl",
+   "target": "unamentis/unamentis/services/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/knowledgebowl",
+   "target": "unamentis/unamentis/services/knowledgebowl/ml",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/knowledgebowl",
+   "target": "unamentis/unamentis/services/voice",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/knowledgebowl",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/learning",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/learning",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/learning",
+   "target": "unamentis/unamentis/core/modules",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/learning",
+   "target": "unamentis/unamentis/services/featureflags",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/learning",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/learning",
+   "target": "unamentis/unamentis/ui/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/readinglist",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/readinglist",
+   "target": "unamentis/unamentis/core/audio",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/readinglist",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/readinglist",
+   "target": "unamentis/unamentis/core/readinglist",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/readinglist",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/readinglist",
+   "target": "unamentis/unamentis/services/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/readinglist",
+   "target": "unamentis/unamentis/services/readingplayback",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/readinglist",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/readinglist",
+   "target": "unamentis/unamentis/services/voice",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/readinglist",
+   "target": "unamentis/unamentis/ui/settings",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/server/importers/enrichment",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/server/web/src/types",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/shared/watchmodels",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/core/audio",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/core/config",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/core/todo",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/services/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/services/llm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/session",
+   "target": "unamentis/unamentis/ui/settings",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/server/server-manager",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/unamentis/core/config",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/unamentis/core/discovery",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/unamentis/core/session",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/unamentis/services/llm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/unamentis/ui/debug",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/unamentis/ui/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/settings",
+   "target": "unamentis/unamentis/ui/readinglist",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/todolist",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/todolist",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/todolist",
+   "target": "unamentis/unamentis/core/todo",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/ui/todolist",
+   "target": "unamentis/unamentis/ui/components",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests",
+   "target": "unamentis/shared/watchmodels",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/server/server-manager/usmxcode/usm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/unamentis/core/audio",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/unamentis/core/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/unamentis/testing/kbaudiotestharness",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/unamentistests",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration",
+   "target": "unamentis/unamentistests/unit",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration/knowledgebowl",
+   "target": "unamentis/unamentis/core/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/integration/knowledgebowl",
+   "target": "unamentis/unamentis/services/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/core/audio",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/core/config",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/core/context",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/core/curriculum",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/core/modules",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/core/questions",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/core/readinglist",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/core/session",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/intents",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/modules/knowledgebowl/services",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/services/llm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/services/readingplayback",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentis/services/tts",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/unamentistests",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/knowledgebowl",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/knowledgebowl",
+   "target": "unamentis/unamentis/core/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/knowledgebowl",
+   "target": "unamentis/unamentis/core/knowledgebowl/team",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/knowledgebowl",
+   "target": "unamentis/unamentis/core/questions",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/knowledgebowl",
+   "target": "unamentis/unamentis/modules/knowledgebowl/services",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/knowledgebowl",
+   "target": "unamentis/unamentis/services/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/knowledgebowl",
+   "target": "unamentis/unamentis/services/knowledgebowl/team",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/knowledgebowl/validation",
+   "target": "unamentis/unamentis/services/knowledgebowl",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/knowledgebowl/validation",
+   "target": "unamentis/unamentis/services/knowledgebowl/algorithms",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/routing",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/routing",
+   "target": "unamentis/unamentis/core/routing/models",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/routing",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/routing",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/services",
+   "target": "unamentis/server/server-manager/usmxcode/usm",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/services",
+   "target": "unamentis/unamentis/core/telemetry",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/services",
+   "target": "unamentis/unamentis/services/featureflags",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/services",
+   "target": "unamentis/unamentis/services/protocols",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/services",
+   "target": "unamentis/unamentis/services/stt",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/services/voice",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/services/voice",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/services/voice",
+   "target": "unamentis/unamentis/services/voice",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/todo",
+   "target": "unamentis/unamentis",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/todo",
+   "target": "unamentis/unamentis/core/persistence/managedobjects",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentistests/unit/todo",
+   "target": "unamentis/unamentis/core/todo",
+   "type": "uses"
+  },
+  {
+   "source": "unamentis/unamentis/services/stt",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/unamentis/services/stt",
+   "target": "unamentis/server/web/src/lib",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/unamentis/services/stt",
+   "target": "unamentis/server/management",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/unamentis/services/tts",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/unamentis/services/tts",
+   "target": "unamentis/server/web/src/lib",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/unamentis/services/tts",
+   "target": "unamentis/server/management",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/server/web/src/lib",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/unamentistests/unit",
+   "target": "unamentis/server/management",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/latency_harness",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/latency_harness",
+   "target": "unamentis/server/web/src/lib",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/latency_harness",
+   "target": "unamentis/server/management",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/management/static",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/management/static",
+   "target": "unamentis/server/web/src/lib",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/management/static",
+   "target": "unamentis/server/management",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/web/src/lib",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/management/tests",
+   "target": "unamentis/server/management",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode-ffi/usmffi/core",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode-ffi/usmffi/core",
+   "target": "unamentis/server/web/src/lib",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/server-manager/usmxcode-ffi/usmffi/core",
+   "target": "unamentis/server/management",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/web-client/src/lib/providers",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/web-client/src/lib/providers",
+   "target": "unamentis/server/web/src/lib",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/web-client/src/lib/providers",
+   "target": "unamentis/server/management",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/web/src/components/question-packs",
+   "target": "unamentis/server/usm-core/crates/usm-core",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/web/src/components/question-packs",
+   "target": "unamentis/server/web/src/lib",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/server/web/src/components/question-packs",
+   "target": "unamentis/server/management",
+   "type": "websocket"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/tab-bar",
+   "target": "unamentis/unamentis/__ui__/tab-learning",
+   "type": "tab"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/tab-bar",
+   "target": "unamentis/unamentis/__ui__/tab-chat",
+   "type": "tab"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/tab-bar",
+   "target": "unamentis/unamentis/__ui__/tab-assistant",
+   "type": "tab"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/tab-bar",
+   "target": "unamentis/unamentis/__ui__/tab-history",
+   "type": "tab"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/tab-bar",
+   "target": "unamentis/unamentis/__ui__/tab-more",
+   "type": "tab"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/kbdashboardview",
+   "target": "unamentis/unamentis/__ui__/kbwrittensessionview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/kbdashboardview",
+   "target": "unamentis/unamentis/__ui__/kboralsessionview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/kbdashboardview",
+   "target": "unamentis/unamentis/__ui__/kbmatchsimulationview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/kbdashboardview",
+   "target": "unamentis/unamentis/__ui__/kbconferencetrainingview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/kbdashboardview",
+   "target": "unamentis/unamentis/__ui__/kbreboundtrainingview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/kbdashboardview",
+   "target": "unamentis/unamentis/__ui__/kbdomaindrillview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/kbdashboardview",
+   "target": "unamentis/unamentis/__ui__/kbsettingsview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/kbdashboardview",
+   "target": "unamentis/unamentis/__ui__/kbquickstartsettingsview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/curriculumview",
+   "target": "unamentis/unamentis/__ui__/curriculumdetailview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/curriculumdetailview",
+   "target": "unamentis/unamentis/__ui__/topicdetailview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/topicdetailview",
+   "target": "unamentis/unamentis/__ui__/sessionview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/sessionlistview",
+   "target": "unamentis/unamentis/__ui__/sessiondetailview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/kbquickstartsettingsview",
+   "target": "unamentis/unamentis/__ui__/kbdomainmixview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/sessionview",
+   "target": "unamentis/unamentis/__ui__/voicesettingsview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/chatterboxsettingsview",
+   "target": "unamentis/unamentis/__ui__/audiorecorderview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/helpview",
+   "target": "unamentis/unamentis/__ui__/voicecommandshelpview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/helpview",
+   "target": "unamentis/unamentis/__ui__/freeformchathelpview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/helpview",
+   "target": "unamentis/unamentis/__ui__/curriculumhelpview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/helpview",
+   "target": "unamentis/unamentis/__ui__/handsfreehelpview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/helpview",
+   "target": "unamentis/unamentis/__ui__/settingshelpview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/kyutaipocketsettingsview",
+   "target": "unamentis/unamentis/__ui__/audiorecorderview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/serversettingsview",
+   "target": "unamentis/unamentis/__ui__/serversetupguideview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/serversettingsview",
+   "target": "unamentis/unamentis/__ui__/qrcodescannerview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/apiproviderdetailview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/sessioncostoverviewview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/voicesettingsview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/ondevicellmsettingsview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/serversettingsview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/diagnosticsview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/devicemetricsview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/audiotestview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/providertestview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/ttsplaybacktuningview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/debugconversationtestview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/helpview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/voicecommandshelpview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/settingsview",
+   "target": "unamentis/unamentis/__ui__/onboardingview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/voicesettingsview",
+   "target": "unamentis/unamentis/__ui__/chatterboxsettingsview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/voicesettingsview",
+   "target": "unamentis/unamentis/__ui__/ttsplaybacktuningview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/todolistview",
+   "target": "unamentis/unamentis/__ui__/todoitemdetailview",
+   "type": "modal"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/tab-more",
+   "target": "unamentis/unamentis/__ui__/analyticsview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis/__ui__/tab-more",
+   "target": "unamentis/unamentis/__ui__/settingsview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis-watch-app/__ui__/kbwatchmainview",
+   "target": "unamentis/unamentis-watch-app/__ui__/kbwatchquicksessionview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis-watch-app/__ui__/kbwatchmainview",
+   "target": "unamentis/unamentis-watch-app/__ui__/kbwatchdomaindrillview",
+   "type": "navigation"
+  },
+  {
+   "source": "unamentis/unamentis-watch-app/__ui__/kbwatchmainview",
+   "target": "unamentis/unamentis-watch-app/__ui__/kbwatchflashcardsview",
+   "type": "navigation"
+  }
+ ],
+ "repositories": [
+  {
+   "default_branch": "main",
+   "name": "unamentis",
+   "repository": null
+  }
+ ]
+}

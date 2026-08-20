@@ -322,7 +322,7 @@ export function SupplyChainSurface() {
             );
           })}
 
-          {/* Vendored code checked into the tree (from the coverage inventory). */}
+          {/* Vendored code checked into the tree, from the supply-chain pass. */}
           {sc.vendored && sc.vendored.length > 0 && (
             <section data-testid="supply-chain-vendored">
               <h3 className={`text-[11px] font-semibold uppercase tracking-wider mb-1.5 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>

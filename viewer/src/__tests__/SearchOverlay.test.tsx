@@ -1,14 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, fireEvent, cleanup, screen, act } from "@testing-library/react";
+import { render, fireEvent, cleanup, screen, act, waitFor } from "@testing-library/react";
 import { SearchOverlay } from "../components/SearchOverlay";
 import { useArchStore } from "../store";
-import { initializeSearch, resetDetailSearchEntries, resetShardSearchEntries } from "../utils/search";
-import type { Architecture, Component } from "../types";
+import { initializeSearch, resetDetailSearchEntries, resetShardSearchEntries, addShardEntries } from "../utils/search";
+import type { Architecture, Component, Symbol } from "../types";
 
 // GUI regression findings from the 2026-07-22 Discovered table (PR #86 review
 // F8, PR #85 review F9). Both fixes live in SearchOverlay.tsx's effects.
 
 const loadSearchShardsMock = vi.fn(() => Promise.resolve());
+
+// Captured at module load, before any test can stub it out via setState (as
+// the "effect split" suite below does for navigateToComponent without
+// restoring it), so the O3 suite can put the real implementation back.
+const realNavigateToComponent = useArchStore.getState().navigateToComponent;
 
 vi.mock("../utils/search", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../utils/search")>();
@@ -159,5 +164,104 @@ describe("SearchOverlay: effect split preserves selection across a live refresh 
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("SearchOverlay: symbol search re-resolves once the owning component loads (O3)", () => {
+  const targetSymbol: Symbol = {
+    id: "sym-thing", name: "doThing", kind: "function",
+    file: "src/beta-svc/thing.ts", line: 10, end_line: 20,
+    code_preview: "", visibility: "public", docstring: null, parent: null, dependencies: [],
+  };
+
+  function splitModeArchitecture(): Architecture {
+    // Split mode: symbols/files arrive only via per-component detail fetches, so
+    // arch.symbols/arch.files stay empty until a component's detail is loaded.
+    return makeArchitecture({
+      components: [makeComponent({ id: "beta-svc", name: "Beta Service", path: "src/beta-svc" })],
+      symbols: [],
+      files: [],
+    });
+  }
+
+  beforeEach(() => {
+    resetShardSearchEntries();
+    resetDetailSearchEntries();
+    useArchStore.setState({
+      componentDetailCache: {},
+      componentDetailLoading: {},
+      componentDetailErrors: {},
+      selectedComponentId: null,
+      detailItem: null,
+      navigateToComponent: realNavigateToComponent,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("navigates to the owning component then opens the symbol once its detail resolves", async () => {
+    const arch = splitModeArchitecture();
+    initializeSearch(arch);
+    // Shard entry for a symbol whose component detail has not been fetched yet
+    // (P6-4 index), the exact split-mode scenario O3 describes.
+    addShardEntries([
+      { ref_kind: "symbol", ref_id: "sym-thing", name: "doThing", path: "src/beta-svc/thing.ts", component: "beta-svc", text: "" },
+    ]);
+
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      expect(String(url)).toContain("detail-beta-svc.json");
+      return { ok: true, json: async () => ({ symbols: [targetSymbol], files: [] }) } as Response;
+    }));
+
+    useArchStore.setState({ architecture: arch, searchOpen: true, searchQuery: "doThing" });
+    render(<SearchOverlay />);
+
+    const resultButton = await screen.findByText("doThing");
+    fireEvent.click(resultButton);
+
+    // Landed on the owning component immediately (synchronous half of the fix).
+    expect(useArchStore.getState().selectedComponentId).toBe("beta-svc");
+
+    // Once the detail fetch resolves, the symbol itself is opened (async half).
+    await waitFor(() => {
+      const item = useArchStore.getState().detailItem;
+      expect(item?.type).toBe("symbol");
+      expect((item?.data as Symbol).id).toBe("sym-thing");
+    });
+  });
+
+  it("does not open a stale symbol if the user navigates elsewhere before the detail resolves", async () => {
+    const arch = splitModeArchitecture();
+    initializeSearch(arch);
+    addShardEntries([
+      { ref_kind: "symbol", ref_id: "sym-thing", name: "doThing", path: "src/beta-svc/thing.ts", component: "beta-svc", text: "" },
+    ]);
+
+    let resolveFetch: (v: Response) => void = () => {};
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { resolveFetch = resolve; })));
+
+    useArchStore.setState({ architecture: arch, searchOpen: true, searchQuery: "doThing" });
+    render(<SearchOverlay />);
+
+    const resultButton = await screen.findByText("doThing");
+    fireEvent.click(resultButton);
+    expect(useArchStore.getState().selectedComponentId).toBe("beta-svc");
+
+    // User navigates away before the fetch settles.
+    act(() => {
+      useArchStore.setState({ selectedComponentId: "other-component", detailItem: null });
+    });
+
+    // Now let the fetch resolve.
+    await act(async () => {
+      resolveFetch({ ok: true, json: async () => ({ symbols: [targetSymbol], files: [] }) } as Response);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The stale symbol must not have been opened over wherever the user went.
+    expect(useArchStore.getState().detailItem).toBeNull();
   });
 });

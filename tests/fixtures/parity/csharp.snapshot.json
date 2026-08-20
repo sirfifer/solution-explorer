@@ -247,7 +247,7 @@
       "imports": [],
       "language": "markdown",
       "lines": 7,
-      "module_doc": null,
+      "module_doc": "C# parity fixture\n\nA minimal ASP.NET Core style project used to freeze C# full-parse output\n(symbols, using imports, framework, endpoints) and to exercise cross-component\nuses edges. The Api directory references types defined in the Domain directory,\neach directory becoming its own module component. See tests/testcsharpparity.py.\n",
       "path": "README.md",
       "size_bytes": 336,
       "symbols": []

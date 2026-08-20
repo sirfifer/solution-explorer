@@ -156,7 +156,11 @@ export const TOOLTIP_COPY = {
     version: "The resolved version from a lockfile, when one is present.",
     declared: "The version constraint as written in the manifest.",
     sbomLink: "The full CycloneDX 1.5 SBOM document for interchange with other tooling.",
-    vendored: "Third-party code checked into this repo, from the coverage inventory.",
+    // Not "from the coverage inventory": vendored entries here come from the
+    // supply-chain pass directly and can be non-empty even when the dataset
+    // carries no coverage ledger at all, so the copy must not point the
+    // reader at a drill-down that may not exist (O4).
+    vendored: "Third-party code checked into this repo.",
     warning: "A manifest that was found but could not be parsed. Its dependencies are missing here.",
     fixture:
       "Dependencies from manifests under test or fixture directories. Accounted here but not counted as shipping dependencies.",

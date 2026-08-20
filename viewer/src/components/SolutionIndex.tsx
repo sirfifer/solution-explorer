@@ -129,6 +129,13 @@ export function SolutionIndex({ solution, solutionBase, darkMode }: SolutionInde
   const page = darkMode ? "bg-zinc-950 text-zinc-100" : "bg-white text-zinc-900";
   const sub = darkMode ? "text-zinc-400" : "text-zinc-500";
   const gapped = summary.members_with_gaps || [];
+  // An empty `members_with_gaps` is ambiguous on its own: it is also what a
+  // solution with NO member coverage data at all looks like (every member's
+  // `coverage` key absent). Without this check, "No source gaps in any
+  // member" reads as a verified clean bill of health when nothing was
+  // actually measured (O4 principle: never imply coverage exists when it
+  // does not).
+  const membersWithCoverage = solution.members.filter((m) => m.coverage).length;
 
   return (
     <div className={`min-h-screen w-full overflow-x-hidden ${page}`}>
@@ -148,9 +155,13 @@ export function SolutionIndex({ solution, solutionBase, darkMode }: SolutionInde
             <p className={`mt-2 text-sm ${darkMode ? "text-amber-400" : "text-amber-600"}`}>
               Source gaps in: {gapped.join(", ")}
             </p>
-          ) : (
+          ) : membersWithCoverage > 0 ? (
             <p className={`mt-2 text-sm ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>
               No source gaps in any member. Coverage is reported per member and never blended.
+            </p>
+          ) : (
+            <p className={`mt-2 text-sm ${sub}`}>
+              Coverage data is not available for these members.
             </p>
           )}
         </header>

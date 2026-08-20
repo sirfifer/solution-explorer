@@ -596,7 +596,7 @@
       "imports": [],
       "language": "markdown",
       "lines": 21,
-      "module_doc": null,
+      "module_doc": "polyglot fixture\n\nA tiny multi-language solution used by the analyzer test suite. It exists to\nexercise the current engine across every tree-sitter language and the main\ncomponent and relationship types, and to anchor the P4-1 parity snapshot that\nthe P4-7 cutover diffs against.\n\nLayout:\n\nservices/api Python service (pyproject.toml), binds port 8000, uses a\n  Postgres driver.\nservices/web TypeScript + JavaScript web client (package.json), calls the\n  API over HTTP.\nservices/worker Go module (go.mod).\nlibs/core Rust library (Cargo.toml).\nlibs/rubylib Ruby package (Gemfile).\napps/ios Swift package (Package.swift).\ndocker-compose.yml infrastructure: db and cache services.\n\nKeep it tiny. It is committed as real files and must parse fast in CI.\n",
       "path": "README.md",
       "size_bytes": 780,
       "symbols": []

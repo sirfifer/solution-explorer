@@ -61,6 +61,7 @@ from .models import (
     to_dict,
 )
 from .parsers import PARSERS
+from .parsers.markdown import extract_markdown_text
 from .swiftui_flow import SwiftUIFlowDetector
 from .utils import (
     _framework_priority,
@@ -606,10 +607,17 @@ class ArchitectureScanner:
                                     if comp.type in server_types:
                                         comp.port = ports[0]
 
-                    # Extract file-level documentation
+                    # Extract file-level documentation. Markdown carries no
+                    # code-language parser (PARSERS has none registered for
+                    # "markdown", by design; see analyzer/parsers/markdown.py),
+                    # so it gets an explicit content-language path here instead
+                    # of a registry entry, which would also switch on the
+                    # code-language signal pipeline for doc prose.
                     module_doc = None
                     if parser:
                         module_doc = parser.extract_file_doc(content)
+                    elif lang == "markdown":
+                        module_doc = extract_markdown_text(content)
 
                     file_info = FileInfo(
                         path=rel,

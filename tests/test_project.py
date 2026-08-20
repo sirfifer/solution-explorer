@@ -232,6 +232,23 @@ def test_search_shards_cover_names_paths_descriptions_docstrings(tmp_path):
     assert "services/api/api/server.py" in file_paths
 
 
+def test_search_shards_markdown_file_entries_carry_text(tmp_path):
+    # Markdown carries no code-language parser (PARSERS has none registered
+    # for "markdown"), so module_doc extraction needs its own content-language
+    # path (analyzer/parsers/markdown.extract_markdown_text) or every markdown
+    # file's search entry text is empty. Anchor to the committed polyglot
+    # README fixture, whose content no other test reads.
+    _, arch, res = _project(POLYGLOT, "polyglot", tmp_path / "arch")
+    sm = json.loads((res.output_dir / "search" / "manifest.json").read_text())
+    entries = []
+    for name in sm["shards"]:
+        entries.extend(json.loads((res.output_dir / "search" / name).read_text()))
+    readme = next(e for e in entries if e["ref_kind"] == "file" and e["path"] == "README.md")
+    assert readme["text"], "markdown file entry must not carry empty text"
+    assert "polyglot fixture" in readme["text"]
+    assert "Postgres driver" in readme["text"]
+
+
 def test_search_enrichment_channel_from_store_and_arch():
     # Store overlay help text and inline component ai_enhance help text both
     # land as enrichment search entries.

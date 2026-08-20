@@ -12,6 +12,8 @@ export function SearchOverlay() {
     navigateToComponent,
     showDetail,
     openFileDeepLink,
+    loadComponentDetail,
+    getComponentSymbols,
     architecture,
     darkMode,
     createSetFromSearchResults,
@@ -104,9 +106,27 @@ export function SearchOverlay() {
         showDetail("symbol", sym);
       } else if (result.componentId) {
         // Split-mode symbol found via the shard index before its component was
-        // opened: navigate to the owning component, whose detail fetch will load
-        // it (P6-4).
-        navigateToComponent(result.componentId);
+        // opened: navigate to the owning component, then once its detail fetch
+        // resolves, re-resolve the symbol from the loaded detail and open it
+        // (O3). navigateToComponent is synchronous; the detail load is not, so
+        // the symbol open has to happen in a follow-up once loadComponentDetail
+        // settles. Guarded against the user navigating elsewhere in the
+        // meantime, so a slow fetch cannot pop open a stale symbol over
+        // whatever the user is looking at by the time it resolves.
+        const targetComponentId = result.componentId;
+        const targetSymbolId = result.id;
+        navigateToComponent(targetComponentId);
+        void loadComponentDetail(targetComponentId).then(() => {
+          if (useArchStore.getState().selectedComponentId !== targetComponentId) {
+            return;
+          }
+          const match = getComponentSymbols(targetComponentId).find(
+            (s) => s.id === targetSymbolId,
+          );
+          if (match) {
+            showDetail("symbol", match);
+          }
+        });
       }
     }
     setSearchOpen(false);
