@@ -11,7 +11,7 @@ unamentis -> unamentis (comprehension-review/v1)
 
 P1 senior engineer, unfamiliar language   11/24 -> 17/24  (+6)
 P2 non-coding executive                   12/24 -> 13/24  (+1)
-P3 staff engineer, AI power user          6/24 -> 16/24  (+10)
+P3 staff engineer, AI power user          6/24 -> 18/24  (+12)
     P3: model_accuracy not comparable (unscored on one side);
         P3's delta is a lower bound, not a measurement
 
@@ -72,15 +72,24 @@ Full detail in `ORCHESTRATOR-FINDINGS.md`. Summary of the load-bearing checks:
 | O3 | Symbol search discards symbol targets | VERIFIED | `SearchOverlay.tsx:86-113` falls back to component navigation and never re-resolves |
 | O4 | The UI advertises coverage it cannot deliver | VERIFIED | Badge renders "Coverage unavailable"; a "coverage ledger" is referenced and does not exist |
 | O7 | P1's claim that the graph never rendered | VERIFIED FALSE | P1's own `31-root-view.png` shows the graph fully drawn |
+| O10 | The Inventory lens is dead at 390x844 | VERIFIED | Panel container is `hidden md:flex`, `display:none` below 768px |
+| O11 | My own claim that dependency cards do not open | RETRACTED | Wrong file. The feature works; clicking OpenAI adds exactly its six referencing components |
 | O8 | The tool asserts a contested port as fact | VERIFIED | `:8767` stated unhedged where the subject's own source disagrees with itself |
 | P3 Fact B | 254 versus 251 component count | VERIFIED | Manifest 254 at 02:35:45Z, admin summary 251 at 02:38:43Z, same repo, same run |
 | P3 Fact C | The changelog reports an id migration as real churn | VERIFIED | 253 of 254 added ids carry a `unamentis/` prefix; stripping it recovers 250 of 256 removed ids |
 | P3 Q3.2 | `diff_summary` all zero across 20 commits | CONFIRMED, corrected | Component and relationship fields are zero; `files_changed` is not |
 
-**Not independently reproduced**, and labelled as such in the cards rather than
-quietly counted: P2's Inventory lens failing at 390x844, P3's Review mode
-producing no visible change, and P3's "More options" menu never rendering.
-These three remain open.
+**All three previously open claims were reproduced in a browser on 2026-08-20**
+and the results were not what the cards assumed. P2's Inventory lens failure at
+390x844 is real and root-caused (O10). P3's Review mode claim is **false**:
+clicking it flips the control to "Exit review mode" and renders a "Review Mode:
+click any component to add feedback" banner plus an explanatory paragraph. P3's
+"More options" menu is **not a defect**: the control is `display:none` at desktop
+width, a mobile-only affordance, the same class of artifact as P1's Tree/Graph
+toggle.
+
+Scores were revised accordingly: P3's `advertised_paths` from 0 to 2, and P2's
+held at 0 but now resting on one verified pillar rather than two.
 
 ### Baseline calls I checked before accepting them
 
@@ -93,6 +102,10 @@ summary banner that could only be restored by reloading the page. Both stand.
 ### Claims excluded from scoring after verification
 
 - **P1's graph blocker.** Verified false (O7). Excluded from `advertised_paths`.
+- **P2's external-dependency blocker.** Verified false (O11), and my original
+  root cause for it was wrong. Withdrawn.
+- **P3's Review mode and "More options" blockers.** Verified false and
+  not-a-defect respectively. Withdrawn.
 - **P2's lens-label blocker.** `LensSwitcher.tsx:47` is a native `<select>`, so
   an `<option>` is not independently clickable for an automation driver but is
   entirely usable by a person. Excluded as an automation artifact.
@@ -149,8 +162,34 @@ No amount of rubric discipline catches that; only opening the evidence does.
 
 **Actions.** Persona blocked-path claims are unverified by default and must be
 checked against source or the persona's own screenshots before scoring. Add a
-counter to the run record: claims checked, claims excluded. This run: 7 checked,
-2 excluded.
+counter to the run record: claims checked, claims excluded. **This run: 11
+checked, 5 withdrawn.**
+
+### R2b. The reliability split is the real finding, and it is actionable
+
+Full detail in O12. Of 8 interaction claims checked: 3 false, 2 harness
+artifacts, 3 real. Of 3 data and consistency claims checked: 3 real, verified
+exactly.
+
+Agent personas are reliable when reading data and unreliable when perceiving an
+interface. That is coherent with what they are: they parse JSON accurately, and
+they neither see a rendered canvas the way a person does nor click the way a
+person does.
+
+This matters more than it first appears. `advertised_paths` is both the
+lowest-scoring dimension in this run and the one the harness measures worst, so
+the headline score is being dragged down by the dimension least able to support
+it. Either every claim feeding it is reproduced before it scores, which is what
+was done here, or agent personas should not score it at all.
+
+### R2c. Verifying a claim needs the same rigour as refuting one
+
+I confirmed P2's external-dependency complaint by grepping a plausible-looking
+file, finding a fact that matched, and stopping. The file was the wrong one and
+the conclusion was wrong. Refutations in this run were held to a much higher
+standard than confirmations, because a refutation feels like it needs
+justifying and a confirmation feels like it is already justified by the
+persona's report. That asymmetry is a bias to name and design against.
 
 ### R3. The rubric has no slot for a persona inventing a defect
 
@@ -253,8 +292,9 @@ re-run of a previous subject is owed.
 
 ## What remains open
 
-1. Three persona claims not independently reproduced (P2 mobile Inventory lens;
-   P3 Review mode; P3 "More options" menu).
+1. ~~Three persona claims not independently reproduced.~~ **Closed 2026-08-20**:
+   all three reproduced in a browser. One real and root-caused, one false, one
+   not a defect. See O10, O12.
 2. Whether the 254-versus-251 disagreement originates in our live-architecture
    pipeline or in the subject's CI. The viewer consumes it at
    `viewer/src/hooks/useAdminData.ts:31`; the producer was not traced.

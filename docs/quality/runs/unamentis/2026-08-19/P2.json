@@ -4,7 +4,7 @@
   "run_date": "2026-08-19",
   "persona": "P2",
   "minutes_to_orientation": 2,
-  "verdict": "B- (persona's own grade, down from the baseline's B+). Scored 13/24 against a baseline floor of 12/24.",
+  "verdict": "B- (persona's own grade, down from the baseline's B+). Scored 13/24 against a baseline floor of 12/24. One reported blocker was withdrawn on verification; the surviving one is root-caused.",
   "dimensions": {
     "orientation": {
       "score": 4,
@@ -33,8 +33,8 @@
     },
     "advertised_paths": {
       "score": 0,
-      "evidence": "FINDINGS.md section 6; 13-openai-detail.png, 14-openai-click-attempt.png, 15-openai-click-real-mouse.png",
-      "note": "External-dependency entries never open, verified as real: InventoryPanel.tsx carries four onClick handlers and none is on a dependency entry. The Inventory lens never rendered at all at 390x844. Neither was recoverable. The reported lens-label blocker is EXCLUDED as an automation artifact: LensSwitcher.tsx:47 is a native <select>, so an option is not independently clickable for a driver but is entirely usable by a person."
+      "evidence": "Orchestrator browser verification 2026-08-20; viewer/src/components/InventoryLensPanel.tsx container class",
+      "note": "REVISED 2026-08-20. Score unchanged at 0 but it now rests on ONE pillar, not two. WITHDRAWN: the external-dependency drill-down works. Clicking OpenAI adds exactly six buttons, the six referencing components, each navigable. The orchestrator's original root cause was wrong, having grepped InventoryPanel.tsx, the non-source-file drill-down, rather than InventoryLensPanel.tsx, which has implemented expand-and-navigate since fcdeab5 on 2026-08-18, before the mirror was generated. P2's failure was most likely an undismissed overlay: P2 drove the lens with selectOption(), a programmatic API that bypasses pointer events, so it could change lenses through an overlay that was still swallowing every real click. STANDS, and now root-caused: the Inventory lens panel is `hidden md:flex`, display:none below the 768px breakpoint, so at 390x844 selecting the Inventory lens renders no panel at all. An advertised feature that does nothing on a phone, never resolved, is the 0 anchor."
     }
   },
   "battery": [
@@ -92,12 +92,8 @@
   ],
   "blocked_paths": [
     {
-      "feature": "External dependency cards do not open on click",
-      "evidence": "14-openai-click-attempt.png, 15-openai-click-real-mouse.png; root-caused, InventoryPanel.tsx has no handler"
-    },
-    {
-      "feature": "Inventory lens list view never renders at 390x844",
-      "evidence": "FINDINGS.md section 6; persona-reported, not independently reproduced"
+      "feature": "Inventory lens renders no panel at all below the 768px breakpoint",
+      "evidence": "Verified 2026-08-20: panel container is `hidden md:flex`; at 390x844 its height is 0 and its contents are absent from visible text"
     },
     {
       "feature": "No rendered diagram of the voice pipeline the home summary describes; the Flow lens is UI navigation flow",

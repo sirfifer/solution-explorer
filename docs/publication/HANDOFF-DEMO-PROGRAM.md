@@ -86,14 +86,21 @@ Run at `docs/quality/runs/unamentis/2026-08-19/`, baseline at
 ```
 P1 senior engineer, unfamiliar language   11/24 -> 17/24  (+6)
 P2 non-coding executive                   12/24 -> 13/24  (+1)
-P3 staff engineer, AI power user           6/24 -> 16/24  (+10, lower bound)
+P3 staff engineer, AI power user           6/24 -> 18/24  (+12, lower bound)
 Trust incidents: 17 -> 8
 ```
 
 Read `REVIEW.md` in the run directory before quoting any of that. The headline
 caveats: the baseline is a floor because P3's 2026-08-17 findings document did
 not survive; P2, the commercially important persona, moved by one point; and
-advertised paths did not improve at all, scoring 2, 0 and 0.
+advertised paths remains the weakest dimension at 2, 0 and 2.
+
+**Do not take a persona's interaction claim at face value.** Of 8 such claims
+checked in this run, 3 were false and 2 were harness artifacts; only 3 were
+real. Of 3 data and consistency claims checked, all 3 verified exactly. Agent
+personas read data reliably and perceive interfaces unreliably. One of the
+false claims was confirmed by the orchestrator against the wrong file and later
+retracted, so hold confirmations to the same standard as refutations.
 
 **Staffing is solved and reusable.** `scripts/comprehension-sitting.sh` gives a
 persona isolation by construction rather than by instruction: a working

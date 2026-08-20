@@ -173,11 +173,21 @@ the orchestrator opens the screenshots. It means:
    persona detected a *tool* error. There is no dimension for a persona
    inventing a defect that does not exist, which is the opposite failure and
    arguably worse, because it manufactures work.
-3. **It cuts the other way too.** P2's apparently similar complaint, that
-   external dependency cards do not open, was checked and is entirely real:
-   `InventoryPanel.tsx` carries only four `onClick` handlers and none is on a
-   dependency entry. Confident negative claims are not uniformly unreliable,
-   which is exactly why each needs checking rather than a blanket discount.
+3. **It cuts the other way too.** P2's mobile Inventory complaint was checked
+   and is entirely real (O10). Confident negative claims are not uniformly
+   unreliable, which is exactly why each needs checking rather than a blanket
+   discount.
+
+**RETRACTION, 2026-08-20.** This section originally cited P2's
+external-dependency complaint as the verified-real counterweight, on the
+grounds that `InventoryPanel.tsx` carries only four `onClick` handlers and none
+is on a dependency entry. **That was wrong, and it was my error, not the
+persona's.** `InventoryPanel.tsx` is the non-source-file drill-down and contains
+no external-dependency content at all. The real surface is
+`InventoryLensPanel.tsx`, which has implemented expand-and-navigate since
+`fcdeab5` on 2026-08-18, before the mirror was generated. Browser verification
+on 2026-08-20 confirms the feature works: clicking OpenAI adds exactly six
+buttons, the six referencing components, each navigable. See O11.
 
 **Scoring consequence.** P1's `advertised_paths` is not penalised for this
 claim. It is recorded against P1's accuracy instead.
@@ -213,3 +223,134 @@ The "Live" badge is driven by `live-config.json`, which points at an external
 GitHub Pages origin for CI status overlay, so it means something different from
 data freshness. Nothing in the interface explains that. Confirmed as a genuine
 ambiguity, low severity, and cheap to fix with a word change.
+
+
+## O10. The Inventory lens renders nothing below the 768px breakpoint. VERIFIED
+
+The panel's container carries the Tailwind classes `hidden md:flex`, which is
+`display: none` below 768px. At 390x844 the container's height is 0 and its
+contents are absent from the page's visible text, while still present in the
+DOM. Selecting the Inventory lens on a phone therefore produces no panel at all,
+with no message explaining why.
+
+The lens selector remains fully operable at that width, so the interface offers
+a choice that silently does nothing. This is the surviving pillar of P2's
+`advertised_paths` score of 0.
+
+Confusingly, "Critical components" DOES appear in the page text at 390px. That
+comes from the pinned summary banner, not from the lens panel, and it is exactly
+the kind of partial signal that makes this defect easy to misdiagnose.
+
+## O11. Retraction: the external-dependency drill-down works
+
+Recorded as its own finding because a wrong verification is worth as much
+attention as a wrong persona claim.
+
+**What I asserted:** that external-dependency entries present an affordance they
+lack, root-caused to `InventoryPanel.tsx` having no `onClick` on a dependency
+entry.
+
+**What is true:** the statement about `InventoryPanel.tsx` is accurate and
+irrelevant. That file is the non-source-file drill-down. The external-dependency
+surface is `InventoryLensPanel.tsx`, which expands a dependency on click
+(line 134) and renders a navigable button per referencing component (line 159).
+This landed in `fcdeab5`, 2026-08-18, an ancestor of HEAD and earlier than the
+2026-08-19 mirror. The deployed bundle contains it: the literals "External
+dependencies" and "No external services detected", the latter being the sibling
+branch of the expand code, both appear in the shipped JavaScript.
+
+**Direct verification, 2026-08-20.** Serving the mirror and driving it: clicking
+OpenAI raises the button count from 164 to 170, exactly the six referencing
+components.
+
+**Why the persona hit a wall anyway.** Most likely an undismissed overlay. The
+first-visit onboarding modal renders a full-viewport backdrop that intercepts
+pointer events, and I reproduced that interception myself before dismissing it.
+P2 drove the lens selector with `selectOption()`, a programmatic API that
+bypasses pointer events entirely, so P2 could keep changing lenses through an
+overlay that was silently swallowing every real click. That is a plausible
+mechanism, not a proven one, and it is recorded as such.
+
+**The lesson is about orchestrator verification, not about personas.** I checked
+a plausible-looking file, found a fact that matched the complaint, and stopped.
+Confirmation of a claim needs the same adversarial standard as refutation of one.
+
+## O12. What the verification pass actually showed about persona reliability
+
+Eleven persona claims have now been checked against source, evidence or a live
+browser. The pattern is sharp and was not visible from any single claim.
+
+**Interaction claims, 8 checked:**
+
+| Claim | Persona | Outcome |
+|---|---|---|
+| Graph never renders | P1 | FALSE, contradicted by its own screenshot |
+| Symbol search opens the parent, not the symbol | P1 | REAL, root-caused (O3) |
+| "Classic frames" label does not match its effect | P1 | REAL, minor |
+| Lens labels not clickable | P2 | ARTIFACT, native `<select>` |
+| External dependency cards do not open | P2 | FALSE (O11) |
+| Inventory lens dead at 390x844 | P2 | REAL, root-caused (O10) |
+| Review mode produces no visible change | P3 | FALSE, it renders a banner and explanatory text |
+| "More options" menu never appears | P3 | NOT A DEFECT, `display:none` at desktop, a mobile-only control |
+
+Three false, two artifacts, three real.
+
+**Data and consistency claims, 3 checked, all from P3:**
+
+| Claim | Outcome |
+|---|---|
+| 254 versus 251 across two front doors | VERIFIED exactly |
+| Changelog reports an id migration as real churn | VERIFIED exactly |
+| `diff_summary` zeroed across 20 commits | CONFIRMED, with one correction |
+
+Three for three.
+
+**The conclusion, which should change how these runs are read:** agent personas
+are reliable when reading data and unreliable when perceiving an interface. That
+is coherent with what they are. They parse JSON accurately and they neither see a
+rendered canvas the way a person does nor click the way a person does.
+
+Consequences for the instrument: `advertised_paths` is the least trustworthy
+dimension when personas are agents, and it is currently the lowest-scoring one,
+so the score is being dragged down by exactly the dimension the harness measures
+worst. Every claim feeding it must be reproduced before it scores. Data-side
+findings need no such discount.
+
+## O13. Search fetches the entire index, sequentially, on first open. Demo-blocking at VS Code scale. VERIFIED
+
+Found while measuring the doc-indexing change, not by a persona, and invisible
+on this subject.
+
+`viewer/src/utils/search.ts::loadSearchShards` iterates every shard named in the
+search manifest and `await`s each `fetch` **in series**. It is triggered from
+`SearchOverlay.tsx:58` the first time the user opens search, guarded so it runs
+once per session. Nothing fetches at page load, so this is not a page-load
+regression.
+
+Measured index size:
+
+| Subject | Shards | Index size | Fetched on first search-open |
+|---|---:|---:|---|
+| UnaMentis | 9 | 7.67 MB (6.10 MB before doc indexing) | all of it, 9 serial requests |
+| VS Code | 84 | **61.0 MB** | all of it, **84 serial requests** |
+
+The VS Code figure is measured from the N2 pre-flight run and predates doc
+indexing. Extrapolating this subject's +25.7% growth would put it near 77 MB,
+but that extrapolation is weak: VS Code's documentation-to-code ratio differs
+from UnaMentis's, so the real figure needs measuring rather than estimating.
+
+**Why the comprehension review never caught it.** On UnaMentis the index is 6 MB
+across 9 shards, so search feels fast. The 2026-08-19 P3 persona used search
+heavily and rated it a strength. The defect only appears at a scale no reviewed
+subject has yet had.
+
+**Status.** Pre-existing, not introduced by the doc-indexing change, though that
+change makes it roughly a quarter worse. It does not affect UnaMentis materially
+and it would be a poor first impression on the demo programme's first public
+subject.
+
+**Not designed yet.** The obvious cheap step, fetching shards in parallel, does
+not solve it: 61 MB is 61 MB. A real fix needs the index restructured so a query
+touches a small part of it, for example a compact match index loaded first with
+text fetched on demand, or term-based sharding. That is a design task, not a
+patch, and it is recorded here rather than attempted inside a fix pass.

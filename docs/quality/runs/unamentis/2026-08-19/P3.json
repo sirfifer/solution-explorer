@@ -4,7 +4,7 @@
   "run_date": "2026-08-19",
   "persona": "P3",
   "minutes_to_orientation": 3,
-  "verdict": "C+ (persona's own grade, the harshest of the three). Scored 16/24 against a baseline floor of 6/24, though that baseline is a floor because P3's 2026-08-17 findings document did not survive.",
+  "verdict": "C+ (persona's own grade, the harshest of the three). Scored 18/24 after verification, against a baseline floor of 6/24. Two reported blockers were withdrawn on verification; every one of P3's DATA claims survived.",
   "dimensions": {
     "orientation": {
       "score": 4,
@@ -32,9 +32,9 @@
       "note": "Detected the false change narrative and resolved it using the tool alone, by fetching the raw manifest through the tool's own machine front door and comparing added against removed ids. This is exactly the 4 anchor."
     },
     "advertised_paths": {
-      "score": 0,
-      "evidence": "FINDINGS.md section 6",
-      "note": "Review mode toggles state with no discoverable visible change and the 'More options' menu never appears; neither resolved. Those two are persona-reported and not independently reproduced. Independently confirmed: four /architecture/*.json paths the bundle references return 200 with index.html, which matches the live origin exactly and is therefore a real product behaviour rather than a mirror artifact."
+      "score": 2,
+      "evidence": "FINDINGS.md section 6; orchestrator browser verification 2026-08-20",
+      "note": "REVISED 2026-08-20 after browser verification, from 0 to 2. Two of the four reported blockers do not survive. Review mode is NOT silent: clicking it flips the control to 'Exit review mode' and renders a 'Review Mode: click any component to add feedback' banner plus an explanatory paragraph about exporting annotations. 'More options' is a mobile-only control, display:none at desktop width, so it is not a user-facing control there at all; the same class of artifact as P1's Tree/Graph toggle. What remains is real: Cmd+K needed a workaround, which is the 2 anchor, and four /architecture/*.json paths the bundle references return 200 with index.html, which reproduces against the live origin."
     }
   },
   "battery": [
@@ -101,14 +101,6 @@
     {
       "feature": "Cmd+K did not open search on first use",
       "evidence": "FINDINGS.md section 6; resolved via the visible Search button"
-    },
-    {
-      "feature": "Review mode toggles state with no visible change",
-      "evidence": "FINDINGS.md section 6; persona-reported, not independently reproduced"
-    },
-    {
-      "feature": "'More options' menu never renders",
-      "evidence": "FINDINGS.md section 6; persona-reported, not independently reproduced"
     }
   ]
 }
