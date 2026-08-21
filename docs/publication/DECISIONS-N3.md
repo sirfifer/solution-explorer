@@ -370,6 +370,17 @@ partition 4   ENRICHED  30 components, 1 attempt   $0.8379
 Zero failed partitions, zero retries, 99 components and 69 relationships
 enriched, narrative written.
 
+## SUPERSEDED. Read docs/publication/ENRICHMENT-CALIBRATION.md instead
+
+**The $37.56 projection below is wrong.** It assumes cost scales with prompt
+tokens. The per-partition data disproves that: partition 1 took 17x less input
+than partition 0 and cost half as much, because cost tracks OUTPUT volume, not
+context. The honest range is roughly $38 to $79, and the spread is dominated by
+the 5,469 relationships this sample barely touched (69 of them, 1.3%).
+
+The measured figures below are correct. Only the projection is wrong. Corrected
+2026-08-20, same day.
+
 ## Projecting the full run, and why the obvious way is wrong
 
 **The naive extrapolation is `$9.19 x 11 = $101`, and it is wrong by a factor of
