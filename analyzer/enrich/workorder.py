@@ -256,10 +256,11 @@ def execute_work_order(
         for c in flatten_components(ctx.arch.get("components", []))
         if c.get("id")
     }
+    scope_set = set(scope)
     before = {
-        key: state.terminal
+        key: {"state": state.state, "terminal": state.terminal}
         for key, state in shared.states.items()
-        if key[1] in set(scope)
+        if key[1] in scope_set
     }
 
     plan = plan_partitions(
@@ -278,6 +279,11 @@ def execute_work_order(
     invoker = ctx.invoker(
         "workorder", phase="work_order", rung=order.issued_by, targets=len(scope)
     )
+    # The contract state's rung records WHICH TIER grounded an item, so a work
+    # order stamps the tier that actually executed it, not the phase that issued
+    # it. Recording "p5" there would claim the determination phase did enrichment
+    # work it never did, and would make the census unreadable.
+    executing_rung = ctx.policy.model_for("workorder").model or "workorder"
     spent_before = ctx.budget.spent
 
     for partition in plan.partitions:
@@ -303,21 +309,27 @@ def execute_work_order(
         # proposes further orders has proposed them into a void.
         phase._absorb(
             ctx, obj, validator, facts_by_id, shared,
-            rung=str(order.issued_by).lower(),
+            rung=executing_rung,
             component_ids=[c for c in partition.component_ids if c in set(scope)],
             relationship_keys=list(partition.relationship_keys),
         )
         outcome.executed = True
 
     after = {
-        key: state.terminal
+        key: {"state": state.state, "terminal": state.terminal}
         for key, state in shared.states.items()
-        if key[1] in set(scope)
+        if key[1] in scope_set
     }
+    # Changed means the CONTRACT STATE moved. An item re-grounded by an order
+    # carries the executing tier's rung, and counting that relabel as a change
+    # would let an order that improved nothing report that it improved something.
     outcome.state_changes = {
-        key[1]: {"before": before.get(key), "after": value}
+        key[1]: {
+            "before": (before.get(key) or {}).get("terminal"),
+            "after": value["terminal"],
+        }
         for key, value in sorted(after.items())
-        if before.get(key) != value
+        if (before.get(key) or {}).get("state") != value["state"]
     }
     outcome.cost_usd = ctx.budget.spent - spent_before
     if outcome.executed and not outcome.state_changes:

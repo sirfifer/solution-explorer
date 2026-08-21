@@ -627,6 +627,7 @@ def build_phases(policy: LadderPolicy) -> list[Phase]:
     loudly.
     """
     from .adjudicate import AdjudicationPhase
+    from .determine import DeterminationPhase
     from .ladder import LadderPhase
     from .orientation import OrientationPhase
     from .synthesis import SynthesisPhase
@@ -636,6 +637,7 @@ def build_phases(policy: LadderPolicy) -> list[Phase]:
         "p2_ladder": LadderPhase,
         "p3_adjudication": AdjudicationPhase,
         "p4_synthesis": SynthesisPhase,
+        "p5_determination": DeterminationPhase,
     }
     phases: list[Phase] = []
     for name in policy.phases:
@@ -665,6 +667,16 @@ def run_ladder(
         config, invoker_factory=invoker_factory, clock=clock, timer=timer
     )
     try:
-        return run_pipeline(ctx, phases if phases is not None else build_phases(config.policy))
+        result = run_pipeline(
+            ctx, phases if phases is not None else build_phases(config.policy)
+        )
+        # Written here rather than inside P5, so a run whose determination phase
+        # is the one that failed still produces a report. A run with no report is
+        # a run nobody can audit, and that is the one outcome to rule out.
+        from .runreport import write_run_report
+
+        write_run_report(ctx, result)
+        result.notes = list(ctx.notes)
+        return result
     finally:
         ctx.store.close()

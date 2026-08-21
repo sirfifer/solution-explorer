@@ -159,7 +159,11 @@ def test_an_order_moves_the_contract_state_of_the_targets_in_scope(world):
     for cid in world["components"][:2]:
         change = outcome.state_changes[cid]
         assert change["before"] == "escalate@sonnet"
-        assert change["after"] == "grounded@p5"
+        # The rung records the tier that DID the work, which for a work order is
+        # whatever the workorder binding resolves to, not the phase that issued
+        # it. Recording "p5" there would claim the determination phase did
+        # enrichment work it never did.
+        assert change["after"] == "grounded@sonnet"
         assert shared.states[("component", cid)].state == "grounded"
 
 
@@ -252,7 +256,7 @@ def test_an_order_that_changes_no_state_is_recorded_as_exactly_that(world):
     shared = LadderOutcome()
     for cid in world["components"][:2]:
         shared.states[("component", cid)] = ContractState(
-            "component", cid, state="grounded", rung="p5"
+            "component", cid, state="grounded", rung="sonnet"
         )
     try:
         outcome = execute_work_order(ctx, _order(world), ladder_outcome=shared)

@@ -40,6 +40,7 @@ from ..derive.importance import ImportanceRanking, rank_components, store_rankin
 from .contract import (
     Census,
     ContractState,
+    FailedQuestion,
     build_census,
     split_contract_payload,
     state_from_block,
@@ -543,15 +544,34 @@ class LadderPhase:
         # so an item that honestly cannot answer is finished rather than stuck.
         declared_gaps = merged_product.get("honest_gaps")
         if terminal and isinstance(declared_gaps, list) and declared_gaps:
-            named = {
-                str(g.get("question"))
+            # A declared gap CLOSES its question, but the reason stays on the
+            # contract state rather than being dropped with it. The reason is the
+            # whole value of an honest gap, and a state that discarded it would
+            # look identical to a gap nobody could explain, which is the thing the
+            # universal gate is meant to catch.
+            why_by_question = {
+                str(g.get("question")): str(g.get("why") or "").strip()
                 for g in declared_gaps
                 if isinstance(g, dict) and g.get("question")
             }
-            state.failed = [f for f in state.failed if f.question not in named]
-            state.state = "honest_gap" if not state.failed else "escalate"
-            if not state.failed:
+            closed: list[FailedQuestion] = []
+            remaining: list[FailedQuestion] = []
+            for failure in state.failed:
+                if failure.question in why_by_question:
+                    closed.append(FailedQuestion(
+                        failure.question,
+                        failure.trigger,
+                        why_by_question[failure.question] or failure.note,
+                    ))
+                else:
+                    remaining.append(failure)
+            if closed and not remaining:
+                state.state = "honest_gap"
                 state.rung = "fable"
+                state.failed = closed
+            elif closed:
+                state.state = "escalate"
+                state.failed = remaining + closed
 
         stored = dict(merged_product, contract=merged_contract)
         outcome.payloads[key] = stored
