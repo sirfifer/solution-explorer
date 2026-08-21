@@ -73,6 +73,21 @@ construction, only the escalated items; the read-heavy phases (P1, P3, P4, P5)
 write spines, verdicts and reports. Utility-first and efficiency-second want
 the same architecture.
 
+### How cost is denominated
+
+Every model invocation, at every rung and phase, runs through the `claude` CLI
+on **the owner's Claude Max subscription**. No API key is billed, and that
+holds for **all** AI work in this engine until the owner deliberately changes
+it (standing decision; the API-key invoker was declined 2026-08-18 and remains
+declined). The dollar figures throughout this design are the API-equivalent
+prices the CLI itself reports for the work performed. They are kept in dollars
+deliberately, for three reasons: they are a truthful meter of how much
+subscription usage a run consumes; they are the unit the `max_cost_usd`
+ceilings meter against; and the design is expected to run on a billed API key
+eventually, so when that switch happens, by decision rather than drift, every
+projection, ceiling and Run Report ledger in this design already denominates
+correctly. The design generalizes; the account it draws on today does not.
+
 ## 3. The phases
 
 **P0, deterministic foundation.** Structure, symbols, metrics, relationships,
@@ -232,7 +247,7 @@ rendering, written even on partial failure.
 | Section | Contents |
 |---|---|
 | identity | subject, exact commit, snapshot date, engine versions, policy |
-| work ledger | per phase, rung and model: targets, tokens in/out, cost, wall, retries |
+| work ledger | per phase, rung and model: targets, tokens in/out, cost (API-equivalent dollars, metered against the owner's subscription; see section 2), wall, retries |
 | item census | every target's terminal contract state, with failed questions and triggers for everything that climbed; the backbone of the determination |
 | escalations | every item that climbed, the trigger, and what the higher rung did with it |
 | work orders | issuer, scope, lens, criteria, budget, outcome |
