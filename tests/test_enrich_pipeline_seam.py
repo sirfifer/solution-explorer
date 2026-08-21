@@ -34,7 +34,6 @@ from analyzer.enrich.pipeline import (
 )
 from analyzer.enrich.retry import RetryingInvoker, RetryPolicy
 
-
 # --- seams -------------------------------------------------------------------
 
 
