@@ -6,7 +6,7 @@ module speaks the MCP stdio transport directly: newline-delimited JSON-RPC 2.0
 messages on stdin/stdout. It handles ``initialize``, ``notifications/initialized``,
 ``tools/list``, ``tools/call``, and ``ping``.
 
-Upgrade path (recorded, TASKS.md P8-1): the nine tools live in tools.py as pure
+Upgrade path (recorded, TASKS.md P8-1): the twelve tools live in tools.py as pure
 functions with JSON-Schema specs. Swapping to ``mcp.server.Server`` is a
 transport change only; ``tools.TOOLS`` is handed over unchanged.
 

@@ -1,4 +1,4 @@
-"""Tests for the MCP server (P8-1): the nine tools, response shapes, staleness
+"""Tests for the MCP server (P8-1): the twelve tools, response shapes, staleness
 and confidence marking, truncation notices, guardrails, and a real stdio
 JSON-RPC round trip against a fixture store.
 
@@ -88,13 +88,15 @@ def ctx():
 # ---------------------------------------------------------------------------
 
 
-def test_exactly_nine_tools_with_expected_names():
+def test_exactly_twelve_tools_with_expected_names():
     names = {t.name for t in TOOLS}
     assert names == {
         "se_overview", "se_search", "se_component", "se_symbol",
         "se_refs", "se_impact", "se_coverage", "se_rules", "se_findings",
+        # D6: the design signals surface, term-first for a machine reader.
+        "se_design", "se_design_component", "se_blast_radius",
     }
-    assert len(TOOLS) == 9
+    assert len(TOOLS) == 12
 
 
 def test_every_tool_has_a_json_schema_and_json_flag():
@@ -298,7 +300,7 @@ def test_server_dispatch_initialize_list_call(ctx):
     assert server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
 
     listed = server.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
-    assert len(listed["result"]["tools"]) == 9
+    assert len(listed["result"]["tools"]) == len(TOOLS)
 
     called = server.handle({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
                            "params": {"name": "se_overview", "arguments": {}}})
@@ -356,7 +358,7 @@ def test_stdio_round_trip(tmp_path):
     by_id = {r.get("id"): r for r in responses}
 
     assert by_id[1]["result"]["serverInfo"]["name"] == "solution-explorer-mcp"
-    assert len(by_id[2]["result"]["tools"]) == 9
+    assert len(by_id[2]["result"]["tools"]) == len(TOOLS)
     assert "ARCHITECTURE OVERVIEW" in by_id[3]["result"]["content"][0]["text"]
     assert "SEARCH" in by_id[4]["result"]["content"][0]["text"]
     # id 5 asked for json mode: the content is a parseable impact payload.

@@ -184,6 +184,27 @@ class StoreContext:
     def digest_index(self) -> DigestIndex:
         return DigestIndex.from_store(self.store)
 
+    @cached_property
+    def design_signals(self):
+        """Architecture quality signals, DERIVED on demand from this store (D6).
+
+        Deliberately derived rather than read from the store's ``design_signals``
+        meta blob, and that choice is the whole consistency guarantee. The blob
+        is written only by a projection run with ``--design-signals``, and
+        ``derive_all`` rebuilds components and edges without clearing meta, so a
+        stored document can outlive the facts it was computed from. Deriving
+        here means the MCP tools and the viewer are reading the same function
+        over the same store, so their numbers agree by construction rather than
+        by two producers happening to stay in step. A test compares the two
+        surfaces directly.
+
+        Pure read, so it honours this package's contract that nothing writes to
+        the store.
+        """
+        from ..derive.design_signals import derive_design_signals
+
+        return derive_design_signals(self.store)
+
     # -- helpers ----------------------------------------------------------
 
     def enrichment_for(self, kind: str, target_id: str) -> Optional[dict]:

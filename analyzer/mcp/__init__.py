@@ -1,5 +1,5 @@
 """The Solution Explorer MCP server (TARGET-ARCHITECTURE section 8, LENS-DESIGN
-section 6): a curated, nine-tool query surface over the v2 fact store for AI
+section 6): a curated, twelve-tool query surface over the v2 fact store for AI
 agents.
 
 Packaging decision (recorded, TASKS.md P8-1): this ships INSIDE the

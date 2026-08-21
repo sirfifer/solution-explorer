@@ -18,7 +18,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="solution-explorer-mcp",
         description="MCP server exposing a Solution Explorer fact store to AI agents "
-        "(nine read-only tools over stdio JSON-RPC).",
+        "(twelve read-only tools over stdio JSON-RPC).",
     )
     parser.add_argument(
         "--store",
