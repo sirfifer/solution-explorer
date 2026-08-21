@@ -23,7 +23,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-__all__ = ["WorkOrder", "WorkOrderOutcome", "EXPECTED_EFFECTS", "parse_work_orders"]
+__all__ = [
+    "WorkOrder",
+    "WorkOrderOutcome",
+    "EXPECTED_EFFECTS",
+    "parse_work_orders",
+    "execute_work_order",
+    "make_descender",
+    "WORK_ORDER_ASSIGNMENT",
+]
 
 # The three instruments a change can claim to move (design section 6). Any claim
 # that a change "worked" must name one of these.
@@ -176,3 +184,165 @@ def parse_work_orders(
             )
         orders = orders[:cap]
     return orders, rejected
+
+
+# --- execution ----------------------------------------------------------------
+#
+# An order is executed as an ordinary scoped enrichment pass. It is not a special
+# path with its own rules: the partitioner's ``include_ids`` filter exists for
+# exactly this, the results are absorbed by the same ladder code that absorbed
+# the first attempt, and the contract is recomputed the same way. That is what
+# "results re-enter through the same contract and the same adjudication they
+# would have faced the first time" means in practice.
+
+
+WORK_ORDER_ASSIGNMENT = """\
+You are executing a SCOPED WORK ORDER against a map that has already been
+enriched and adjudicated. This is not a re-run and it is not a general pass. You
+have been sent back for one reason, stated below, and the map already contains
+what the earlier rungs established.
+
+THE LENS: {lens}
+WHAT WOULD SATISFY THIS: {criteria}
+WHAT SHOULD MEASURABLY CHANGE: {expected_effect}
+
+Answer the completeness contract for each component in scope, THROUGH THIS LENS.
+Where the existing answers already satisfy the order, say so by repeating them
+rather than rewriting them: an order is not a licence to redo finished work.
+
+Do NOT propose further work orders. This is the only level of follow-up there is,
+and anything you would want a second order for belongs in your answers here.
+"""
+
+
+def execute_work_order(
+    ctx,
+    order: WorkOrder,
+    *,
+    ladder_outcome=None,
+) -> WorkOrderOutcome:
+    """Run one order as a scoped pass and report what it actually changed.
+
+    Returns an outcome whose ``state_changes`` is the honest before-and-after of
+    the census for the targets in scope. An order that ran and changed nothing is
+    recorded as exactly that, because "we did more work" is not the same claim as
+    "the map got better", and a determination that cannot tell them apart will
+    keep buying rounds that do nothing.
+    """
+    from .evidence import EvidenceValidator
+    from .ladder import LadderOutcome, LadderPhase
+    from .partition import flatten_components, plan_partitions
+    from .prompts import build_contract_partition_prompt
+
+    outcome = WorkOrderOutcome(order=order)
+    problems = order.problems()
+    if problems:
+        outcome.notes.append("not executed: " + "; ".join(problems))
+        return outcome
+    if not ctx.budget.under():
+        outcome.notes.append("not executed: run cost ceiling reached")
+        return outcome
+
+    scope = list(dict.fromkeys(order.scope))[: order.max_targets]
+    if not scope:
+        outcome.notes.append("not executed: scope was empty after de-duplication")
+        return outcome
+
+    phase = LadderPhase()
+    shared = ladder_outcome if ladder_outcome is not None else LadderOutcome()
+    validator = EvidenceValidator(ctx.store, root=ctx.root)
+    facts_by_id = {
+        c["id"]: c
+        for c in flatten_components(ctx.arch.get("components", []))
+        if c.get("id")
+    }
+    before = {
+        key: state.terminal
+        for key, state in shared.states.items()
+        if key[1] in set(scope)
+    }
+
+    plan = plan_partitions(
+        ctx.arch.get("components", []),
+        ctx.arch.get("relationships", []),
+        include_ids=scope,
+    )
+    if not plan.partitions:
+        outcome.notes.append("not executed: nothing in scope survived partitioning")
+        return outcome
+
+    assignment = WORK_ORDER_ASSIGNMENT.format(
+        lens=order.lens, criteria=order.criteria,
+        expected_effect=order.expected_effect,
+    )
+    invoker = ctx.invoker(
+        "workorder", phase="work_order", rung=order.issued_by, targets=len(scope)
+    )
+    spent_before = ctx.budget.spent
+
+    for partition in plan.partitions:
+        if not ctx.budget.under():
+            outcome.notes.append("stopped early: run cost ceiling reached")
+            break
+        prompt = build_contract_partition_prompt(
+            partition, ctx.facts, assignment=assignment
+        )
+        result = invoker(prompt)
+        outcome.targets_attempted += len(partition.component_ids)
+        if not result.ok:
+            outcome.notes.append(f"partition did not return: {result.error}")
+            continue
+        from .engine import _parse_json_object
+
+        obj = _parse_json_object(result.text)
+        if obj is None:
+            outcome.notes.append("partition returned unparseable text")
+            continue
+        # One level of federation, enforced structurally: the absorber reads
+        # components and relationships and nothing else, so a response that
+        # proposes further orders has proposed them into a void.
+        phase._absorb(
+            ctx, obj, validator, facts_by_id, shared,
+            rung=str(order.issued_by).lower(),
+            component_ids=[c for c in partition.component_ids if c in set(scope)],
+            relationship_keys=list(partition.relationship_keys),
+        )
+        outcome.executed = True
+
+    after = {
+        key: state.terminal
+        for key, state in shared.states.items()
+        if key[1] in set(scope)
+    }
+    outcome.state_changes = {
+        key[1]: {"before": before.get(key), "after": value}
+        for key, value in sorted(after.items())
+        if before.get(key) != value
+    }
+    outcome.cost_usd = ctx.budget.spent - spent_before
+    if outcome.executed and not outcome.state_changes:
+        outcome.notes.append(
+            "executed and changed no contract state; the order cost budget and "
+            "moved nothing"
+        )
+    ctx.store.commit()
+    order.outcome = outcome.to_dict()["outcome"]
+    return outcome
+
+
+def make_descender(ctx, ladder_outcome=None):
+    """Build the descent seam the pipeline hands to P4 and P5.
+
+    Returns a callable taking a sequence of orders and returning their outcomes.
+    Orders execute in issue order and each one sees the state the previous one
+    left, because two orders touching the same component must not both believe
+    they are the one that changed it.
+    """
+
+    def descend(orders):
+        return [
+            execute_work_order(ctx, order, ladder_outcome=ladder_outcome)
+            for order in orders
+        ]
+
+    return descend

@@ -553,7 +553,8 @@ class LadderPhase:
             if not state.failed:
                 state.rung = "fable"
 
-        outcome.payloads[key] = dict(merged_product, contract=merged_contract)
+        stored = dict(merged_product, contract=merged_contract)
+        outcome.payloads[key] = stored
         outcome.states[key] = state
         outcome.rung_counts[rung] = outcome.rung_counts.get(rung, 0) + 1
 
@@ -565,7 +566,11 @@ class LadderPhase:
             if entry not in outcome.parser_findings:
                 outcome.parser_findings.append(entry)
 
-        self._stamp(ctx, target_kind, target_id, merged_product, state)
+        # The FULL payload, contract included: _stamp splits it into the product
+        # row and the contract-state row. Passing the product-only copy here
+        # wrote every contract row with an empty answers block, which read as
+        # valid because the answers key was still present.
+        self._stamp(ctx, target_kind, target_id, stored, state)
 
     def _write_honest_gaps(
         self, ctx: RunContext, state: ContractState, outcome: LadderOutcome

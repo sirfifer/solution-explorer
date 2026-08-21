@@ -532,7 +532,13 @@ def test_contract_answers_live_in_their_own_rows_never_in_the_product(world):
     sample = contract_rows[0]["payload"]
     assert sample["state"] in ("grounded", "escalate", "honest_gap")
     assert sample["rung"] in ("sonnet", "opus", "fable")
-    assert isinstance(sample["answers"], dict)
+    # Non-empty, and carrying real answers with their evidence. Asserting only
+    # that the key is a dict let a defect through that wrote every contract row
+    # with an empty answers block: the key was present, so the check passed.
+    assert sample["answers"], "the contract row must carry the answers it graded"
+    assert "purpose" in sample["answers"]
+    assert sample["answers"]["purpose"]["claim"]
+    assert sample["answers"]["purpose"]["evidence"]
 
 
 def test_relationships_are_enriched_and_carry_the_reduced_contract(world):
