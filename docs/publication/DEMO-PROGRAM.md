@@ -142,8 +142,8 @@ consent friction is minimal.
 | 3 | **home-assistant/core** | Python, Apache-2.0 | Breadth, plugin architecture | A, expect gate failures first |
 
 **1. VS Code.** Start here because the risk of an embarrassing first result is
-lowest and the payoff is highest. We have already measured it: 16,482 files,
-about 3.47M lines, 152 seconds cold, 121 warm, 1.9 GB peak, 420 MB store, with a
+lowest and the payoff is highest. We have already measured it: 15,256 files,
+4,936,720 lines, 136.5 seconds cold, 95.5 warm, 1.93 GB peak, 656 MB store, with a
 complete coverage ledger. README already cites that number as a claim, so this
 demo makes a published claim independently verifiable by anyone. Expect trouble
 in `src/vs/**`, which is layered folders rather than package-per-directory, so
@@ -180,7 +180,7 @@ non-developers, which is the Doug persona the stakeholder views target.
 |---|---|---|---|---|---|
 | 4 | **denoland/deno** | Rust + TypeScript, MIT | Polyglot across two full-parse tiers | A | Rust at real scale; one story across a Rust core and a TS surface |
 | 5 | **Supabase** (`supabase/supabase`, `postgrest/postgrest`, `supabase/realtime`, `supabase/storage-api`, `supabase/auth`) | TS, Go, Haskell, Elixir; Apache-2.0 and MIT | True multi-repo solution, data layer, declared language gaps | B until the multi-repo ledger lands, then A | The differentiator demo; forces P4-7 (unified multi-repo coverage ledger) |
-| 6 | **spring-projects/spring-boot** | Java, Apache-2.0 | Language tier wall | B, indefinitely | Justifies and specifies a Java tree-sitter tier |
+| 6 | **spring-projects/spring-boot** | Java, Apache-2.0 | Language tier wall (track placement now in question, see note below) | B, indefinitely (in question, see note below) | Was meant to justify a Java tree-sitter tier; Java already parses |
 
 Supabase deserves a note. Two of its members are Haskell and Elixir, neither in
 any tier, so the ledger will declare a large honest gap. That is the right kind
@@ -189,11 +189,18 @@ clearest possible argument for the coverage ledger as a feature. But it cannot
 publish until multi-repo emits a unified ledger, so it sits on Track B and pulls
 that deferred card forward.
 
-Spring Boot is on the list precisely because it will fail. Java is the largest
-enterprise language we cannot parse, and a buyer will notice that in the first
-five minutes. A metrics-only map of a forty-module Java monorepo is not
-publishable under the theater gate, so its entire purpose is to make the Java
-tier concrete: what breaks, what a tier would have to produce, and what it buys.
+Spring Boot was placed on this list on the premise that it would fail: that Java
+is the largest enterprise language we cannot parse. That premise is false.
+`analyzer/parsers/java.py` and `java_ts.py` exist, Java is in
+`FULL_PARSE_LANGS`, and a reconnaissance probe against the repo's own Java
+fixture produced full-parse output, symbols with kinds, framework detection,
+API endpoints, and a relationship, not a blank map. `DEMO-PREREQUISITES.md:98`
+already recorded the consequence: Spring Boot may belong on Track A, not Track
+B. That track placement is accordingly an open question, not settled here; this
+document does not move it. What is still true is that behaviour at
+forty-module, several-hundred-thousand-line scale is unproven, and the 25
+percent detect-only publishing gate needs recomputing for any subject, because
+the set of detect-only languages is smaller than assumed.
 
 ### 3.4 Wave 3, the succession (not exhaustive, by design)
 

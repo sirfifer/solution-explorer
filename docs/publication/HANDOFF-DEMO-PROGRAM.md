@@ -55,22 +55,29 @@ Decided, do not re-litigate (owner decisions 2026-08-18):
    the parity snapshots are pinned to the tree-sitter tier and skip loudly on
    the regex lane. **Always `pip install -e ".[all,dev]"` before trusting any
    local diff or test posture.**
-2. **The true test posture is 1609 passed, 1 failed**, not the "1451 / 3" an
-   older handoff recorded, which was measured in that broken environment. The
-   single failure is `test_pruned_directory_row_stands_in_for_its_contents`,
-   which fails only inside a git worktree (where `.git` is a file, not a
-   directory) and passes in CI and in a normal checkout.
+2. **The current test posture in a normal checkout is 1642 passed, 4 skipped, 1
+   xfailed, 0 failed** (verified 2026-08-20), not the "1451 / 3" an older
+   handoff recorded, which was measured in that broken environment. A worktree
+   checkout (where `.git` is a file, not a directory) can still behave
+   differently from a normal checkout, but the previously-recorded
+   `test_pruned_directory_row_stands_in_for_its_contents` failure specific to
+   that setup no longer reproduces.
 3. **The viewer's 86 local test failures are environment-only** (`localStorage`
    unavailable in the local Node). They pass in CI. Do not chase them, and do not
    let a real failure hide among them: capture the failing FILE set before and
    after a change and diff the two lists.
-4. **The changelog reports an id-namespace migration as real churn, and every
-   pathway agrees with it.** The current UnaMentis publication shows 254 "New
-   component discovered" rows and 256 removals. Roughly 250 of those are the
-   same components re-identified with a `unamentis/` prefix; about six changed
-   for real. Verified 2026-08-19, see `ORCHESTRATOR-FINDINGS.md`. **Do not rely
-   on the projection diff for N2 or N3 until this is resolved**, or the weekly
-   findings loop will be swamped by phantom churn. This is the same shape as the
+4. **A pure id-based diff reports any id-scheme change as total churn, and every
+   pathway agreed with it.** The UnaMentis publication once showed 254 "New
+   component discovered" rows and 256 removals, of which roughly 250 were the
+   same components re-identified with a `unamentis/` prefix and about six
+   changed for real. Verified 2026-08-19, see `ORCHESTRATOR-FINDINGS.md`.
+   **Resolved in PR #100.** `analyzer/project/id_normalization.py` now
+   recognises a re-identification (same component, new id scheme) as its own
+   change kind instead of a paired add and remove, so the projection diff no
+   longer reports a namespace migration as churn. The lesson still stands for
+   the next id-scheme change: a diff showing mass adds and removes in lockstep
+   is worth checking against `id_normalization.py`'s re-identification logic
+   before assuming it is real churn. This is the same shape as the
    989-phantom-symbol-losses trap above.
 5. **Fixing a classification can remove an accidental exclusion elsewhere.**
    Stopping test directories being typed `api-server` produced 68 bogus
@@ -226,7 +233,7 @@ the artifact.
 # ALWAYS first, in any fresh worktree
 python3 -m venv .venv-wt && .venv-wt/bin/pip install -e ".[all,dev]"
 
-.venv-wt/bin/python -m pytest tests/ -q          # expect 1609 passed, 1 failed in a worktree
+.venv-wt/bin/python -m pytest tests/ -q          # expect 1642 passed, 4 skipped, 1 xfailed, 0 failed in a normal checkout
 .venv-wt/bin/python -m ruff check analyze.py analyzer/ scripts/ tests/
 node --test infrastructure/preview-gate/*.test.mjs
 cd viewer && npx tsc --noEmit && npx eslint src/ && npx vitest run

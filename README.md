@@ -181,7 +181,7 @@ pip install -e ".[all]"          # Everything above
 - **Hierarchical drill-down**: Click to see details, double-click to drill into sub-components
 - **Breadcrumb navigation**: Always know where you are, click to jump back
 - **Graph and tree views**: An interactive React Flow diagram plus a collapsible component tree sidebar, with a tabbed detail panel for the selected component
-- **Fuzzy search**: Cmd/Ctrl+K to search across components, files, and symbols
+- **Fuzzy search**: Cmd/Ctrl+K to search across components, files, symbols, and markdown documentation content
 - **Detail panel**: Tabbed view with overview, files, symbols, relationships, and AI insights
 - **Code preview**: Inline syntax-highlighted code for every symbol
 - **Relationship visualization**: Arrows show dependencies, HTTP connections, and AI-discovered relationships
@@ -401,7 +401,7 @@ Two properties come from this design:
 - **Coverage ledger.** Every file under the root is accounted for exactly once: parsed, skipped for a stated reason, or inside a pruned directory recorded as a single row. Split output writes a `coverage.json` the viewer surfaces as a coverage badge, so a silent gap is not possible. There is no symbol cap in v2.
 - **Incremental by construction.** The fact store is the baseline. A warm run re-parses only the files whose content changed, so `--incremental`, `--base-sha`, `--head-sha`, and `--baseline` are accepted as compatibility no-ops.
 
-On a large repository the engine holds up: analyzing the VS Code codebase (about 3.47M lines) took 152 seconds cold and produced a complete coverage ledger.
+On a large repository the engine holds up: analyzing the VS Code codebase (4,936,720 lines) took 136.5 seconds cold and produced a complete coverage ledger.
 
 The legacy **v1** single-pass scanner is still available with `--engine v1` for rollback. It is scheduled for removal at a later gate. Rollback is a flag flip; nothing else changes.
 

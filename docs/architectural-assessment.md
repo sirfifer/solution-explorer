@@ -177,19 +177,19 @@ Symbols and files are chunked per component and loaded on demand when a user ope
 
 **Why:** This is the feature work from the original plan (buttons, toolbars, menus, swipe actions, state properties). It becomes practical after Changes 1-3 because: (a) the parser code has a clean home, (b) there's no symbol cap, (c) the data loads lazily so more symbols don't slow initial page load.
 
-**What:** As described in `docs/ui-actions-source-linking-plan.md`, Phases 2 and 3.
+**What:** As described in `docs/archive/ui-actions-source-linking-plan.md`, Phases 2 and 3.
 
 #### Change 5: Source code linking
 
 **Why:** Every symbol, file, and action should link to the exact GitHub source location.
 
-**What:** As described in `docs/ui-actions-source-linking-plan.md`, Phase 1.
+**What:** As described in `docs/archive/ui-actions-source-linking-plan.md`, Phase 1.
 
 #### Change 6: Bidirectional navigation
 
 **Why:** Deep-link URLs let external tools navigate into the architecture viewer.
 
-**What:** As described in `docs/ui-actions-source-linking-plan.md`, Phase 4.
+**What:** As described in `docs/archive/ui-actions-source-linking-plan.md`, Phase 4.
 
 ---
 
