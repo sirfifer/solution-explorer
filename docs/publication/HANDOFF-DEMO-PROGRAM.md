@@ -13,9 +13,9 @@ published on `syscorpus.com`, refreshed weekly from the owner's Mac Studio, with
 every refresh feeding fixes back into the tool. The plan, the project register
 and the execution design are agreed and decided. **All six prerequisites are
 built and merged** (PRs #96, #97, #98; `main` is green at `71e7a8d` or later).
-**N1, the calibration run, is complete** (2026-08-19,
-`docs/quality/runs/unamentis/2026-08-19/`). Nothing of the demo program itself
-is built yet. The next unit of work is pre-flight measurement, then demo one.
+**N1 (the calibration run) and N2 (pre-flight measurement for VS Code) are both
+complete**, merged in PR #100 on 2026-08-21. Nothing of the demo program itself
+is built yet. **The next unit of work is N3: the demo harness and demo one.**
 
 ## State of the world
 
@@ -25,7 +25,10 @@ is built yet. The next unit of work is pre-flight measurement, then demo one.
 | Live demos | `solution-explorer.unamentis.org` and `um-arch.unamentis.org`, both redeployed and verified carrying the new engine output |
 | `wt/demo-program` branch | The planning docs. Merge it or work from it; it is documentation only |
 | Domain | `syscorpus.com` (owner also holds `.org`). DNS and Cloudflare projects not yet created |
-| Demo harness | Does not exist. Designed in `DEMO-PROGRAM.md` section 4 |
+| Demo harness | Does not exist. Designed in `DEMO-PROGRAM.md` section 4. **This is the next thing to build** |
+| VS Code pre-flight | Measured and viable. 668 published files against a 20,000 ceiling, 136 s cold, 0.10% detect-only on code lines. `docs/publication/PREFLIGHT-MEASUREMENTS.md` |
+| VS Code clone and store | Already on disk at `/Volumes/Studio/dev/.scratch/n2/`, ~1.2 GB. Reusable for demo one; reproducible if deleted |
+| Live demo data | Fixed 2026-08-21. The Live overlay had been serving 2026-02-23 data that looked fresh; UnaMentis/unamentis#123 removed the stale committed file. Both front doors now report 254 |
 
 Decided, do not re-litigate (owner decisions 2026-08-18):
 
@@ -113,13 +116,21 @@ and briefs are in `docs/quality/personas/`. Reuse both for every subject.
 same sittings score 11, 12 and 6. A letter grade and the rubric measure
 different things.
 
-### N2. Pre-flight measurement and the three-subject reconnaissance
+### N2. Pre-flight measurement. DONE for VS Code, 2026-08-20
 
-`DEMO-PROGRAM.md` section 4.6 lists the six measurements. Analysis only: no
-enrichment, no deploy, **no fixing**. Recon is not a fix cycle; record what you
-see and fix nothing until the demo whose turn it is. Note the detect-only
-language share calculation changed when Java, C# and C/C++ moved to the
-full-parsing tier (PR #98), so recompute rather than reusing an old estimate.
+Results in `docs/publication/PREFLIGHT-MEASUREMENTS.md`. VS Code is comfortably
+viable on every axis measured, and the analysis completed cleanly twice with no
+errors.
+
+Home Assistant Core and Kubernetes were **deliberately deferred**: measuring
+three subjects before demo one exists is premature, and their numbers can be
+taken when their turn comes.
+
+**One question remains open and it needs an owner decision before generating:**
+`enhance --dry-run` reports 1,446,236 prompt tokens but models neither output
+tokens nor cost. Enrichment runs on the owner's `claude` subscription rather
+than an API key, so this is a real call about when to spend that usage, not a
+line item. It can only be settled by an actual `enhance` run.
 
 ### N3. The demo harness and demo one
 
@@ -129,8 +140,14 @@ end, deployed as a **private preview first** using
 `infrastructure/preview-gate/`, and public only after it passes the graduation
 gate and a comprehension review.
 
-Blocked on the owner: creating the Cloudflare Pages projects and setting
-`PREVIEW_PASSCODE`.
+**Blocked on the owner, and these gate the deploy half of N3:**
+
+1. Create the Cloudflare Pages project for demo one.
+2. Set `PREVIEW_PASSCODE` for `infrastructure/preview-gate/`.
+3. Decide when to spend the enrichment run (see N2 above).
+
+Note that the harness, registry, hub generator and launchd unit can all be built
+and tested locally before any of those exist. Only the deploy needs them.
 
 ## Deferred to the Wave 1 retrospective
 
