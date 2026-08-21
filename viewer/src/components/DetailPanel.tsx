@@ -19,6 +19,7 @@ import { RationaleStrip } from "./RationaleStrip";
 import { findingsForComponent } from "../findings/model";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { Tooltip, TechTooltip } from "./Tooltip";
+import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 import { getTechRef, getPatternRef, getProtocolRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
 
 function SourceLink({ filePath, line, endLine }: { filePath: string; line?: number; endLine?: number }) {
@@ -575,8 +576,13 @@ function OverviewTab({
       {/* External Services */}
       {component.external_services && component.external_services.length > 0 && (
         <div>
-          <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+          <h4 className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
             External Services ({component.external_services.length})
+            <Tooltip content={TOOLTIP_COPY.inventoryLens.externalDependencies} focusable>
+              <span className={`text-[9px] normal-case font-medium tracking-wide px-1 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}>
+                detected
+              </span>
+            </Tooltip>
           </h4>
           <div className="flex flex-wrap gap-1.5">
             {component.external_services.map((svc, i) => {

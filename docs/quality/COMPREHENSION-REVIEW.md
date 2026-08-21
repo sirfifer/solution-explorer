@@ -18,8 +18,11 @@ and could not be repeated identically. This charter makes it repeatable,
 comparable across subjects, and improvable without silently drifting the scores.
 
 **It runs on publication and on a major engine change, not on the weekly
-refresh.** Three personas plus verification is half a day to a day of mostly
-unattended time. The weekly refresh keeps the machine gates and the projection
+refresh.** The sittings themselves are cheap: all three of the 2026-08-19
+sittings took 31 minutes of wall clock in total, not the half a day to a day
+this charter first estimated. The cost is the orchestrator's, in building the
+key and verifying every claim, and that is what makes this the expensive
+instrument. The weekly refresh keeps the machine gates and the projection
 diff; this is what gates a demo going public.
 
 ## Rules of engagement
@@ -38,6 +41,17 @@ diff; this is what gates a demo going public.
    corroborated.
 6. **Nothing is softened.** A defect the personas hit is recorded at the
    severity they hit it, whatever it costs us.
+7. **A persona's claim is unverified until the orchestrator checks it.** This
+   cuts both ways and neither way is the default. In the 2026-08-19 run a
+   persona reported that the graph never rendered, and its own screenshot showed
+   the graph fully drawn; in the same run another persona's structurally similar
+   complaint was entirely real. Check every blocked path and every trust
+   incident against the source or the persona's own evidence before it scores,
+   and record the count: claims checked, claims excluded.
+8. **A blocked path caused by the persona's interaction modality is excluded.**
+   An agent driving a browser cannot click an `<option>` inside a closed
+   `<select>`; a person can. Such a failure measures the harness, not the
+   interface. Exclude it and record the exclusion so it is auditable.
 
 ## Who can be a persona
 
@@ -97,12 +111,19 @@ one. A run is not complete until every persona has produced all four.
 |---|---|
 | `JOURNAL.md` | Narrative, in order, every section naming the screenshots it rests on |
 | `FINDINGS.md` | Mental model; answers to the battery with confidence and source; ranked confusions and blockers; moments of delight; trust assessment; verdict |
-| `SCORECARD.json` | The rubric below, scored, with one evidence pointer per dimension |
 | `evidence/` | Numbered screenshots, referenced by number from the journal |
 
-The orchestrator adds `REVIEW.md` (verification of every load-bearing claim, the
-combined defect list, and the instrument retro) and `PROFILE.json` (the
-subject-difficulty profile).
+**`SCORECARD.json` is authored by the orchestrator, not by the persona.** A
+persona given the rubric optimises for its anchors, which is a quieter
+contamination than reading the repository but corrupts the same number. Personas
+produce the raw material the rubric needs, timings, ranked blockers, trust
+issues, answers with confidence and source, and a verdict. The orchestrator
+scores it. This also keeps a live run symmetrical with a retrospective one,
+where scores must be authored from artifacts anyway.
+
+The orchestrator adds `SCORECARD.json` per persona, `REVIEW.md` (verification of
+every load-bearing claim, the combined defect list, and the instrument retro)
+and `PROFILE.json` (the subject-difficulty profile).
 
 ## The three personas
 
@@ -188,8 +209,14 @@ Two things are counted, not scored, and reported alongside:
   unverifiable, with severity. These become findings regardless of the score.
 - **Blocked paths**: each advertised feature that failed on first use.
 
-The old B+ maps to roughly 17 to 19 of 24. It is recorded as the v1 baseline for
-UnaMentis, and the calibration run replaces it with a real number.
+**The old B+ does not map to 17 to 19 of 24, as this charter previously
+assumed.** The 2026-08-17 sittings, scored retrospectively against this rubric,
+came out at P1 11/24, P2 12/24 and P3 6/24. The gap is conceptual rather than
+arithmetic: a holistic letter grade answers "could a non-expert understand
+this", while the rubric also charges heavily for trust incidents and blocked
+paths. The 2026-08-17 P2 awarded B+ while listing eight blockers and writing
+"Directionally yes, contractually no." Those numbers are the v1 baseline for
+UnaMentis. See `docs/quality/runs/unamentis/2026-08-19/REVIEW.md`, R1.
 
 ## Separating tool performance from subject difficulty
 
@@ -197,7 +224,11 @@ Without this, a score drop just means the next subject was harder, and the
 series is meaningless. `PROFILE.json` records, per subject and per run:
 
 size in files and lines; language mix and the share of lines in full-parse
-tiers; component count and maximum drill depth; documentation density (doc lines
+tiers, **computed over code lines only**, because full-parse languages never
+fall outside the code class, so an all-lines figure measures how much bundled
+data and documentation a subject carries rather than how much of it the engine
+parses. On UnaMentis the two differ by 88 percentage points, 8.78% against
+96.72%. Record both, compare on the code-only figure; component count and maximum drill depth; documentation density (doc lines
 per code line); external dependency count; enrichment coverage; whether the
 coverage ledger is complete; and the fit zoom the level renders at on each of
 the three reference viewports.

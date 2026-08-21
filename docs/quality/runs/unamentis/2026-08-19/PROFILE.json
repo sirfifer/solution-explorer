@@ -1,0 +1,207 @@
+{
+  "measured_at": "2026-08-19",
+  "subject": "unamentis",
+  "charter_version": "comprehension-review/v1",
+  "dataset_chosen": {
+    "path": "/Volumes/Studio/dev/.evidence/solution-explorer/mirrors/20260819/site",
+    "description": "Byte-for-byte curl mirror of https://solution-explorer.unamentis.org, fetched 2026-08-19T21:03:30Z, hash-verified against the live origin (see VERIFICATION.tsv; four paths mismatch and are explained as Cloudflare SPA-fallback pages carrying a per-request nonce, not real content, per removed-fallbacks/README.md).",
+    "why_chosen": "Only candidate whose component_detail_index/stats.total_components (254) and analyzer_version (1.2.0) match the live, currently-deployed dataset described in the cross-check ('254 components, split mode, AI-enriched'). It is dated today (generated_at 2026-08-19T02:35:45Z) and was fetched specifically to serve this run's isolated persona mirrors (N1-STAFFING.md decision 2, option B), with an explicit PROVENANCE.json and per-file sha256 verification against the origin -- the strongest chain of custody among the candidates found.",
+    "manifest_file": "architecture/manifest.json (top-level keys: analyzer_version, changelog, changelog_serial, component_detail_index, components, default_branch, description, generated_at, name, relationships, repositories, repository, root_path, stats, ai_enhance)",
+    "manifest_generated_at": "2026-08-19T02:35:45.834513+00:00",
+    "manifest_analyzer_version": "1.2.0"
+  },
+  "dataset_candidates_rejected": [
+    {
+      "path": "/Volumes/Studio/dev/solution-explorer/viewer/dist/architecture/manifest.json",
+      "reason": "Same repository (UnaMentis/unamentis) and split/AI-enriched shape, but stale: generated_at 2026-03-02T07:22:03Z, analyzer_version 1.0.0, stats.total_components 178 with 256 tree nodes (255 non-root) -- none of which match the 254 cross-check. Directory mtime is 2026-08-17, so it is plausibly the local mirror served during the 2026-08-17 baseline study, not the current dataset. Kept as a historical reference only, not used for any measured value in this file."
+    },
+    {
+      "path": "/Volumes/Studio/dev/unamentis/architecture.json",
+      "reason": "Monolithic (not split) local build artifact in the UnaMentis working tree; generated_at 2026-02-23T17:09:13Z, total_components 173. Older than the viewer/dist candidate and does not match 'split mode'."
+    },
+    {
+      "path": "/Volumes/Studio/dev/solution-explorer/architecture.json",
+      "reason": "Not the UnaMentis dataset at all -- this is solution-explorer's self-analysis (name: solution-explorer, repository: sirfifer/solution-explorer, 23 components). Ruled out immediately."
+    },
+    {
+      "path": "/Volumes/Studio/dev/solution-explorer/viewer/tests/gui/fixtures/old-format/architecture.json",
+      "reason": "Named test fixture in an 'old-format' directory. Ruled out immediately."
+    }
+  ],
+  "size": {
+    "files": 1249,
+    "lines": 3767918,
+    "lines_by_class": {
+      "code": 342177,
+      "config": 3586,
+      "data": 3291902,
+      "docs": 130253
+    },
+    "note": "lines_by_class shows the 'data' class (3,291,902 lines, 87.4% of the total) is almost entirely large JSON payloads (curriculum/ML data), not source code. This dominates every lines-based percentage below; see language_mix.note.",
+    "provenance": "python3 -c \"import json; d=json.load(open('architecture/manifest.json')); print(d['stats']['total_files'], d['stats']['total_lines'], d['stats']['lines_by_class'])\" run from /Volumes/Studio/dev/.evidence/solution-explorer/mirrors/20260819/site"
+  },
+  "language_mix": {
+    "by_language_lines": {
+      "json": 3286269,
+      "swift": 132706,
+      "markdown": 130253,
+      "python": 124908,
+      "typescript": 62705,
+      "yaml": 8616,
+      "javascript": 5285,
+      "rust": 4707,
+      "html": 4408,
+      "shell": 4159,
+      "sql": 2093,
+      "toml": 603,
+      "ruby": 570,
+      "css": 353,
+      "coredata": 171,
+      "cpp": 65,
+      "storyboard": 47
+    },
+    "by_language_share_percent": {
+      "json": 87.2171,
+      "swift": 3.522,
+      "markdown": 3.4569,
+      "python": 3.315,
+      "typescript": 1.6642,
+      "yaml": 0.2287,
+      "javascript": 0.1403,
+      "rust": 0.1249,
+      "html": 0.117,
+      "shell": 0.1104,
+      "sql": 0.0555,
+      "toml": 0.016,
+      "ruby": 0.0151,
+      "css": 0.0094,
+      "coredata": 0.0045,
+      "cpp": 0.0017,
+      "storyboard": 0.0012
+    },
+    "tiers": {
+      "full_parse": {
+        "languages": ["swift", "python", "rust", "typescript", "javascript", "go", "ruby", "java", "csharp", "cpp"],
+        "languages_present_in_this_dataset": ["cpp", "javascript", "python", "ruby", "rust", "swift", "typescript"],
+        "lines": 330946,
+        "share_percent": 8.7833
+      },
+      "detect_only": {
+        "languages_present_in_this_dataset": ["coredata", "css", "html", "json", "markdown", "shell", "sql", "storyboard", "toml", "yaml"],
+        "lines": 3436972,
+        "share_percent": 91.2167
+      }
+    },
+    "tiers_code_only": {
+      "purpose": "Cross-subject comprehension-score comparator. The 'tiers' figure above is denominated over all 3,767,918 lines, which is dominated by 3,291,902 lines of bundled curriculum/ML JSON classified 'data' (see size.note). A number driven by the size of bundled data blobs makes this subject look overwhelmingly detect-only when its actual authored code is mostly full-parsing languages, and would poison any comparison against a subject with a smaller or absent data payload. This field restricts the same tier partition to lines_by_class=='code' only (342,177 lines), excluding 'data', 'docs' (130,253 lines), and 'config' (3,586 lines).",
+      "denominator_lines": 342177,
+      "denominator_definition": "size.lines_by_class.code, i.e. lines in files the analyzer classifies 'code' (analyzer/derive/pipeline.py:_file_line_class), excluding data/docs/config.",
+      "full_parse": {
+        "languages_present_in_code_class": ["cpp", "javascript", "python", "ruby", "rust", "swift", "typescript"],
+        "lines": 330946,
+        "share_percent": 96.7178
+      },
+      "detect_only": {
+        "languages_present_in_code_class": ["coredata", "css", "html", "shell", "sql", "storyboard"],
+        "lines": 11231,
+        "share_percent": 3.2822
+      },
+      "by_language_lines_code_class_only": {
+        "swift": 132706,
+        "python": 124908,
+        "typescript": 62705,
+        "javascript": 5285,
+        "rust": 4707,
+        "html": 4408,
+        "shell": 4159,
+        "sql": 2093,
+        "ruby": 570,
+        "css": 353,
+        "coredata": 171,
+        "cpp": 65,
+        "storyboard": 47
+      },
+      "divergence_from_all_lines_full_parse_share_percentage_points": 87.9345,
+      "note": "Full-parse languages (swift/python/rust/typescript/javascript/ruby/cpp) occur only in the 'code' class under the analyzer's own classifier, so the full-parse LINE COUNT is unchanged from the all-lines figure above (330,946 either way); only the denominator shrinks, from 3,767,918 all-lines to 342,177 code-lines, which moves the full-parse SHARE from 8.7833% to 96.7178% (+87.9345 percentage points). The all-lines 'tiers' object above is not wrong, but it answers 'what share of everything shipped is full-parse', while this object answers 'what share of the authored code is full-parse' -- the latter is the fair comparator across subjects with different amounts of bundled data. The prior version of this file's 'tiers.note' said this narrower split could not be measured without recomputing from raw source; it has now been computed from the same mirrored dataset by reading the per-file path/language/size_bytes already present in each of the 254 component detail shards (which the manifest itself does not expose as a flat cross-tab) and classifying each file with the analyzer's own _file_line_class function, imported as a library rather than reimplemented. Fidelity check: summing this per-file classification over all 1,249 unique files (deduplicated from 1,328 raw entries, since a file can be listed under more than one component) reproduces size.lines_by_class exactly -- code=342177, config=3586, data=3291902, docs=130253, sum=3767918 -- confirming the per-file records and the manifest's own aggregate agree.",
+      "provenance": "python3 script run from /Volumes/Studio/dev/solution-explorer (repo root, for the analyzer import) reading /Volumes/Studio/dev/.evidence/solution-explorer/mirrors/20260819/site/architecture/data/detail-*.json (254 shards): collected every files[] entry (path, language, lines, size_bytes) into a dict keyed by path (dedup, 1249 unique of 1328 raw entries, no value conflicts on the 50 duplicated paths); imported analyzer.derive.pipeline._file_line_class(path, language, size_bytes) unmodified and applied it per file; verified sum-by-class against architecture/manifest.json stats.lines_by_class (exact match); restricted to class=='code' and partitioned those 342,177 lines by tier_determination's full_parse/detect_only language sets."
+    },
+    "note": "Full-parse vs detect-only is dominated by the JSON data payload (see size.note): json alone is 87.2% of all lines and is detect-only, which pulls the detect-only share to 91.2%. Restricted to lines_by_class 'code'+'docs'+'config' (476,016 lines, excluding the 'data' class), the mix would read very differently. See tiers_code_only above for the code-only split (data/docs/config excluded), which is the figure to use for cross-subject comparisons.",
+    "tier_determination": {
+      "method": "Current tier membership was read directly from analyzer source, not from prose docs, per task instruction: the parser registry at analyzer/parsers/__init__.py (PARSERS = {swift, python, rust, typescript, javascript, go, java, ruby, csharp, cpp, storyboard}, each with a working extract_symbols/extract_imports) cross-referenced against the authoritative FULL_PARSE_LANGS set asserted by tests/test_language_tiers.py (Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby, Java, C#, C/C++), which exists specifically to keep the docs and the parser registry from drifting apart. Storyboard/xib has a registered parser but is explicitly commented in __init__.py as 'always regex-tier (no tree-sitter)' schema-detection, and is excluded from FULL_PARSE_LANGS by that test, so it is classified detect-only here, matching the test's authoritative list rather than the raw PARSERS dict.",
+      "confirms_java_csharp_cpp_move": "tests/test_language_tiers.py's own docstring states the prior state directly: 'Both README.md and PROJECT-OVERVIEW.md listed Java, C# and C/C++ as detection + metrics only while analyzer/parsers/ carried full regex AND tree-sitter parsers for all three... This test keeps the tables and the parsers honest with each other.' Java and C# have zero lines in this particular dataset's language stats, so their tier placement could not be cross-checked against real data here, but their parser registration (analyzer/parsers/java.py, analyzer/parsers/csharp.py, both in PARSERS) is unconditional, not dataset-dependent.",
+      "sources": [
+        "/Volumes/Studio/dev/solution-explorer/analyzer/parsers/__init__.py",
+        "/Volumes/Studio/dev/solution-explorer/tests/test_language_tiers.py"
+      ]
+    },
+    "provenance": "Line counts/shares: architecture/manifest.json stats.languages in the chosen mirror, arithmetic done in a one-off python3 script (sum by tier membership, verified sum(full)+sum(detect_only)==stats.total_lines). Tier membership: see tier_determination.sources."
+  },
+  "components": {
+    "count": 254,
+    "max_drill_depth": 6,
+    "note": "count matches architecture/manifest.json stats.total_components and len(component_detail_index) exactly (both 254), and also matches a direct tree walk of the components array (254 nodes total, including the root 'repo:unamentis' node itself as one of the 254). max_drill_depth counts the root as depth 1; the deepest node found was depth 6, i.e. 5 levels of drill-down below the root.",
+    "provenance": "python3 tree-walk of architecture/manifest.json .components (recursive count + max depth), run from /Volumes/Studio/dev/.evidence/solution-explorer/mirrors/20260819/site; cross-checked against stats.total_components and len(component_detail_index) in the same file."
+  },
+  "documentation_density": {
+    "doc_lines": 130253,
+    "code_lines": 342177,
+    "doc_lines_per_code_line": 0.3807,
+    "provenance": "architecture/manifest.json stats.lines_by_class.docs / stats.lines_by_class.code (130253 / 342177), from the chosen mirror."
+  },
+  "external_dependency_count": null,
+  "external_dependency_count_note": "Not measurable from this dataset. architecture/ai.json's manifest_sections entry for key 'supply_chain' (SBOM: ecosystems, dependencies, direct/transitive, pin_status) reports present:false, and no sbom.json shard exists anywhere in the mirror or in fetched_urls.txt/VERIFICATION.tsv (i.e. it was never linked from the live front door, so it was never fetched -- not merely omitted from the mirror). As a distinct, non-substituting data point: per-component external_services fields across the 254-node tree name 5 distinct third-party services (Anthropic, Deepgram, GitHub, Groq, OpenAI); this is informal free-text service naming, not an SBOM dependency count, and is reported separately rather than used to fill this field.",
+  "external_services_named_informal": {
+    "distinct_count": 5,
+    "names": ["Anthropic", "Deepgram", "GitHub", "Groq", "OpenAI"],
+    "provenance": "python3 walk of architecture/manifest.json .components collecting the .external_services field from every node, deduplicated by name."
+  },
+  "enrichment_coverage": {
+    "components_with_ai_enhance": 250,
+    "total_components": 254,
+    "coverage_percent": 98.43,
+    "components_without_ai_enhance": [
+      {"id": "repo:unamentis", "name": "unamentis", "type": "repository", "depth": 1},
+      {"id": "unamentis/unamentis/__ui__/unamentis-launchscreen-storyboard/01J-lp-oVM", "name": "LaunchScreen", "type": "screen", "depth": 4},
+      {"id": "unamentis/docs/research", "name": "research", "type": "content", "depth": 4},
+      {"id": "unamentis/docs/reviews", "name": "reviews", "type": "content", "depth": 4}
+    ],
+    "note": "Measured as presence of a populated ai_enhance.help_text string on each of the 254 nodes in the components tree. The 4 without are the repo-root container itself and three non-code leaves (a storyboard screen, two docs-content groupings). DEPLOYMENTS.md separately records an older gate-check figure of '251/251 enhanced components preserved (100.0% of still-present)' for this same install; that number is from a prior Phase 4 verification pass on a different snapshot and does not match this run's 250/254 -- reported as-is per instructions, not reconciled.",
+    "provenance": "python3 tree-walk of architecture/manifest.json .components counting truthy .ai_enhance.help_text, run from /Volumes/Studio/dev/.evidence/solution-explorer/mirrors/20260819/site."
+  },
+  "coverage_ledger": {
+    "complete": false,
+    "missing": "The coverage ledger (TARGET-ARCHITECTURE.md section 7 / invariant I2, implemented by analyzer/project/coverage.py) is entirely absent from this dataset, not partially populated. Evidence: (1) architecture/manifest.json has no top-level 'coverage' key at all (full key list: analyzer_version, changelog, changelog_serial, component_detail_index, components, default_branch, description, generated_at, name, relationships, repositories, repository, root_path, stats, ai_enhance). (2) architecture/ai.json's own manifest_sections entry for key 'coverage' (pointer '.coverage', described as 'Manifest-embedded coverage summary... Full ledger... is in coverage.json') reports present:false. (3) No coverage.json shard exists in the mirror, in fetched_urls.txt, or in VERIFICATION.tsv. (4) The mirror's removed-fallbacks/architecture_coverage.json is confirmed by removed-fallbacks/README.md to be a Cloudflare SPA-fallback copy of index.html carrying a request nonce, i.e. /architecture/coverage.json 404s to the app shell on the live origin -- it is not real content that was merely excluded from the mirror.",
+    "provenance": "/Volumes/Studio/dev/.evidence/solution-explorer/mirrors/20260819/site/architecture/manifest.json (absent key); /Volumes/Studio/dev/.evidence/solution-explorer/mirrors/20260819/site/architecture/ai.json (manifest_sections[].key=='coverage', present:false); directory listing of /Volumes/Studio/dev/.evidence/solution-explorer/mirrors/20260819/site/architecture/ (no coverage.json); /Volumes/Studio/dev/.evidence/solution-explorer/mirrors/20260819/removed-fallbacks/README.md."
+  },
+  "viewport_fit_zoom": {
+    "desktop": null,
+    "mobile": null,
+    "mobile_landscape": null,
+    "note": "pending, requires browser",
+    "reference_viewport_dimensions": {
+      "desktop": "1440x900",
+      "mobile": "390x844",
+      "mobile_landscape": "844x390"
+    },
+    "provenance": "Viewport dimensions only (not the fit-zoom values, which were not measured): .claude/skills/gui-test-cycle/SKILL.md lines 151-154."
+  },
+  "provenance": {
+    "measured_at": "Task instruction (UTC date of this run).",
+    "subject": "Task instruction.",
+    "dataset_chosen": "See dataset_chosen.why_chosen and dataset_candidates_rejected above.",
+    "size.files": "architecture/manifest.json stats.total_files in the chosen mirror.",
+    "size.lines": "architecture/manifest.json stats.total_lines in the chosen mirror.",
+    "size.lines_by_class": "architecture/manifest.json stats.lines_by_class in the chosen mirror.",
+    "language_mix.by_language_lines": "architecture/manifest.json stats.languages in the chosen mirror.",
+    "language_mix.by_language_share_percent": "Derived: each stats.languages[lang] / stats.total_lines * 100, rounded to 4 decimals.",
+    "language_mix.tiers": "Derived from stats.languages partitioned by tier_determination.sources; see language_mix.tier_determination.",
+    "language_mix.tiers_code_only": "See language_mix.tiers_code_only.provenance above (per-file path/language/size_bytes from the 254 architecture/data/detail-*.json shards, classified with analyzer.derive.pipeline._file_line_class imported as a library, cross-tab verified against stats.lines_by_class).",
+    "components.count": "architecture/manifest.json stats.total_components and len(component_detail_index), cross-checked by tree walk.",
+    "components.max_drill_depth": "Tree walk of architecture/manifest.json .components, max recursion depth reached.",
+    "documentation_density": "architecture/manifest.json stats.lines_by_class.docs and .code.",
+    "external_dependency_count": "Not measured; see external_dependency_count_note. architecture/ai.json manifest_sections key 'supply_chain', present:false.",
+    "enrichment_coverage": "Tree walk of architecture/manifest.json .components, presence of ai_enhance.help_text.",
+    "coverage_ledger": "See coverage_ledger.provenance above.",
+    "viewport_fit_zoom": "Not measured; browser tool unavailable for this task (another job holds it). Left null per task instruction."
+  }
+}

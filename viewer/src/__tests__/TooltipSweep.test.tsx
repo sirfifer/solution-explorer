@@ -126,6 +126,7 @@ describe("tooltip copy quality", () => {
         TOOLTIP_COPY.supplyChain.transitive,
       ],
       "evidence.link": [TOOLTIP_COPY.evidence.link],
+      "inventoryLens.externalDependencies": [TOOLTIP_COPY.inventoryLens.externalDependencies],
       "tours.stale": [TOOLTIP_COPY.tours.stale],
       "directive.export": [TOOLTIP_COPY.directive.export],
       "directive.exemption": [TOOLTIP_COPY.directive.exemption],

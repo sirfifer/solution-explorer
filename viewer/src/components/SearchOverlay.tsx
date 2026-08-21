@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useArchStore } from "../store";
-import { search, loadSearchShards, type SearchResult } from "../utils/search";
+import {
+  search,
+  loadSearchShards,
+  getShardLoadState,
+  subscribeShardLoadState,
+  type SearchResult,
+  type ShardLoadState,
+} from "../utils/search";
 import { getLanguageColor } from "../utils/layout";
 
 export function SearchOverlay() {
@@ -12,6 +19,8 @@ export function SearchOverlay() {
     navigateToComponent,
     showDetail,
     openFileDeepLink,
+    loadComponentDetail,
+    getComponentSymbols,
     architecture,
     darkMode,
     createSetFromSearchResults,
@@ -19,6 +28,16 @@ export function SearchOverlay() {
   } = useArchStore();
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  // Mirrors search.ts's shard-load state so results drawn only from the
+  // already-loaded architecture aren't presented as complete while shards are
+  // still filling in descriptions/docstrings/AI text (or failed to load at
+  // all). A subscription rather than polling: search.ts owns the state as
+  // plain module data (no React dependency there), so the component syncs to
+  // it via a small pub/sub instead of pulling the whole module into the store.
+  const [shardLoadState, setShardLoadStateLocal] = useState<ShardLoadState>(getShardLoadState());
+  useEffect(() => subscribeShardLoadState(setShardLoadStateLocal), []);
+  const shardsPending =
+    shardLoadState === "loading" || shardLoadState === "partial" || shardLoadState === "failed";
 
   const results = useMemo(
     () => (searchQuery ? search(searchQuery) : []),
@@ -104,9 +123,27 @@ export function SearchOverlay() {
         showDetail("symbol", sym);
       } else if (result.componentId) {
         // Split-mode symbol found via the shard index before its component was
-        // opened: navigate to the owning component, whose detail fetch will load
-        // it (P6-4).
-        navigateToComponent(result.componentId);
+        // opened: navigate to the owning component, then once its detail fetch
+        // resolves, re-resolve the symbol from the loaded detail and open it
+        // (O3). navigateToComponent is synchronous; the detail load is not, so
+        // the symbol open has to happen in a follow-up once loadComponentDetail
+        // settles. Guarded against the user navigating elsewhere in the
+        // meantime, so a slow fetch cannot pop open a stale symbol over
+        // whatever the user is looking at by the time it resolves.
+        const targetComponentId = result.componentId;
+        const targetSymbolId = result.id;
+        navigateToComponent(targetComponentId);
+        void loadComponentDetail(targetComponentId).then(() => {
+          if (useArchStore.getState().selectedComponentId !== targetComponentId) {
+            return;
+          }
+          const match = getComponentSymbols(targetComponentId).find(
+            (s) => s.id === targetSymbolId,
+          );
+          if (match) {
+            showDetail("symbol", match);
+          }
+        });
       }
     }
     setSearchOpen(false);
@@ -240,6 +277,22 @@ export function SearchOverlay() {
             <span><kbd className={`px-1 rounded ${darkMode ? "bg-zinc-800" : "bg-zinc-100"}`}>Enter</kbd> Select</span>
           </div>
           <div className="flex items-center gap-3">
+            {shardsPending && (
+              <span
+                className={
+                  shardLoadState === "failed"
+                    ? darkMode ? "text-amber-500/80" : "text-amber-600"
+                    : darkMode ? "text-zinc-500" : "text-zinc-400"
+                }
+                title={
+                  shardLoadState === "failed"
+                    ? "Some search shards failed to load; results may be incomplete."
+                    : "Still loading the full search index; results may be incomplete."
+                }
+              >
+                {shardLoadState === "loading" ? "Indexing…" : "Index incomplete"}
+              </span>
+            )}
             {results.length > 0 && (
               <button
                 onClick={handleMakeSet}

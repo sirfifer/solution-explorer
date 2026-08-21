@@ -60,6 +60,51 @@ let shardsLoadStarted = false;
 // Flat view rebuilt from baseResults + detail entries + shard entries.
 let allResults: SearchResult[] = [];
 
+// How many shard requests loadSearchShards keeps in flight at once. Bounded
+// rather than unbounded: firing all ~85 requests at once risks connection-pool
+// exhaustion (HTTP/1.1 browsers cap at ~6 connections per origin) and can end
+// up slower than a small pool. 6 fully uses that per-origin limit without
+// queuing overhead, and stays comfortably safe under HTTP/2 multiplexing too.
+const SHARD_FETCH_CONCURRENCY = 6;
+
+// Whether the background shard load (loadSearchShards) is in progress, done,
+// or has failed outright. Exposed so SearchOverlay can tell the user results
+// may be incomplete instead of presenting a partially-loaded index as final
+// (comprehension-study: "trustworthy map" is the product's central claim).
+// Plain module state + pub/sub, matching the rest of this file's style (no
+// React import here); the component subscribes and mirrors it into useState.
+/**
+ * State of the background search-shard load.
+ *
+ * "partial" means some shards loaded and at least one did not, so the index is
+ * usable but genuinely incomplete. It is distinct from "failed", where nothing
+ * loaded at all. Both must be surfaced: presenting an incomplete index as
+ * complete is the defect this state exists to prevent.
+ */
+export type ShardLoadState = "idle" | "loading" | "loaded" | "partial" | "failed";
+let shardLoadState: ShardLoadState = "idle";
+const shardLoadListeners = new Set<(state: ShardLoadState) => void>();
+
+function setShardLoadState(next: ShardLoadState) {
+  shardLoadState = next;
+  for (const listener of shardLoadListeners) listener(next);
+}
+
+/** Current state of the background shard load. See ShardLoadState. */
+export function getShardLoadState(): ShardLoadState {
+  return shardLoadState;
+}
+
+/** Subscribe to shard-load state changes. Returns an unsubscribe function. */
+export function subscribeShardLoadState(
+  listener: (state: ShardLoadState) => void,
+): () => void {
+  shardLoadListeners.add(listener);
+  return () => {
+    shardLoadListeners.delete(listener);
+  };
+}
+
 // Merge all sources into one deduplicated, Fuse-indexed list. Entries are keyed
 // by `${type}:${id}`; when a shard entry and a base entry share a key the base
 // metadata (kind/language) is preserved and the shard's free text is folded in,
@@ -128,6 +173,7 @@ export function initializeSearch(arch: Architecture) {
   // set to be fetched again. Detail-derived entries are preserved separately.
   shardResults = [];
   shardsLoadStarted = false;
+  setShardLoadState("idle");
 
   // Index components
   function indexComponents(components: Component[]) {
@@ -245,6 +291,7 @@ export function addShardEntries(entries: ShardEntry[]) {
 export function resetShardSearchEntries() {
   shardResults = [];
   shardsLoadStarted = false;
+  setShardLoadState("idle");
   rebuildFuse();
 }
 
@@ -252,26 +299,77 @@ export function resetShardSearchEntries() {
  * Lazily load the prebuilt search shards and merge them into the index (P6-4).
  * Idempotent (loads once per session). Degrades silently when no shards exist
  * (monolithic or pre-v2 datasets), so this is safe to call unconditionally.
+ *
+ * Shards are fetched with bounded concurrency (SHARD_FETCH_CONCURRENCY workers
+ * pulling from a shared index cursor) rather than sequentially: over a real
+ * network the per-request round trip, not bandwidth, dominates load time for a
+ * large shard set. Results are written into a slot pre-assigned by each
+ * shard's position in the manifest, so the entries handed to addShardEntries
+ * are always assembled in shard-manifest order regardless of which fetch
+ * finishes first. That determinism matters: Fuse ranking / tie-breaking can
+ * depend on stable input order, and a nondeterministic index would make
+ * results and tests flaky.
  */
 export async function loadSearchShards(baseUrl = "./architecture/search"): Promise<void> {
   if (shardsLoadStarted) return;
   shardsLoadStarted = true;
+  setShardLoadState("loading");
   try {
     const manifestRes = await fetch(`${baseUrl}/manifest.json`);
     const isJson = manifestRes.ok && (manifestRes.headers.get("content-type")?.includes("json") ?? false);
-    if (!isJson) return;
+    if (!isJson) {
+      // No shard set for this dataset (monolith / pre-v2). Nothing to load,
+      // so the index is already complete: not a failure state.
+      setShardLoadState("loaded");
+      return;
+    }
     const manifest = await manifestRes.json();
     const shardNames: string[] = Array.isArray(manifest?.shards) ? manifest.shards : [];
-    const collected: ShardEntry[] = [];
-    for (const name of shardNames) {
-      const res = await fetch(`${baseUrl}/${name}`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (Array.isArray(data)) collected.push(...(data as ShardEntry[]));
-    }
+
+    // Slot per shard index, filled out of order, read back in order.
+    const bySlot: ShardEntry[][] = new Array(shardNames.length);
+    let nextIndex = 0;
+    let missed = 0;
+    const runWorker = async () => {
+      while (nextIndex < shardNames.length) {
+        const i = nextIndex++;
+        const name = shardNames[i];
+        // One bad shard costs one shard. Letting it throw here would reject
+        // Promise.all and discard every sibling that loaded fine, so a single
+        // 404 or a single malformed file would lose the whole index instead of
+        // a fraction of it.
+        try {
+          const res = await fetch(`${baseUrl}/${name}`);
+          if (!res.ok) {
+            missed++;
+            continue;
+          }
+          const data = await res.json();
+          if (Array.isArray(data)) bySlot[i] = data as ShardEntry[];
+          else missed++;
+        } catch {
+          missed++;
+        }
+      }
+    };
+    const workerCount = Math.min(SHARD_FETCH_CONCURRENCY, shardNames.length);
+    await Promise.all(Array.from({ length: workerCount }, runWorker));
+
+    const collected: ShardEntry[] = ([] as ShardEntry[]).concat(...bySlot.filter(Boolean));
     if (collected.length > 0) addShardEntries(collected);
+    // A shard we could not read is missing content, so the index is genuinely
+    // incomplete and must not be reported as complete. Partial and total loss
+    // are distinguished because they are different facts, though both tell the
+    // user the same thing.
+    if (missed === 0) setShardLoadState("loaded");
+    else if (collected.length > 0) setShardLoadState("partial");
+    else setShardLoadState("failed");
   } catch {
-    // Best-effort: a missing shard set is not an error (monolith / old data).
+    // Best-effort: a missing shard set is not an error (monolith / old data),
+    // but a genuine failure here (network error, malformed manifest/shard
+    // JSON) must not be reported as a complete index, so it's flagged
+    // distinctly from "loaded" for the UI to surface.
+    setShardLoadState("failed");
   }
 }
 

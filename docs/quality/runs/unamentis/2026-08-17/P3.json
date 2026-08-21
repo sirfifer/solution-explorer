@@ -1,0 +1,123 @@
+{
+  "charter_version": "comprehension-review/v1",
+  "subject": "unamentis",
+  "run_date": "2026-08-17",
+  "persona": "P3",
+  "retrospective": true,
+  "verdict": "No FINDINGS.md survives for this persona (confirmed absent, not merely unread); JOURNAL.md ends 'Closed the tab. Full findings and grades in FINDINGS.md,' which does not exist. No informal grade, verdict, or per-question confidence/source survives. This card is built from JOURNAL.md alone and is the thinnest of the three by design, not by oversight.",
+  "minutes_to_orientation": null,
+  "dimensions": {
+    "orientation": {
+      "score": 2,
+      "evidence": "JOURNAL.md '## First load' (01-first-load.png, 02-home-graph.png)",
+      "note": "No time marker survives for this persona at all (unlike P1's 'ten minutes in' or P2's 'ninety seconds'), so the score rests on narrative position, not a stated duration: the AI summary banner giving 'the elevator pitch in one paragraph' is the first substantive thing recorded, before any other exploration. That supports 'reached inside the time box' but not the anchor-4 'inside five minutes' claim, since no timing language exists to confirm it."
+    },
+    "model_accuracy": {
+      "score": null,
+      "evidence": "Only 1 of 5 battery questions (Q2) is scoreable at all; the other four are unscoreable per the answer key's own design (Q1, Q3, Q4 require the orchestrator to independently reproduce or verify claims against the live dataset/mirror, which this document-only retrospective does not do; Q5's answer would have lived in the missing FINDINGS.md and does not survive in JOURNAL.md). A single data point cannot support a dimension score.",
+      "note": "The answer key itself flags this asymmetry: 'P3's questions cannot be scored against subject ground truth the way P1's and P2's can.' See battery array for the one scoreable item."
+    },
+    "navigation_efficiency": {
+      "score": 2,
+      "evidence": "JOURNAL.md 'Search battery' (19-search-websocket.png, 20-docs-apispec.png) and 'Review loop' (28-review-drilled.png, 29-review-tree-click.png)",
+      "note": "Search and deep links mostly reached targets efficiently and the auth-search route is called out as clean ('That IS a navigation spine'), but the persona names an explicit dead end ('Worst moment of the session' on the websocket search result landing on an empty panel) and the Review Summary panel is reported to permanently hijack navigation afterward, overriding deep links and blocking the tree-click-to-detail-panel path."
+    },
+    "trust": {
+      "score": 0,
+      "evidence": "JOURNAL.md throughout, e.g. 'Machine pathway' ('the metadata lies in three places') and the repeated 'Filed for annotation' pattern across 'UI exploration'",
+      "note": "A power-user persona actively hunting for inconsistencies who found and logged many: duplicated relationship edges, a pytest suite classified as a production API server, a single implausible env var (CFG_SCALE), an endpoint-count contradiction (69+ vs 265, independently corroborating P2's finding), and a machine-readable front door (ai.json) that claims enrichment is absent while the manifest and UI are saturated with it."
+    },
+    "unaided_recovery": {
+      "score": 2,
+      "evidence": "JOURNAL.md 'Machine pathway' ('solved the 3.77M line mystery') and 'UI exploration' (tests-as-API-server) versus 'Machine pathway' (175 vs. 254 component count, left open: 'Which number does an agent trust?')",
+      "note": "Mixed record. Some errors were fully detected and corrected using the tool alone: the 3.77M line count was resolved by reading stats.languages in ai.json (87% JSON data files), and the 'tests' component's API-server misclassification was correctly identified as a pytest suite from its own Files/Docs tabs. Others were detected but explicitly left unresolved: the 175-vs-254 component count discrepancy and the ai.json enrichment-flag contradiction are both flagged as open questions rather than resolved to a single trusted answer."
+    },
+    "advertised_paths": {
+      "score": 0,
+      "evidence": "JOURNAL.md 'Search battery' (20-docs-apispec.png) and 'Review loop' (33-export-panel.png, 35-set-feature.png through 42-make-set.png)",
+      "note": "Several advertised features failed on first use: a search result for an advertised doc file landed on a tab the target component doesn't have, rendering an empty panel body ('Worst moment of the session'); Esc did not close the Help modal despite the shortcut list stating it should; the Review Summary panel took over the right rail and would not yield across navigation, reload, and theme toggle, and was found double-mounted in the DOM (Playwright: two 'Copy All' and two 'Clear All' buttons, with Clear All silently doing nothing); and 'Make set from 50 results' produced no visible effect at all."
+    }
+  },
+  "battery": [
+    {
+      "question": 1,
+      "verdict": "unscoreable",
+      "source": "JOURNAL.md 'UI exploration' and 'Machine pathway'",
+      "note": "The answer key requires the orchestrator to independently check every claimed agreement/disagreement directly against the live dataset's JSON mirror ('A persona claiming agreement is not evidence of agreement'). This retrospective is built from surviving documents only and performs no such live re-verification, so no correct/partial/wrong verdict can be assigned even though the journal itself documents specific disagreements (duplicated edges, a 175-vs-254 component count mismatch, the enrichment-flag contradiction)."
+    },
+    {
+      "question": 2,
+      "verdict": "correct",
+      "source": "JOURNAL.md 'Machine pathway': 'Four fetches, maybe 40KB total, answer in hand'",
+      "note": "The key accepts any order-of-magnitude estimate and only marks the answer wrong if the front door is claimed larger than the raw source. The persona's walked example (ai.json to search shard to one 20KB detail shard, ~40KB total to answer a real question) is a concrete order-of-magnitude demonstration and makes no such wrong claim."
+    },
+    {
+      "question": 3,
+      "verdict": "unscoreable",
+      "source": "JOURNAL.md 'Machine pathway' and 'Review loop', four annotations listed there",
+      "note": "The key marks this 'verified, not keyed': every instance the persona raises must be checked by the orchestrator against the dataset and source, with no fixed must-appear/wrong list to grade against. Not performed in this retrospective; the four annotations logged (endpoint-count contradiction, tests-as-API-server, duplicated edges, server-manager's dominant language) are real candidate findings but not independently confirmed here."
+    },
+    {
+      "question": 4,
+      "verdict": "unscoreable",
+      "source": "n/a",
+      "note": "The key requires the orchestrator to reproduce the persona's claimed route and time it. No such reproduction is performed in this document-only retrospective, and no explicit single 'fastest route' answer with a stated basis survives in JOURNAL.md to grade even informally."
+    },
+    {
+      "question": 5,
+      "verdict": "unscoreable",
+      "source": "n/a",
+      "note": "Graded on the key's reasoning/self-assessment basis, but no answer survives. JOURNAL.md never states whether the persona would trust the tool's output in a code review; that content would have lived in FINDINGS.md, which does not exist for this persona."
+    }
+  ],
+  "trust_incidents": [
+    {
+      "what": "The machine-readable front door (ai.json) states dataset.enriched=false and ai_enhance present=false, while the manifest carries ai_enhance on the root and on 250 of 254 components, and the UI itself is described as 'drenched in AI Insights'.",
+      "severity": "high",
+      "evidence": "JOURNAL.md 'Machine pathway': 'the metadata lies in three places'"
+    },
+    {
+      "what": "Component count disagrees across pathways: stats.total_components=175 (matches the UI header) while the components tree and the search index both report 254.",
+      "severity": "high",
+      "evidence": "JOURNAL.md 'Machine pathway'"
+    },
+    {
+      "what": "AI Insights states '69+ HTTP endpoints' for unamentis-management while the Capabilities tab lists 265 for the same component.",
+      "severity": "medium",
+      "evidence": "JOURNAL.md 'UI exploration' (07-ai-insights.png)"
+    },
+    {
+      "what": "A pytest suite ('tests' component, 50 files) is classified as an 'API Server' with Middleware patterns, and the Review export lists its httpbin test calls (GET /test, GET /get, POST /post) as the component's production API endpoints.",
+      "severity": "medium",
+      "evidence": "JOURNAL.md 'UI exploration' and 'Review loop' ('the export even self-incriminates')"
+    },
+    {
+      "what": "The sole listed ENV VAR for the JWT-authenticated management server is CFG_SCALE, a Stable Diffusion parameter, which is implausible on its face.",
+      "severity": "medium",
+      "evidence": "JOURNAL.md 'First load' / hover card (04-hover-tooltip.png)"
+    },
+    {
+      "what": "Edge/relationship dedupe is broken: 'LatencyHarness' and 'latency_harness' are listed as separate outgoing targets, and Audio's incoming list contains 'Session uses' twice.",
+      "severity": "low",
+      "evidence": "JOURNAL.md 'UI exploration'"
+    }
+  ],
+  "blocked_paths": [
+    {
+      "feature": "Search result for the advertised WebSocket protocol doc (08-WEBSOCKET.md)",
+      "evidence": "JOURNAL.md 'Search battery': 'clicking the 08-WEBSOCKET.md file result dumped me on the parent docs/api-spec component with tab=capabilities, a tab that component doesn't have, so the panel body rendered empty ... Worst moment of the session.' (20-docs-apispec.png)"
+    },
+    {
+      "feature": "Esc to close the Help modal",
+      "evidence": "JOURNAL.md 'Odds and ends': 'Esc did not close the Help modal despite the shortcut list saying \"Close panels / search: Esc.\"' (34-help.png)"
+    },
+    {
+      "feature": "Review Summary panel coexisting with normal navigation",
+      "evidence": "JOURNAL.md 'Review loop': 'the Review Summary panel takes over the right rail and will not yield. It reopens after navigation, after reload ..., after theme toggle. Tree selection stops opening the detail panel ... the whole panel is mounted twice in the DOM ... my Clear All click silently did nothing.'"
+    },
+    {
+      "feature": "'Make set from N results' / component sets",
+      "evidence": "JOURNAL.md 'Review loop': 'I clicked \"Make set from 50 results\" and nothing visible happened.' (35-set-feature.png through 42-make-set.png)"
+    }
+  ]
+}

@@ -56,7 +56,8 @@ function TestedBadge({ tested, darkMode }: { tested: boolean; darkMode: boolean 
   );
 }
 
-export function CapabilityPanel() {
+// `mobile` (O10): see FlowPanel's comment on the same prop.
+export function CapabilityPanel({ mobile = false }: { mobile?: boolean } = {}) {
   const darkMode = useArchStore((s) => s.darkMode);
   const architecture = useArchStore((s) => s.architecture);
   const selectedCapabilityId = useArchStore((s) => s.selectedCapabilityId);
@@ -80,9 +81,11 @@ export function CapabilityPanel() {
 
   const testedCount = capabilities.filter(capabilityIsTested).length;
 
-  const containerClass = `hidden md:flex flex-col w-80 shrink-0 border-r overflow-hidden ${
-    darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"
-  }`;
+  const containerClass = mobile
+    ? `flex flex-col w-full h-full overflow-hidden ${darkMode ? "bg-zinc-950" : "bg-zinc-50"}`
+    : `hidden md:flex flex-col w-80 shrink-0 border-r overflow-hidden ${
+        darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"
+      }`;
 
   return (
     <div className={containerClass}>

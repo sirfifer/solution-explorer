@@ -13,8 +13,9 @@ published on `syscorpus.com`, refreshed weekly from the owner's Mac Studio, with
 every refresh feeding fixes back into the tool. The plan, the project register
 and the execution design are agreed and decided. **All six prerequisites are
 built and merged** (PRs #96, #97, #98; `main` is green at `71e7a8d` or later).
-Nothing of the demo program itself is built yet. The next unit of work is the
-calibration run, then pre-flight measurement, then demo one.
+**N1, the calibration run, is complete** (2026-08-19,
+`docs/quality/runs/unamentis/2026-08-19/`). Nothing of the demo program itself
+is built yet. The next unit of work is pre-flight measurement, then demo one.
 
 ## State of the world
 
@@ -60,7 +61,15 @@ Decided, do not re-litigate (owner decisions 2026-08-18):
    unavailable in the local Node). They pass in CI. Do not chase them, and do not
    let a real failure hide among them: capture the failing FILE set before and
    after a change and diff the two lists.
-4. **Fixing a classification can remove an accidental exclusion elsewhere.**
+4. **The changelog reports an id-namespace migration as real churn, and every
+   pathway agrees with it.** The current UnaMentis publication shows 254 "New
+   component discovered" rows and 256 removals. Roughly 250 of those are the
+   same components re-identified with a `unamentis/` prefix; about six changed
+   for real. Verified 2026-08-19, see `ORCHESTRATOR-FINDINGS.md`. **Do not rely
+   on the projection diff for N2 or N3 until this is resolved**, or the weekly
+   findings loop will be swamped by phantom churn. This is the same shape as the
+   989-phantom-symbol-losses trap above.
+5. **Fixing a classification can remove an accidental exclusion elsewhere.**
    Stopping test directories being typed `api-server` produced 68 bogus
    "unreferenced" findings on FastAPI, because the unreferenced rule had been
    skipping them only as a side effect of the mislabel. The golden corpus caught
@@ -68,32 +77,41 @@ Decided, do not re-litigate (owner decisions 2026-08-18):
 
 ## What to do next, in order
 
-### N1. The calibration run of the Comprehension Review
+### N1. The calibration run. DONE, 2026-08-19
 
-The charter is `docs/quality/COMPREHENSION-REVIEW.md`. Read the two sections
-"Who can be a persona" and "A calibration run" before planning anything: **a
-persona must have no exposure to this repository**, which disqualifies the
-orchestrating session from the sittings and means each persona is a fresh
-context briefed only with its persona, mission, battery and URL.
+Run at `docs/quality/runs/unamentis/2026-08-19/`, baseline at
+`.../2026-08-17/`, raw persona material at
+`/Volumes/Studio/dev/.evidence/solution-explorer/persona-runs/20260819/`.
 
-Three parts:
+```
+P1 senior engineer, unfamiliar language   11/24 -> 17/24  (+6)
+P2 non-coding executive                   12/24 -> 13/24  (+1)
+P3 staff engineer, AI power user           6/24 -> 18/24  (+12, lower bound)
+Trust incidents: 17 -> 8
+```
 
-- **Before**: retrospectively score the 2026-08-17 sitting from its preserved
-  artifacts at `/Volumes/Studio/dev/.evidence/solution-explorer/persona-runs/20260817/`
-  (three journals, two findings documents, 124 screenshots). Mark
-  `"retrospective": true`, and leave any dimension the artifacts cannot support
-  as `null` rather than inventing it. This is the baseline.
-- **After**: three live sittings against `solution-explorer.unamentis.org`,
-  which now carries the fixes.
-- **Report**: `scripts/comprehension-score.py compare <after> <before>`, plus a
-  `REVIEW.md` with independent verification and the instrument retro.
+Read `REVIEW.md` in the run directory before quoting any of that. The headline
+caveats: the baseline is a floor because P3's 2026-08-17 findings document did
+not survive; P2, the commercially important persona, moved by one point; and
+advertised paths remains the weakest dimension at 2, 0 and 2.
 
-Outstanding decision for the owner: **how the personas are staffed.** Subagents
-(a fresh subagent per persona, never having read the repo) or separate sessions.
-The session that wrote this could not do it itself without invalidating the
-measurement.
+**Do not take a persona's interaction claim at face value.** Of 8 such claims
+checked in this run, 3 were false and 2 were harness artifacts; only 3 were
+real. Of 3 data and consistency claims checked, all 3 verified exactly. Agent
+personas read data reliably and perceive interfaces unreliably. One of the
+false claims was confirmed by the orchestrator against the wrong file and later
+retracted, so hold confirmations to the same standard as refutations.
 
-Run directory: `docs/quality/runs/unamentis/<date>/`.
+**Staffing is solved and reusable.** `scripts/comprehension-sitting.sh` gives a
+persona isolation by construction rather than by instruction: a working
+directory outside the repository, browser-only MCP, no skills, and a deny list
+removing Read, Bash, Grep, Glob, WebFetch, WebSearch and Agent. Verified: the
+persona has only `ToolSearch`, `Write`, `TodoWrite` and the browser. Personas
+and briefs are in `docs/quality/personas/`. Reuse both for every subject.
+
+**The charter's "B+ maps to 17 to 19 of 24" is wrong** and should be struck. The
+same sittings score 11, 12 and 6. A letter grade and the rubric measure
+different things.
 
 ### N2. Pre-flight measurement and the three-subject reconnaissance
 
@@ -113,6 +131,42 @@ gate and a comprehension review.
 
 Blocked on the owner: creating the Cloudflare Pages projects and setting
 `PREVIEW_PASSCODE`.
+
+## Deferred to the Wave 1 retrospective
+
+**The rule (owner decision, 2026-08-20).** Do not be shy about cheap
+performance, quality-of-life and fine-tuning work; do it as it comes up. But
+work whose value is *hard to establish* waits until we have more data, meaning
+late in Wave 1 or at the end of it, when a wider sampling of projects makes it
+possible to decide what is actually worth doing rather than guessing from one
+subject.
+
+**Why this rule earned its place immediately.** The search index looked
+demo-blocking on 2026-08-20: 61 MB across 84 shards, fetched sequentially. A
+restructure was scoped and approved. Measurement then showed the origin already
+serves brotli (2.9 MB over the wire, not 61 MB), that search returns usable
+results in 451 ms because it matches against the already-loaded architecture
+while shards enrich it afterwards, and that the obvious two-tier design was not
+even viable, because matching needs the `text` field so it cannot be deferred.
+The restructure was dropped for two small fixes. One subject could not tell the
+difference between "expensive at scale" and "expensive-looking on paper".
+
+**How to use this register.** Each item records what we know now and, more
+importantly, **what evidence would settle it**. At the Wave 1 retrospective,
+answer them from three subjects rather than one.
+
+| Deferred item | What we know | What would settle it |
+|---|---|---|
+| Search index restructure | Not warranted on VS Code. Brotli makes it ~2.9 MB on the wire; results are usable in 451 ms. Client-side memory and Fuse index-build cost at 167,693 entries were never measured | Whether any Wave 1 subject makes search slow *in the browser*, and the measured index-build time and memory at the largest subject's scale |
+| External dependency detection completeness | Only the honest labelling was fixed. Detection is still a hardcoded 18-domain match that counts GitHub from a CI script and misses Unleash and LiveKit entirely | Whether the same class of miss recurs across three unrelated subjects, which would show it is systemic rather than a UnaMentis quirk. Also whether declared-dependency manifests are a better signal than URL matching |
+| Cross-surface agreement gates | `ai.json`, the manifest and the admin summary each passed their own validity checks while contradicting each other. Two of this run's deepest defects shared that signature | Whether disagreements recur on other subjects, and which surface pairs are worth gating. Cheap to build, and unlike the comprehension review it could run every weekly refresh |
+| Classification accuracy audit | Does not exist. `DEMO-PROGRAM.md` 5.3 already says to specify it from what the first demo's review finds by hand, rather than guessing now | The by-hand findings from demo one, which is exactly the wider-sampling logic applied to a smaller scope |
+| Compact index encoding | Measured at 47% smaller uncompressed, but brotli already captures the same redundancy, so the benefit is client-side only | Only worth revisiting if browser memory or parse time turns out to be the real constraint at Wave 1 scale |
+
+**What is NOT deferred**, because it is cheap and its value is obvious: the
+bounded-concurrency shard fetch and the partial-results indicator; anything that
+stops a surface asserting something it cannot support; and any defect a persona
+or a gate reproduces.
 
 ### N4. Card M2, M3 and M4
 

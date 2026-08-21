@@ -1,0 +1,103 @@
+{
+  "charter_version": "comprehension-review/v1",
+  "subject": "unamentis",
+  "run_date": "2026-08-19",
+  "persona": "P2",
+  "minutes_to_orientation": 2,
+  "verdict": "B- (persona's own grade, down from the baseline's B+). Scored 13/24 against a baseline floor of 12/24. One reported blocker was withdrawn on verification; the surviving one is root-caused.",
+  "dimensions": {
+    "orientation": {
+      "score": 4,
+      "evidence": "JOURNAL.md '[t+2m] First read of the landing screen'; 02-landing.png",
+      "note": "'Inside the first two minutes, without clicking anything.'"
+    },
+    "model_accuracy": {
+      "score": 2,
+      "evidence": "FINDINGS.md section 3",
+      "note": "Q1 and Q3 correct; Q2 and Q4 partial, and they are the two questions an executive asks first. Both partials trace to the same product gap (O1) rather than to reviewer error."
+    },
+    "navigation_efficiency": {
+      "score": 2,
+      "evidence": "JOURNAL.md; 27 screenshots",
+      "note": "Reached the inventory and component surfaces but burned attempts on three routes that never resolved."
+    },
+    "trust": {
+      "score": 3,
+      "evidence": "FINDINGS.md section 5",
+      "note": "'I did not catch the tool stating anything I could actively disprove.' A clear improvement on the baseline P2, which found a mislabelled component and a 69-versus-265 endpoint contradiction. Remaining items are unverifiable rather than false: an unexplained criticality criterion covering 104 of 254 components, and a 'Live' badge shown beside 'Generated 18h ago' (O9)."
+    },
+    "unaided_recovery": {
+      "score": 2,
+      "evidence": "FINDINGS.md section 5, first bullet",
+      "note": "Suspected the criticality ratio was not actionable but could not verify the criterion from inside the tool."
+    },
+    "advertised_paths": {
+      "score": 0,
+      "evidence": "Orchestrator browser verification 2026-08-20; viewer/src/components/InventoryLensPanel.tsx container class",
+      "note": "REVISED 2026-08-20. Score unchanged at 0 but it now rests on ONE pillar, not two. WITHDRAWN: the external-dependency drill-down works. Clicking OpenAI adds exactly six buttons, the six referencing components, each navigable. The orchestrator's original root cause was wrong, having grepped InventoryPanel.tsx, the non-source-file drill-down, rather than InventoryLensPanel.tsx, which has implemented expand-and-navigate since fcdeab5 on 2026-08-18, before the mirror was generated. P2's failure was most likely an undismissed overlay: P2 drove the lens with selectOption(), a programmatic API that bypasses pointer events, so it could change lenses through an overlay that was still swallowing every real click. STANDS, and now root-caused: the Inventory lens panel is `hidden md:flex`, display:none below the 768px breakpoint, so at 390x844 selecting the Inventory lens renders no panel at all. An advertised feature that does nothing on a phone, never resolved, is the 0 anchor."
+    }
+  },
+  "battery": [
+    {
+      "question": 1,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "02-landing.png"
+    },
+    {
+      "question": 2,
+      "verdict": "partial",
+      "confidence": "medium",
+      "source": "09-database-detail-full.png, 16-management-server-detail.png",
+      "note": "Identified the database and the management API as central and unprotected, but could only infer degradation behaviour; noted the tool does not model blast radius."
+    },
+    {
+      "question": 3,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "04-inventory-lens.png, 06-inventory-clean.png",
+      "note": "Named the five vendors and the substitutability implied by the Flow narrative."
+    },
+    {
+      "question": 4,
+      "verdict": "partial",
+      "confidence": "low",
+      "source": "FINDINGS.md Q4",
+      "note": "Identified single-point-of-failure shape at component level, including that no replication or HA is shown. Did not reach the subject's actual concentration, its whole backend on one laptop, which O1 shows is unreachable through the tool."
+    },
+    {
+      "question": 5,
+      "verdict": "correct",
+      "confidence": "medium",
+      "source": "FINDINGS.md Q5",
+      "note": "Not graded against facts. Wrote the five-minute brief and assessed it honestly."
+    }
+  ],
+  "trust_incidents": [
+    {
+      "what": "104 of 254 components labelled critical or important with no discoverable criterion, a ratio too wide to prioritise from",
+      "severity": "medium",
+      "evidence": "FINDINGS.md section 5; 04-inventory-lens.png"
+    },
+    {
+      "what": "Header shows 'Generated 18h ago' and a 'Live' badge simultaneously, with no explanation of what 'Live' promises",
+      "severity": "low",
+      "evidence": "01-first-load.png; confirmed by orchestrator as O9"
+    },
+    {
+      "what": "Per-vendor usage counts (OpenAI 6 users, Anthropic 2) cannot be cross-checked because the cards do not open",
+      "severity": "low",
+      "evidence": "13-openai-detail.png"
+    }
+  ],
+  "blocked_paths": [
+    {
+      "feature": "Inventory lens renders no panel at all below the 768px breakpoint",
+      "evidence": "Verified 2026-08-20: panel container is `hidden md:flex`; at 390x844 its height is 0 and its contents are absent from visible text"
+    },
+    {
+      "feature": "No rendered diagram of the voice pipeline the home summary describes; the Flow lens is UI navigation flow",
+      "evidence": "FINDINGS.md section 6"
+    }
+  ]
+}

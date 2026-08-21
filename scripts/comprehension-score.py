@@ -246,14 +246,27 @@ def compare(run: dict, baseline: dict) -> tuple[str, bool]:
         before, after = total(baseline["cards"][p]), total(run["cards"][p])
         delta = after - before
         arrow = "same" if delta == 0 else (f"+{delta}" if delta > 0 else str(delta))
-        worse = [
-            d for d in DIMENSIONS
-            if run["cards"][p]["dimensions"][d]["score"] < baseline["cards"][p]["dimensions"][d]["score"]
-        ]
+        # A retrospective baseline is REQUIRED to carry nulls where its
+        # surviving artifacts cannot support a dimension, so a comparison must
+        # expect them. A null on either side is not a regression and not an
+        # improvement; it is an absence, and saying so is the whole point.
+        worse, incomparable = [], []
+        for d in DIMENSIONS:
+            b = baseline["cards"][p]["dimensions"][d]["score"]
+            a = run["cards"][p]["dimensions"][d]["score"]
+            if b is None or a is None:
+                incomparable.append(d)
+            elif a < b:
+                worse.append(d)
         line = f"{p} {PERSONA_NAMES[p]:<38} {before}/{MAX_TOTAL} -> {after}/{MAX_TOTAL}  ({arrow})"
         if worse:
             line += f"   REGRESSED: {', '.join(worse)}"
         lines.append(line)
+        if incomparable:
+            lines.append(
+                f"    {p}: {', '.join(incomparable)} not comparable (unscored on one side); "
+                f"{p}'s delta is a lower bound, not a measurement"
+            )
     tb = sum(len(c["trust_incidents"]) for c in baseline["cards"].values())
     tr = sum(len(c["trust_incidents"]) for c in run["cards"].values())
     lines.append("")

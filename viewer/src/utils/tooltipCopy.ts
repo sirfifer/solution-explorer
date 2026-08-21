@@ -156,7 +156,11 @@ export const TOOLTIP_COPY = {
     version: "The resolved version from a lockfile, when one is present.",
     declared: "The version constraint as written in the manifest.",
     sbomLink: "The full CycloneDX 1.5 SBOM document for interchange with other tooling.",
-    vendored: "Third-party code checked into this repo, from the coverage inventory.",
+    // Not "from the coverage inventory": vendored entries here come from the
+    // supply-chain pass directly and can be non-empty even when the dataset
+    // carries no coverage ledger at all, so the copy must not point the
+    // reader at a drill-down that may not exist (O4).
+    vendored: "Third-party code checked into this repo.",
     warning: "A manifest that was found but could not be parsed. Its dependencies are missing here.",
     fixture:
       "Dependencies from manifests under test or fixture directories. Accounted here but not counted as shipping dependencies.",
@@ -180,6 +184,15 @@ export const TOOLTIP_COPY = {
       "Copies a structured work order for an AI executor: the intent, members, files, lines, and acceptance criteria.",
     exemption: "Uncheck to leave a member out of the work order. A reason is required.",
     acceptance: "Conditions this directive must satisfy to be considered done.",
+  },
+
+  // The Inventory lens (external dependency count honesty, O2). The count is
+  // a domain-string match against a fixed list of known API domains, not a
+  // scan of every possible integration, so nowhere it appears may read as a
+  // complete count.
+  inventoryLens: {
+    externalDependencies:
+      "Matched by known API domain in source. Not an exhaustive list of dependencies.",
   },
 
   // The rationale strip fields (the colleague stand-in).
@@ -224,6 +237,7 @@ export const SWEPT_SURFACES = [
   "supplyChain.pinStatus",
   "supplyChain.scope",
   "evidence.link",
+  "inventoryLens.externalDependencies",
   "tours.stale",
   "directive.export",
   "directive.exemption",

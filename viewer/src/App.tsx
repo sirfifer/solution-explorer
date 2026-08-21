@@ -38,6 +38,8 @@ import { formatNumber, formatRelativeTime, getTypeColors } from "./utils/layout"
 import { dataUrl, getDataBase } from "./utils/dataSource";
 import { parsePublication, publicationDisplayName } from "./utils/publication";
 import { SolutionIndex } from "./components/SolutionIndex";
+import { Tooltip } from "./components/Tooltip";
+import { TOOLTIP_COPY } from "./utils/tooltipCopy";
 import type { Architecture, Component, SolutionManifest } from "./types";
 import { SOLUTION_MANIFEST_KIND } from "./types";
 
@@ -147,6 +149,75 @@ function MobileBottomSheet({ darkMode, activePanel, bottomSheet }: {
   );
 }
 
+// Whether the mobile lens sheet should mount (O10), exported so its exact
+// production logic is directly unit-testable without mounting all of <App />
+// (which unconditionally renders the ReactFlow graph, untested in jsdom here).
+// Mutually exclusive with the detail/review sheet: navigating from a lens row
+// always opens the detail sheet (store.navigateToComponent sets activePanel
+// to "detail"), and the two sheets sharing the bottom of a phone screen has
+// nowhere to go.
+export function shouldShowMobileLensSheet({ isPanelViewport, lens, activePanel }: {
+  isPanelViewport: boolean;
+  lens: string;
+  activePanel: string | null;
+}): boolean {
+  return !isPanelViewport && lens !== "structure" && activePanel !== "detail" && activePanel !== "review";
+}
+
+// The mobile counterpart to the desktop-docked lens panel (O10). Below the md
+// breakpoint the docked panel is display:none (its own `hidden md:flex`
+// wrapper), so without this a lens picked on a phone rendered nothing with no
+// explanation. Reuses the same bottom-sheet chrome as MobileBottomSheet above
+// (drag handle, rounded top, snap-driven height) rather than inventing a
+// second mobile pattern, per the fix's own preference for reuse. Exported for
+// the same testability reason as shouldShowMobileLensSheet above.
+export function MobileLensSheet({ lens, darkMode, bottomSheet }: {
+  lens: string;
+  darkMode: boolean;
+  bottomSheet: ReturnType<typeof useBottomSheet>;
+}) {
+  const { isDragging, dragOffset, sheetHeight, handlers } = bottomSheet;
+
+  const windowH = typeof window !== "undefined" ? window.innerHeight : 800;
+  const baseHeightPx = (sheetHeight / 100) * windowH;
+  const currentHeightPx = isDragging
+    ? Math.max(0, Math.min(windowH * 0.95, baseHeightPx - dragOffset))
+    : baseHeightPx;
+
+  return (
+    <div
+      className={`
+        md:hidden fixed bottom-0 left-0 right-0 z-30
+        flex flex-col rounded-t-2xl shadow-2xl
+        ${darkMode ? "bg-zinc-900 border-t border-zinc-800" : "bg-white border-t border-zinc-200"}
+      `}
+      style={{
+        height: currentHeightPx,
+        transition: isDragging ? "none" : "height 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+        willChange: isDragging ? "height" : "auto",
+        paddingBottom: `env(safe-area-inset-bottom)`,
+      }}
+    >
+      {/* Drag handle area (full width touch target) */}
+      <div
+        className="flex flex-col items-center pt-2 pb-1 cursor-grab active:cursor-grabbing touch-none shrink-0"
+        {...handlers}
+      >
+        <div className={`w-10 h-1 rounded-full ${darkMode ? "bg-zinc-700" : "bg-zinc-300"}`} />
+      </div>
+
+      <div className="flex-1 overflow-hidden min-h-0">
+        {lens === "flow" && <FlowPanel mobile />}
+        {lens === "inventory" && <InventoryLensPanel mobile />}
+        {lens === "activity" && <ActivityPanel mobile />}
+        {lens === "capability" && <CapabilityPanel mobile />}
+        {lens === "data" && <DataPanel mobile />}
+        {lens === "rules" && <RulesPanel mobile />}
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const {
     architecture,
@@ -207,6 +278,20 @@ export function App() {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
+  // One lens-panel instance per form factor (O10), matching the md: breakpoint
+  // the lens panel classes already use (narrower than the lg: detail-panel
+  // split above, so it tracks the panels' own hidden md:flex threshold rather
+  // than reusing isDesktopViewport, which would change behavior in 768-1023px).
+  const [isPanelViewport, setIsPanelViewport] = useState(
+    () => typeof window === "undefined" || window.matchMedia("(min-width: 768px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const onChange = (e: MediaQueryListEvent) => setIsPanelViewport(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   const bannerCritical = useMemo(
     () => (architecture ? collectCriticalComponents(architecture) : []),
     [architecture],
@@ -244,6 +329,18 @@ export function App() {
   const bottomSheet = useBottomSheet({
     onDismiss: () => setActivePanel(null),
     initialSnap: "peek" as SnapPoint,
+  });
+
+  // Mobile lens-panel bottom sheet (O10). A separate instance from the detail
+  // sheet above: the two are mutually exclusive (this one is mounted only when
+  // no detail/review panel is open, see the render below) but track their own
+  // drag/snap state independently. Starts at "half", not "peek": unlike the
+  // detail sheet, there is no compact peek-only header to show while collapsed
+  // (same reasoning as the review-mode snap effect further down), so peek would
+  // render a mostly blank sheet for a lens the user just deliberately picked.
+  const lensBottomSheet = useBottomSheet({
+    onDismiss: () => useArchStore.getState().setLens("structure"),
+    initialSnap: "half" as SnapPoint,
   });
 
   // Collapsible + resizable sidebar widths (restored from session storage)
@@ -792,7 +889,11 @@ export function App() {
               )}
               {bannerDependencies.length > 0 && (
                 <div className="flex items-start gap-2">
-                  <span className={`shrink-0 font-semibold uppercase tracking-wider ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>Depends on</span>
+                  <Tooltip content={TOOLTIP_COPY.inventoryLens.externalDependencies} focusable>
+                    <span className={`shrink-0 font-semibold uppercase tracking-wider underline decoration-dotted underline-offset-2 ${darkMode ? "text-indigo-500" : "text-indigo-400"}`}>
+                      Depends on (detected)
+                    </span>
+                  </Tooltip>
                   <p className="leading-relaxed">
                     {bannerDependencies.slice(0, 8).map((d) => d.name).join(", ")}
                     {bannerDependencies.length > 8 && ` and ${bannerDependencies.length - 8} more`}
@@ -982,14 +1083,18 @@ export function App() {
           </div>
         )}
 
-        {/* Graph (with the active lens's ranked panel docked left when present) */}
+        {/* Graph (with the active lens's ranked panel docked left when present).
+            The docked panel is mounted only at panel-viewport widths (O10):
+            mounting both this and the mobile lens sheet duplicated every
+            control in the DOM, the same reason the detail panel above is
+            split by isDesktopViewport rather than left to CSS alone. */}
         <main className="flex-1 relative flex overflow-hidden">
-          {lens === "flow" && <FlowPanel />}
-          {lens === "inventory" && <InventoryLensPanel />}
-          {lens === "activity" && <ActivityPanel />}
-          {lens === "capability" && <CapabilityPanel />}
-          {lens === "data" && <DataPanel />}
-          {lens === "rules" && <RulesPanel />}
+          {isPanelViewport && lens === "flow" && <FlowPanel />}
+          {isPanelViewport && lens === "inventory" && <InventoryLensPanel />}
+          {isPanelViewport && lens === "activity" && <ActivityPanel />}
+          {isPanelViewport && lens === "capability" && <CapabilityPanel />}
+          {isPanelViewport && lens === "data" && <DataPanel />}
+          {isPanelViewport && lens === "rules" && <RulesPanel />}
           <div className="flex-1 relative">
             <ReactFlowProvider>
               <ArchitectureGraph />
@@ -1048,6 +1153,22 @@ export function App() {
             darkMode={darkMode}
             activePanel={activePanel}
             bottomSheet={bottomSheet}
+          />
+        )}
+
+        {/* Lens panel - mobile bottom sheet (O10). Only when no detail/review
+            sheet is already claiming the bottom of the screen: picking a row
+            inside the lens panel navigates to a component, which opens the
+            detail sheet (navigateToComponent always sets activePanel to
+            "detail"), and the two sheets sharing the screen has nowhere to go
+            on a phone. Dismissing the detail sheet (activePanel back to null)
+            brings the lens sheet back, same as the docked panel staying put
+            beside the detail aside on desktop. */}
+        {shouldShowMobileLensSheet({ isPanelViewport, lens, activePanel }) && (
+          <MobileLensSheet
+            lens={lens}
+            darkMode={darkMode}
+            bottomSheet={lensBottomSheet}
           />
         )}
       </div>

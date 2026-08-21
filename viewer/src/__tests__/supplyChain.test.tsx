@@ -200,6 +200,26 @@ describe("SupplyChainSurface", () => {
     expect(within(dialog).getByText("node_modules")).toBeDefined();
   });
 
+  it("does not point the vendored entry at a coverage ledger the dataset does not carry (O4)", () => {
+    // This fixture has vendored entries but the architecture built from it
+    // (makeArchitecture default) carries no `coverage` key at all, which is
+    // exactly the shape of the published dataset O4 describes. Vendored rows
+    // come from the supply-chain pass, independent of the coverage ledger, so
+    // they can and do render here even with no ledger to point to.
+    const arch = makeArchitecture({ supply_chain: NPM });
+    expect(arch.coverage).toBeUndefined();
+    setArch(arch);
+    useArchStore.setState({ supplyChainOpen: true });
+    render(<SupplyChainSurface />);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByTestId("supply-chain-vendored")).toBeDefined();
+    // The vendored row's tooltip must not send the reader to a "coverage
+    // inventory" or "coverage ledger" that this dataset does not have.
+    expect(within(dialog).queryByLabelText(/coverage inventory/i)).toBeNull();
+    expect(within(dialog).queryByLabelText(/coverage ledger/i)).toBeNull();
+    expect(dialog.textContent).not.toMatch(/coverage (inventory|ledger)/i);
+  });
+
   it("closes on Escape", () => {
     setArch(makeArchitecture({ supply_chain: NPM }));
     useArchStore.setState({ supplyChainOpen: true });

@@ -31,11 +31,19 @@ __all__ = ["build_search_entries", "shard_entries", "write_search_shards", "DEFA
 DEFAULT_SHARD_SIZE = 2000
 _MAX_TEXT = 2000  # cap free text per entry so shards stay bounded
 
+# Doc-class file entries (currently: markdown, via
+# analyzer/parsers/markdown.extract_markdown_text) carry prose, not a short
+# docstring or description, so they get their own, larger cap instead of
+# raising _MAX_TEXT globally, which would balloon every symbol and component
+# entry too. Tunable independently of _MAX_TEXT.
+_MAX_DOC_TEXT = 16000
+_DOC_LANGUAGES = {"markdown"}
 
-def _clean(text: Optional[str]) -> str:
+
+def _clean(text: Optional[str], cap: int = _MAX_TEXT) -> str:
     if not text:
         return ""
-    return " ".join(str(text).split())[:_MAX_TEXT]
+    return " ".join(str(text).split())[:cap]
 
 
 def _component_file_owner(components: list) -> dict[str, str]:
@@ -68,7 +76,8 @@ def build_search_entries(arch: dict, store=None) -> list[dict]:
     entries: list[dict] = []
     seen: set[tuple[str, str]] = set()
 
-    def add(ref_kind: str, ref_id: str, name: str, path: str, component: str, text: str) -> None:
+    def add(ref_kind: str, ref_id: str, name: str, path: str, component: str, text: str,
+            *, max_text: int = _MAX_TEXT) -> None:
         key = (ref_kind, ref_id)
         if key in seen:
             return
@@ -79,7 +88,7 @@ def build_search_entries(arch: dict, store=None) -> list[dict]:
             "name": name or "",
             "path": path or "",
             "component": component or "",
-            "text": _clean(text),
+            "text": _clean(text, cap=max_text),
         })
 
     components = arch.get("components", [])
@@ -117,7 +126,9 @@ def build_search_entries(arch: dict, store=None) -> list[dict]:
     for f in arch.get("files", []):
         path = f["path"]
         name = path.rsplit("/", 1)[-1]
-        add("file", path, name, path, owner.get(path, ""), f.get("module_doc") or "")
+        doc_cap = _MAX_DOC_TEXT if f.get("language") in _DOC_LANGUAGES else _MAX_TEXT
+        add("file", path, name, path, owner.get(path, ""), f.get("module_doc") or "",
+            max_text=doc_cap)
 
     for s in arch.get("symbols", []):
         sid = s["id"]

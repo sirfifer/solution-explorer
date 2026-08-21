@@ -53,6 +53,7 @@ from typing import Optional
 
 from ..constants import LANGUAGE_MAP, SKIP_EXTENSIONS
 from ..parsers import PARSERS
+from ..parsers.markdown import extract_markdown_text
 from ..store import LOCAL_REPO, ROOT_COMPONENT, FactStore, assign_symbol_ids
 from ..utils import (
     GitignoreMatcher,
@@ -93,7 +94,12 @@ from .signals import extract_entity_signals, extract_rule_signals, extract_signa
 # like env["CFG_SCALE"] = ... are no longer inputs) and SQL entity parsing
 # blanks comments before splitting columns, so cached env_var and entity
 # signals from /6 are wrong under the new rules and must re-extract.
-EXTRACT_TIER = "p5-extract/7"
+# /8 (doc-search fix): markdown files now get a module_doc via
+# analyzer/parsers/markdown.extract_markdown_text (previously always None, so
+# every markdown search-index entry carried empty text). Markdown has no
+# parser, so parser_version() never tier-tags it; bumping EXTRACT_TIER is the
+# only way to invalidate cached FileFacts rows that predate this fix.
+EXTRACT_TIER = "p5-extract/8"
 INLINE_THRESHOLD = 8  # below this many cache misses, parse inline (no pool)
 
 # In-run retry for transient extraction failures (P4-8). A worker crash, an
@@ -200,7 +206,17 @@ def _parse_worker(task: tuple[str, str, str, str]) -> tuple[str, str, object]:
         parser = PARSERS.get(language)
         symbols = parser.extract_nested_symbols(content, rel) if parser else []
         imports = sorted(set(parser.extract_imports(content))) if parser else []
-        module_doc = parser.extract_file_doc(content) if parser else None
+        if parser:
+            module_doc = parser.extract_file_doc(content)
+        elif language == "markdown":
+            # Markdown has no code-language parser (PARSERS registers none for
+            # "markdown" by design; see analyzer/parsers/markdown.py) so it is
+            # not routed through extract_signals below, which stays gated on
+            # `parser` to keep the regex signal pipeline (URLs, HTTP/DB/queue
+            # drivers, endpoints, CLI commands, ...) off documentation prose.
+            module_doc = extract_markdown_text(content)
+        else:
+            module_doc = None
         signals = extract_signals(content, language, parser) if parser else []
         # Entity signals are parser-independent (pure regex), so they run for
         # both code files and parser-less schema files (P5-2, Data lens L3).
