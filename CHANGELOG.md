@@ -14,15 +14,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Inbound deep links**: `?file=&line=` URLs drill to the owning component and select the symbol at that line, with graceful handling of ambiguous and missing targets.
 - **Annotation persistence**: Review annotations persist to localStorage under the architecture's stable identity and survive a hard reload.
 - **`--engine v1` rollback flag**: The legacy single-pass scanner remains selectable for rollback and is scheduled for removal at a later gate.
+- **Markdown documentation search**: Markdown documentation content is now indexed and searchable alongside components, files, and symbols.
+- **Mobile lens bottom sheet**: Lens panels are usable below 768px via a mobile bottom sheet.
+- **Bounded-concurrency search shard loading**: Search shards load with bounded concurrency and a load-state indicator, including a partial-load state.
+- **Comprehension Review instrument**: A three-persona comprehension study instrument, with its first calibration run (N1) complete.
 
 ### Changed
 
 - Default single-repo and multi-repo paths (`npx`, `build.sh`, the GitHub Action, the workflows) emit uncapped `--split` output; single-file mode still warns loudly when it truncates, naming the count and the flags that lift the cap.
+- External dependency counts are labelled as detected, not complete, so the viewer no longer overclaims exhaustive coverage of a project's dependencies.
+- Admin summary now uses `stats.total_components`, the analyzer's own authoritative count, with a viewer warning when it disagrees with another surface's count.
 
 ### Fixed
 
 - Browser back and forward no longer corrupt drill state or grow the history stack.
 - Live refresh no longer wipes the search index or serves stale detail data.
+- Projection diff no longer reports an id-namespace change (e.g. a re-identification prefix) as mass component add/remove churn; it is now its own re-identification change kind (`analyzer/project/id_normalization.py`).
+- Symbol search now resolves to the symbol after its component detail finishes loading, instead of racing it.
+- Coverage surfaces no longer reference a coverage ledger that does not exist for datasets where one was never generated.
 
 ## [1.2.0] - 2026-07-11
 

@@ -409,7 +409,7 @@ gate, comprehension instrument) AND the first exposure of the analyzer to a
 codebase nobody here has mapped. If the subject is also structurally exotic,
 every failure is ambiguous: harness bug, analyzer gap, or subject weirdness. VS
 Code's analyzer behaviour is already partly known from the Phase 4 benchmark
-(16,482 files, 3.47M lines, 152 s cold, complete ledger), so a failure is far
+(15,256 files, 4,936,720 lines, 136.5 s cold, complete ledger), so a failure is far
 more likely to be attributable to the new machinery.
 
 **A pattern is established on the case where the pattern is the thing under

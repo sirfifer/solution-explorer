@@ -20,7 +20,7 @@ Full-screen modal (`AdminDashboard.tsx`) with 5 tabs: Health, Activity, History,
 `useLiveMonitor.ts` implements adaptive polling (15s-120s based on update freshness), ETag-based conditional GET, circuit breaker with slow-retry backoff (5 failures -> 60s pause -> 5-min retry intervals), tab visibility pause/resume, localStorage caching, and a 30-minute full refresh safety net.
 
 ### Stream F: GitHub Actions Workflow
-`live-monitor.yml` runs on push and workflow completion. Uses `actions/deploy-pages` (official GitHub action). Concurrency group on `github.ref` prevents deployment races. `scripts/collect-ci-status.py` queries the GitHub API for workflow statuses. `scripts/generate-admin-summary.py` produces the admin dashboard data.
+`live-monitor.yml` runs on push and workflow completion. Uses `actions/deploy-pages` (official GitHub action). Concurrency group on `github.ref` prevents deployment races. `scripts/collect-ci-status.py` queries the GitHub API for workflow statuses. `scripts/generate-admin-summary.py` produces the admin dashboard data, using `stats.total_components` as the authoritative component count; the viewer warns when this disagrees with another surface's count.
 
 ### Stream G: Incremental Analyzer
 `analyzer/incremental.py` (1400+ lines) performs git-diff based selective re-analysis. Stores analyzer version in baseline to trigger full rescan on parser upgrades. CLI flags: `--incremental`, `--base-sha`, `--head-sha`, `--baseline`. Falls back to full rescan when >50% files change, marker files are modified, or on force push.

@@ -151,7 +151,7 @@ solution-explorer/
 │   ├── config_parsers.py # Config file parsers
 │   ├── constants.py    # Shared constants
 │   └── utils.py        # Shared helpers
-├── tests/              # Python test suite (370 tests)
+├── tests/              # Python test suite (1,642 tests)
 ├── action.yml          # GitHub Action definition
 ├── build.sh            # Static site build script
 └── viewer/             # React/TypeScript frontend

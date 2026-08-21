@@ -93,9 +93,39 @@ Click any node to open the detail panel on the right side of the screen. The pan
 
 In split mode (for larger codebases), the detail panel lazy-loads component data on demand, showing a brief loading state while symbols and files are fetched from per-component JSON files.
 
+### Lenses
+
+The graph answers "what is here". Lenses answer narrower questions without
+making you leave it. A selector above the canvas switches between them. Structure
+is the default view; the other six dock their own ranked panel beside the graph
+while the graph itself stays live and navigable.
+
+| Lens | The question it answers |
+|------|-------------------------|
+| **Structure** | How is the system composed? The default view |
+| **Inventory** | What is critical, what does this depend on, and what ports does it listen on? |
+| **Flow** | How does a user move through the application? |
+| **Activity** | Where is the code changing? |
+| **Capability** | What can this system do, expressed as capabilities rather than files? |
+| **Data** | What data exists, and which entities relate to which? |
+| **Rules** | What business rules are encoded, and where? |
+
+A lens only appears when the loaded dataset can actually answer its question. A
+project with no detected business rules does not get a Rules lens showing an
+empty panel; the lens is simply absent. This is the same principle the coverage
+ledger follows, applied to navigation: offer nothing you cannot substantiate.
+
+Every row in a lens panel is a way back into the graph: clicking a critical
+component, an external dependency's caller, or a listening port navigates
+straight to the component that owns it. On a phone the panel becomes a bottom
+sheet rather than disappearing, so a lens is usable in a hallway, not only at a
+desk.
+
 ### Search
 
-Press Cmd+K (or Ctrl+K) to open a spotlight-style search overlay. Fuzzy matching powered by Fuse.js searches across all components, files, and symbols simultaneously. Results show a type icon, name, path, language dot, and kind badge. Navigate with arrow keys, press Enter to select. The result counter shows how many matches exist (up to 50 displayed). In split mode, the search index builds progressively as components are explored.
+Press Cmd+K (or Ctrl+K) to open a spotlight-style search overlay. Fuzzy matching powered by Fuse.js searches across components, files, symbols, and the text of the project's own documentation simultaneously. That last one matters more than it sounds: a system's most important facts are often written in prose rather than expressed in code, and a map that indexes Markdown by filename alone cannot lead anyone to them. Results show a type icon, name, path, language dot, and kind badge. Navigate with arrow keys, press Enter to select. The result counter shows how many matches exist (up to 50 displayed).
+
+In split mode the index arrives in shards, fetched in parallel in the background. Search is usable immediately against what is already loaded, and the overlay says so: it reports that it is still indexing rather than presenting a partially-loaded index as a complete one, and says plainly if a shard failed to arrive.
 
 ### The Tree Navigator
 
@@ -194,7 +224,7 @@ How it works:
 
 **SwiftUI flow detection** is a specialized capability. The SwiftUIFlowDetector identifies TabView tabs, NavigationLink targets, sheet and fullScreenCover modals, and embedded view composition. It uses distance-based breadth-first search to assign screens to their closest tab, preventing contamination across navigation hierarchies. The result is a faithful representation of an iOS app's navigation structure rendered as navigable nodes in the viewer.
 
-**Analysis engine (v2, default).** The default engine is an extract, derive, project pipeline over a persistent fact store. Extraction parses each file once and records its symbols and signals in the store, keyed by content hash, so a warm run re-parses only the files whose content changed. Derivation builds components, relationships, and metrics from the store without re-reading source. Projection writes the same `architecture.json` or split output the viewer already renders. Two properties fall out of this design: a coverage ledger that accounts for every file under the root exactly once (parsed, skipped for a stated reason, or inside a pruned directory recorded as a single row), and incremental analysis by construction (the store is the baseline, so `--incremental` and its sibling flags are accepted as no-ops). There is no symbol cap in v2. On the VS Code codebase (about 3.47M lines) a cold run took 152 seconds and produced a complete ledger. The legacy v1 single-pass scanner remains available via `--engine v1` for rollback and is scheduled for removal at a later gate.
+**Analysis engine (v2, default).** The default engine is an extract, derive, project pipeline over a persistent fact store. Extraction parses each file once and records its symbols and signals in the store, keyed by content hash, so a warm run re-parses only the files whose content changed. Derivation builds components, relationships, and metrics from the store without re-reading source. Projection writes the same `architecture.json` or split output the viewer already renders. Two properties fall out of this design: a coverage ledger that accounts for every file under the root exactly once (parsed, skipped for a stated reason, or inside a pruned directory recorded as a single row), and incremental analysis by construction (the store is the baseline, so `--incremental` and its sibling flags are accepted as no-ops). There is no symbol cap in v2. On the VS Code codebase (4.94M lines across 15,256 parsed files) a cold run took 136 seconds, peaked at 1.9 GB, and produced a complete ledger. The legacy v1 single-pass scanner remains available via `--engine v1` for rollback and is scheduled for removal at a later gate.
 
 **Output modes:** The analyzer supports two output formats. Single-file mode produces one `architecture.json` with everything. Split mode (`--split` flag) produces a directory with a lightweight `manifest.json` (~20-100 KB) containing the component tree, relationships, and stats, plus per-component detail files loaded on demand. Under the legacy v1 engine, single-file mode applies a configurable default 5,000 symbol cap (lifted with `--max-symbols 0` or `--split`); the default v2 engine never caps symbols.
 
@@ -224,6 +254,19 @@ All AI data lives in optional `ai_enhance` sub-objects at the component, relatio
 The viewer is built with React 19, TypeScript, and Tailwind CSS. React Flow renders the graph. ELK (Eclipse Layout Kernel) computes automatic layouts. Zustand manages state. Vite builds the production bundle.
 
 The key architectural decision in the viewer is hierarchical drill-down. At any level of the hierarchy, the viewer displays at most ~100 nodes. This keeps React Flow's SVG-based rendering performant without needing a Canvas or WebGL replacement. The performance bottleneck in architecture visualization is never the rendering engine. It is data loading. Split mode addresses this: the manifest loads on startup (~20-100 KB), and per-component details load on demand when a user opens a detail panel.
+
+### The Machine Front Door
+
+The viewer is not the only consumer of a projection. Every published map also
+carries an `ai.json` front door and an `llms.txt` pointer, and an MCP server
+exposes the same facts as tools an AI agent can call directly: overview, search,
+component detail, rules, findings, coverage. An agent answering a question about
+an unfamiliar codebase can read a structured projection instead of the raw
+repository, which is a different order of magnitude of context.
+
+This is the same design principle as the viewer, applied to a different reader.
+Both consume the fact store; neither is privileged. A claim that appears in one
+and not the other is a defect, and the two are checked against each other.
 
 ### Deployment
 
@@ -352,6 +395,76 @@ The work since 1.2.0 replaced the in-memory scanner with the default v2 extract,
 
 The package version is reconciled to **1.2.0** across `pyproject.toml`, the CLI package, and the viewer, and the CHANGELOG carries a 1.2.0 entry. The tagged release and the npm and PyPI publish are prepared but not yet done, pending the maintainer setting the publish credentials, so `npx solution-explorer` is not on the public registries yet. The CHANGELOG is the authoritative record of release dates.
 
+### After the Index Engine: Measuring Whether the Map Can Be Trusted
+
+Everything above is a story about capability: more languages, more coverage,
+more surfaces. The next chapter is a different kind of work, and a more
+uncomfortable one.
+
+The claim at the centre of this project is that a person who does not know a
+codebase, or even its language, can navigate it, work out how it fits together,
+and start finding real issues, without an AI holding their hand. That claim had
+never actually been measured. It had been assumed, demonstrated informally, and
+believed. So an instrument was built to test it: the Comprehension Review. Three
+fixed personas run genuinely cold against a deployed map, each with a mission
+and a five-question battery. A senior engineer who does not know the subject's
+language. A technology executive who last wrote code fifteen years ago. A staff
+engineer who drives tools hard and distrusts anything derived. Their answers are
+scored against a key built independently from the subject's own source, so the
+tool is never graded against its own output.
+
+The first run measured the same subject before and after a known change, so the
+instrument and the change could be validated together. What it surfaced was not
+a list of rough edges. Almost every finding was the same species of defect: a
+place where the map said more than it could support.
+
+Documentation was indexed by filename only. Every one of a subject's 233
+Markdown files was in the search index with its content empty, which meant the
+single richest description of that system was invisible to anyone searching for
+what it said. Two reviewers, months apart and working independently, both failed
+to discover that the subject's entire backend ran on one laptop, a fact its own
+documentation stated plainly, because that fact lived in prose. The changelog
+reported an identifier-scheme change as 254 newly discovered components when
+about six had genuinely changed. A count of five external dependencies was
+presented as fact when the method behind it was matching a hardcoded list of
+domains, one of which had been picked up from a continuous-integration script.
+An administrative overlay served data six months old, republished on every run
+so that every freshness signal available said it was current.
+
+The shape those failures share is the important part. **None of them looked
+wrong.** A component count of 251 sitting beside 254 reads as a scoping
+difference. "254 components added" reads as an active week. That is the
+dangerous failure mode for a comprehension tool: not an error a reader catches
+and discounts, but a plausible number they carry into a decision. A tool that is
+obviously broken costs you an afternoon. A tool that is quietly, credibly wrong
+costs you the decision you made on top of it.
+
+So the fixes were less about features than about epistemics. Documentation
+content is indexed. Identifier migrations are detected and reported as
+re-identification rather than discovery. Dependency counts say they were
+detected by matching known domains, and that the list is not exhaustive. When
+two published surfaces disagree about the same number, the interface now says so
+loudly instead of showing both as though they agreed. Where the tool cannot
+support a claim, it now declines to make it. That is a harder product to
+demonstrate and a much easier one to trust.
+
+The instrument corrected itself in the process, which is the part worth
+repeating to anyone building something similar. A reviewer reported that the
+graph never rendered; their own screenshot, taken during the attempt, showed it
+rendered. Across the run, reviewer claims about *data* proved reliable and their
+claims about *interfaces* frequently did not. So every claim is now verified
+against source or evidence before it counts, in both directions, and a
+confirmation is held to the same standard as a contradiction. Two of the
+verifier's own findings turned out to be wrong for exactly the opposite reason:
+a plausible fact, a partial check, a confident conclusion.
+
+Where this leads is a programme of published maps: well-known open-source
+codebases, mapped by the tool, refreshed on a schedule, with every refresh
+feeding what it exposes back into the engine. Any map good enough to publish
+under its subject's name is a map worth trusting. None of that is built yet. The
+instrument that decides when it is ready, however, now exists, and it has
+already been sharp enough to be unflattering.
+
 ### The Decision Not to Rewrite
 
 Before the v1.1.0 refactor, a thorough architectural assessment was conducted. Research into Sourcegraph, Sourcetrail, CodeScene, NDepend, Structure101, Semgrep, SonarQube, and other tools informed the key decisions.
@@ -376,7 +489,7 @@ All three Wave 2 features have shipped:
 
 **Bidirectional navigation.** Inbound deep-link URLs let external tools navigate into the viewer. An AI assistant can output a link like `?file=Sources/Auth/LoginView.swift&line=42`, and opening it drills into the owning component and selects the symbol at that line. Ambiguous and missing targets degrade gracefully rather than crashing.
 
-See [docs/ui-actions-source-linking-plan.md](docs/ui-actions-source-linking-plan.md) for the original implementation plan (a historical snapshot).
+See [docs/archive/ui-actions-source-linking-plan.md](docs/archive/ui-actions-source-linking-plan.md) for the original implementation plan, archived now that all three have shipped.
 
 ### Wave 3: Scale Hardening (Future)
 
@@ -416,23 +529,27 @@ For projects exceeding 5,000 files, additional optimizations are planned:
 
 | Metric | Value |
 |--------|-------|
-| Languages (full parsing) | 6 parser pairs (Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby), each with regex + tree-sitter |
-| Languages (detection + metrics) | 10+ |
+| Languages (full parsing) | 9 parser pairs (Swift, Python, Rust, TypeScript/JavaScript, Go, Ruby, Java, C#, C/C++), each with regex + tree-sitter |
+| Languages (detection + metrics) | 7 (Kotlin, Dart, Vue, Svelte, HTML/CSS, SQL, Shell) |
 | Component types recognized | 21 |
 | Architectural roles (AI) | 18 |
 | Device frame styles | 10 |
 | Annotation target types | 9 |
 | Detail panel tabs | 6 |
-| CI workflows | 3 (quality gate, architecture viz, live monitor) |
+| Lenses | 7 (Structure, Inventory, Flow, Activity, Capability, Data, Rules), each shown only when the dataset supports it |
+| Comprehension Review personas | 3, each scored on 6 dimensions |
+| CI workflows | 9 (quality gate, architecture viz, live monitor, golden corpus, GUI plan check, SBOM, scorecard, release, downstream deploy) |
 
 ### Related Documents
 
 | Document | Purpose |
 |----------|---------|
 | [README.md](README.md) | Installation, configuration, CLI reference, deployment options |
-| [docs/architecture.md](docs/architecture.md) | Technical architecture, data model, design decisions |
+| [docs/quality/COMPREHENSION-REVIEW.md](docs/quality/COMPREHENSION-REVIEW.md) | The instrument that measures whether the map teaches: personas, battery, rubric, answer keys |
+| [docs/publication/PREFLIGHT-MEASUREMENTS.md](docs/publication/PREFLIGHT-MEASUREMENTS.md) | Measured scale, timing and cost figures per subject |
+| [docs/architecture.md](docs/architecture.md) | Technical architecture and data model. **Predates v1.2.0; see its banner** |
 | [docs/architectural-assessment.md](docs/architectural-assessment.md) | Technical design decisions, industry research, evolution plan |
-| [docs/analyzer-package.md](docs/analyzer-package.md) | Analyzer package structure and module guide |
+| [docs/analyzer-package.md](docs/analyzer-package.md) | Analyzer package structure and module guide. **Predates v1.2.0; see its banner** |
 | [docs/archive/live-architecture-monitoring.md](docs/archive/live-architecture-monitoring.md) | Live monitoring design, cost analysis, dual-mode architecture (historical) |
-| [docs/ui-actions-source-linking-plan.md](docs/ui-actions-source-linking-plan.md) | Wave 2 feature design (UI actions, source linking, deep navigation), a historical snapshot now that all three have shipped |
+| [docs/archive/ui-actions-source-linking-plan.md](docs/archive/ui-actions-source-linking-plan.md) | Wave 2 feature design (UI actions, source linking, deep navigation). Archived; all three shipped |
 | [DEPLOYMENTS.md](DEPLOYMENTS.md) | Installation tracking and redeployment guide |

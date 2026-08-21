@@ -23,12 +23,12 @@ What exists and is verifiable:
 
 | Driver | Evidence |
 |---|---|
-| Working product at real scale | VS Code measured: 16,482 files, 3.47M lines, 152s cold / 121s warm, complete coverage ledger |
+| Working product at real scale | VS Code measured: 15,256 files, 4,936,720 lines, 136.5s cold / 95.5s warm, complete coverage ledger |
 | Verifiable-accuracy thesis | Coverage ledger (every file accounted for), publish gate, preview gate, provenance stamping, "no theater" rule enforced by instrument |
 | Comprehension instrument with scores | Three-persona study (B+), N1 calibration run: P1 11 to 17/24, P3 6 to 16/24, trust incidents 17 to 8 |
 | Language breadth | 9 full-parse groups (Swift, Python, Rust, TS/JS, Go, Ruby, Java, C#, C/C++), detect+metrics for the rest |
 | Multi-repo composition | M1 shipped (composition without cross-repo edges); M2-M4 designed, not built |
-| Engineering hygiene | 1,609 passing tests, golden corpora with parity guards, CI green, SBOM, CRA readiness artifact |
+| Engineering hygiene | 1,642 passing tests, golden corpora with parity guards, CI green, SBOM, CRA readiness artifact |
 | AI-era angles | Machine front door (`ai.json`, `llms.txt`): agents consume the enumeration at a fraction of raw-repo token cost |
 | Clean IP | One human contributor plus dependabot; solo copyright; FSL-1.1-ALv2; license review and consent policy already built for demos |
 | Operational maturity path | Weekly refresh harness designed (gates, provenance, findings loop); demos as living infrastructure, not screenshots |

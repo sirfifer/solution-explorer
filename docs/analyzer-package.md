@@ -1,3 +1,5 @@
+> **Historical snapshot (written 2026-02-18, banner added 2026-08-20).** This document describes the `analyzer/` package as it existed then and is kept for its research and reasoning, not as a description of the current codebase. Since it was written, tree-sitter parsers replaced the six regex-only parsers it describes, the analyzer was rebuilt around the default v2 extract, derive, project index engine with a coverage ledger, and an MCP server (`solution-explorer-mcp`) shipped for AI agents. None of that exists in the description below. Treat this document as the state on 2026-02-18. See CHANGELOG.md and PROJECT-OVERVIEW.md for what ships today.
+
 # Analyzer Package Architecture
 
 The `analyzer/` package is the core of Solution Explorer's static analysis. It scans codebases to extract components, relationships, symbols, and metrics, producing structured JSON for the interactive viewer.
