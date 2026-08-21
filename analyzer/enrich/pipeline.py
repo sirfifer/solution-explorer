@@ -558,8 +558,14 @@ def build_run_context(
 
     owned = store is None
     store = store or FactStore(str(config.store_path))
+    # Coerce the paths here rather than trusting the dataclass annotation: a
+    # caller passing a plain string is doing something reasonable, and failing on
+    # it deep inside derivation would read as a store problem rather than a
+    # configuration one.
+    root = Path(config.root)
+    store_path = Path(config.store_path)
     try:
-        _, arch = derive_all(store, config.root.name, root_path=str(config.root))
+        _, arch = derive_all(store, root.name, root_path=str(root))
         index = DigestIndex.from_store(store)
         facts = StoreFacts(
             arch,
@@ -570,16 +576,16 @@ def build_run_context(
         )
         return RunContext(
             store=store,
-            root=config.root,
-            store_path=config.store_path,
+            root=root,
+            store_path=store_path,
             arch=arch,
             facts=facts,
             index=index,
             policy=config.policy,
             budget=BudgetMeter(ceiling=config.policy.max_cost_usd),
             invoker_factory=invoker_factory or default_invoker_factory,
-            run_dir=config.run_dir,
-            commit_sha=current_commit_sha(str(config.root)),
+            run_dir=Path(config.run_dir),
+            commit_sha=current_commit_sha(str(root)),
             seed=config.seed,
             dry_run=config.dry_run,
             clock=clock,
@@ -620,7 +626,11 @@ def build_phases(policy: LadderPolicy) -> list[Phase]:
     has no implementation yet yields a NotBuiltPhase, which reports skipped
     loudly.
     """
-    registry: dict[str, Callable[[], Phase]] = {}
+    from .ladder import LadderPhase
+
+    registry: dict[str, Callable[[], Phase]] = {
+        "p2_ladder": LadderPhase,
+    }
     phases: list[Phase] = []
     for name in policy.phases:
         if name == "p0_context":
