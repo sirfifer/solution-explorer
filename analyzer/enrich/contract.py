@@ -49,6 +49,9 @@ __all__ = [
     "evaluate",
     "terminal_key",
     "build_census",
+    "split_contract_payload",
+    "state_from_block",
+    "CONTRACT_KEY",
 ]
 
 # The five required questions (4.1). Identity is one question in prose and four
@@ -465,3 +468,100 @@ def build_census(states: list[ContractState]) -> Census:
     for item in ordered:
         by_state[item.terminal] = by_state.get(item.terminal, 0) + 1
     return Census(by_state=dict(sorted(by_state.items())), items=ordered)
+
+
+# --- payload splitting --------------------------------------------------------
+#
+# A contract-aware response is a superset of the existing ai_enhance payload: the
+# same product fields, plus one "contract" key. The engine stamps the product
+# fields exactly as before, and the contract scaffolding goes to its own store row
+# and the Run Report. That split is what keeps the promise in the build plan: the
+# product receives what it receives today, plus tours, plus honest-gap markers,
+# and never the answer scaffolding.
+
+CONTRACT_KEY = "contract"
+
+
+def split_contract_payload(payload: Any) -> tuple[dict, dict]:
+    """Split a tier's per-target payload into (product fields, contract block).
+
+    Returns two dicts. The first is what the existing cleaner and the scorer see,
+    with the contract key removed; the second is the raw contract block, empty
+    when the tier returned none. Neither raises: a malformed payload yields two
+    empty dicts, because a broken response must degrade to "no contract answered"
+    rather than take the partition down.
+    """
+    if not isinstance(payload, dict):
+        return {}, {}
+    product = {k: v for k, v in payload.items() if k != CONTRACT_KEY}
+    block = payload.get(CONTRACT_KEY)
+    return product, (block if isinstance(block, dict) else {})
+
+
+def state_from_block(
+    *,
+    target_kind: str,
+    target_id: str,
+    rung: str,
+    block: dict,
+    facts: Optional[dict] = None,
+    validator: Optional[EvidenceValidator] = None,
+    attempt_ref: Optional[str] = None,
+    previous: Optional[ContractState] = None,
+) -> ContractState:
+    """Evaluate a tier's raw contract block into a recomputed ContractState.
+
+    The tier's ``self_state``, its declared confusion, its parser-first findings
+    and its substitution check all travel through; only the state itself is
+    recomputed rather than believed.
+    """
+    block = block if isinstance(block, dict) else {}
+    substitution = block.get("substitution_check")
+    parser_first = block.get("parser_first")
+    state = evaluate(
+        target_kind=target_kind,
+        target_id=target_id,
+        rung=rung,
+        answers=block.get("answers"),
+        facts=facts,
+        validator=validator,
+        self_declared=(
+            str(block["self_state"]).strip() if block.get("self_state") else None
+        ),
+        declared_confusion=(
+            str(block["confusion"]).strip() if block.get("confusion") else None
+        ),
+        parser_first=parser_first if isinstance(parser_first, list) else [],
+        attempt_ref=attempt_ref,
+        previous=previous,
+    )
+    # A tier that says its description would fit any sibling has self-reported the
+    # substitution failure the design calls E4. Believing a self-reported FAILURE
+    # is safe in a way believing a self-reported success is not: nothing is
+    # gained by claiming to be interchangeable.
+    if isinstance(substitution, str) and _is_substitution_failure(substitution):
+        state.failed.append(
+            FailedQuestion("purpose", "E4", substitution.strip()[:300])
+        )
+        state.state = "escalate"
+    return state
+
+
+_SUBSTITUTION_FAILURE_MARKERS = (
+    "would fit any",
+    "fits any",
+    "fit any sibling",
+    "nothing unique",
+    "nothing distinctive",
+    "could be any",
+    "applies to all",
+    "none",
+)
+
+
+def _is_substitution_failure(text: str) -> bool:
+    """Did the tier admit its answers describe nothing in particular?"""
+    lowered = text.strip().lower()
+    if not lowered:
+        return True
+    return any(marker in lowered for marker in _SUBSTITUTION_FAILURE_MARKERS)

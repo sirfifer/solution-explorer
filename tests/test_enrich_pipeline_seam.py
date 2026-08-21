@@ -230,7 +230,10 @@ def test_every_invocation_ledgers_phase_rung_model_tokens_and_cost():
     row = ctx.ledger[0]
     assert row.phase == "p2_ladder"
     assert row.rung == "2a"
-    assert row.model == DEFAULT_MODELS["p2a_bulk"]
+    # The ledger records the binding LABEL (source and model), not a bare
+    # model name, so a Run Report says which lab did each piece of work.
+    assert row.model == DEFAULT_MODELS["p2a_bulk"].label
+    assert row.model == "anthropic-claude-cli:sonnet"
     assert row.targets == 3
     assert row.tokens_in == 120  # input plus cache reads, which are input work
     assert row.tokens_out == 7

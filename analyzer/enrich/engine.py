@@ -137,7 +137,7 @@ class ClaudeCliInvoker:
 
     def __init__(
         self,
-        model: str = DEFAULT_MODEL,
+        model: Optional[str] = DEFAULT_MODEL,
         *,
         claude_bin: str = "claude",
         timeout: int = 600,
@@ -148,12 +148,16 @@ class ClaudeCliInvoker:
 
     def __call__(self, prompt: str) -> InvokeResult:
         try:
+            # A None model omits the flag entirely, which lets the CLI route the
+            # call itself instead of being pinned to one model. That is the
+            # "unpinned" half of a tier binding (see enrich/models.py): the same
+            # option a routing provider offers, expressed on the provider we
+            # actually run on today.
+            argv = [self.claude_bin, "-p", "--output-format", "json"]
+            if self.model:
+                argv += ["--model", self.model]
             proc = subprocess.run(
-                [
-                    self.claude_bin, "-p",
-                    "--output-format", "json",
-                    "--model", self.model,
-                ],
+                argv,
                 input=prompt,
                 capture_output=True,
                 text=True,

@@ -24,6 +24,7 @@ from .engine import (
     EnhanceConfig,
     run_enhance,
 )
+from .models import DEFAULT_SOURCE, ModelSpec, known_sources
 from .pipeline import DEFAULT_MODELS
 
 DEFAULT_STORE_RELPATH = Path(".solution-explorer") / "index.db"
@@ -135,9 +136,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--phase-model",
         action="append",
         default=None,
-        metavar="KEY=MODEL",
-        help="Override the model for one phase or rung, repeatable. Keys: "
+        metavar="KEY=SPEC",
+        help="Bind one phase or rung to a source and model, repeatable. SPEC is "
+        "'model' (the default source), 'source:model', or 'source:auto' to leave "
+        "the model unpinned so that source routes the call itself. Keys: "
         + ", ".join(sorted(DEFAULT_MODELS)) + ". Ladder only.",
+    )
+    parser.add_argument(
+        "--model-source",
+        default=None,
+        help="Default source for every tier binding that does not name one "
+        f"(default: {DEFAULT_SOURCE}). Registered sources: "
+        + ", ".join(known_sources()) + ". Ladder only.",
     )
     parser.add_argument(
         "--min-rounds",
@@ -260,31 +270,50 @@ def main(argv: list[str]) -> int:
     return 0 if report.ok else 1
 
 
-def _parse_phase_models(pairs: Optional[list[str]]) -> tuple[dict, list[str]]:
-    """Parse repeated KEY=MODEL overrides. Returns (models, errors).
+def _parse_phase_models(
+    pairs: Optional[list[str]], default_source: str = DEFAULT_SOURCE
+) -> tuple[dict, list[str]]:
+    """Parse repeated KEY=SPEC tier bindings. Returns (bindings, errors).
 
-    An unknown key is an error rather than a silent no-op: a typo that quietly
-    left a rung on its default model would be invisible in the Run Report and
-    would misattribute whatever that rung produced.
+    Two things are errors rather than silent no-ops, because both would be
+    invisible afterwards and would misattribute whatever that rung produced: an
+    unknown phase or rung key, and a source with no registered provider. The
+    second is caught here, at configuration time, rather than when the rung first
+    tries to invoke and the run has already spent everything below it.
     """
     models = dict(DEFAULT_MODELS)
     errors: list[str] = []
+    if default_source not in known_sources():
+        errors.append(
+            f"--model-source: unknown source {default_source!r}; registered "
+            "sources are " + (", ".join(known_sources()) or "(none)")
+        )
+        return models, errors
+    for key in models:
+        models[key] = ModelSpec.parse(models[key], default_source=default_source)
     for raw in pairs or []:
         if "=" not in raw:
-            errors.append(f"--phase-model expects KEY=MODEL, got {raw!r}")
+            errors.append(f"--phase-model expects KEY=SPEC, got {raw!r}")
             continue
-        key, _, model = raw.partition("=")
-        key, model = key.strip(), model.strip()
+        key, _, spec_text = raw.partition("=")
+        key, spec_text = key.strip(), spec_text.strip()
         if key not in DEFAULT_MODELS:
             errors.append(
                 f"--phase-model: unknown key {key!r}; valid keys are "
                 + ", ".join(sorted(DEFAULT_MODELS))
             )
             continue
-        if not model:
-            errors.append(f"--phase-model: empty model for key {key!r}")
+        if not spec_text:
+            errors.append(f"--phase-model: empty binding for key {key!r}")
             continue
-        models[key] = model
+        spec = ModelSpec.parse(spec_text, default_source=default_source)
+        if spec.source not in known_sources():
+            errors.append(
+                f"--phase-model {key}: unknown source {spec.source!r}; registered "
+                "sources are " + (", ".join(known_sources()) or "(none)")
+            )
+            continue
+        models[key] = spec
     return models, errors
 
 
@@ -292,7 +321,9 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
     """The --ladder entry: build the policy, run the pipeline, print the summary."""
     from .pipeline import IterationPolicy, LadderConfig, LadderPolicy, run_ladder
 
-    models, errors = _parse_phase_models(args.phase_model)
+    models, errors = _parse_phase_models(
+        args.phase_model, args.model_source or DEFAULT_SOURCE
+    )
     if errors:
         for err in errors:
             print(f"Error: {err}", file=sys.stderr)
@@ -331,6 +362,8 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
 
     print(f"Enrichment ladder run ({len(result.phases)} phases)")
     print(f"  run dir: {run_dir}")
+    bound = ", ".join(f"{k}={models[k].label}" for k in sorted(models))
+    print(f"  tier bindings: {bound}")
     for phase in result.phases:
         print(f"    {phase.name}: {phase.status.upper()}")
         for note in phase.notes[:5]:

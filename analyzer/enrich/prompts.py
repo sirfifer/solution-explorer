@@ -31,6 +31,7 @@ __all__ = [
     "build_finding_verify_prompt",
     "build_identify_unknowns_prompt",
     "build_identity_verify_prompt",
+    "build_contract_partition_prompt",
 ]
 
 # The architectural role vocabulary (RESOURCES.md). Kept in sync with the
@@ -656,3 +657,201 @@ RULES:
         "",
         "Return the JSON object now.",
     ])
+
+
+# --- The completeness contract payload (ENRICHMENT-ENGINE.md section 4) -------
+#
+# The ladder's rungs all answer the SAME questions against the SAME grounding
+# rule; only the intelligence applied to them changes. So there is one contract
+# block appended to the existing ai_enhance schema, and one prompt builder that
+# every rung reuses with a different assignment header. The existing schema is
+# untouched: a contract-aware response is a superset of what the bulk pass
+# already returns, which is what lets the engine keep stamping the product
+# payload exactly as before while the contract scaffolding goes to the store and
+# the Run Report instead.
+
+_PARSER_FIRST_INSTRUCTION = """\
+FIRST, BEFORE ANYTHING ELSE, ANSWER THIS. For every component you are about to
+describe, ask: could deterministic processing have gotten this right without a
+model, and how would it do so next time? Record every such observation in
+"parser_first". Examples of a real parser-first finding: a framework you inferred
+from an import the analyzer did not recognise; a relationship obvious from a
+config file nothing parsed; a component type the directory layout already
+implied. This list is REQUIRED on every component. An empty list is a legitimate
+answer and means you found nothing mechanical; do not invent entries to fill it.
+"""
+
+_GROUNDING_RULE = """\
+THE GROUNDING RULE, which governs every answer you give:
+
+A claim without evidence you can point at is not an answer. Every answer names
+its evidence: a file, a symbol, an edge, a manifest entry, or a doc passage. An
+answer you cannot cite is marked "uncertain" with a reason, or "dropped". It is
+NEVER left standing bare and it is never dressed up in confident prose.
+
+Evidence items take one of these shapes, and every one of them is checked
+mechanically after you answer, against the analyzed file set and the graph:
+
+  {"kind": "file",     "path": "src/x.py", "line": 120}
+  {"kind": "symbol",   "path": "src/x.py", "symbol": "UserService", "line": 40}
+  {"kind": "edge",     "source": "<component-id>", "target": "<component-id>",
+                       "edge_type": "imports"}
+  {"kind": "manifest", "path": "package.json"}
+  {"kind": "doc",      "path": "README.md", "line": 12}
+
+Paths must come from the files listed in the facts for that component. A citation
+to a file that is not in the analyzed set fails the check, and the answer is
+recorded as ungrounded no matter how plausible the claim reads. Citing nothing is
+better than citing something you invented: an honest "uncertain" costs the run a
+cheap escalation, an invented citation costs it trust.
+"""
+
+_CONTRACT_SCHEMA = """\
+Each component's ai_enhance block gains ONE extra key, "contract":
+
+"contract": {
+  "parser_first": ["..."],
+  "answers": {
+    "purpose":            {"claim": "...", "status": "answered", "evidence": [...]},
+    "mechanism":          {"claim": "...", "status": "answered", "evidence": [...]},
+    "place":              {"claim": "...", "status": "answered", "evidence": [...]},
+    "identity.type":      {"claim": "...", "status": "answered", "evidence": [...]},
+    "identity.framework": {"claim": "...", "status": "answered", "evidence": [...]},
+    "identity.port":      {"claim": "...", "status": "answered", "evidence": [...]},
+    "identity.language":  {"claim": "...", "status": "answered", "evidence": [...]},
+    "next_step":          {"claim": "...", "status": "answered", "evidence": [...]}
+  },
+  "self_state": "grounded" | "escalate",
+  "confusion": null,
+  "substitution_check": "the one fact in your answers that could NOT be true of \
+any sibling component"
+}
+
+THE REQUIRED QUESTIONS, and what each one is actually asking:
+
+- purpose:   What is this for, in the subject's own terms? Not what its name
+             says. What job does it do for the system.
+- mechanism: How does it do it? The one or two structural facts a reader needs:
+             the key types, the central flow.
+- place:     What depends on it, what does it depend on, and why does that make
+             sense? Cite the edges.
+- identity.*: Each identity claim SEPARATELY. type, framework, port and language
+             are four distinct claims and each carries its own evidence.
+- next_step: Where would a reader go from here, and why? Name the component or
+             file, and say what they would learn there.
+
+ANSWER STATUS is exactly one of:
+  "answered"  you have a claim and evidence for it
+  "uncertain" you have a belief you cannot ground; give the reason
+  "dropped"   you have nothing worth saying; give the reason
+
+"answers" MUST contain an entry for every question listed under REQUIRED
+QUESTIONS for that component, which the facts block names per component. Do not
+answer questions that are not listed for it: a component with no port is not
+hiding one.
+
+"confusion" is for the case where you cannot reconcile the code with its
+comments, docs or naming. State the specific confusion in one sentence, or leave
+it null. Declaring confusion is not failure and it is not penalised. It is the
+single most useful thing you can tell the next rung, and a subject whose comments
+diverge from its code is a known and expected case.
+
+"substitution_check": name the one fact in your answers that could not be true of
+a randomly chosen sibling component. If everything you wrote would fit any
+sibling equally well, say so plainly, and set self_state to "escalate": a
+description that fits everything describes nothing.
+
+"self_state": your own read, "grounded" if you answered every required question
+with evidence you would defend, "escalate" otherwise. Your self-assessment is
+recorded, and it is then recomputed independently from your answers and your
+citations. Overclaiming does not help you and it does not stay hidden.
+
+Relationships take the reduced form:
+
+"contract": {
+  "parser_first": [],
+  "answers": {
+    "flow": {"claim": "what actually crosses this edge", "status": "answered",
+             "evidence": [...]},
+    "why":  {"claim": "why this connection exists", "status": "answered",
+             "evidence": [...]}
+  },
+  "self_state": "grounded", "confusion": null
+}
+"""
+
+
+def _contract_targets(partition: Partition, facts: StoreFacts) -> list[dict]:
+    """Per-component fact blocks with the required question list attached.
+
+    Attaching the question set to each component is what keeps the rung and the
+    validator asking the same thing. The set is computed from the same
+    deterministic facts ``contract.evaluate`` uses, so a rung that answers exactly
+    what it was asked cannot be failed for missing a question it was never given.
+    """
+    from .contract import required_questions
+
+    out = []
+    for cid in partition.component_ids:
+        block = facts.component_facts(cid)
+        block["REQUIRED_QUESTIONS"] = list(required_questions("component", block))
+        out.append(block)
+    return out
+
+
+def build_contract_partition_prompt(
+    partition: Partition,
+    facts: StoreFacts,
+    *,
+    assignment: Optional[str] = None,
+    brief: Optional[dict] = None,
+) -> str:
+    """Build the contract-aware enrichment prompt for one partition.
+
+    ``assignment`` replaces the opening instruction so a higher rung can state
+    that it is closing named gaps rather than starting fresh. ``brief`` is the P1
+    subject brief, which warns the rung about a subject whose comments and code
+    diverge so that confusion is expected rather than shameful.
+    """
+    components = _contract_targets(partition, facts)
+    relationships = [facts.relationship_facts(k) for k in partition.relationship_keys]
+
+    head = assignment or (
+        "You are enhancing a software architecture graph. Using ONLY the facts "
+        "provided (do not invent structure), produce an ai_enhance block for each "
+        "component and relationship, and complete the completeness contract for "
+        "each one."
+    )
+
+    parts = [head, "", _PARSER_FIRST_INSTRUCTION, "", _GROUNDING_RULE, ""]
+    if brief:
+        parts += [
+            "SUBJECT BRIEF (what this system is, who reads the map, and what "
+            "matters to them). Written by the orientation pass over the docs and "
+            "the deterministic summary. Where it names an idiom or a divergence, "
+            "expect it:",
+            json.dumps(brief, indent=2, default=str),
+            "",
+        ]
+    parts += [
+        _SCHEMA_CONTRACT,
+        "",
+        _CONTRACT_SCHEMA,
+        "",
+        "ROLE VOCABULARY (use exact values): " + ", ".join(ROLE_VOCABULARY),
+        "",
+        _CRITICALITY_GUIDANCE,
+        "",
+        _FEWSHOT,
+        "",
+        "COMPONENTS (produce an ai_enhance WITH a contract for every id; "
+        "REQUIRED_QUESTIONS on each component tells you exactly what its contract "
+        "must answer):",
+        json.dumps(components, indent=2, default=str),
+        "",
+        "RELATIONSHIPS (produce an ai_enhance with a reduced contract for every key):",
+        json.dumps(relationships, indent=2, default=str),
+        "",
+        "Return the JSON object now.",
+    ]
+    return "\n".join(parts)

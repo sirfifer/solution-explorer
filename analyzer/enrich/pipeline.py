@@ -43,7 +43,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Protocol
 
 from ..contracts import gap_from_exception
-from .engine import ClaudeCliInvoker, Invoker, InvokeResult
+from .engine import Invoker, InvokeResult
+from .models import DEFAULT_SOURCE, ModelSpec, build_invoker
 from .provenance import Clock, iso_now
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -63,24 +64,47 @@ __all__ = [
     "PipelineResult",
     "RunContext",
     "default_invoker_factory",
+    "resolve_models",
+    "ModelSpec",
     "run_pipeline",
     "DEFAULT_MODELS",
     "PHASE_ORDER",
 ]
 
-# Which model each phase and rung runs on (design section 2). Keys are the
-# pipeline's own phase/rung names, not CLI model ids, so a registry or a flag can
-# repoint one rung without touching any phase code.
-DEFAULT_MODELS: dict[str, str] = {
-    "p1_orientation": "fable",
-    "p2a_bulk": "sonnet",
-    "p2b_escalated": "opus",
-    "p2c_residue": "fable",
-    "p3_adjudication": "opus",
-    "p4_synthesis": "fable",
-    "p5_determination": "fable",
-    "workorder": "sonnet",
+# Which SOURCE and model each phase and rung runs on (design section 2). Keys are
+# the pipeline's own phase and rung names, never vendor ids, so a registry or a
+# flag repoints one rung without touching any phase code.
+#
+# The ladder is a structure, not a vendor. Its rungs are defined by the kind of
+# work they do, and today they are BOUND to Claude models on the owner's
+# subscription. That binding is configuration: see analyzer/enrich/models.py for
+# the source registry, and note that a binding may leave the model unpinned so
+# the source routes the call itself.
+DEFAULT_MODELS: dict[str, ModelSpec] = {
+    "p1_orientation": ModelSpec(DEFAULT_SOURCE, "fable"),
+    "p2a_bulk": ModelSpec(DEFAULT_SOURCE, "sonnet"),
+    "p2b_escalated": ModelSpec(DEFAULT_SOURCE, "opus"),
+    "p2c_residue": ModelSpec(DEFAULT_SOURCE, "fable"),
+    "p3_adjudication": ModelSpec(DEFAULT_SOURCE, "opus"),
+    "p4_synthesis": ModelSpec(DEFAULT_SOURCE, "fable"),
+    "p5_determination": ModelSpec(DEFAULT_SOURCE, "fable"),
+    "workorder": ModelSpec(DEFAULT_SOURCE, "sonnet"),
 }
+
+
+def resolve_models(
+    raw: Optional[dict] = None, *, default_source: str = DEFAULT_SOURCE
+) -> dict[str, ModelSpec]:
+    """Merge tier bindings over the defaults, parsing every accepted form.
+
+    Unknown keys are kept rather than dropped: a caller binding a rung this build
+    does not know about is configuring something for a later one, and silently
+    discarding it would be worse than carrying it.
+    """
+    out = dict(DEFAULT_MODELS)
+    for key, value in (raw or {}).items():
+        out[str(key)] = ModelSpec.parse(value, default_source=default_source)
+    return out
 
 # The canonical phase order. P0 is deterministic context assembly and never
 # invokes a model.
@@ -293,7 +317,7 @@ class IterationPolicy:
 class LadderPolicy:
     """Everything a run needs to know that is not a fact about the subject."""
 
-    models: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_MODELS))
+    models: dict[str, ModelSpec] = field(default_factory=lambda: dict(DEFAULT_MODELS))
     iteration: IterationPolicy = field(default_factory=IterationPolicy)
     max_cost_usd: Optional[float] = None
     # Fraction of grounded items P3 spot-checks, weighted by importance.
@@ -304,19 +328,21 @@ class LadderPolicy:
     threshold: float = 85.0
     phases: tuple[str, ...] = PHASE_ORDER
 
-    def model_for(self, key: str) -> str:
-        return self.models.get(key, DEFAULT_MODELS.get(key, "sonnet"))
+    def model_for(self, key: str) -> ModelSpec:
+        """The tier binding for a phase or rung. Never returns a bare model name."""
+        spec = self.models.get(key) or DEFAULT_MODELS.get(key)
+        if spec is None:
+            return ModelSpec(DEFAULT_SOURCE, "sonnet")
+        return ModelSpec.parse(spec)
 
 
-def default_invoker_factory(model: str) -> Invoker:
-    """Real invoker for a model name: the `claude` CLI, wrapped in transport retry.
+def default_invoker_factory(spec: ModelSpec) -> Invoker:
+    """Real invoker for a tier binding, resolved through the provider registry.
 
     Only used when a run does not inject its own factory. Every test injects one,
     which is how the whole pipeline is exercised without spending anything.
     """
-    from .retry import RetryingInvoker, RetryPolicy
-
-    return RetryingInvoker(ClaudeCliInvoker(model=model), policy=RetryPolicy())
+    return build_invoker(spec)
 
 
 @dataclass
@@ -359,7 +385,7 @@ class RunContext:
     index: DigestIndex
     policy: LadderPolicy
     budget: BudgetMeter
-    invoker_factory: Callable[[str], Invoker]
+    invoker_factory: Callable[[ModelSpec], Invoker]
     run_dir: Path
     commit_sha: Optional[str] = None
     seed: int = 0
@@ -384,13 +410,13 @@ class RunContext:
         targets: int = 0,
     ) -> MeteredInvoker:
         """A metered invoker for one phase or rung, on that key's model."""
-        model = self.policy.model_for(key)
+        spec = self.policy.model_for(key)
         return MeteredInvoker(
-            self.invoker_factory(model),
+            self.invoker_factory(spec),
             ctx=self,
             phase=phase,
             rung=rung,
-            model=model,
+            model=spec.label,
             targets=targets,
         )
 
@@ -508,7 +534,7 @@ class LadderConfig:
 def build_run_context(
     config: LadderConfig,
     *,
-    invoker_factory: Optional[Callable[[str], Invoker]] = None,
+    invoker_factory: Optional[Callable[[ModelSpec], Invoker]] = None,
     clock: Clock = iso_now,
     timer: Callable[[], float] = time.monotonic,
     store: Optional[FactStore] = None,
@@ -608,7 +634,7 @@ def build_phases(policy: LadderPolicy) -> list[Phase]:
 def run_ladder(
     config: LadderConfig,
     *,
-    invoker_factory: Optional[Callable[[str], Invoker]] = None,
+    invoker_factory: Optional[Callable[[ModelSpec], Invoker]] = None,
     clock: Clock = iso_now,
     timer: Callable[[], float] = time.monotonic,
     phases: Optional[Iterable[Phase]] = None,
