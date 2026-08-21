@@ -629,11 +629,13 @@ def build_phases(policy: LadderPolicy) -> list[Phase]:
     from .adjudicate import AdjudicationPhase
     from .ladder import LadderPhase
     from .orientation import OrientationPhase
+    from .synthesis import SynthesisPhase
 
     registry: dict[str, Callable[[], Phase]] = {
         "p1_orientation": OrientationPhase,
         "p2_ladder": LadderPhase,
         "p3_adjudication": AdjudicationPhase,
+        "p4_synthesis": SynthesisPhase,
     }
     phases: list[Phase] = []
     for name in policy.phases:
