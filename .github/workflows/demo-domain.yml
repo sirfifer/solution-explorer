@@ -85,6 +85,32 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+          # A secret set with `echo "$tok" | gh secret set` carries a trailing
+          # newline. It survives into the env var, produces a malformed
+          # "Authorization: Bearer <tok>\n" header, and Cloudflare answers 401 --
+          # indistinguishable from an expired token. Rule it out before
+          # concluding the credential is dead, because the fix is different
+          # (re-set the same secret without the newline vs mint a new token).
+          echo "::group::whitespace-stripped retry"
+          STRIPPED=$(printf '%s' "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')
+          rawlen=${#CLOUDFLARE_API_TOKEN}; striplen=${#STRIPPED}
+          echo "raw length $rawlen, stripped length $striplen (difference $((rawlen-striplen)))"
+          scode=$(curl -sS -o /tmp/verify2.json -w '%{http_code}' \
+            "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+            -H "Authorization: Bearer $STRIPPED")
+          echo "stripped verify HTTP $scode"
+          jq '{success, result: (.result // {} | {status})}' /tmp/verify2.json || true
+          echo "::endgroup::"
+          {
+            echo '```'
+            echo "raw len $rawlen vs stripped len $striplen -> stripped verify HTTP $scode"
+            if [ "$scode" = "200" ] && [ "$rawlen" != "$striplen" ]; then
+              echo "DIAGNOSIS: the secret has surrounding whitespace. Re-set it with"
+              echo "  printf %s \"\$TOKEN\" | gh secret set CLOUDFLARE_API_TOKEN -R sirfifer/solution-explorer"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
           echo "::group::can it read Pages projects?"
           pcode=$(curl -sS -o /tmp/proj.json -w '%{http_code}' \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects" \
