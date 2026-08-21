@@ -1,0 +1,44 @@
+{
+  "slug": "vscode",
+  "subject": {
+    "name": "Visual Studio Code",
+    "repo": "https://github.com/microsoft/vscode.git",
+    "license": "MIT",
+    "governance": "corporate"
+  },
+  "track": "published",
+  "policy": {
+    "follow": "default-branch",
+    "pin": null,
+    "exclude": [],
+    "history": "full"
+  },
+  "hosting": {
+    "cf_project": "syscorpus-vscode",
+    "url": "https://vscode.demo.syscorpus.com"
+  },
+  "cadence": "weekly",
+  "budget": {
+    "max_cost_usd": 45.0,
+    "max_wall_minutes": 45,
+    "_note": "45.0 not the plan's 5.0: the 2026-08-20 five-partition calibration measured $5.04 for 15.1% of the partition tokens plus a fixed $4.15 narrative pass, projecting ~$37.56 for a full VS Code run. A 5.0 ceiling would truncate every refresh after roughly five partitions."
+  },
+  "gates": {
+    "coverage": "complete",
+    "max_detect_only_line_share": 0.25,
+    "min_enrichment_score": 85
+  },
+  "consent": {
+    "required": false,
+    "state": "n/a",
+    "contacted": null
+  },
+  "license_review": {
+    "reviewer": "Claude (Opus 5), N3",
+    "date": "2026-08-20",
+    "spdx": "MIT",
+    "commit": "74d615da22fdd1992966b51551c4ef12ae5c09a4",
+    "record": "docs/publication/license-reviews/vscode.md",
+    "countersigned_by_owner": false
+  }
+}

@@ -70,3 +70,72 @@ The clone, store and split output from this run are at
 `/Volumes/Studio/dev/.scratch/n2/`, roughly 1.2 GB. Keeping them saves
 re-cloning and re-analysing when demo one starts. Delete freely; they are
 reproducible with the command above.
+
+---
+
+## Clone depth, measured 2026-08-20 (N3)
+
+N2 recorded that "a shallow clone yields one commit of activity" and that
+history-dependent output "will be thin or empty". Measured properly at the start
+of N3, that understates it in the one direction that matters: **the Activity
+lens does not come out empty, it comes out populated and wrong.**
+
+Both runs below analyze the **same working tree**, `74d615da22fdd1992966b51551c4ef12ae5c09a4`,
+so clone depth is the only variable. Both produced identical structure: 570
+components, 15,256 files, 4,936,720 lines, 151,867 symbols, 100% coverage.
+
+| Signal | Shallow, depth 1 | Full history | Consequence of shipping the shallow one |
+|---|---|---|---|
+| Commits seen | 1 | 146,125 | |
+| Distinct authors | 1 | **2,771** | |
+| `file_coupling` / `component_coupling` | 0 / 0 | 100 / 100 | Co-change lens empty |
+| Components flagged knowledge islands | **567 of 567** | 53 of 567 | Publishes "every component is a knowledge island" about a project with 2,771 contributors |
+| Bus factor, min/median/max | 1 / 1 / 1 | 1 / 2 / 11 | Publishes bus factor 1 for all of VS Code |
+| Distinct `last_modified` values | 1 | 4,746 | Staleness meaningless |
+| Files where `churn == lines_added`, nothing removed | 15,256 of 15,256 | 3,596 | `churn` is really the file's line count |
+| Top hotspot | `colorize-fixtures/test-checker.ts` | `src/vscode-dts/vscode.d.ts` | Publishes a ranking of the **largest** files as the most-changed |
+
+The mechanism: a depth-1 clone's single commit is parentless, so `git log
+--numstat` reports the entire tree as added. `churn` becomes the file's line
+count and `hotspot_score` becomes `churn + 1` (14,010 of 15,256 files exactly).
+One author gives `top_author_share = 1.0`, which is above the 0.95
+`KNOWLEDGE_ISLAND_SHARE` threshold, so every component trips the flag.
+
+`provenance` does honestly record `shallow: true, commits: 1`, so the data is
+labelled. That is not sufficient: the numbers themselves read as real activity,
+and this is exactly the defect class that has cost this project the most time, a
+plausible wrong answer that passes every machine gate.
+
+### What full history costs
+
+| | Shallow depth 1 | 12-month `--shallow-since` | Full |
+|---|---|---|---|
+| Clone wall time | (not re-measured) | 20 s | **80 s** |
+| Clone disk | 339 MB | 569 MB | **1.4 GB** |
+| Commits in `git log --no-merges` | 1 | 22,354 | 146,170 |
+| Commits emitting >5,000 file rows | 1 of 1 | **15** | **1** |
+| Analysis wall time | 136.5 s cold | (not run) | **208.4 s** |
+| Analysis peak RSS | 1.93 GB | (not run) | **1.85 GB** |
+
+**The 12-month shallow clone is the trap option.** It looks like a cheap middle
+ground and it is not: its 15 commits emitting more than 5,000 file rows each are
+exactly the 16 SHAs in `.git/shallow`, the grafted boundaries. Each one is a
+parentless synthetic full-tree add, so it reproduces the depth-1 defect fifteen
+times over instead of once. The full clone has exactly **one** commit above
+5,000 rows and it is a genuine 2018 commit, not an artifact.
+
+Full history costs **+72 s of wall time and about 1 GB of disk**, and peak memory
+went slightly *down*. That is inside the registry's 45-minute budget by a wide
+margin.
+
+**Decision: `policy.history: "full"` for every published demo.** Recorded in
+`demos/registry/<slug>.json`. A shallow clone is acceptable only for a Track B
+capability-forcing target where nobody reads the Activity lens.
+
+Incidental finding, recorded because it will mislead someone later:
+`git clone --depth=5000` against this repo did **not** produce a shallow
+repository. Reproduced three times with packet traces; the client sends
+`deepen 5000` and the server returns a `shallow-info` section, but `index-pack`
+runs with an empty `--shallow-file` and no boundary is applied. `--depth=100`
+against the same server in the same session behaved normally. So depth-based
+bounding is not dependable here; use `--shallow-since` or a full clone.
