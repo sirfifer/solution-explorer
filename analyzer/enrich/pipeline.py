@@ -626,12 +626,14 @@ def build_phases(policy: LadderPolicy) -> list[Phase]:
     has no implementation yet yields a NotBuiltPhase, which reports skipped
     loudly.
     """
+    from .adjudicate import AdjudicationPhase
     from .ladder import LadderPhase
     from .orientation import OrientationPhase
 
     registry: dict[str, Callable[[], Phase]] = {
         "p1_orientation": OrientationPhase,
         "p2_ladder": LadderPhase,
+        "p3_adjudication": AdjudicationPhase,
     }
     phases: list[Phase] = []
     for name in policy.phases:

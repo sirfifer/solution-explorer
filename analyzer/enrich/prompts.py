@@ -32,6 +32,8 @@ __all__ = [
     "build_identify_unknowns_prompt",
     "build_identity_verify_prompt",
     "build_contract_partition_prompt",
+    "build_grounding_spotcheck_prompt",
+    "build_substitution_prompt",
 ]
 
 # The architectural role vocabulary (RESOURCES.md). Kept in sync with the
@@ -855,3 +857,100 @@ def build_contract_partition_prompt(
         "Return the JSON object now.",
     ]
     return "\n".join(parts)
+
+
+# --- P3 adjudication prompts -------------------------------------------------
+#
+# Both are read-heavy and near-zero output by design: checking a citation is far
+# cheaper than producing one, which is the asymmetry that lets the top of the
+# ladder be verified without costing what it cost to write.
+
+
+def build_grounding_spotcheck_prompt(digest: dict) -> str:
+    """Ask whether cited evidence actually SUPPORTS its claim.
+
+    The mechanical validator already proved the citation points at something
+    real. It cannot judge sufficiency, and this is the only place that judgment
+    happens. The prompt therefore says so explicitly: existence is settled, and
+    the only question left is whether the evidence carries the weight of the
+    claim.
+
+    The digest carries labels and evidence pointers, never the narrative payload.
+    Sending the prose would invite grading the writing instead of the grounding.
+    """
+    contract = """\
+Return ONLY a single JSON object, no prose and no fences:
+
+{
+  "checks": [
+    {"question": "<the question id from the digest>",
+     "supported": true | false,
+     "confidence": "high" | "medium" | "low",
+     "reason": "one sentence; required when supported is false"}
+  ]
+}
+
+For each claim below, the cited evidence has ALREADY been verified to exist: the
+file is in the analyzed set, the line is inside it, the symbol is in that file.
+That is settled and is not what you are being asked.
+
+The only question is SUFFICIENCY: does that evidence actually support that claim?
+
+- supported: false when the evidence is real but does not carry the claim. A
+  claim that a component "handles authentication for the whole system" cited
+  only to the file's existence is not supported. A claim that it "imports the
+  session library" cited to that import is.
+- supported: false is the useful answer. You are not grading the writing and you
+  are not looking for reasons to agree. If the evidence would not convince a
+  reader who checked it, say so.
+- Use confidence "low" rather than guessing when you cannot tell from what you
+  were given. A low-confidence agreement is recorded as exactly that.
+"""
+    return "\n".join([
+        "You are auditing whether claims about a codebase are actually supported "
+        "by the evidence attached to them.",
+        "",
+        contract,
+        "",
+        "CLAIMS AND THEIR EVIDENCE:",
+        json.dumps(digest, indent=2, default=str),
+        "",
+        "Return the JSON object now.",
+    ])
+
+
+def build_substitution_prompt(description: str, candidates: list[dict]) -> str:
+    """The substitution test: does this description describe anything in particular?
+
+    A description that would fit any sibling equally well describes nothing, and
+    the design makes that trigger E4. The bulk rung self-applies the test;
+    adjudication applies it independently here, because a self-assessment of
+    distinctiveness is exactly the assessment a tier has no incentive to fail.
+    """
+    contract = """\
+Return ONLY a single JSON object, no prose and no fences:
+
+{"choice": "<one id from the candidates, or null>",
+ "reason": "one sentence",
+ "distinctive": true | false}
+
+Answer null, with distinctive false, when the description would fit more than one
+of the candidates. That is not a failure to answer: it is the finding. A
+description that fits several components is a description of none of them, and
+saying so is more useful than picking the most likely one.
+"""
+    return "\n".join([
+        "Below is a description written about ONE component of a software system, "
+        "and a list of candidate components it might be describing. Identify which "
+        "one it describes.",
+        "",
+        contract,
+        "",
+        "DESCRIPTION:",
+        description,
+        "",
+        "CANDIDATES:",
+        json.dumps(candidates, indent=2, default=str),
+        "",
+        "Return the JSON object now.",
+    ])
