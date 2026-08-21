@@ -103,6 +103,9 @@ def run_v2(args) -> None:
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(2)
+    # D3, opt-in. Read defensively because run_v2 is called with several
+    # different arg objects across the test suite and the demo harness.
+    design_signals = bool(getattr(args, "design_signals", False))
     if channel != DEFAULT_CHANNEL:
         # Report honestly (no theater): only claim a stamp when a non-stable gate
         # actually activates. With the shipped empty registry a non-default
@@ -195,7 +198,7 @@ def run_v2(args) -> None:
             result = project_split(
                 arch, output_dir, store=store, root=root,
                 generated_at=generated_at, analyzer_version=__version__,
-                channel=channel, indent=indent,
+                channel=channel, design_signals=design_signals, indent=indent,
             )
             output_label = f"{output_dir}/"
         else:
@@ -203,7 +206,7 @@ def run_v2(args) -> None:
             result = project_monolith(
                 arch, output_path, store=store, root=root,
                 generated_at=generated_at, analyzer_version=__version__,
-                channel=channel, indent=indent,
+                channel=channel, design_signals=design_signals, indent=indent,
             )
             output_label = str(output_path)
     finally:
