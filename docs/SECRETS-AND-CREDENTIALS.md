@@ -38,6 +38,18 @@ and `set +x` is forced so a caller running under `bash -x` cannot leak it.
 
 ### 3. GitHub Actions, where repository secrets already live
 
+> **Status 2026-08-20: `solution-explorer`'s `CLOUDFLARE_API_TOKEN` is DEAD.**
+> `/user/tokens/verify` returns **HTTP 401** with it, and so does a plain Pages
+> project list (run `32447591303`). 401 means invalid, expired or revoked; a
+> valid token lacking a scope returns **403**. The secret dates from
+> 2026-01-31. `wrangler` OAuth on the Studio still works against the same
+> account, which isolates the failure to this token rather than the account or
+> the project. **Every CI job needing the Cloudflare API is broken until it is
+> replaced.** Fix: `~/Desktop/store-cloudflare-token.command`, which installs a
+> fresh token into both the Keychain and the repo secret from one paste.
+> `expat-intel`'s token is from 2026-01-20 and is worth checking for the same
+> failure.
+
 For anything that must run in CI, must be auditable, or where no local
 credential exists. `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` have been
 repository secrets since 2026-01-31. `expat-intel`'s `deploy-worker.yml`
