@@ -196,6 +196,69 @@ describe("loadSearchShards: bounded-parallel fetch and loading state", () => {
     unsubscribe();
   });
 
+  // A shard that 404s or arrives malformed used to be skipped silently while
+  // the state still went to "loaded", so the overlay told the user the index
+  // was complete when content was missing. That is precisely the defect this
+  // state exists to prevent. Raised in review on PR #100.
+  it("reports partial, not loaded, when some shards fail, and keeps the ones that succeeded", async () => {
+    const shardNames = ["shard-0.json", "shard-1.json", "shard-2.json"];
+    const fetchMock = vi.fn((url: string) => {
+      if (url.endsWith("manifest.json")) return Promise.resolve(manifestResponse(shardNames));
+      if (url.endsWith("shard-1.json")) return Promise.resolve({ ok: false, status: 404 });
+      const i = shardNames.findIndex((n) => url.endsWith(n));
+      const entry: ShardEntry = {
+        ref_kind: "component", ref_id: `s${i}`, name: "PartialMatch",
+        path: "p", component: "c", text: "",
+      };
+      return Promise.resolve({ ok: true, json: async () => [entry] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await loadSearchShards();
+
+    expect(getShardLoadState()).toBe("partial");
+    // The surviving shards are still usable: a partial index beats none, as
+    // long as the user is told it is partial.
+    expect(search("PartialMatch").map((r) => r.id)).toEqual(["s0", "s2"]);
+  });
+
+  // One malformed shard used to reject Promise.all, discarding every sibling
+  // that had loaded fine, so a single bad file lost the entire index.
+  it("loses only the malformed shard, not every shard that loaded beside it", async () => {
+    const shardNames = ["shard-0.json", "shard-1.json", "shard-2.json"];
+    const fetchMock = vi.fn((url: string) => {
+      if (url.endsWith("manifest.json")) return Promise.resolve(manifestResponse(shardNames));
+      if (url.endsWith("shard-1.json")) {
+        return Promise.resolve({ ok: true, json: async () => { throw new SyntaxError("bad json"); } });
+      }
+      const i = shardNames.findIndex((n) => url.endsWith(n));
+      const entry: ShardEntry = {
+        ref_kind: "component", ref_id: `s${i}`, name: "SurvivorMatch",
+        path: "p", component: "c", text: "",
+      };
+      return Promise.resolve({ ok: true, json: async () => [entry] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await loadSearchShards();
+
+    expect(getShardLoadState()).toBe("partial");
+    expect(search("SurvivorMatch").map((r) => r.id)).toEqual(["s0", "s2"]);
+  });
+
+  it("reports failed, not partial, when every shard fails and nothing was collected", async () => {
+    const shardNames = ["shard-0.json", "shard-1.json"];
+    const fetchMock = vi.fn((url: string) => {
+      if (url.endsWith("manifest.json")) return Promise.resolve(manifestResponse(shardNames));
+      return Promise.resolve({ ok: false, status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await loadSearchShards();
+
+    expect(getShardLoadState()).toBe("failed");
+  });
+
   it("marks the load failed, not loaded, when the fetch throws, so callers can't mistake it for a complete index", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 

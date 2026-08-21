@@ -36,7 +36,8 @@ export function SearchOverlay() {
   // it via a small pub/sub instead of pulling the whole module into the store.
   const [shardLoadState, setShardLoadStateLocal] = useState<ShardLoadState>(getShardLoadState());
   useEffect(() => subscribeShardLoadState(setShardLoadStateLocal), []);
-  const shardsPending = shardLoadState === "loading" || shardLoadState === "failed";
+  const shardsPending =
+    shardLoadState === "loading" || shardLoadState === "partial" || shardLoadState === "failed";
 
   const results = useMemo(
     () => (searchQuery ? search(searchQuery) : []),
@@ -289,7 +290,7 @@ export function SearchOverlay() {
                     : "Still loading the full search index; results may be incomplete."
                 }
               >
-                {shardLoadState === "failed" ? "Index incomplete" : "Indexing…"}
+                {shardLoadState === "loading" ? "Indexing…" : "Index incomplete"}
               </span>
             )}
             {results.length > 0 && (

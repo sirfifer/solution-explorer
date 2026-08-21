@@ -73,7 +73,15 @@ const SHARD_FETCH_CONCURRENCY = 6;
 // (comprehension-study: "trustworthy map" is the product's central claim).
 // Plain module state + pub/sub, matching the rest of this file's style (no
 // React import here); the component subscribes and mirrors it into useState.
-export type ShardLoadState = "idle" | "loading" | "loaded" | "failed";
+/**
+ * State of the background search-shard load.
+ *
+ * "partial" means some shards loaded and at least one did not, so the index is
+ * usable but genuinely incomplete. It is distinct from "failed", where nothing
+ * loaded at all. Both must be surfaced: presenting an incomplete index as
+ * complete is the defect this state exists to prevent.
+ */
+export type ShardLoadState = "idle" | "loading" | "loaded" | "partial" | "failed";
 let shardLoadState: ShardLoadState = "idle";
 const shardLoadListeners = new Set<(state: ShardLoadState) => void>();
 
@@ -321,14 +329,27 @@ export async function loadSearchShards(baseUrl = "./architecture/search"): Promi
     // Slot per shard index, filled out of order, read back in order.
     const bySlot: ShardEntry[][] = new Array(shardNames.length);
     let nextIndex = 0;
+    let missed = 0;
     const runWorker = async () => {
       while (nextIndex < shardNames.length) {
         const i = nextIndex++;
         const name = shardNames[i];
-        const res = await fetch(`${baseUrl}/${name}`);
-        if (!res.ok) continue;
-        const data = await res.json();
-        if (Array.isArray(data)) bySlot[i] = data as ShardEntry[];
+        // One bad shard costs one shard. Letting it throw here would reject
+        // Promise.all and discard every sibling that loaded fine, so a single
+        // 404 or a single malformed file would lose the whole index instead of
+        // a fraction of it.
+        try {
+          const res = await fetch(`${baseUrl}/${name}`);
+          if (!res.ok) {
+            missed++;
+            continue;
+          }
+          const data = await res.json();
+          if (Array.isArray(data)) bySlot[i] = data as ShardEntry[];
+          else missed++;
+        } catch {
+          missed++;
+        }
       }
     };
     const workerCount = Math.min(SHARD_FETCH_CONCURRENCY, shardNames.length);
@@ -336,7 +357,13 @@ export async function loadSearchShards(baseUrl = "./architecture/search"): Promi
 
     const collected: ShardEntry[] = ([] as ShardEntry[]).concat(...bySlot.filter(Boolean));
     if (collected.length > 0) addShardEntries(collected);
-    setShardLoadState("loaded");
+    // A shard we could not read is missing content, so the index is genuinely
+    // incomplete and must not be reported as complete. Partial and total loss
+    // are distinguished because they are different facts, though both tell the
+    // user the same thing.
+    if (missed === 0) setShardLoadState("loaded");
+    else if (collected.length > 0) setShardLoadState("partial");
+    else setShardLoadState("failed");
   } catch {
     // Best-effort: a missing shard set is not an error (monolith / old data),
     // but a genuine failure here (network error, malformed manifest/shard
