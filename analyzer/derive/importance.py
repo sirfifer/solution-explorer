@@ -55,6 +55,15 @@ from current store state every time, because ``derive_all`` rebuilds components
 and edges without clearing meta, so a trusted blob could outlive the facts it
 was computed from.
 
+**Why entry points are re-derived here rather than read.** The component model
+declares an ``entry_points`` field and the projection carries it, but nothing in
+the current derive path populates it: the only writer sets it to an empty list
+(``analyzer/derive/multi.py``) and the only reader guards against it being
+absent. It is a declared field with no producer, so reading it would have scored
+every component zero on this signal. The three mechanical reasons below are
+derived here instead. If a producer ever fills that field, this is the place to
+prefer it.
+
 **Not in the projection.** The ranking is store-internal in this build. Surfacing
 it in the viewer or the projection would move golden baselines and is explicitly
 out of scope (``ENRICHMENT-ENGINE-BUILD.md`` section 3).

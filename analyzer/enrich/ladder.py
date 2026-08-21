@@ -249,6 +249,28 @@ def order_partitions(
     )
 
 
+def _brief_dict(ctx: RunContext) -> Optional[dict]:
+    """The P1 brief as plain data, or None when orientation produced nothing.
+
+    Only the parts a rung can act on are passed down. The criteria belong to P5
+    and would be noise in a per-partition prompt; the identity, the audience and
+    above all the idiom warnings are what change how a rung reads the code.
+    """
+    brief = (ctx.phase_data("p1_orientation") or {}).get("brief")
+    if brief is None:
+        return None
+    data = brief.to_dict() if hasattr(brief, "to_dict") else dict(brief)
+    if not data.get("generated"):
+        return None
+    return {
+        "identity": data.get("identity"),
+        "audience": data.get("audience"),
+        "what_matters": data.get("what_matters") or [],
+        "idiom_warnings": data.get("idiom_warnings") or [],
+        "weighting_adjustments": data.get("weighting_adjustments") or [],
+    }
+
+
 class LadderPhase:
     """P2: rung 2a over everything, then 2b over the escalations, then 2c."""
 
@@ -266,7 +288,7 @@ class LadderPhase:
         store_ranking(ctx.store, ranking)
         outcome.ranking = ranking
 
-        brief = (ctx.phase_data("p1_orientation") or {}).get("brief")
+        brief = _brief_dict(ctx)
         components = ctx.arch.get("components", [])
         relationships = ctx.arch.get("relationships", [])
         facts_by_id = {

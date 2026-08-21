@@ -627,8 +627,10 @@ def build_phases(policy: LadderPolicy) -> list[Phase]:
     loudly.
     """
     from .ladder import LadderPhase
+    from .orientation import OrientationPhase
 
     registry: dict[str, Callable[[], Phase]] = {
+        "p1_orientation": OrientationPhase,
         "p2_ladder": LadderPhase,
     }
     phases: list[Phase] = []
