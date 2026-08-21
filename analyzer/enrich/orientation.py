@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from ..derive.design_signals import derive_design_signals, design_digest
 from ..derive.importance import ImportanceRanking, rank_components
 from .engine import _parse_json_object
 from .pipeline import PhaseResult, RunContext
@@ -269,6 +270,7 @@ def build_orientation_prompt(
     readme: str,
     top_components: list[dict],
     ranking_note: str,
+    design: Optional[dict] = None,
 ) -> str:
     parts = [
         "You are orienting an automated enrichment pipeline before it maps a "
@@ -287,6 +289,19 @@ def build_orientation_prompt(
         f"fan-in, git activity, entry points, size). {ranking_note}",
         json.dumps(top_components, indent=2, default=str),
         "",
+    ]
+    # D7: the design digest, offered as context, not woven through the contract.
+    # Absent entirely when the subject yields no signals, so a prompt for a
+    # subject this analysis cannot read carries no empty section.
+    if design:
+        parts += [
+            "HOW THIS SYSTEM IS HELD TOGETHER (mechanical architecture quality "
+            "signals, no AI). Use these to sharpen what matters for THIS subject; "
+            "they are tensions to weigh, not defects to report.",
+            json.dumps(design, indent=2, default=str),
+            "",
+        ]
+    parts += [
         "README AND DOCUMENTATION (truncated):",
         readme[:12000] if readme else "(no readme found)",
         "",
@@ -377,6 +392,7 @@ class OrientationPhase:
             readme=readme,
             top_components=_top_components(ctx.arch, ranking, TOP_COMPONENTS_SHOWN),
             ranking_note=ranking_note,
+            design=design_digest(derive_design_signals(ctx.store)),
         )
 
         if ctx.dry_run:

@@ -86,6 +86,7 @@ __all__ = [
     "DesignFinding",
     "DesignSignals",
     "derive_design_signals",
+    "design_digest",
     "store_design_signals",
     "load_design_signals",
     "boundary_strength_for",
@@ -1117,6 +1118,77 @@ def derive_design_signals(store) -> DesignSignals:
         has_activity=has_activity,
         boundaries=boundaries,
     )
+
+
+def design_digest(
+    signals: DesignSignals, *, max_findings: int = 12, max_components: int = 8
+) -> Optional[dict]:
+    """A compact digest of the signals, for the enrichment pipeline's context.
+
+    D7. P1 orientation and P4 synthesis assemble context before they ask a model
+    anything, and these facts belong in that context: a phase that knows the
+    subject has a four-member cycle at its heart writes a better brief than one
+    that does not.
+
+    OFFERED, NOT WOVEN THROUGH. This is a compact block appended to the existing
+    prompts, not a prompt overhaul. The build plan is explicit that prompt
+    redesign waits for the first real ladder run and its calibration.
+
+    Returns ``None`` when there is nothing to say, so the prompt builders add no
+    section at all rather than an empty one. Bounded by construction: the caller
+    cannot be handed an unbounded block of context.
+    """
+    if not signals.items:
+        return None
+
+    counts: dict[str, int] = {}
+    for finding in signals.findings:
+        counts[finding.kind] = counts.get(finding.kind, 0) + 1
+
+    # The most load-bearing components, which is what a brief most needs to know
+    # about. Ranked by blast radius, since "how much rides on this" is the
+    # question that shapes how carefully the rest of the run treats it.
+    ranked = sorted(
+        signals.items, key=lambda i: (-i.blast_radius, -i.fan_in, i.component_id)
+    )
+    load_bearing = [
+        {
+            "id": item.component_id,
+            "blast_radius": item.blast_radius,
+            "depended_on_by": item.fan_in,
+            "instability": item.instability,
+            "abstractness": item.abstractness,
+            "bands": dict(item.bands),
+        }
+        for item in ranked[:max_components]
+        if item.blast_radius > 0 or item.fan_in > 0
+    ]
+
+    return {
+        # The caveat first, so a phase that quotes a finding into a brief
+        # inherits what the method cannot see rather than losing it.
+        "method_caveat": METHOD_CAVEAT,
+        "has_git_history": signals.has_activity,
+        "component_count": len(signals.items),
+        "finding_counts": counts,
+        "findings": [
+            {
+                "term": finding.term,
+                "says": finding.lead,
+                "method": finding.method,
+                "targets": list(finding.targets),
+            }
+            for finding in signals.findings[:max_findings]
+        ],
+        "most_load_bearing": load_bearing,
+        "how_to_use": (
+            "These are mechanical facts, not verdicts. Every one is a tension to "
+            "weigh, not a defect to report: a cycle inside a deliberately "
+            "co-released cluster may be correct. Rank compares a finding only "
+            "against its own kind, and there is no overall score. A null "
+            "instability or abstractness means not measurable, never zero."
+        ),
+    }
 
 
 def store_design_signals(store, signals: DesignSignals) -> None:
