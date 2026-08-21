@@ -63,6 +63,42 @@ jobs:
             exit 1
           fi
 
+      - name: Diagnose the token before using it
+        run: |
+          set -euo pipefail
+          # A 401 on the real call cannot distinguish "token expired" from
+          # "token lacks Pages scope". /user/tokens/verify separates them, and
+          # the permission-groups dump says exactly what this token may do.
+          echo "::group::token verify"
+          code=$(curl -sS -o /tmp/verify.json -w '%{http_code}' \
+            "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+          echo "verify HTTP $code"
+          jq '{success, errors, result: (.result // {} | {status, expires_on, not_before})}' /tmp/verify.json || cat /tmp/verify.json
+          echo "::endgroup::"
+          {
+            echo "### Token diagnosis"
+            echo '```'
+            echo "verify HTTP $code"
+            jq -r '"status: " + ((.result.status)//"n/a") + " | expires: " + ((.result.expires_on)//"never")' /tmp/verify.json 2>/dev/null || true
+            jq -r '(.errors//[])[] | "error \(.code): \(.message)"' /tmp/verify.json 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::group::can it read Pages projects?"
+          pcode=$(curl -sS -o /tmp/proj.json -w '%{http_code}' \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+          echo "pages list HTTP $pcode"
+          jq '{success, errors, count: (.result // [] | length)}' /tmp/proj.json || cat /tmp/proj.json
+          echo "::endgroup::"
+          {
+            echo '```'
+            echo "pages projects list: HTTP $pcode"
+            jq -r '(.errors//[])[] | "error \(.code): \(.message)"' /tmp/proj.json 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Attach the custom domain
         if: inputs.action == 'attach'
         run: |
