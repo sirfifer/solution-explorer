@@ -57,11 +57,16 @@ Decided, do not re-litigate (owner decisions 2026-08-18):
    local diff or test posture.**
 2. **The current test posture in a normal checkout is 1642 passed, 4 skipped, 1
    xfailed, 0 failed** (verified 2026-08-20), not the "1451 / 3" an older
-   handoff recorded, which was measured in that broken environment. A worktree
-   checkout (where `.git` is a file, not a directory) can still behave
-   differently from a normal checkout, but the previously-recorded
-   `test_pruned_directory_row_stands_in_for_its_contents` failure specific to
-   that setup no longer reproduces.
+   handoff recorded, which was measured in that broken environment. **In a
+   worktree checkout the posture is 1641 passed, 4 skipped, 1 xfailed, 1
+   failed**, and the one failure is
+   `test_pruned_directory_row_stands_in_for_its_contents`. It asserts that the
+   `.git` *directory* contributes exactly one pruned-directory ledger row; in a
+   worktree `.git` is a file, so the row cannot exist and the assertion gets 0.
+   Environment-only, and it does **not** indicate a real regression. Corrected
+   2026-08-20 in N3: this handoff previously said the failure "no longer
+   reproduces", which was measured in the primary checkout and is wrong for a
+   worktree. Baseline against the posture for the checkout kind you are in.
 3. **The viewer's 86 local test failures are environment-only** (`localStorage`
    unavailable in the local Node). They pass in CI. Do not chase them, and do not
    let a real failure hide among them: capture the failing FILE set before and

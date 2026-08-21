@@ -301,7 +301,8 @@ resolves to, the harness records the exact SHA it analyzed and stamps it into
 | `enhance <slug>` | `analyze.py enhance --update` with the per-demo cost ceiling |
 | `validate <slug>` | The 3.6 checklist plus the 2 graduation gates; exits non-zero on any failure |
 | `diff <slug>` | Projection diff against last week's build (blue versus green) |
-| `deploy <slug>` | `wrangler pages deploy` to the demo's own Pages project |
+| `bundle <slug>` | **Amendment, 2026-08-20 (N3).** Assemble the deployable artifact: projection into `viewer/public/architecture/`, viewer build, `functions/_middleware.js` from `infrastructure/preview-gate/`, `UPSTREAM-LICENSE.txt` and any NOTICE, `publication.json`. See the note below |
+| `deploy <slug>` | `wrangler pages deploy` of the **bundle** to the demo's own Pages project |
 | `report <slug>` | Run record, JSON and markdown |
 | `findings <slug>` | Turn machine-gate results into deduplicated GitHub issues (section 5) |
 | `refresh <slug>` | The whole chain, stopping at the first gate failure |
@@ -310,6 +311,22 @@ resolves to, the harness records the exact SHA it analyzed and stamps it into
 
 Nothing here is new capability. It is orchestration over CLIs that already
 exist, which is why the estimate in section 8 is days and not weeks.
+
+**Amendment, 2026-08-20 (N3): the `bundle` step was missing from this table and
+its absence was not cosmetic.** As originally written, the table went straight
+from `analyze` (which emits `manifest.json`, `data/`, `search/`, `ai.json`,
+`llms.txt`) to `deploy`. That output directory is *data*, not a site. Deploying
+it would have published the raw architecture JSON with no viewer to read it
+and, decisively, **no `functions/_middleware.js`, so no preview gate at all**.
+The "private preview" that `DISCLOSURE-POLICY.md` step 3 requires would have
+been fully public, which is precisely what that step forbids.
+
+The first implementation of the harness followed the table faithfully and
+deployed `_arch_dir` for exactly this reason. The gap was in the design, not in
+the implementation. `bundle` is now the step between them, `deploy` refuses any
+bundle missing `index.html`, the preview-gate middleware, or the upstream
+license, and that refusal is not overridable by `DEMO_DEPLOY_ALLOW`: the
+environment variable authorizes a deploy, it cannot authorize an unsafe one.
 
 ### 4.3 Cadence
 

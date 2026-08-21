@@ -40,3 +40,8 @@ infrastructure/cloudflare/worker/.wrangler/
 # Golden-corpus fetched source (card G2): frozen clones fetched on demand at
 # a pinned commit. Never tracked; only tests/golden/<name>/baseline.json is.
 .golden-cache/
+
+# Wrangler local cache, written wherever wrangler runs. The demo harness
+# (scripts/demo-site.py deploy) runs it from the repo root, so ignore it here
+# too, not only under infrastructure/cloudflare/worker/.
+.wrangler/
