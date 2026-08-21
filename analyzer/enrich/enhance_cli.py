@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Optional
 
 from .engine import (
     DEFAULT_MAX_COST_USD,
@@ -23,6 +24,7 @@ from .engine import (
     EnhanceConfig,
     run_enhance,
 )
+from .pipeline import DEFAULT_MODELS
 
 DEFAULT_STORE_RELPATH = Path(".solution-explorer") / "index.db"
 
@@ -117,6 +119,40 @@ def build_parser() -> argparse.ArgumentParser:
         "Pass a large value to effectively disable it.",
     )
     parser.add_argument(
+        "--ladder",
+        action="store_true",
+        help="Run the full Enrichment Engine ladder (P1 orientation through P5 "
+        "determination) instead of the single bulk-enrichment pass. Default off: "
+        "without this flag the enhance path is byte-for-byte what it was.",
+    )
+    parser.add_argument(
+        "--run-dir",
+        default=None,
+        help="Directory the ladder writes its Run Report and per-phase artifacts "
+        "into (default: <root>/.solution-explorer/runs/<timestamp>). Ladder only.",
+    )
+    parser.add_argument(
+        "--phase-model",
+        action="append",
+        default=None,
+        metavar="KEY=MODEL",
+        help="Override the model for one phase or rung, repeatable. Keys: "
+        + ", ".join(sorted(DEFAULT_MODELS)) + ". Ladder only.",
+    )
+    parser.add_argument(
+        "--min-rounds",
+        type=int,
+        default=None,
+        help="Forced improvement rounds P5 must run even when it believes the map "
+        "is done (default 1, the Wave 1 forced-iteration decision). Ladder only.",
+    )
+    parser.add_argument(
+        "--max-rounds",
+        type=int,
+        default=None,
+        help="Cap on P5 improvement rounds (default 2). Ladder only.",
+    )
+    parser.add_argument(
         "--retry-attempts",
         type=int,
         default=None,
@@ -145,6 +181,12 @@ def main(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 2
+
+    # The ladder is a separate top-level path, not a mode of run_enhance. The
+    # default path below is therefore untouched by its existence: with --ladder
+    # off, main() reaches run_enhance with exactly the config it always built.
+    if args.ladder:
+        return _run_ladder_path(args, root, store_path)
 
     retry_policy = None
     if args.retry_attempts is not None:
@@ -216,3 +258,100 @@ def main(argv: list[str]) -> int:
         print(f"  report: {config.report_path}")
 
     return 0 if report.ok else 1
+
+
+def _parse_phase_models(pairs: Optional[list[str]]) -> tuple[dict, list[str]]:
+    """Parse repeated KEY=MODEL overrides. Returns (models, errors).
+
+    An unknown key is an error rather than a silent no-op: a typo that quietly
+    left a rung on its default model would be invisible in the Run Report and
+    would misattribute whatever that rung produced.
+    """
+    models = dict(DEFAULT_MODELS)
+    errors: list[str] = []
+    for raw in pairs or []:
+        if "=" not in raw:
+            errors.append(f"--phase-model expects KEY=MODEL, got {raw!r}")
+            continue
+        key, _, model = raw.partition("=")
+        key, model = key.strip(), model.strip()
+        if key not in DEFAULT_MODELS:
+            errors.append(
+                f"--phase-model: unknown key {key!r}; valid keys are "
+                + ", ".join(sorted(DEFAULT_MODELS))
+            )
+            continue
+        if not model:
+            errors.append(f"--phase-model: empty model for key {key!r}")
+            continue
+        models[key] = model
+    return models, errors
+
+
+def _run_ladder_path(args, root: Path, store_path: Path) -> int:
+    """The --ladder entry: build the policy, run the pipeline, print the summary."""
+    from .pipeline import IterationPolicy, LadderConfig, LadderPolicy, run_ladder
+
+    models, errors = _parse_phase_models(args.phase_model)
+    if errors:
+        for err in errors:
+            print(f"Error: {err}", file=sys.stderr)
+        return 2
+
+    iteration = IterationPolicy(
+        min_rounds=1 if args.min_rounds is None else args.min_rounds,
+        max_rounds=2 if args.max_rounds is None else args.max_rounds,
+    ).normalized()
+
+    run_dir = (
+        Path(args.run_dir).resolve()
+        if args.run_dir
+        else root / ".solution-explorer" / "runs" / _run_stamp()
+    )
+
+    policy = LadderPolicy(
+        models=models,
+        iteration=iteration,
+        max_cost_usd=args.max_cost_usd,
+        threshold=args.threshold,
+    )
+    config = LadderConfig(
+        store_path=store_path,
+        root=root,
+        run_dir=run_dir,
+        policy=policy,
+        dry_run=args.dry_run,
+        max_partitions=args.max_partitions,
+        max_lines=args.max_lines,
+        max_components=args.max_components,
+        min_components=args.min_components,
+    )
+
+    result = run_ladder(config)
+
+    print(f"Enrichment ladder run ({len(result.phases)} phases)")
+    print(f"  run dir: {run_dir}")
+    for phase in result.phases:
+        print(f"    {phase.name}: {phase.status.upper()}")
+        for note in phase.notes[:5]:
+            print(f"      - {note}")
+    for note in result.notes:
+        print(f"  note: {note}")
+    if result.ledger:
+        print(
+            f"  invocations: {len(result.ledger)}, "
+            f"cost: ${result.total_cost_usd:.4f} API-equivalent "
+            "(metered against the owner's subscription, not money spent)"
+        )
+    if result.ceiling_hit:
+        print("  note: run cost ceiling reached; partial state reported honestly")
+    if result.failed_phases:
+        print(f"  FAILED phases: {result.failed_phases}")
+    return 0 if result.ok else 1
+
+
+def _run_stamp() -> str:
+    """UTC timestamp for a default run directory name."""
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
