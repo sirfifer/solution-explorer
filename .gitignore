@@ -33,6 +33,13 @@ projection-diff.json
 .solution-explorer/index.db
 .solution-explorer/*.db-wal
 .solution-explorer/*.db-shm
+# Nested stores too. The three patterns above contain a slash, so git anchors
+# them to the repository root, and a store written anywhere else escaped them.
+# Running the suite analyzes tests/fixtures/*, which drops a real store beside
+# each fixture, and one of those was committed before this rule existed.
+**/.solution-explorer/index.db
+**/.solution-explorer/*.db-wal
+**/.solution-explorer/*.db-shm
 
 # Cloudflare Worker
 infrastructure/cloudflare/worker/.wrangler/

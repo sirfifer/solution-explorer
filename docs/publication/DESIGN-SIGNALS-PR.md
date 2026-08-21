@@ -133,6 +133,25 @@ a change to a published artifact on the default path.
 "nine". All updated. Two transport tests hardcoded `== 9`; they now assert
 against `len(TOOLS)` so the next tool addition cannot drift them out of step.
 
+## One self-inflicted mess, cleaned up, disclosed
+
+A 2.7 MB SQLite store,
+`tests/fixtures/polyglot/.solution-explorer/index.db`, was committed by
+mistake in the D6 commit (`bf79f0f`) by an over-broad `git add -A`. It is a
+test artifact: running the suite analyzes the fixtures, which drops a real fact
+store beside each one. It is untracked on main and should never have been added.
+
+Root cause worth fixing, and fixed: the three `.gitignore` patterns for the fact
+store all contain a slash, so git anchors them to the repository root, and a
+store written anywhere else escaped them entirely. `**/`-prefixed patterns now
+cover nested stores, and `git check-ignore` confirms the fixture path is caught.
+
+The file is removed from the branch tip in the final commit. **The blob is still
+in the branch's history at `bf79f0f`**, because rewriting history was outside
+this session's authority. If the branch is squash-merged the blob never reaches
+main and nothing further is needed. If it is merged with history preserved, drop
+that blob first.
+
 ## What was NOT run
 
 - **No model invocations of any kind.** Nothing in this branch calls a model.
