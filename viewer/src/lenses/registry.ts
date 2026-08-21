@@ -40,6 +40,11 @@ export interface LensContext {
   // components regardless of selection, so this is carried for parity and future
   // use; other lenses ignore it. Optional.
   selectedRuleId?: string | null;
+  // The currently selected design finding (D4). The Design lens reads it to
+  // build the focused graph: the components a finding implicates plus exactly
+  // the edges it names, which is the row-to-graph contract. Other lenses ignore
+  // it. Optional so existing lenses and callers need not supply it.
+  selectedDesignFindingId?: string | null;
 }
 
 /** One documented question and the gesture that answers it (I14). */

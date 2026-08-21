@@ -33,6 +33,8 @@ import type {
   StatusOverlay,
   ChangelogEntry,
   Publication,
+  ComponentDesign,
+  DesignFinding,
 } from "./types";
 import type { SearchResult } from "./utils/search";
 import { addToSearchIndex } from "./utils/search";
@@ -231,6 +233,28 @@ interface ArchStore {
   // Jump from a rule to the Capability lens with the rule's trigger capability
   // selected (the L2 cross-link). No-op when the rule has no capability trigger.
   viewRuleInCapabilityLens: (ruleId: string) => boolean;
+
+  // Design lens selection (D4). The selected finding drives the panel highlight,
+  // the focused graph (its implicated components and exactly the edges it
+  // names), and the URL param. Selecting one also navigates to the first
+  // implicated component (I12 stable identity). Reset on architecture reload.
+  selectedDesignFindingId: string | null;
+  selectDesignFinding: (findingId: string) => void;
+  clearDesignFinding: () => void;
+  getDesignFindings: () => DesignFinding[];
+  // The per-component design metrics, or null when the dataset carries none for
+  // that component. Null is "not measured", never "zero".
+  getDesignForComponent: (componentId: string) => ComponentDesign | null;
+
+  // Blast radius mode (D5): when on, hovering or selecting a node shades its
+  // transitive dependents one way and its transitive dependencies another.
+  // Computed client-side from the graph the viewer already holds.
+  blastRadiusMode: boolean;
+  toggleBlastRadiusMode: () => void;
+  setBlastRadiusMode: (on: boolean) => void;
+  // The component the blast-radius shading is currently anchored on.
+  blastRadiusFocusId: string | null;
+  setBlastRadiusFocus: (componentId: string | null) => void;
 
   // A one-shot request to open a specific detail-panel tab (P6-3). Set when
   // selecting a capability/entity so the panel jumps to its Capabilities/Data tab;
@@ -906,6 +930,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   selectedCapabilityId: null,
   selectedEntityId: null,
   selectedRuleId: null,
+  selectedDesignFindingId: null,
+  blastRadiusMode: false,
+  blastRadiusFocusId: null,
   pendingDetailTab: null,
 
   activePanel: null,
@@ -1006,6 +1033,12 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       selectedEntityId: null,
       // Rules lens selection belongs to a specific dataset; reset on reload (P6-6).
       selectedRuleId: null,
+      // Design lens selection and blast-radius shading belong to a specific
+      // dataset; reset on reload so a new scan starts from the ranked landing
+      // with no stale shading anchored on a component that may not exist (D4/D5).
+      selectedDesignFindingId: null,
+      blastRadiusMode: false,
+      blastRadiusFocusId: null,
       pendingDetailTab: null,
       // The findings overlay and any staged selection set belong to a specific
       // dataset; reset on reload so a new scan starts closed (P6-8).
@@ -1125,7 +1158,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   // Structure this is exactly the existing selectors, so old data renders
   // identically. Falls back to the default lens if the active id is unknown.
   getLensGraph: () => {
-    const { architecture, drillLevel, lens, selectedCapabilityId, selectedEntityId, selectedRuleId } = get();
+    const {
+      architecture, drillLevel, lens, selectedCapabilityId, selectedEntityId,
+      selectedRuleId, selectedDesignFindingId,
+    } = get();
     if (!architecture) return { nodes: [], aggregates: [], edges: [] };
     const def = getLens(lens) ?? getLens(DEFAULT_LENS_ID)!;
     return def.getGraph({
@@ -1137,6 +1173,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       selectedCapabilityId,
       selectedEntityId,
       selectedRuleId,
+      selectedDesignFindingId,
     });
   },
 
@@ -1261,6 +1298,42 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   clearRule: () => set({ selectedRuleId: null }),
 
   getRules: () => get().architecture?.rules ?? [],
+
+  // Design lens (D4). Selecting a finding focuses the graph on exactly what the
+  // finding implicates and navigates to its first target, so the row-to-graph
+  // contract every other lens honours holds here too. A finding with no targets
+  // (the boundary-strength summary is system-wide) selects nothing on the graph
+  // and simply highlights its row.
+  selectDesignFinding: (findingId) => {
+    const finding = get()
+      .getDesignFindings()
+      .find((f) => f.id === findingId);
+    set({ selectedDesignFindingId: findingId });
+    const first = finding?.targets[0];
+    if (first) {
+      get().navigateToComponent(first);
+    }
+  },
+
+  clearDesignFinding: () => set({ selectedDesignFindingId: null }),
+
+  getDesignFindings: () => get().architecture?.design_signals?.findings ?? [],
+
+  getDesignForComponent: (componentId) => {
+    return get().getComponentById(componentId)?.design ?? null;
+  },
+
+  // Blast radius mode (D5). The initial values live with the other lens state
+  // at the top of the store; these are the actions.
+  toggleBlastRadiusMode: () =>
+    set((s) => ({
+      blastRadiusMode: !s.blastRadiusMode,
+      // Leaving the mode drops the anchor, so re-entering starts clean rather
+      // than resuming a shading the reader has forgotten about.
+      blastRadiusFocusId: s.blastRadiusMode ? null : s.blastRadiusFocusId,
+    })),
+  setBlastRadiusMode: (on) => set({ blastRadiusMode: on, blastRadiusFocusId: null }),
+  setBlastRadiusFocus: (componentId) => set({ blastRadiusFocusId: componentId }),
 
   // Cross-lens jump L6 -> L3: switch to the Data lens with the rule's linked
   // entity focused. setLens resolves to Data (available when data_entities exist)
