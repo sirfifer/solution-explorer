@@ -1,0 +1,138 @@
+name: Demo Domain
+
+# Attach (or inspect) a custom domain on a demo's Cloudflare Pages project, and
+# report whether its certificate actually goes active.
+#
+# Why this is a workflow and not a local script: privileged Cloudflare API work
+# in this ecosystem runs where the secret already lives, in GitHub Actions
+# (CLOUDFLARE_API_TOKEN, a repository secret since 2026-01-31), exactly as
+# expat-intel's deploy-worker.yml does. A local session has wrangler's OAuth
+# token, which is enough to create projects, upload secrets and deploy, but
+# `wrangler pages` has no custom-domain command at any version through 4.125.0,
+# so the domain has to go through the REST API. Exporting the token into a shell
+# to work around that would move a long-lived credential out of the one place
+# that is designed to hold it, which is a downgrade in posture for a
+# convenience. This keeps the secret where it is and makes every run auditable.
+#
+# The reason this exists at all: `demo.syscorpus.com` puts each demo one level
+# deeper than Cloudflare's free Universal SSL wildcard reaches. `*.syscorpus.com`
+# does not match `vscode.demo.syscorpus.com`, wildcards do not cascade, and
+# Cloudflare's docs say Advanced Certificate Manager does not apply to Pages
+# custom domains. That is documentation, not a test on this account, and the
+# `check` action below is the test.
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: Cloudflare Pages project name (e.g. syscorpus-vscode)
+        required: true
+        type: string
+      hostname:
+        description: Custom hostname to attach (e.g. vscode.demo.syscorpus.com)
+        required: true
+        type: string
+      action:
+        description: check = report only; attach = add it then report
+        required: true
+        default: check
+        type: choice
+        options: [check, attach]
+
+concurrency:
+  group: demo-domain-${{ inputs.project }}
+  cancel-in-progress: false
+
+jobs:
+  domain:
+    name: ${{ inputs.action }} ${{ inputs.hostname }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # Account id is not a secret (it appears in dashboard URLs).
+      CLOUDFLARE_ACCOUNT_ID: a01622cc6f94a7bb946140c02b6ee474
+      PROJECT: ${{ inputs.project }}
+      HOSTNAME: ${{ inputs.hostname }}
+      ACTION: ${{ inputs.action }}
+    steps:
+      - name: Require the API token
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN secret is not configured, so nothing was attempted. Add a Cloudflare API token with Pages:Edit and Zone:DNS:Edit as a repository secret named CLOUDFLARE_API_TOKEN."
+            exit 1
+          fi
+
+      - name: Attach the custom domain
+        if: inputs.action == 'attach'
+        run: |
+          set -euo pipefail
+          echo "::group::POST pages/projects/$PROJECT/domains"
+          code=$(curl -sS -o /tmp/attach.json -w '%{http_code}' \
+            -X POST \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT/domains" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$(jq -nc --arg n "$HOSTNAME" '{name:$n}')")
+          echo "HTTP $code"
+          jq '{success, errors, messages, result: (.result // {} | {name, status, certificate_authority, validation_data, verification_data})}' /tmp/attach.json || cat /tmp/attach.json
+          echo "::endgroup::"
+          # 409 means it is already attached, which is success for our purposes.
+          if [ "$code" != "200" ] && [ "$code" != "409" ]; then
+            echo "::error::attach failed with HTTP $code; see the group above for Cloudflare's errors array"
+            exit 1
+          fi
+
+      - name: Report domain and certificate status
+        run: |
+          set -euo pipefail
+          # Give Cloudflare a moment to begin provisioning before the first read.
+          if [ "$ACTION" = "attach" ]; then sleep 20; fi
+
+          echo "## Domain status: \`$HOSTNAME\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          for attempt in 1 2 3 4 5 6; do
+            curl -sS -o /tmp/domains.json \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT/domains" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+            row=$(jq -c --arg n "$HOSTNAME" '.result[]? | select(.name==$n)' /tmp/domains.json || true)
+            if [ -z "$row" ]; then
+              echo "not attached to project '$PROJECT'" | tee -a "$GITHUB_STEP_SUMMARY"
+              break
+            fi
+            status=$(echo "$row" | jq -r '.status // "unknown"')
+            echo "attempt $attempt: status=$status"
+            if [ "$status" = "active" ] || [ "$status" = "deactivated" ]; then break; fi
+            sleep 20
+          done
+
+          if [ -n "${row:-}" ]; then
+            {
+              echo '```json'
+              echo "$row" | jq '{name, status, certificate_authority, validation_data, verification_data}'
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Independently verify the certificate over TLS
+        run: |
+          set -euo pipefail
+          # Rule 1 of the ecosystem procedures: confirm a state change from
+          # OUTSIDE the thing that made it. The API saying "active" is the API's
+          # own report; a real TLS handshake from a machine that has never seen
+          # this account is evidence. A wrong or missing certificate is exactly
+          # what this whole workflow exists to detect, so a handshake failure is
+          # reported as the ANSWER, not as a job failure.
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Independent TLS check" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if out=$(echo | timeout 30 openssl s_client -servername "$HOSTNAME" -connect "$HOSTNAME:443" 2>/dev/null); then
+            echo "$out" | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null \
+              | tee -a "$GITHUB_STEP_SUMMARY" || true
+          else
+            echo "TLS handshake FAILED for $HOSTNAME" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "(expected while DNS or the certificate is still provisioning, and" >> "$GITHUB_STEP_SUMMARY"
+            echo " the decisive result if it never clears: this hostname is not coverable)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
