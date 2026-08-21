@@ -239,6 +239,52 @@ def validate_registry(doc) -> list[str]:
     if cadence is not None and cadence not in CADENCE_SECONDS:
         errors.append(f"cadence must be one of {sorted(CADENCE_SECONDS)}, got {cadence!r}")
 
+    errors.extend(_enrichment_errors(doc.get("enrichment")))
+
+    return errors
+
+
+# The enrichment block is OPTIONAL: an entry without one runs the classic single
+# bulk pass, which is what every entry did before the ladder existed. When it is
+# present it is validated strictly, because a typo in a model binding or an
+# iteration bound would otherwise be discovered by a run that had already spent
+# most of its budget.
+ENRICHMENT_PIPELINES = frozenset({"bulk", "ladder"})
+
+
+def _enrichment_errors(block) -> list[str]:
+    if block is None:
+        return []
+    if not isinstance(block, dict):
+        return ["enrichment must be an object"]
+    errors: list[str] = []
+    pipeline = block.get("pipeline", "bulk")
+    if pipeline not in ENRICHMENT_PIPELINES:
+        errors.append(
+            f"enrichment.pipeline must be one of {sorted(ENRICHMENT_PIPELINES)}, "
+            f"got {pipeline!r}"
+        )
+    models = block.get("models")
+    if models is not None and not isinstance(models, dict):
+        errors.append("enrichment.models must be an object of rung -> binding")
+    iteration = block.get("iteration")
+    if iteration is not None:
+        if not isinstance(iteration, dict):
+            errors.append("enrichment.iteration must be an object")
+        else:
+            for key in ("min_rounds", "max_rounds"):
+                value = iteration.get(key)
+                if value is not None and (not isinstance(value, int) or value < 0):
+                    errors.append(
+                        f"enrichment.iteration.{key} must be a non-negative integer, "
+                        f"got {value!r}"
+                    )
+            lo, hi = iteration.get("min_rounds"), iteration.get("max_rounds")
+            if isinstance(lo, int) and isinstance(hi, int) and lo > hi:
+                errors.append(
+                    f"enrichment.iteration.min_rounds ({lo}) exceeds max_rounds "
+                    f"({hi}), so the forced floor could never be reached"
+                )
     return errors
 
 
@@ -581,6 +627,22 @@ def run_enhance(
         "--threshold", str(corpus["gates"]["min_enrichment_score"]),
         "--report", str(report_path),
     ]
+
+    # The Enrichment Engine ladder, when the registry asks for it. The Run Report
+    # lands in the run directory beside every other artifact of that refresh, so
+    # a reader who opens one date opens everything that happened on it.
+    enrichment = corpus.get("enrichment") or {}
+    if enrichment.get("pipeline") == "ladder":
+        run_dir = _run_dir(slug, runs_dir=None) / "enrichment"
+        cmd += ["--ladder", "--run-dir", str(run_dir)]
+        for key, binding in sorted((enrichment.get("models") or {}).items()):
+            cmd += ["--phase-model", f"{key}={binding}"]
+        iteration = enrichment.get("iteration") or {}
+        if iteration.get("min_rounds") is not None:
+            cmd += ["--min-rounds", str(iteration["min_rounds"])]
+        if iteration.get("max_rounds") is not None:
+            cmd += ["--max-rounds", str(iteration["max_rounds"])]
+
     if max_partitions is not None:
         cmd += ["--max-partitions", str(max_partitions)]
     if dry_run:
@@ -588,6 +650,11 @@ def run_enhance(
 
     result = subprocess.run(cmd)
     return result.returncode
+
+
+def enrichment_run_dir(slug: str, date: Optional[str] = None, runs_dir: Optional[Path] = None) -> Path:
+    """Where a ladder run's Run Report lands for one demo and date."""
+    return _run_dir(slug, date=date, runs_dir=runs_dir) / "enrichment"
 
 
 # ---------------------------------------------------------------------------
@@ -772,15 +839,35 @@ def gate_detect_only_share(arch_dir: Path, gates_cfg: dict) -> GateResult:
 
 
 def gate_enrichment_quality(slug: str, corpus_dir: Optional[Path], gates_cfg: dict) -> GateResult:
-    """Section 2 + 3.6: enrichment at/above threshold, zero failed partitions.
+    """Section 2 + 3.6, upgraded to the TRUTH instrument.
 
-    Reads the report `enhance <slug>` wrote (analyze.py enhance already ran the
-    quality scorer as a gate at the registry's own `gates.min_enrichment_score`
-    threshold, via `run_enhance`'s `--threshold` wiring), rather than
-    re-scoring here. If enhance was run as `--dry-run`, `scorer_pass` is null
-    (no model was invoked, nothing to score); that is reported distinctly from
-    a real failure.
+    The form scorer is a sanity FLOOR, not the gate. The calibration measured 83
+    of 99 components scoring exactly 85.0 on it while nothing checked whether one
+    claim was true; a gate that reads only that number certifies shape and calls
+    it quality.
+
+    So when a ladder Run Report exists, this reads what the truth instrument
+    actually produced:
+
+      * the contract census: nothing may still be asking to climb, because an
+        item in the escalate state is unfinished work rather than a gap;
+      * the adjudication disagreement rate: how many sampled claims independent
+        adjudication would not stand behind;
+      * the verify verdicts: the S2 identity surface.
+
+    And it keeps the NOT_IMPLEMENTED discipline exactly. A ladder run whose
+    adjudication sampled NOTHING has no truth instrument, and reporting PASS on
+    the form floor alone would be the precise failure this gate exists to
+    prevent: a green light with nothing behind it. That case is
+    NOT_IMPLEMENTED, loudly, never a silent pass.
+
+    A registry entry with no ladder falls back to the classic bulk report, which
+    is what every entry did before the ladder existed.
     """
+    ladder_report = enrichment_run_dir(slug) / "report.json"
+    if ladder_report.is_file():
+        return _gate_from_run_report(ladder_report, gates_cfg)
+
     report_path = _out_dir(slug, corpus_dir) / "enhance-report.json"
     if not report_path.is_file():
         return GateResult("enrichment_quality", "SKIP", f"no enrichment report at {report_path}; run `enhance <slug>` first")
@@ -800,6 +887,99 @@ def gate_enrichment_quality(slug: str, corpus_dir: Optional[Path], gates_cfg: di
     if scorer_pass is False:
         return GateResult("enrichment_quality", "FAIL", f"quality gate failed: {report.get('scorer_summary')}")
     return GateResult("enrichment_quality", "PASS", f"quality gate passed at threshold {threshold}: {report.get('scorer_summary')}")
+
+
+# Truth-instrument bounds. Deliberately explicit rather than buried in the gate,
+# because these two numbers are what "good enough to publish" means in practice
+# and they should be arguable in one place.
+MIN_GROUNDED_FRACTION = 0.80
+MAX_DISAGREEMENT_RATE = 0.20
+
+
+def _gate_from_run_report(report_path: Path, gates_cfg: dict) -> GateResult:
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return GateResult("enrichment_quality", "FAIL", f"Run Report is not valid JSON: {exc}")
+
+    identity = report.get("identity") or {}
+    if identity.get("dry_run"):
+        return GateResult(
+            "enrichment_quality", "SKIP",
+            "the Run Report is from a --dry-run ladder (no model was invoked); "
+            "run `enhance <slug>` for real",
+        )
+
+    census = report.get("census") or {}
+    total = int(census.get("total") or 0)
+    if not total:
+        return GateResult(
+            "enrichment_quality", "NOT_IMPLEMENTED",
+            "the ladder produced no contract census, so the truth instrument has "
+            "nothing to read; this is reported rather than passed on the form floor",
+        )
+
+    unresolved = census.get("unresolved") or []
+    if unresolved:
+        return GateResult(
+            "enrichment_quality", "FAIL",
+            f"{len(unresolved)} item(s) were still asking to climb when the ladder "
+            f"stopped: {unresolved[:5]}. That is unfinished work, not an honest gap",
+        )
+
+    adjudication = report.get("adjudication") or {}
+    sampled = int(adjudication.get("checked") or 0)
+    rate = adjudication.get("disagreement_rate")
+    if not sampled or rate is None:
+        return GateResult(
+            "enrichment_quality", "NOT_IMPLEMENTED",
+            "no grounding spot-checks were run, so the disagreement rate is "
+            "undefined rather than zero and nothing has checked whether the "
+            "claims are supported by their own evidence. The form scorer alone "
+            "is a floor, not a quality verdict",
+        )
+
+    grounded_fraction = float(census.get("grounded_fraction") or 0.0)
+    problems: list[str] = []
+    if grounded_fraction < MIN_GROUNDED_FRACTION:
+        problems.append(
+            f"only {grounded_fraction:.1%} of items grounded "
+            f"(floor {MIN_GROUNDED_FRACTION:.0%})"
+        )
+    if float(rate) > MAX_DISAGREEMENT_RATE:
+        problems.append(
+            f"adjudication would not stand behind {float(rate):.1%} of the "
+            f"{sampled} claims it sampled (ceiling {MAX_DISAGREEMENT_RATE:.0%})"
+        )
+
+    # The universal gates the determination already answered mechanically are
+    # read back rather than recomputed, so the gate and the Run Report cannot
+    # disagree about the same run.
+    unmet = [
+        c.get("criterion_id")
+        for c in (report.get("criteria") or [])
+        if c.get("verdict") == "unmet"
+    ]
+    if unmet:
+        problems.append("criteria not met: " + ", ".join(str(c) for c in unmet))
+
+    identity_pass = (report.get("adjudication") or {}).get("identity") or {}
+    identity_note = ""
+    if identity_pass:
+        verdicts = identity_pass.get("verdicts") or {}
+        identity_note = (
+            f"; identity verdicts {', '.join(f'{k}={v}' for k, v in sorted(verdicts.items()))}"
+            if verdicts else ""
+        )
+
+    summary = (
+        f"{census.get('grounded', 0)}/{total} grounded "
+        f"({grounded_fraction:.1%}), disagreement {float(rate):.1%} over "
+        f"{sampled} sampled claim(s){identity_note}"
+    )
+    if problems:
+        return GateResult("enrichment_quality", "FAIL", "; ".join(problems) + f" [{summary}]")
+    return GateResult("enrichment_quality", "PASS", summary)
 
 
 def gate_sbom_present(arch_dir: Path) -> GateResult:
