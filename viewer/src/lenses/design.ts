@@ -296,6 +296,71 @@ export function rollUpEdgeMarks(sets: Iterable<Set<DesignEdgeMark>>): Set<Design
   return out;
 }
 
+// --- blast radius, as an interaction (D5) ---------------------------------------
+
+// The two directions of a blast radius, plus everything else. Computed
+// client-side from the edges the viewer already holds, so it works at any drill
+// level and on any lens's graph without another projection round trip.
+//
+// The picture is the point (research document Part 3): dependents shade one way,
+// dependencies the other, everything else dims. "If this changes, everything
+// shaded could break" is a faster read than any number.
+export interface BlastRadius {
+  // Transitive dependents: what could break if the focus changes.
+  dependents: Set<string>;
+  // Transitive dependencies: what the focus itself is standing on.
+  dependencies: Set<string>;
+}
+
+// Walk one direction of the graph transitively from a starting node. Cycles are
+// normal in exactly the graphs this feature is for, so the walk is a visited-set
+// traversal and the origin is never included in its own result.
+function reachable(
+  start: string,
+  adjacency: Map<string, string[]>,
+): Set<string> {
+  const seen = new Set<string>();
+  const frontier = [start];
+  while (frontier.length > 0) {
+    const current = frontier.pop()!;
+    for (const next of adjacency.get(current) ?? []) {
+      if (next !== start && !seen.has(next)) {
+        seen.add(next);
+        frontier.push(next);
+      }
+    }
+  }
+  return seen;
+}
+
+// Build both adjacency maps from a flat edge list. Self-edges are dropped: a
+// module that imports itself is a parser artifact, not a blast radius.
+export function buildBlastAdjacency(
+  edges: { source: string; target: string }[],
+): { forward: Map<string, string[]>; reverse: Map<string, string[]> } {
+  const forward = new Map<string, string[]>();
+  const reverse = new Map<string, string[]>();
+  for (const { source, target } of edges) {
+    if (!source || !target || source === target) continue;
+    // source depends on target, so target changing can break source.
+    (forward.get(source) ?? forward.set(source, []).get(source)!).push(target);
+    (reverse.get(target) ?? reverse.set(target, []).get(target)!).push(source);
+  }
+  return { forward, reverse };
+}
+
+export function computeBlastRadius(
+  focusId: string | null,
+  edges: { source: string; target: string }[],
+): BlastRadius {
+  if (!focusId) return { dependents: new Set(), dependencies: new Set() };
+  const { forward, reverse } = buildBlastAdjacency(edges);
+  return {
+    dependents: reachable(focusId, reverse),
+    dependencies: reachable(focusId, forward),
+  };
+}
+
 // The Design question list (I14). Every id is exercised in designQuestions.test.
 export const DESIGN_QUESTIONS: LensQuestion[] = [
   {

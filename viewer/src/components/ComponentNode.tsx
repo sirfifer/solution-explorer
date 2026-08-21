@@ -1100,6 +1100,21 @@ export const ComponentNode = memo(function ComponentNode({
               <span>{formatNumber(component.metrics.lines)} loc</span>
             </Tooltip>
           )}
+          {/* Blast radius (D5): present only on a --design-signals dataset, and
+              only when something actually depends on this component. The count
+              is the number, the graph shading is the picture, and the tooltip
+              carries the plain-language reading rather than the term. */}
+          {(component.design?.blast_radius ?? 0) > 0 && (
+            <Tooltip
+              content={`If this changes, ${component.design!.blast_radius} other part${
+                component.design!.blast_radius === 1 ? "" : "s"
+              } could break. Counted by following dependencies through the whole graph.`}
+            >
+              <span className={darkMode ? "text-rose-400" : "text-rose-600"}>
+                {formatNumber(component.design!.blast_radius)} could break
+              </span>
+            </Tooltip>
+          )}
           {component.port && (
             <ReviewTarget
               targetType="component-port"

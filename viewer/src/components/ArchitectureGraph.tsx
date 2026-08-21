@@ -32,7 +32,7 @@ import {
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
-import { getLens, capabilityCountsByComponent, ruleCountsByComponent, type CapabilityKindCounts, type RuleKindCounts } from "../lenses";
+import { getLens, capabilityCountsByComponent, ruleCountsByComponent, computeBlastRadius, type CapabilityKindCounts, type RuleKindCounts } from "../lenses";
 import type { Component, Relationship } from "../types";
 
 const nodeTypes: NodeTypes = {
@@ -56,6 +56,10 @@ export function ArchitectureGraph() {
     selectedCapabilityId,
     selectedEntityId,
     selectedRuleId,
+    selectedDesignFindingId,
+    blastRadiusMode,
+    blastRadiusFocusId,
+    setBlastRadiusFocus,
     getLensGraph,
     selectComponent,
     navigateToBreadcrumb,
@@ -372,7 +376,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, nodeBudget, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, getLensGraph]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, nodeBudget, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, selectedDesignFindingId, getLensGraph]);
 
   // Apply ELK layout
   useEffect(() => {
@@ -456,6 +460,9 @@ export function ArchitectureGraph() {
 
   // Pan to selected node and highlight its neighbors
   useEffect(() => {
+    // Blast-radius mode owns the shading while it is on (D5). Two effects both
+    // writing opacity would race and the last one to run would win at random.
+    if (blastRadiusMode) return;
     if (!selectedComponentId) {
       // Reset all opacities
       setNodes((nds) => nds.map((n) => ({
@@ -537,7 +544,88 @@ export function ArchitectureGraph() {
     })));
     // layoutVersion: re-run once ELK has applied real positions so a deep-link
     // restore centers on the laid-out node, not its pre-layout grid slot (F-VW-7).
-  }, [selectedComponentId, layoutVersion, getNodes, getEdges, setCenter, setNodes, setEdges]);
+  }, [selectedComponentId, layoutVersion, blastRadiusMode, getNodes, getEdges, setCenter, setNodes, setEdges]);
+
+  // Blast radius shading (D5). An interaction, not a report: with the mode on,
+  // the anchored component's transitive DEPENDENTS shade warm (what breaks if
+  // this changes), its transitive DEPENDENCIES shade cool (what it stands on),
+  // and everything else dims. The picture is the fastest quality read there is,
+  // which is why no number is needed until the reader wants one.
+  //
+  // Computed client-side from the edges already on the canvas, so it costs no
+  // round trip and works at any drill level: the shading answers the question
+  // for the graph the reader is actually looking at. It needs no design_signals
+  // block either, so the interaction is available on any dataset while the
+  // stored per-component count is the flag-gated extra.
+  useEffect(() => {
+    if (!blastRadiusMode) return;
+    const anchor = blastRadiusFocusId ?? selectedComponentId;
+    if (!anchor) {
+      // Mode on but nothing anchored yet: show the graph plainly rather than
+      // dimming everything, so the reader can see what to click.
+      setNodes((nds) => nds.map((n) => ({
+        ...n,
+        style: { ...n.style, opacity: 1, transition: "opacity 0.3s ease" },
+      })));
+      setEdges((eds) => eds.map((e) => ({
+        ...e,
+        style: { ...e.style, opacity: 1, transition: "opacity 0.3s ease" },
+      })));
+      return;
+    }
+
+    const { dependents, dependencies } = computeBlastRadius(
+      anchor,
+      getEdges().map((e) => ({ source: e.source, target: e.target })),
+    );
+
+    setNodes((nds) => nds.map((n) => {
+      const isAnchor = n.id === anchor;
+      const isDependent = dependents.has(n.id);
+      const isDependency = dependencies.has(n.id);
+      // A node can be reachable both ways when it sits in a cycle with the
+      // anchor. It is shown as a dependent, because "this could break" is the
+      // claim that matters for a change.
+      const ring = isAnchor
+        ? "0 0 0 3px #818CF8"
+        : isDependent
+          ? "0 0 0 3px rgba(244,63,94,0.85)"
+          : isDependency
+            ? "0 0 0 3px rgba(56,189,248,0.85)"
+            : undefined;
+      return {
+        ...n,
+        style: {
+          ...n.style,
+          opacity: isAnchor || isDependent || isDependency ? 1 : 0.12,
+          boxShadow: ring,
+          borderRadius: ring ? 14 : (n.style?.borderRadius as number | undefined),
+          transition: "opacity 0.3s ease",
+        },
+      };
+    }));
+
+    setEdges((eds) => eds.map((e) => {
+      const inRadius =
+        (dependents.has(e.source) || e.source === anchor) &&
+        (dependents.has(e.target) || e.target === anchor);
+      const inDeps =
+        (dependencies.has(e.source) || e.source === anchor) &&
+        (dependencies.has(e.target) || e.target === anchor);
+      return {
+        ...e,
+        style: {
+          ...e.style,
+          opacity: inRadius || inDeps ? 1 : 0.06,
+          transition: "opacity 0.3s ease",
+        },
+        animated: false,
+      };
+    }));
+  }, [
+    blastRadiusMode, blastRadiusFocusId, selectedComponentId, layoutVersion,
+    getEdges, setNodes, setEdges,
+  ]);
 
   // Where and when the last node click landed, in screen coordinates. Selecting
   // a node opens the detail panel, which shrinks the canvas (measured: 1184px
@@ -560,13 +648,19 @@ export function ArchitectureGraph() {
         t: Date.now(),
       };
       selectComponent(node.id);
+      // In blast-radius mode a click also re-anchors the shading, which is the
+      // whole gesture: click a part, see what rides on it (D5).
+      if (blastRadiusMode) setBlastRadiusFocus(node.id);
     },
-    [selectComponent],
+    [selectComponent, blastRadiusMode, setBlastRadiusFocus],
   );
 
   const onPaneClick = useCallback(() => {
     selectComponent(null);
-  }, [selectComponent]);
+    // Clicking empty canvas drops the blast-radius anchor but stays in the mode,
+    // so the reader can pick a different part without leaving and re-entering.
+    if (blastRadiusMode) setBlastRadiusFocus(null);
+  }, [selectComponent, blastRadiusMode, setBlastRadiusFocus]);
 
   // Second press at the same screen point within the double-click window drills
   // the node the first press selected, wherever that press now lands. Capture
