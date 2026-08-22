@@ -28,6 +28,7 @@ import { ActivityPanel } from "./components/ActivityPanel";
 import { CapabilityPanel } from "./components/CapabilityPanel";
 import { DataPanel } from "./components/DataPanel";
 import { RulesPanel } from "./components/RulesPanel";
+import { DesignPanel } from "./components/DesignPanel";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useBottomSheet } from "./hooks/useBottomSheet";
@@ -213,6 +214,7 @@ export function MobileLensSheet({ lens, darkMode, bottomSheet }: {
         {lens === "capability" && <CapabilityPanel mobile />}
         {lens === "data" && <DataPanel mobile />}
         {lens === "rules" && <RulesPanel mobile />}
+        {lens === "design" && <DesignPanel mobile />}
       </div>
     </div>
   );
@@ -1095,6 +1097,7 @@ export function App() {
           {isPanelViewport && lens === "capability" && <CapabilityPanel />}
           {isPanelViewport && lens === "data" && <DataPanel />}
           {isPanelViewport && lens === "rules" && <RulesPanel />}
+          {isPanelViewport && lens === "design" && <DesignPanel />}
           <div className="flex-1 relative">
             <ReactFlowProvider>
               <ArchitectureGraph />

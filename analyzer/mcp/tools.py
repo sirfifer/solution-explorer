@@ -1,5 +1,5 @@
-"""The nine MCP tools over the fact store (TARGET-ARCHITECTURE section 8,
-extended by LENS-DESIGN section 6).
+"""The twelve MCP tools over the fact store (TARGET-ARCHITECTURE section 8,
+extended by LENS-DESIGN section 6 and the design signals of D6).
 
 Each tool is a pure function ``(StoreContext, args) -> ToolResult`` reading only
 the store (invariant I9, no LLM calls). Every response cites evidence file:line,
@@ -21,6 +21,12 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from ..contracts import require
+from ..derive.design_signals import (
+    METHOD_CAVEAT,
+    METRIC_TERMS,
+    NULL_RATIO_NOTE,
+    reachable_set,
+)
 from .context import StoreContext
 
 # Response bounds (invariant: no silent truncation, always an "N more" notice).
@@ -922,6 +928,200 @@ def _concern_has_component(concern: dict, component: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Design signals (D6). The machine front door INVERTS the two-audience order:
+# the canonical term leads, because it is the compact, unambiguous key an agent
+# can map to the literature and act on, and the plain-language sentence rides
+# along as the description. Same facts as the viewer's Design lens, same
+# derivation over the same store, so the numbers agree by construction.
+# ---------------------------------------------------------------------------
+
+
+def _design_finding_payload(finding) -> dict:
+    """One finding, term-first for a machine reader.
+
+    Built from the finding's own serializer so the field list lives in one
+    place; this wrapper only performs the machine front door's inversion, the
+    plain sentence riding as the description while the term leads.
+    """
+    payload = finding.to_dict()
+    payload["description"] = payload.pop("lead")
+    # Term first. This is the inversion: re-keyed so a reader paging through
+    # raw JSON sees the canonical term before anything else.
+    ordered = {"term": payload.pop("term"), "term_detail": payload.pop("term_detail")}
+    ordered.update(payload)
+    return ordered
+
+
+def _tool_design(ctx: StoreContext, args: dict) -> ToolResult:
+    signals = ctx.design_signals
+    if not signals.items:
+        return ToolResult(
+            "No components in this store, so no design signals.",
+            {"available": False, "reason": "no components", "findings": []},
+        )
+    kind = (args.get("kind") or "").strip()
+    limit = _limit_arg(args, DEFAULT_LIST_LIMIT)
+    findings = signals.findings
+    if kind:
+        findings = [f for f in findings if f.kind == kind]
+    shown = findings[:limit]
+
+    counts = signals.finding_counts()
+
+    data = {
+        "available": True,
+        # The caveat leads the payload, not a footnote, because an agent that
+        # reports these findings onward must carry it.
+        "method_caveat": METHOD_CAVEAT,
+        "has_activity": signals.has_activity,
+        "component_count": len(signals.items),
+        "finding_counts": counts,
+        "findings": [_design_finding_payload(f) for f in shown],
+        # Stated explicitly so an agent does not infer an ordering that is not
+        # there and then act on it.
+        "ranking_note": (
+            "rank_within_kind orders a finding against its own kind only. There "
+            "is no overall architecture score and no ranking of one kind "
+            "against another; do not synthesize one."
+        ),
+    }
+    note = _truncation_note(len(findings), len(shown), "findings")
+    if note:
+        data["truncation_note"] = note
+
+    lines = [f"DESIGN SIGNALS  ({len(signals.items)} components, {len(signals.findings)} findings)"]
+    lines.append(f"method: static graph{' + git history' if signals.has_activity else ''}")
+    lines.append(f"caveat: {METHOD_CAVEAT}")
+    if counts:
+        lines.append("counts: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+    for f in shown:
+        lines.append(f"  [{f.term}] {f.lead}")
+        if f.targets:
+            lines.append(f"    targets: {', '.join(f.targets)}  ({f.method})")
+    if note:
+        lines.append(f"  ({note})")
+    return ToolResult("\n".join(lines), data)
+
+
+def _tool_design_component(ctx: StoreContext, args: dict) -> ToolResult:
+    cid = str(args.get("id") or "").strip()
+    if not cid:
+        raise ToolError("id is required")
+    if cid not in ctx.component_by_id:
+        raise ToolError(f"unknown component id: {cid}")
+    item = ctx.design_signals.get(cid)
+    if item is None:
+        return ToolResult(
+            f"{cid}: no design metrics.",
+            {"id": cid, "available": False, "method_caveat": METHOD_CAVEAT},
+        )
+    findings = [
+        _design_finding_payload(f)
+        for f in ctx.design_signals.findings
+        if cid in f.targets
+    ]
+    data = {
+        "id": cid,
+        "available": True,
+        "method_caveat": METHOD_CAVEAT,
+        "metrics": item.to_dict(),
+        # Term-first glossary from the derive module's single source, so this
+        # payload, the tool description and the front door cannot drift into
+        # three different definitions of the same number.
+        "metric_terms": dict(METRIC_TERMS),
+        "null_note": (
+            NULL_RATIO_NOTE + ". Abstractness is only "
+            "computed where the language distinguishes an interface from a class, "
+            "so Python, C++, Ruby and JavaScript components report null. Do not "
+            "coerce null to 0: that would place a load-bearing component in the "
+            "zone of pain on a number nobody measured."
+        ),
+        "findings": findings,
+    }
+    metrics = item.to_dict()
+    lines = [
+        f"DESIGN  {cid}",
+        f"  fan_in={metrics['fan_in']} fan_out={metrics['fan_out']} "
+        f"blast_radius={metrics['blast_radius']}",
+        f"  instability={metrics['instability']} abstractness={metrics['abstractness']} "
+        f"distance={metrics['distance_main_sequence']}  (null means not measurable)",
+        f"  bands: {metrics['bands']}",
+        f"  caveat: {METHOD_CAVEAT}",
+    ]
+    for f in findings:
+        lines.append(f"  [{f['term']}] {f['description']}")
+    return ToolResult("\n".join(lines), data)
+
+
+def _tool_blast_radius(ctx: StoreContext, args: dict) -> ToolResult:
+    """What breaks if this changes, and what it stands on.
+
+    The coordination primitive for an agent fleet: blast radius decides what can
+    be edited in parallel and what has to queue. Distinct from ``se_impact``,
+    which walks a bounded number of hops to produce a per-hop EVIDENCE chain;
+    this reports the full transitive closure as counts plus id lists, and adds
+    the reverse direction and cycle membership.
+    """
+    cid = str(args.get("id") or "").strip()
+    if not cid:
+        raise ToolError("id is required")
+    if cid not in ctx.component_by_id:
+        raise ToolError(f"unknown component id: {cid}")
+    limit = _limit_arg(args, DEFAULT_LIST_LIMIT)
+
+    # The SAME graph and the SAME walk the design metrics use, via the derive
+    # module's shared helpers, so this tool and se_design_component cannot
+    # report two different blast radii for one component.
+    inbound, outbound = ctx.design_adjacency
+    dependents = sorted(reachable_set(cid, inbound))
+    dependencies = sorted(reachable_set(cid, outbound))
+
+    # Cycle membership matters more than either count: inside a cycle the
+    # members can only be changed as a unit, so an agent must not split them.
+    # Read from the UNCAPPED membership map, never from the findings list: the
+    # findings cap cycles at 50 for payload discipline, and a component in the
+    # 51st cycle is still in a cycle.
+    members = ctx.design_signals.cycle_membership.get(cid)
+
+    data = {
+        "id": cid,
+        "method_caveat": METHOD_CAVEAT,
+        "blast_radius": len(dependents),
+        "dependents": dependents[:limit],
+        "depends_on_count": len(dependencies),
+        "depends_on": dependencies[:limit],
+        "in_cycle": members is not None,
+        "cycle_members": [list(members)] if members else [],
+        "parallel_safety_note": (
+            "Components inside a cycle with this one can only be changed as a "
+            "unit. Components in `dependents` could break if this changes; "
+            "editing them in parallel with this one risks conflicting on the "
+            "same contract."
+        ),
+    }
+    lines = [
+        f"BLAST RADIUS  {cid}",
+        f"  {len(dependents)} component(s) could break if this changes",
+        f"  it stands on {len(dependencies)} component(s)",
+    ]
+    if members:
+        lines.append(f"  IN A CYCLE with: {', '.join(m for m in members if m != cid)}")
+    notes = []
+    note = _truncation_note(len(dependents), len(data["dependents"]), "dependents")
+    if note:
+        notes.append(note)
+    note = _truncation_note(len(dependencies), len(data["depends_on"]), "dependencies")
+    if note:
+        notes.append(note)
+    if notes:
+        data["truncation_note"] = "; ".join(notes)
+        lines.append(f"  ({data['truncation_note']})")
+    lines.append(f"  caveat: {METHOD_CAVEAT}")
+    return ToolResult("\n".join(lines), data)
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -1066,6 +1266,58 @@ TOOLS: list[ToolSpec] = [
             }
         ),
         _tool_findings,
+    ),
+    # Design signals (D6). Descriptions are term-first: an agent maps
+    # "Dependency cycle" to the literature and acts on it, and the
+    # plain-language sentence rides along in each finding's `description`.
+    ToolSpec(
+        "se_design",
+        "Architecture quality signals, deterministic and AI-free. Findings for "
+        "Dependency cycle (Acyclic Dependencies Principle), Zone of pain and "
+        "Zone of uselessness (main-sequence distance), Stability inversion "
+        "(Stable Dependencies Principle), Cross-boundary change coupling "
+        "(Common Closure Principle, from git history), and Boundary strength "
+        "(source / deployment / process / service). Each finding carries the "
+        "canonical term, a plain-language description, and the method naming "
+        "its evidence class. Ranked WITHIN a kind only: there is no overall "
+        "architecture score and no ranking of one kind against another.",
+        _schema(
+            {
+                "kind": {
+                    "type": "string",
+                    "description": "Filter: cycle | zone_of_pain | zone_of_uselessness | stability_inversion | change_coupling | boundary_strength.",
+                },
+                "limit": {"type": "integer", "description": "Max findings (default 50)."},
+            }
+        ),
+        _tool_design,
+    ),
+    ToolSpec(
+        "se_design_component",
+        "One component's design metrics: fan_in (afferent coupling Ca), fan_out "
+        "(efferent coupling Ce), instability (I = Ce/(Ca+Ce)), abstractness (A), "
+        "distance_main_sequence (D = |A+I-1|), blast_radius, and quintile bands, "
+        "plus the findings naming it. Ratios are NULLABLE and null means not "
+        "measurable, never zero.",
+        _schema({"id": {"type": "string", "description": "Component id."}}, required=["id"]),
+        _tool_design_component,
+    ),
+    ToolSpec(
+        "se_blast_radius",
+        "What breaks if this component changes: the full transitive dependent "
+        "set, the set it stands on, and whether it sits inside a dependency "
+        "cycle. The coordination primitive for planning parallel work, since "
+        "boundaries decide what can be edited independently. Use se_impact "
+        "instead when you need the per-hop evidence chain rather than the "
+        "closure.",
+        _schema(
+            {
+                "id": {"type": "string", "description": "Component id."},
+                "limit": {"type": "integer", "description": "Max ids listed per direction (default 50)."},
+            },
+            required=["id"],
+        ),
+        _tool_blast_radius,
     ),
 ]
 

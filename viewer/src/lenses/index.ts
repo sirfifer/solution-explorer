@@ -9,6 +9,7 @@ import "./flow";
 import "./capability";
 import "./data";
 import "./rules";
+import "./design";
 
 export * from "./registry";
 export { structureLens, STRUCTURE_QUESTIONS } from "./structure";
@@ -86,3 +87,32 @@ export {
   type RuleKindGroup,
   type RuleDecisionTable,
 } from "./rules";
+export {
+  designLens,
+  DESIGN_QUESTIONS,
+  DESIGN_KIND_ORDER,
+  DESIGN_KIND_LABEL,
+  METHOD_LABEL,
+  ZONE_OF_PAIN_MAX_SUM,
+  ZONE_OF_USELESSNESS_MIN_SUM,
+  hasDesignSignals,
+  designMethodCaveat,
+  groupDesignFindings,
+  findDesignFinding,
+  findingComponentIds,
+  findingImplicatesEdge,
+  buildScatter,
+  zoneFor,
+  collectDesignSubjectIds,
+  buildDesignFindingGraph,
+  buildDesignLandingGraph,
+  readZoneThresholds,
+  computeBlastRadius,
+  blastRadiusFrom,
+  buildBlastAdjacency,
+  type BlastRadius,
+  type DesignFindingGroup,
+  type ScatterPoint,
+  type ScatterData,
+  type ZoneThresholds,
+} from "./design";

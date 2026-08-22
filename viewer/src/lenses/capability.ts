@@ -19,6 +19,7 @@
  * capabilities (a bare architecture, old data) never shows the lens.
  */
 import type { Architecture, Capability, Component, Relationship } from "../types";
+import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
 
 // The kinds in the order the panel and the graph present them.
@@ -99,20 +100,6 @@ export function capabilityCountsByComponent(
     counts[c.kind] += 1;
   }
   return map;
-}
-
-// Recursively collect the components whose ids are in `ids`, in pre-order so the
-// node order is deterministic and matches the source tree.
-function collectComponentsByIds(components: Component[], ids: Set<string>): Component[] {
-  const out: Component[] = [];
-  const walk = (comps: Component[]) => {
-    for (const c of comps) {
-      if (ids.has(c.id)) out.push(c);
-      walk(c.children);
-    }
-  };
-  walk(components);
-  return out;
 }
 
 // The graph selection: the capability-owning components (globally, across the

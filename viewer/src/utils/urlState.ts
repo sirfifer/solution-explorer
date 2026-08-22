@@ -25,6 +25,9 @@ export interface UrlState {
   // Rules lens selection (P6-6). `rule` is the selected rule id, emitted only
   // under the Rules lens, composing with the existing params.
   rule?: string;
+  // Design lens selection (D4). `finding` is the selected design finding id,
+  // emitted only under the Design lens, composing with the existing params.
+  finding?: string;
   // Inbound deep-link params (P3-2). `file` is a repo-relative source path; the
   // optional `line` selects the symbol whose range contains it. These are
   // consumed once on load to drive navigation and are not re-persisted into the
@@ -53,6 +56,7 @@ export function parseUrlState(): UrlState {
     capability: params.get("capability") || undefined,
     entity: params.get("entity") || undefined,
     rule: params.get("rule") || undefined,
+    finding: params.get("finding") || undefined,
     file: params.get("file") || undefined,
     line: Number.isFinite(lineNum) && lineNum > 0 ? lineNum : undefined,
   };
@@ -102,6 +106,9 @@ function buildUrl(state: UrlState): string {
   // Rules lens selection rides only under the Rules lens (P6-6).
   if (state.lens === "rules" && state.rule) {
     params.set("rule", state.rule);
+  }
+  if (state.lens === "design" && state.finding) {
+    params.set("finding", state.finding);
   }
   const search = params.toString();
   return search ? `${window.location.pathname}?${search}` : window.location.pathname;

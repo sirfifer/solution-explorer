@@ -45,6 +45,7 @@ from .activity import activity_manifest_summary, build_activity
 from .changelog import apply_changelog
 from .coverage import build_coverage, coverage_manifest_summary
 from .cra_emit import emit_cra_readiness
+from .design import emit_design_signals
 from .frontdoor import write_front_door
 from .gitinfo import apply_info_plist_names, read_git_info
 from .manifest import write_manifest_and_details
@@ -372,6 +373,7 @@ def project_split(
     commit_sha: str = "",
     now: Optional[datetime] = None,
     shard_size: int = DEFAULT_SHARD_SIZE,
+    design_signals: bool = False,
     indent=2,
 ) -> ProjectionResult:
     """Write the split projection (manifest + details + coverage + search).
@@ -384,6 +386,9 @@ def project_split(
     ``channel`` is the resolved maturity channel (card R3); it stamps a
     deterministic ``gate_provenance`` on a non-default run and is a no-op on the
     default ``stable`` channel.
+
+    ``design_signals`` is the D3 opt-in. Default off, and with it off nothing in
+    the design path runs and the bytes are unchanged.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -433,6 +438,16 @@ def project_split(
     )
     if cra_result is not None:
         _merge_cra_findings(prepared, cra_result.findings)
+    # Design signals (D3): per-component metrics and architecture-level findings,
+    # opt-in via --design-signals and a strict no-op when off, so both golden
+    # corpora stay still. Before the changelog so a newly appeared dependency
+    # cycle is a recorded change, matching the SBOM's placement and rationale.
+    design_section = iso.run(
+        "project.design-signals", emit_design_signals, prepared, store,
+        enabled=design_signals, default=None,
+    )
+    if design_section is not None:
+        prepared["design_signals"] = design_section
     serial = iso.run(
         "project.changelog", _finish_changelog, prepared, previous,
         output_dir / "manifest.json", commit_sha=commit_sha, now=now, default=0,
@@ -519,6 +534,7 @@ def project_monolith(
     previous: Optional[dict] = None,
     commit_sha: str = "",
     now: Optional[datetime] = None,
+    design_signals: bool = False,
     indent=2,
 ) -> ProjectionResult:
     """Write the monolithic ``architecture.json`` projection.
@@ -530,6 +546,9 @@ def project_monolith(
     ``channel`` is the resolved maturity channel (card R3); it stamps a
     deterministic ``gate_provenance`` on a non-default run and is a no-op on the
     default ``stable`` channel.
+
+    ``design_signals`` is the D3 opt-in. Default off, and with it off nothing in
+    the design path runs and the bytes are unchanged.
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -567,6 +586,14 @@ def project_monolith(
     )
     if cra_result is not None:
         _merge_cra_findings(prepared, cra_result.findings)
+    # Design signals (D3): rides in the monolith (write_monolith copies every
+    # arch key). See project_split for the placement rationale.
+    design_section = iso.run(
+        "project.design-signals", emit_design_signals, prepared, store,
+        enabled=design_signals, default=None,
+    )
+    if design_section is not None:
+        prepared["design_signals"] = design_section
     serial = iso.run(
         "project.changelog", _finish_changelog, prepared, previous,
         output_path, commit_sha=commit_sha, now=now, default=0,

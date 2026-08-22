@@ -64,6 +64,11 @@ _MANIFEST_SECTIONS: tuple[tuple[str, str], ...] = (
     ("entity_access", "Flat index of which components read/write which data entities."),
     ("rules", "Flat index of project rules and their pass/violation state."),
     ("supply_chain", "Software bill of materials summary: ecosystems, dependencies (name, version, pin_status, direct/transitive, evidence), language target/SDK versions, and warnings. The full CycloneDX 1.5 document is sbom.json."),
+    # Term-first, per the machine-front-door inversion in the research document
+    # Part 3: an agent wants the canonical key it can map to the literature, and
+    # the plain sentence rides along as the description. The human surfaces
+    # invert this and lead with the sentence.
+    ("design_signals", "Architecture quality signals, deterministic (no AI). Per-component metrics ride on each component's `design`: fan_in (afferent coupling Ca), fan_out (efferent coupling Ce), instability (I = Ce/(Ca+Ce)), abstractness (A), distance_main_sequence (D = |A+I-1|), blast_radius (transitive dependents), and quintile `bands`. The ratios are NULLABLE and null means not measurable, never zero: abstractness is only computed where the language distinguishes an interface from a class. Architecture level carries `findings` (kinds: cycle, zone_of_pain, zone_of_uselessness, stability_inversion, change_coupling, boundary_strength; each with `term`, plain-language `lead`, `method` naming the epistemic class, `targets`, `edges`, `evidence`, and `rank_within_kind`), `boundaries` (per-pair boundary strength: source, deployment, process, service), `finding_counts`, and `method_caveat`. Findings rank WITHIN a kind only. There is deliberately no overall architecture score and no ranking of one kind against another. Present only when the analyzer ran with --design-signals."),
     ("tours", "Guided walkthroughs (ordered component sequences) when present."),
     ("ai_enhance", "Architecture-level AI overlay (description, help text, provenance markers) when the dataset is enriched."),
     ("changelog", "Ordered projection changelog entries (what changed since the previous projection)."),
@@ -328,6 +333,28 @@ def _supply_chain_walk_order(mode: str, monolith_filename: str) -> dict:
     }
 
 
+def _design_signals_walk_order(mode: str, monolith_filename: str) -> dict:
+    """The 'where is this architecture weak' walk order (D6).
+
+    Term-first, because the reader is an agent: the canonical names lead so they
+    can be mapped to the literature and acted on, with the plain-language
+    consequence carried as the description of each. The viewer inverts this.
+
+    The last step is the one that matters most for an agent fleet. Blast radius
+    is the coordination primitive: it decides what can be edited in parallel and
+    what has to queue.
+    """
+    entry = monolith_filename if mode == "monolith" else "manifest.json"
+    return {
+        "question": "where is this architecture weak, and what can I change safely",
+        "steps": [
+            {"fetch": entry, "then": "Read .design_signals.method_caveat FIRST and carry it into anything you report: these are static edges only, so reflection, dependency injection wiring, and dynamic dispatch are invisible. Then .design_signals.finding_counts for the shape of the problem."},
+            {"fetch": entry, "then": "Read .design_signals.findings. Each carries `term` (the canonical name: Dependency cycle, Zone of pain, Stability inversion, Cross-boundary change coupling, Zone of uselessness, Boundary strength), `lead` (the same fact in plain language, for reporting to a human), `method` (static-graph, git-history, or static-graph+git-history: which evidence class the claim rests on), `targets` (component ids), `edges` ([source, target] pairs), and `rank_within_kind`. Rank compares a finding ONLY against its own kind; there is no ranking of one kind against another and no overall score, so do not synthesize one."},
+            {"fetch": entry, "then": "Before editing a component, read its `design.blast_radius`: that many components transitively depend on it and could break. Use it to plan parallel work along real boundaries. Check `.design_signals.findings` for a cycle whose `targets` contain the component: inside a cycle, the members can only be changed as a unit. Read `.design_signals.boundaries` for how strongly a pair is separated (source means convention only, service means a network contract)."},
+        ],
+    }
+
+
 def _cra_walk_order() -> dict:
     """The 'is this repo CRA-ready' walk order (P10-4). Same path in both modes."""
     return {
@@ -343,6 +370,7 @@ def _walk_orders(
     monolith_filename: str = "architecture.json",
     supply_chain: Optional[dict] = None,
     cra_present: bool = False,
+    design_signals: bool = False,
 ) -> list[dict]:
     """Recommended fetch sequences for common question shapes."""
     orders = _base_walk_orders(mode, monolith_filename)
@@ -350,6 +378,8 @@ def _walk_orders(
         orders.append(_supply_chain_walk_order(mode, monolith_filename))
     if cra_present:
         orders.append(_cra_walk_order())
+    if design_signals:
+        orders.append(_design_signals_walk_order(mode, monolith_filename))
     return orders
 
 
@@ -477,7 +507,13 @@ def build_front_door(
             arch, mode=mode, coverage=coverage, activity=activity
         ),
         "walk_orders": _walk_orders(
-            mode, monolith_filename, supply_chain=supply_chain, cra_present=cra_present
+            mode, monolith_filename, supply_chain=supply_chain, cra_present=cra_present,
+            # Derived from the arch itself, not passed in: the design section is
+            # stamped onto the arch by the projection before the front door
+            # runs, so reading it here keeps the advertisement and the data in
+            # lockstep. Advertising a recipe for a section that is absent would
+            # be the same lying contract the search gating guards against.
+            design_signals=bool(arch.get("design_signals")),
         ),
         "token_economy": _token_economy(),
     }

@@ -32,7 +32,7 @@ import {
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
-import { getLens, capabilityCountsByComponent, ruleCountsByComponent, type CapabilityKindCounts, type RuleKindCounts } from "../lenses";
+import { getLens, capabilityCountsByComponent, ruleCountsByComponent, buildBlastAdjacency, blastRadiusFrom, type CapabilityKindCounts, type RuleKindCounts } from "../lenses";
 import type { Component, Relationship } from "../types";
 
 const nodeTypes: NodeTypes = {
@@ -56,6 +56,8 @@ export function ArchitectureGraph() {
     selectedCapabilityId,
     selectedEntityId,
     selectedRuleId,
+    selectedDesignFindingId,
+    blastRadiusMode,
     getLensGraph,
     selectComponent,
     navigateToBreadcrumb,
@@ -262,6 +264,12 @@ export function ArchitectureGraph() {
         // Ring the ego-view hub (the entity's owning component) under the Data lens.
         node.style = { boxShadow: "0 0 0 3px #818CF8", borderRadius: 14 };
       }
+      // The style this node returns to when a shading mode releases it. The
+      // selection and blast-radius effects both paint over `style`; painting
+      // over a previous paint (spreading the CURRENT style) is how stale
+      // rings survived leaving a mode, so every repaint composes over this
+      // snapshot instead.
+      node.data = { ...node.data, baseStyle: { ...(node.style ?? {}) } };
       return node;
     });
 
@@ -368,11 +376,15 @@ export function ArchitectureGraph() {
           };
         }
 
+        // Snapshot for the shading effects to restore, matching the nodes'
+        // baseStyle. baseAnimated matters: restoring "opacity 1" alone left
+        // every edge de-animated after blast-radius mode.
+        edge.data = { baseStyle: { ...edge.style }, baseAnimated: edge.animated ?? false };
         return edge;
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, nodeBudget, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, getLensGraph]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, nodeBudget, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, selectedDesignFindingId, getLensGraph]);
 
   // Apply ELK layout
   useEffect(() => {
@@ -454,18 +466,28 @@ export function ArchitectureGraph() {
     };
   }, [rawNodes, rawEdges, lens, setNodes, setEdges, fitView, getViewport, shrinkNodeBudget]);
 
+  // Restore every node and edge to the style the graph build gave it. The one
+  // exit path for both shading modes: composing from the baseStyle snapshot
+  // (never from the current, possibly painted, style) is what guarantees no
+  // mode leaves its rings, dimming or de-animation behind.
+  const restoreBaseStyles = useCallback(() => {
+    setNodes((nds) => nds.map((n) => ({
+      ...n,
+      style: { ...((n.data?.baseStyle as object) ?? {}), transition: "opacity 0.3s ease" },
+    })));
+    setEdges((eds) => eds.map((e) => ({
+      ...e,
+      style: { ...((e.data?.baseStyle as object) ?? {}), transition: "opacity 0.3s ease" },
+      animated: (e.data?.baseAnimated as boolean) ?? false,
+    })));
+  }, [setNodes, setEdges]);
+
   // Pan to selected node and highlight its neighbors
   useEffect(() => {
     if (!selectedComponentId) {
-      // Reset all opacities
-      setNodes((nds) => nds.map((n) => ({
-        ...n,
-        style: { ...n.style, opacity: 1, transition: "opacity 0.3s ease" },
-      })));
-      setEdges((eds) => eds.map((e) => ({
-        ...e,
-        style: { ...e.style, opacity: 1, transition: "opacity 0.3s ease" },
-      })));
+      // Nothing selected: with blast mode on its own effect owns the paint;
+      // otherwise everything returns to base.
+      if (!blastRadiusMode) restoreBaseStyles();
       return;
     }
 
@@ -502,6 +524,11 @@ export function ArchitectureGraph() {
       setCenter(centerX, centerY, { duration: 400 });
     }
 
+    // Blast-radius mode owns the shading while it is on (D5): the pan above
+    // still runs (a search or finding row must bring its selection into
+    // view), but only one effect may paint.
+    if (blastRadiusMode) return;
+
     // Compute neighbor set from current edges (read via getEdges to avoid dependency loop)
     const currentEdges = getEdges();
     const neighborIds = new Set<string>();
@@ -518,7 +545,7 @@ export function ArchitectureGraph() {
     setNodes((nds) => nds.map((n) => ({
       ...n,
       style: {
-        ...n.style,
+        ...((n.data?.baseStyle as object) ?? {}),
         opacity: n.id === selectedComponentId || neighborIds.has(n.id) ? 1 : 0.15,
         transition: "opacity 0.3s ease",
       },
@@ -528,7 +555,7 @@ export function ArchitectureGraph() {
     setEdges((eds) => eds.map((e) => ({
       ...e,
       style: {
-        ...e.style,
+        ...((e.data?.baseStyle as object) ?? {}),
         opacity: connectedEdgeIds.has(e.id) ? 1 : 0.08,
         strokeWidth: connectedEdgeIds.has(e.id) ? 2.5 : undefined,
         transition: "opacity 0.3s ease",
@@ -537,7 +564,94 @@ export function ArchitectureGraph() {
     })));
     // layoutVersion: re-run once ELK has applied real positions so a deep-link
     // restore centers on the laid-out node, not its pre-layout grid slot (F-VW-7).
-  }, [selectedComponentId, layoutVersion, getNodes, getEdges, setCenter, setNodes, setEdges]);
+  }, [selectedComponentId, layoutVersion, blastRadiusMode, restoreBaseStyles, getNodes, getEdges, setCenter, setNodes, setEdges]);
+
+  // Blast radius shading (D5). An interaction, not a report: with the mode on,
+  // the anchored component's transitive DEPENDENTS shade warm (what breaks if
+  // this changes), its transitive DEPENDENCIES shade cool (what it stands on),
+  // and everything else dims. The picture is the fastest quality read there is,
+  // which is why no number is needed until the reader wants one.
+  //
+  // Computed client-side from the edges already on the canvas, so it costs no
+  // round trip and works at any drill level: the shading answers the question
+  // for the graph the reader is actually looking at. It needs no design_signals
+  // block either, so the interaction is available on any dataset while the
+  // stored per-component count is the flag-gated extra.
+  // The blast adjacency is a function of the edge set alone, which does not
+  // change between anchor clicks; memoizing it leaves each re-anchor paying
+  // only the two reachable-set walks.
+  const blastAdjacency = useMemo(
+    () => buildBlastAdjacency(rawEdges.map((e) => ({ source: e.source, target: e.target }))),
+    [rawEdges],
+  );
+
+  useEffect(() => {
+    if (!blastRadiusMode) return;
+    // The anchor IS the selection (I12): every path that selects a component,
+    // graph click, scatter dot, finding row, search, moves the shading with
+    // it. A separate focus id drifted from the selection on exactly those
+    // paths and misattributed one component's radius to another.
+    const anchor = selectedComponentId;
+    if (!anchor || !rawNodes.some((n) => n.id === anchor)) {
+      // Nothing anchored, or the anchor is not on this canvas (the graph
+      // changed under it): show the graph plainly rather than dimming
+      // everything around a node the reader cannot see.
+      restoreBaseStyles();
+      return;
+    }
+
+    const { dependents, dependencies } = blastRadiusFrom(anchor, blastAdjacency);
+
+    setNodes((nds) => nds.map((n) => {
+      const isAnchor = n.id === anchor;
+      const isDependent = dependents.has(n.id);
+      const isDependency = dependencies.has(n.id);
+      // A node can be reachable both ways when it sits in a cycle with the
+      // anchor. It is shown as a dependent, because "this could break" is the
+      // claim that matters for a change.
+      const ring = isAnchor
+        ? "0 0 0 3px #818CF8"
+        : isDependent
+          ? "0 0 0 3px rgba(244,63,94,0.85)"
+          : isDependency
+            ? "0 0 0 3px rgba(56,189,248,0.85)"
+            : undefined;
+      const base = (n.data?.baseStyle as Record<string, unknown>) ?? {};
+      return {
+        ...n,
+        style: {
+          ...base,
+          opacity: isAnchor || isDependent || isDependency ? 1 : 0.12,
+          // The blast ring replaces any lens ring while it applies; a node
+          // outside the radius keeps its base ring, dimmed with the node.
+          boxShadow: ring ?? (base.boxShadow as string | undefined),
+          borderRadius: ring ? 14 : (base.borderRadius as number | undefined),
+          transition: "opacity 0.3s ease",
+        },
+      };
+    }));
+
+    setEdges((eds) => eds.map((e) => {
+      const inRadius =
+        (dependents.has(e.source) || e.source === anchor) &&
+        (dependents.has(e.target) || e.target === anchor);
+      const inDeps =
+        (dependencies.has(e.source) || e.source === anchor) &&
+        (dependencies.has(e.target) || e.target === anchor);
+      return {
+        ...e,
+        style: {
+          ...((e.data?.baseStyle as object) ?? {}),
+          opacity: inRadius || inDeps ? 1 : 0.06,
+          transition: "opacity 0.3s ease",
+        },
+        animated: false,
+      };
+    }));
+  }, [
+    blastRadiusMode, selectedComponentId, layoutVersion, blastAdjacency,
+    rawNodes, restoreBaseStyles, setNodes, setEdges,
+  ]);
 
   // Where and when the last node click landed, in screen coordinates. Selecting
   // a node opens the detail panel, which shrinks the canvas (measured: 1184px
@@ -565,6 +679,9 @@ export function ArchitectureGraph() {
   );
 
   const onPaneClick = useCallback(() => {
+    // Clearing the selection also drops the blast-radius anchor (they are the
+    // same id), so the reader can pick a different part without leaving and
+    // re-entering the mode.
     selectComponent(null);
   }, [selectComponent]);
 

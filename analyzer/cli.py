@@ -172,6 +172,21 @@ def main():
              "active, and each active gate is stamped into the projection "
              "provenance. Gating is a v2-engine mechanism.",
     )
+    parser.add_argument(
+        "--design-signals",
+        action="store_true",
+        help="Compute and project architecture quality signals (D3): "
+             "per-component fan-in, fan-out, instability, abstractness, "
+             "distance from the main sequence and blast radius, plus "
+             "architecture-level findings for dependency cycles, stability "
+             "inversions, the zones of pain and uselessness, cross-boundary "
+             "change coupling, and boundary strength. Deterministic and free; "
+             "no AI is involved. Default off: without this flag the projection "
+             "is byte-for-byte what it was. Abstractness is only measured in "
+             "languages whose extractor can express it (C#, Go, Java, Rust, "
+             "Swift, TypeScript), so Python and C++ subjects report it as "
+             "unknown rather than as zero. A v2-engine feature.",
+    )
 
     args = parser.parse_args()
 

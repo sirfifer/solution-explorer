@@ -28,6 +28,7 @@
  * architecture, old data) never shows the lens.
  */
 import type { Architecture, Component, Relationship, Rule } from "../types";
+import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
 
 // The kinds in the order the panel and the graph present them: decisions and
@@ -166,20 +167,6 @@ export function decisionTableFromRule(rule: Rule): RuleDecisionTable | null {
   const branches = rule.detail.outputs ?? [];
   if (inputs.length === 0 || branches.length < 2) return null;
   return { subject: inputs.join(", "), branches };
-}
-
-// Recursively collect the components whose ids are in `ids`, pre-order so the node
-// order is deterministic and matches the source tree.
-function collectComponentsByIds(components: Component[], ids: Set<string>): Component[] {
-  const out: Component[] = [];
-  const walk = (comps: Component[]) => {
-    for (const c of comps) {
-      if (ids.has(c.id)) out.push(c);
-      walk(c.children);
-    }
-  };
-  walk(components);
-  return out;
 }
 
 // The graph selection: the rule-owning components (globally, across the whole

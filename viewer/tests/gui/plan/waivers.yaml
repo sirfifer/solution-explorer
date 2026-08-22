@@ -72,3 +72,29 @@
   reason: >
     Requires a composed multi-repo solution dataset, which is not in the
     Phase 1 dataset set. Recorded deferral to the multi-repo engagement.
+- token: lens:design
+  reason: >
+    No committed GUI dataset is generated with --design-signals, so the
+    Design lens never appears in the runner (the lens gates on the dataset
+    carrying design_signals). Found by the 2026-08-21 verification round:
+    the D-series build added the lens without plan coverage and never ran
+    this check. Retire by regenerating the dogfood dataset with
+    --design-signals and writing executed cases for the lens and each
+    subview below.
+- token: subview:design/where-is-it-weak
+  reason: "Same as lens:design: no dataset carries design_signals. Retire with the design-signals dogfood regeneration."
+- token: subview:design/locked-together
+  reason: "Same as lens:design. The case needs a dataset with at least one dependency cycle; the dogfood has import cycles, so the regenerated dataset covers it."
+- token: subview:design/load-bearing
+  reason: >
+    Same as lens:design, plus a data caveat: zone findings need abstractness,
+    which is measured only in abstraction-capable languages, so the case must
+    target the dogfood's TypeScript components.
+- token: subview:design/how-do-we-know
+  reason: "Same as lens:design: the method chips and the caveat footer render only when the lens does."
+- token: subview:design/blast-radius
+  reason: "Same as lens:design: the mode toggle lives in the Design panel, which mounts only under the lens."
+- token: subview:design/seams
+  reason: "Same as lens:design: the boundary-strength summary is a Design panel row."
+- token: component:DesignPanel
+  reason: "Same as lens:design: the panel mounts only under the Design lens. Retire together with the lens waiver."

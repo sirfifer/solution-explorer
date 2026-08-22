@@ -367,6 +367,9 @@ class Phase(Protocol):
         ...
 
 
+_UNSET = object()  # cache sentinel: None is a legitimate cached value
+
+
 @dataclass
 class RunContext:
     """Everything a phase reads and writes, assembled once by P0.
@@ -409,6 +412,25 @@ class RunContext:
     # The default records orders without executing them, so a pipeline missing
     # the descent seam degrades visibly rather than silently dropping the order.
     descend: Optional[Callable[[Sequence[Any]], list[Any]]] = None
+    # The design-signals digest, derived at most once per run. A sentinel
+    # rather than None because None is a real result ("this subject yields no
+    # signals") and must be cached like any other.
+    _design_digest_cache: Any = field(default=_UNSET, repr=False, compare=False)
+
+    def design_digest(self) -> Optional[dict]:
+        """The compact design-signals digest for this subject, or None (D7).
+
+        Cached so P1 orientation and P4 synthesis, which both offer the digest
+        to their prompts, derive the signals once and brief the model on the
+        same picture of the subject. The derivation is a full-store scan plus
+        graph closure; paying it twice per run for identical input was
+        measured, not hypothetical.
+        """
+        if self._design_digest_cache is _UNSET:
+            from ..derive.design_signals import design_digest_for
+
+            self._design_digest_cache = design_digest_for(self.store)
+        return self._design_digest_cache
 
     def invoker(
         self,

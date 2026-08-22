@@ -293,10 +293,15 @@ def rank_components(store) -> ImportanceRanking:
         target = edge.get("target_id")
         if source == target:
             continue
-        if target in inbound and source is not None:
-            inbound[target].add(source)
-        if source in outbound and target is not None:
-            outbound[source].add(target)
+        # Both endpoints must be known components, matching design_signals.py:
+        # an edge into a component from an id the store has no component for
+        # is not a dependency partner, and counting it here while the design
+        # metrics exclude it would let the two surfaces report different
+        # fan-in for the same component from the same store.
+        if source not in known_ids or target not in known_ids:
+            continue
+        inbound[target].add(source)
+        outbound[source].add(target)
 
     # Files per component, and commits per file from the full-history activity
     # lens. A store with no activity rows (activity is optional) simply scores

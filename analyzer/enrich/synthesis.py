@@ -213,6 +213,7 @@ def build_synthesis_prompt(
     census: dict,
     honest_gaps: list[dict],
     adjudication: Optional[dict],
+    design: Optional[dict] = None,
 ) -> str:
     parts = [
         "You are writing the story spine for a map of a software system. Everything "
@@ -237,6 +238,18 @@ def build_synthesis_prompt(
         json.dumps(census, default=str),
         "",
     ]
+    # D7: the design digest, offered as context. A tour that walks through a
+    # dependency cycle should be able to say so; a narrative that calls a
+    # component the stable heart of the system should know what it stands on.
+    # Absent entirely when the subject yields no signals.
+    if design:
+        parts += [
+            "HOW THIS SYSTEM IS HELD TOGETHER (mechanical architecture quality "
+            "signals, no AI). Where a tour's path crosses one of these, the "
+            "narration may name it. They are tensions to weigh, not verdicts.",
+            json.dumps(design, indent=2, default=str),
+            "",
+        ]
     if honest_gaps:
         parts += [
             "WHAT COULD NOT BE ESTABLISHED, even after the deepest read. This is "
@@ -299,6 +312,7 @@ class SynthesisPhase:
         prompt = build_synthesis_prompt(
             brief=brief, components=components, census=census,
             honest_gaps=honest_gaps, adjudication=adjudication,
+            design=ctx.design_digest(),
         )
 
         if ctx.dry_run:

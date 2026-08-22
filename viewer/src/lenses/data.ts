@@ -24,6 +24,7 @@ import type {
   EntityAccess,
   Relationship,
 } from "../types";
+import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
 
 // The kinds in the order the panel presents them, most specific source first.
@@ -192,19 +193,6 @@ export function buildEntityEgoGraph(
   }
 
   return { nodes: [...nodesById.values()], edges, ownerId: hubId };
-}
-
-// Recursively collect the components whose ids are in `ids`, pre-order.
-function collectComponentsByIds(components: Component[], ids: Set<string>): Component[] {
-  const out: Component[] = [];
-  const walk = (comps: Component[]) => {
-    for (const c of comps) {
-      if (ids.has(c.id)) out.push(c);
-      walk(c.children);
-    }
-  };
-  walk(components);
-  return out;
 }
 
 // The landing graph (no entity selected): the entity-owning components globally

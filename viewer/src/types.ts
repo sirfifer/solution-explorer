@@ -480,6 +480,108 @@ export interface Component {
   // non-empty; the contextual findings badge derives its set from the finding
   // members (robust), so this ref list is advisory. Old datasets omit it.
   findings?: string[];
+  // Architecture quality metrics (D3). Present only on a projection run with
+  // --design-signals, and only for components the derivation knows; every other
+  // dataset omits the key entirely and the Design lens does not appear.
+  design?: ComponentDesign;
+}
+
+// Per-component design metrics (D1/D3). The ratios are NULLABLE on purpose and
+// null means "not measurable here", never "zero": a component with no type
+// declarations has no abstractness, and a component with no edges has no
+// instability. Rendering a null as 0 would put a load-bearing module in the zone
+// of pain on a number nobody measured, so every consumer must branch on null.
+export interface ComponentDesign {
+  // Distinct components that depend on this one (afferent coupling, Ca).
+  fan_in: number;
+  // Distinct components this one depends on (efferent coupling, Ce).
+  fan_out: number;
+  // Ce / (Ca + Ce). Low is load-bearing, high is volatile. Null when isolated.
+  instability: number | null;
+  // Abstract type declarations over all type declarations. Null when the
+  // component declares no types, or is written in a language whose abstraction
+  // the extractors cannot see (Python, C++, Ruby, JavaScript).
+  abstractness: number | null;
+  // |A + I - 1|. Null whenever either input is null.
+  distance_main_sequence: number | null;
+  // How many components transitively depend on this one.
+  blast_radius: number;
+  // Quintile per metric, "q1" lowest through "q5" highest. The "churn" key is
+  // present only when the dataset carries git activity.
+  bands: Record<string, string>;
+}
+
+// One architecture-level design finding, in the dual-audience shape (D2). The
+// human surface renders `lead` first, `term` as a secondary chip, and `method`
+// as the epistemic-class chip. The machine front door inverts that order.
+// There is deliberately no severity and no cross-kind rank.
+export interface DesignFinding {
+  id: string;
+  kind:
+    | "cycle"
+    | "zone_of_pain"
+    | "zone_of_uselessness"
+    | "stability_inversion"
+    | "change_coupling"
+    | "boundary_strength";
+  // The plain-language consequence. This leads, always.
+  lead: string;
+  // The canonical term, for the practitioner who wants the literature.
+  term: string;
+  // The term's parenthetical gloss from the translation table; may be empty.
+  term_detail?: string;
+  // Which epistemic class the claim is in.
+  method: "static-graph" | "git-history" | "static-graph+git-history";
+  // Implicated component ids, for graph highlighting.
+  targets: string[];
+  // Implicated directed edges as [source, target] pairs.
+  edges: string[][];
+  evidence: DesignEvidence[];
+  // Rank against this finding's OWN kind only. Never across kinds.
+  rank_within_kind: number;
+}
+
+// A design finding's citation. Reuses the enrichment contract's evidence schema
+// so the same no-AI validator checks it. Edge citations name source and target;
+// file citations name a path.
+export interface DesignEvidence {
+  kind: "file" | "symbol" | "edge" | "manifest" | "doc";
+  path: string | null;
+  line: number | null;
+  symbol: string | null;
+  source?: string;
+  target?: string;
+  edge_type?: string;
+}
+
+// One component-pair seam, classified onto Clean Architecture's boundary
+// anatomy. Strength rises left to right: convention only, then a version
+// boundary, then a process, then a network contract.
+export interface DesignBoundary {
+  source: string;
+  target: string;
+  strength: "source" | "deployment" | "process" | "service";
+}
+
+// The architecture-level design signals block (D3). Optional: present only on a
+// --design-signals run. Absence is what hides the Design lens.
+export interface DesignSignals {
+  version: number;
+  // What this analysis cannot see, carried as DATA so the viewer, ai.json and
+  // the MCP tools all render the same sentence instead of inventing three.
+  method_caveat: string;
+  has_activity: boolean;
+  component_count: number;
+  // The zone corners the findings were computed against, carried as data so
+  // the scatter shades exactly those regions. Optional: datasets projected
+  // before this key existed fall back to the viewer's mirrored constants.
+  zone_thresholds?: {
+    zone_of_pain_max_sum: number;
+    zone_of_uselessness_min_sum: number;
+  };
+  finding_counts: Record<string, number>;
+  findings: DesignFinding[];
+  boundaries: DesignBoundary[];
 }
 
 // Aggregation node (P6-4). At a drill level, components that the hero filter
@@ -903,6 +1005,10 @@ export interface Architecture {
   // no manifests omit it and the supply chain surface does not appear. The full
   // CycloneDX document is sbom.json beside the manifest.
   supply_chain?: SupplyChain;
+  // Architecture quality signals (D3). Optional, and present only on a run with
+  // --design-signals. Presence gates the Design lens; every other dataset omits
+  // the key and the lens does not appear, exactly like coverage and activity.
+  design_signals?: DesignSignals;
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
   live_status?: {
     statuses?: Record<string, ArchitectureStatus>;
