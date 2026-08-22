@@ -584,3 +584,47 @@ def test_a_dry_run_plans_the_ladder_and_invokes_nothing(world):
     # It says plainly that the upper rungs cannot be planned in advance, rather
     # than reporting a plan that omits them as if they were free.
     assert any("cannot" in n for n in ctx.results["p2_ladder"].notes)
+
+
+def test_max_partitions_actually_bounds_the_ladder(world):
+    """The smoke-run bound binds, and says what it excluded.
+
+    Fail-before: LadderConfig declared max_partitions "for cheap smoke runs"
+    and nothing on the ladder path read it, so a --max-partitions 3 smoke run
+    against the real VS Code store (2026-08-22) ran all 57 partitions to the
+    $45 ceiling. The flag must cap the ordered partition list, keep the most
+    important partitions, and declare the exclusion in the run's notes.
+    """
+
+    class RefuseToInvoke:
+        prompts: list = []
+
+        def __call__(self, prompt):
+            raise AssertionError("a dry run must not invoke")
+
+    # Force one partition per component so the fixture yields several, then
+    # cap to one.
+    config = LadderConfig(
+        store_path=world["db"], root=POLYGLOT,
+        run_dir=world["root"] / "run-cap", policy=LadderPolicy(), dry_run=True,
+        max_partitions=1, max_components=1, min_components=1,
+    )
+    ctx = build_run_context(
+        config, invoker_factory=lambda spec: RefuseToInvoke(), clock=FIXED_CLOCK
+    )
+    # The bounds must survive the config-to-context seam; this is where they
+    # previously died.
+    assert ctx.max_partitions == 1
+    assert ctx.max_components == 1
+    assert ctx.min_components == 1
+    try:
+        run_pipeline(ctx, [LadderPhase()])
+        result = ctx.results["p2_ladder"]
+    finally:
+        ctx.store.close()
+
+    preview = result.data["plan_preview"]
+    assert len(preview) == 1, "the cap must bound what the ladder will attempt"
+    notes = " ".join(result.notes)
+    assert "capped to the 1 most important partition(s)" in notes
+    assert "not attempted" in notes

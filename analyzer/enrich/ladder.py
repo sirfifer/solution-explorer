@@ -297,6 +297,18 @@ class LadderPhase:
         }
 
         partitions = self._ordered_partitions(ctx, components, relationships, ranking)
+        if ctx.max_partitions is not None and len(partitions) > ctx.max_partitions:
+            # The smoke-run bound. Ordering is by importance, so the cap keeps
+            # the partitions that matter most. Declared loudly: a bounded run
+            # must never read as full coverage, and unattempted items appear in
+            # no census state at all rather than in a fabricated one.
+            outcome.notes.append(
+                f"rung 2a: capped to the {ctx.max_partitions} most important "
+                f"partition(s) of {len(partitions)} planned (max_partitions); "
+                "items in the other partitions were not attempted and appear "
+                "in no census state"
+            )
+            partitions = partitions[: ctx.max_partitions]
         if ctx.dry_run:
             return self._plan_only(ctx, partitions, brief, outcome)
 
@@ -330,7 +342,9 @@ class LadderPhase:
     ) -> list[Partition]:
         plan = plan_partitions(
             components, relationships,
-            max_lines=50_000, max_components=30, min_components=5,
+            max_lines=ctx.max_lines,
+            max_components=ctx.max_components,
+            min_components=ctx.min_components,
         )
         return order_partitions(plan.partitions, ranking)
 

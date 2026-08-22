@@ -396,6 +396,15 @@ class RunContext:
     ledger: list[LedgerRow] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     results: dict[str, PhaseResult] = field(default_factory=dict)
+    # Partition sizing for rung 2a, forwarded from LadderConfig. max_partitions
+    # is the smoke-run bound: the ladder attempts only the N most important
+    # partitions and says so. These lived on LadderConfig alone until 2026-08-22,
+    # when a "smoke" run with --max-partitions 3 ran all 57 partitions to the
+    # $45 ceiling because nothing on the ladder path ever read the field.
+    max_partitions: Optional[int] = None
+    max_lines: int = 50_000
+    max_components: int = 30
+    min_components: int = 5
     # Filled in by T9 so P4 and P5 can send work orders back down the ladder.
     # The default records orders without executing them, so a pipeline missing
     # the descent seam degrades visibly rather than silently dropping the order.
@@ -588,6 +597,10 @@ def build_run_context(
             commit_sha=current_commit_sha(str(root)),
             seed=config.seed,
             dry_run=config.dry_run,
+            max_partitions=config.max_partitions,
+            max_lines=config.max_lines,
+            max_components=config.max_components,
+            min_components=config.min_components,
             clock=clock,
             timer=timer,
             scorer=load_scorer(),
