@@ -36,6 +36,8 @@ metered against the owner's subscription. They are never money spent. See
 
 from __future__ import annotations
 
+import json
+import threading
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -141,10 +143,55 @@ class BudgetMeter:
     ceiling: Optional[float] = None
     spent: float = 0.0
     charges: int = 0
+    # The wall-clock ceiling, in seconds, with the same soft semantics as the
+    # cost ceiling: work in flight when it is reached runs to completion, and
+    # no NEW work launches. Configured via configure_wall because it needs the
+    # run's injectable timer; None disables it. Added after the first real run
+    # (2026-08-22), whose registry wall budget of 45 minutes was silently
+    # unenforced on the enhance path while the run went 10.8 hours.
+    wall_ceiling_s: Optional[float] = None
+    _wall_timer: Optional[Callable[[], float]] = field(
+        default=None, repr=False, compare=False
+    )
+    _wall_started: Optional[float] = field(default=None, repr=False, compare=False)
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock, repr=False, compare=False
+    )
+
+    def configure_wall(
+        self, ceiling_s: Optional[float], timer: Callable[[], float]
+    ) -> None:
+        """Arm the wall ceiling. The clock starts at the moment of arming."""
+        self.wall_ceiling_s = ceiling_s
+        self._wall_timer = timer
+        self._wall_started = timer() if ceiling_s is not None else None
+
+    def wall_elapsed_s(self) -> Optional[float]:
+        if self._wall_started is None or self._wall_timer is None:
+            return None
+        return max(0.0, self._wall_timer() - self._wall_started)
+
+    def _over_wall(self) -> bool:
+        if self.wall_ceiling_s is None:
+            return False
+        elapsed = self.wall_elapsed_s()
+        return elapsed is not None and elapsed >= self.wall_ceiling_s
 
     def under(self) -> bool:
-        """True while new work may be launched."""
-        return self.ceiling is None or self.spent < self.ceiling
+        """True while new work may be launched (both ceilings clear)."""
+        if self.ceiling is not None and self.spent >= self.ceiling:
+            return False
+        return not self._over_wall()
+
+    def stop_reason(self) -> str:
+        """Which ceiling stopped the run, for honest notes. Cost wins ties."""
+        if self.ceiling is not None and self.spent >= self.ceiling:
+            return f"run cost ceiling reached (${self.ceiling:.2f} API-equivalent)"
+        if self._over_wall():
+            return (
+                f"run wall ceiling reached ({self.wall_ceiling_s / 60.0:.0f} minutes)"
+            )
+        return "run ceiling reached"
 
     def remaining(self) -> Optional[float]:
         if self.ceiling is None:
@@ -152,14 +199,15 @@ class BudgetMeter:
         return max(0.0, self.ceiling - self.spent)
 
     def charge(self, cost_usd: float) -> None:
-        self.spent += max(0.0, float(cost_usd or 0.0))
-        self.charges += 1
+        # Locked: with parallel rungs, += from worker threads is a lost-update
+        # race, and an undercounted meter is a broken ceiling.
+        with self._lock:
+            self.spent += max(0.0, float(cost_usd or 0.0))
+            self.charges += 1
 
     def require(self) -> None:
         if not self.under():
-            raise BudgetExhausted(
-                f"run cost ceiling reached (${self.ceiling:.2f} API-equivalent)"
-            )
+            raise BudgetExhausted(self.stop_reason())
 
 
 @dataclass
@@ -256,18 +304,17 @@ class MeteredInvoker:
     def __call__(self, prompt: str) -> InvokeResult:
         self.calls += 1
         if not self._ctx.budget.under():
+            reason = f"not invoked: {self._ctx.budget.stop_reason()}"
             row = LedgerRow(
                 phase=self.phase,
                 rung=self.rung,
                 model=self.model,
                 targets=self.targets,
                 ok=False,
-                error="not invoked: run cost ceiling reached",
+                error=reason,
             )
-            self._ctx.ledger.append(row)
-            return InvokeResult(
-                ok=False, text="", error="not invoked: run cost ceiling reached"
-            )
+            self._ctx.record_ledger_row(row)
+            return InvokeResult(ok=False, text="", error=reason)
         started = self._ctx.timer()
         result = self._inner(prompt)
         wall = max(0.0, self._ctx.timer() - started)
@@ -276,7 +323,7 @@ class MeteredInvoker:
         # RetryingInvoker exposes the attempt count it used for the last logical
         # invoke; a plain invoker does not, so absence reads as no retries.
         retries = int(getattr(self._inner, "last_attempts", 1) or 1) - 1
-        self._ctx.ledger.append(
+        self._ctx.record_ledger_row(
             LedgerRow(
                 phase=self.phase,
                 rung=self.rung,
@@ -320,6 +367,21 @@ class LadderPolicy:
     models: dict[str, ModelSpec] = field(default_factory=lambda: dict(DEFAULT_MODELS))
     iteration: IterationPolicy = field(default_factory=IterationPolicy)
     max_cost_usd: Optional[float] = None
+    # Wall-clock ceiling for the whole run, minutes. Enforced by the shared
+    # budget meter with the cost ceiling's soft semantics. None disables.
+    max_wall_minutes: Optional[float] = None
+    # Bounded parallelism for the ladder's independent invocations (rung 2a
+    # partitions, escalation batches). 1 reproduces the sequential behaviour.
+    # Modest default: the first parallel runs should measure the timeout rate
+    # against the sequential baseline before anyone raises it.
+    max_parallel: int = 4
+    # Per-attempt subprocess timeout for real invokers. The first real run's
+    # MEDIAN legitimate call ran ~554s against the old fixed 600s, so timeouts
+    # were routine and, with the retry budget below the timeout, unrecoverable.
+    invoke_timeout_s: int = 1200
+    # Run the first parallel task alone before fanning out, so the shared
+    # prompt prefix lands in the provider's cache once instead of N times.
+    warm_first: bool = True
     # Fraction of grounded items P3 spot-checks, weighted by importance.
     spot_check_fraction: float = 0.1
     max_spot_checks: int = 25
@@ -343,6 +405,26 @@ def default_invoker_factory(spec: ModelSpec) -> Invoker:
     which is how the whole pipeline is exercised without spending anything.
     """
     return build_invoker(spec)
+
+
+def policy_invoker_factory(policy: LadderPolicy) -> Callable[[ModelSpec], Invoker]:
+    """A factory that applies the policy's per-attempt timeout to real invokers.
+
+    The retry total budget scales with the timeout, because a fixed 120s retry
+    budget under a 600s per-attempt timeout meant a timed-out call could never
+    retry: the first attempt alone exhausted the budget. One recovery attempt
+    for a long-running call is the point of the policy.
+    """
+    from .retry import RetryPolicy
+
+    retry = RetryPolicy(total_budget_s=float(policy.invoke_timeout_s) + 300.0)
+
+    def factory(spec: ModelSpec) -> Invoker:
+        return build_invoker(
+            spec, retry_policy=retry, timeout_s=policy.invoke_timeout_s
+        )
+
+    return factory
 
 
 @dataclass
@@ -399,6 +481,10 @@ class RunContext:
     ledger: list[LedgerRow] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     results: dict[str, PhaseResult] = field(default_factory=dict)
+    # Guards the ledger and its on-disk stream under parallel rungs.
+    _ledger_lock: threading.Lock = field(
+        default_factory=threading.Lock, repr=False, compare=False
+    )
     # Partition sizing for rung 2a, forwarded from LadderConfig. max_partitions
     # is the smoke-run bound: the ladder attempts only the N most important
     # partitions and says so. These lived on LadderConfig alone until 2026-08-22,
@@ -450,6 +536,32 @@ class RunContext:
             model=spec.label,
             targets=targets,
         )
+
+    def record_ledger_row(self, row: LedgerRow) -> None:
+        """Append a ledger row and stream it to the run directory.
+
+        The stream (``ledger.jsonl``, one JSON object per line, appended the
+        moment each invocation finishes) is the run's observability channel: a
+        supervisor watching the file sees progress, cost so far, and stalls in
+        real time instead of a silence that ends with the report. Streaming is
+        best-effort by design: a full disk must degrade observability, never
+        the run itself.
+        """
+        with self._ledger_lock:
+            self.ledger.append(row)
+            try:
+                payload = row.to_dict()
+                payload["at"] = self.clock()
+                payload["spent_usd"] = round(self.budget.spent, 4)
+                with open(self.run_path("ledger.jsonl"), "a") as stream:
+                    stream.write(json.dumps(payload, sort_keys=True) + "\n")
+            except OSError:
+                if "ledger stream unavailable" not in " ".join(self.notes):
+                    self.notes.append(
+                        "ledger stream unavailable: ledger.jsonl could not be "
+                        "written; the in-memory ledger and the report are "
+                        "unaffected"
+                    )
 
     def phase_data(self, name: str) -> dict:
         result = self.results.get(name)
@@ -589,6 +701,11 @@ def build_run_context(
 
     owned = store is None
     store = store or FactStore(str(config.store_path))
+    budget = BudgetMeter(ceiling=config.policy.max_cost_usd)
+    wall_minutes = config.policy.max_wall_minutes
+    budget.configure_wall(
+        float(wall_minutes) * 60.0 if wall_minutes is not None else None, timer
+    )
     # Coerce the paths here rather than trusting the dataclass annotation: a
     # caller passing a plain string is doing something reasonable, and failing on
     # it deep inside derivation would read as a store problem rather than a
@@ -613,8 +730,8 @@ def build_run_context(
             facts=facts,
             index=index,
             policy=config.policy,
-            budget=BudgetMeter(ceiling=config.policy.max_cost_usd),
-            invoker_factory=invoker_factory or default_invoker_factory,
+            budget=budget,
+            invoker_factory=invoker_factory or policy_invoker_factory(config.policy),
             run_dir=Path(config.run_dir),
             commit_sha=current_commit_sha(str(root)),
             seed=config.seed,

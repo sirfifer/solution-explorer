@@ -131,12 +131,20 @@ def known_sources() -> tuple[str, ...]:
     return tuple(sorted(_PROVIDERS))
 
 
-def build_invoker(spec: Any, *, retry_policy: Any = None) -> Invoker:
+def build_invoker(
+    spec: Any, *, retry_policy: Any = None, timeout_s: Optional[int] = None
+) -> Invoker:
     """Build the invoker for a binding, wrapped in transport retry.
 
     Retry is applied here rather than inside each provider so every source gets
     the same transient-only, bounded, full-jitter behaviour and the same accrued
     cost accounting, which is what makes ledger rows comparable across sources.
+
+    ``timeout_s`` overrides the provider invoker's per-attempt subprocess
+    timeout where the invoker exposes one (duck-typed on a ``timeout``
+    attribute, which the CLI invoker does). Providers whose transport has no
+    such knob simply ignore it, which is the correct degradation: the retry
+    policy still bounds the logical invoke.
     """
     resolved = ModelSpec.parse(spec)
     builder = _PROVIDERS.get(resolved.source)
@@ -147,7 +155,10 @@ def build_invoker(spec: Any, *, retry_policy: Any = None) -> Invoker:
         )
     from .retry import RetryingInvoker, RetryPolicy
 
-    return RetryingInvoker(builder(resolved), policy=retry_policy or RetryPolicy())
+    inner = builder(resolved)
+    if timeout_s is not None and hasattr(inner, "timeout"):
+        inner.timeout = int(timeout_s)
+    return RetryingInvoker(inner, policy=retry_policy or RetryPolicy())
 
 
 def _claude_cli_builder(spec: ModelSpec) -> Invoker:
