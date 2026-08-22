@@ -224,6 +224,7 @@ class LedgerRow:
     model: str
     targets: int = 0
     tokens_in: int = 0
+    tokens_cached: int = 0
     tokens_out: int = 0
     cost_usd: float = 0.0
     wall_seconds: float = 0.0
@@ -238,6 +239,7 @@ class LedgerRow:
             "model": self.model,
             "targets": self.targets,
             "tokens_in": self.tokens_in,
+            "tokens_cached": self.tokens_cached,
             "tokens_out": self.tokens_out,
             "cost_usd": round(self.cost_usd, 6),
             "wall_seconds": round(self.wall_seconds, 3),
@@ -247,17 +249,19 @@ class LedgerRow:
         }
 
 
-def _usage_tokens(usage: dict) -> tuple[int, int]:
-    """Pull (input, output) token counts out of a CLI usage block.
+def _usage_tokens(usage: dict) -> tuple[int, int, int]:
+    """Pull (input, cached, output) token counts out of a CLI usage block.
 
-    The CLI reports ``input_tokens`` and ``output_tokens``, plus cache read and
-    creation counts on a cached call. Cache-creation tokens are billed as input
-    work, so they are counted as input; a missing or malformed block reads as
-    zero rather than raising, because a ledger row must never be the thing that
-    fails a run.
+    ``input`` is fresh work: ``input_tokens`` plus ``cache_creation`` (both are
+    full-price token processing). ``cached`` is ``cache_read_input_tokens``,
+    reported SEPARATELY because a cache read costs roughly a tenth of fresh
+    input: folding it into tokens_in made the first real run's opus rows read
+    as ~743k input per call and made every cost-per-token calibration wrong.
+    A missing or malformed block reads as zero rather than raising, because a
+    ledger row must never be the thing that fails a run.
     """
     if not isinstance(usage, dict):
-        return 0, 0
+        return 0, 0, 0
 
     def _int(key: str) -> int:
         try:
@@ -265,12 +269,8 @@ def _usage_tokens(usage: dict) -> tuple[int, int]:
         except (TypeError, ValueError):
             return 0
 
-    tokens_in = (
-        _int("input_tokens")
-        + _int("cache_creation_input_tokens")
-        + _int("cache_read_input_tokens")
-    )
-    return tokens_in, _int("output_tokens")
+    tokens_in = _int("input_tokens") + _int("cache_creation_input_tokens")
+    return tokens_in, _int("cache_read_input_tokens"), _int("output_tokens")
 
 
 class MeteredInvoker:
@@ -318,7 +318,7 @@ class MeteredInvoker:
         started = self._ctx.timer()
         result = self._inner(prompt)
         wall = max(0.0, self._ctx.timer() - started)
-        tokens_in, tokens_out = _usage_tokens(result.usage)
+        tokens_in, tokens_cached, tokens_out = _usage_tokens(result.usage)
         self._ctx.budget.charge(result.cost_usd)
         # RetryingInvoker exposes the attempt count it used for the last logical
         # invoke; a plain invoker does not, so absence reads as no retries.
@@ -330,6 +330,7 @@ class MeteredInvoker:
                 model=self.model,
                 targets=self.targets,
                 tokens_in=tokens_in,
+                tokens_cached=tokens_cached,
                 tokens_out=tokens_out,
                 cost_usd=result.cost_usd,
                 wall_seconds=wall,

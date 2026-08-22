@@ -235,7 +235,11 @@ def test_every_invocation_ledgers_phase_rung_model_tokens_and_cost():
     assert row.model == DEFAULT_MODELS["p2a_bulk"].label
     assert row.model == "anthropic-claude-cli:sonnet"
     assert row.targets == 3
-    assert row.tokens_in == 120  # input plus cache reads, which are input work
+    # Cache reads are ledgered in their own column: they cost a tenth of
+    # fresh input, and folding them into tokens_in made the first real run's
+    # calibration numbers unusable (2026-08-22).
+    assert row.tokens_in == 100
+    assert row.tokens_cached == 20
     assert row.tokens_out == 7
     assert row.cost_usd == 0.25
     assert row.wall_seconds > 0
