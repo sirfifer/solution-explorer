@@ -180,6 +180,12 @@ class RetryingInvoker:
         self._rng = rng or random.Random()
         self._sleep = sleep
         self._monotonic = monotonic
+        # Transport attempts used by the most recent logical invoke (1 means no
+        # retry). The ladder's work ledger reports retries per invocation, and
+        # without this the count would be silently reported as zero. Not part of
+        # the Invoker protocol: a caller that does not ask still sees identical
+        # behaviour.
+        self.last_attempts = 0
 
     def _full_jitter(self, attempt: int) -> float:
         """Full-jitter backoff for a 1-based attempt index: uniform(0, cap)."""
@@ -197,6 +203,7 @@ class RetryingInvoker:
             result = self._base(prompt)
             total_cost += result.cost_usd
             last = result
+            self.last_attempts = attempt
             decision = classify_outcome(result)
             if decision is not RetryDecision.TRANSIENT:
                 # SUCCESS or DETERMINISTIC: stop, with cost summed across attempts.

@@ -128,16 +128,23 @@ Invoker = Callable[[str], InvokeResult]
 class ClaudeCliInvoker:
     """Invoke Claude headlessly via the `claude` CLI (the installed mechanism).
 
-    Runs ``claude -p --output-format json --model <model>`` with the prompt on
+    Runs ``claude -p --output-format json [--model <model>]`` with the prompt on
     stdin (stdin avoids ARG_MAX limits on large partition prompts), then parses
     the JSON envelope's ``result`` (model text), ``total_cost_usd``, and
     ``usage``. The Python Agent SDK is not installed in this environment; the CLI
     is the simplest available headless path and reports cost per call.
+
+    ``model`` is optional. A model name pins the call to that model, which is
+    what every caller does today. ``model=None`` OMITS the flag entirely and lets
+    the CLI route the call itself, which is the unpinned half of a tier binding
+    (see :mod:`analyzer.enrich.models`). Both forms are exercised by tests that
+    assert the exact argv, because argv construction is where a routing change
+    would otherwise be invisible.
     """
 
     def __init__(
         self,
-        model: str = DEFAULT_MODEL,
+        model: Optional[str] = DEFAULT_MODEL,
         *,
         claude_bin: str = "claude",
         timeout: int = 600,
@@ -148,12 +155,16 @@ class ClaudeCliInvoker:
 
     def __call__(self, prompt: str) -> InvokeResult:
         try:
+            # A None model omits the flag entirely, which lets the CLI route the
+            # call itself instead of being pinned to one model. That is the
+            # "unpinned" half of a tier binding (see enrich/models.py): the same
+            # option a routing provider offers, expressed on the provider we
+            # actually run on today.
+            argv = [self.claude_bin, "-p", "--output-format", "json"]
+            if self.model:
+                argv += ["--model", self.model]
             proc = subprocess.run(
-                [
-                    self.claude_bin, "-p",
-                    "--output-format", "json",
-                    "--model", self.model,
-                ],
+                argv,
                 input=prompt,
                 capture_output=True,
                 text=True,

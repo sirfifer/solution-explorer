@@ -267,23 +267,54 @@ Any claim a change "worked" must name which instrument moved.
 | Truth (verify verdicts + evidence validator + contract census) | claims vs their own evidence; S2; grounding | verify exists, never invoked; validator and census new; wired at P3 and counted in the gate |
 | Utility (engagement proxies + comprehension review) | unprompted exploration, generated ideas, time to first orientation, drop-off; rubric per persona | review exists; proxies pilot against the 2026-08-19 persona material first |
 
+## 6a. Where the models come from
+
+Owner direction, 2026-08-21. The ladder is a structure, not a vendor. Its rungs
+are defined by the KIND of work they do, and the binding of a rung to a model is
+configuration.
+
+A **tier binding** is a source plus an optionally pinned model:
+
+```
+p2a_bulk = anthropic-claude-cli:sonnet     an explicit source, pinned
+p2b_escalated = some-aggregator:auto        unpinned: that source routes the call
+p2c_residue = fable                         a bare name means the default source
+```
+
+Unpinned is a first-class state rather than a missing value, and it is a real
+experiment worth running: letting a routing source choose its own model per call,
+against a ladder whose rungs are defined by the work rather than the model, is a
+direct test of whether the tier assignments are doing what we think. It works on
+the source that ships today too, where it omits the model flag and lets the CLI
+choose.
+
+Providers are registered in `analyzer/enrich/models.py`, not hardcoded. One ships
+today, the `claude` CLI on the owner's subscription, because that is what the
+account runs. Adding a lab or an aggregator is a registration; nothing above that
+module knows a vendor name. An unknown source is rejected at configuration time,
+never at invocation time, because a typo discovered when a rung finally invokes
+has already wasted everything the run spent below it.
+
+The Run Report's work ledger records the binding label per invocation, so the
+report can say which source did which piece of work.
+
 ## 7. Build order
 
 Each step under the no-regression protocol: isolation, VS Code plus both
 golden corpora, byte-identical output when the feature is off.
 
 1. Phase seam in the engine: composable phases and rungs, a model per rung,
-   work-order descent. Everything hangs off this.
-2. Navigation-importance ranking, derive tier, no AI.
+   work-order descent. Everything hangs off this. **DONE** (T1, PR #105).
+2. Navigation-importance ranking, derive tier, no AI. **DONE** (T2).
 3. The completeness contract in the 2a payload: the questions, the grounding
-   rule, contract states, triggers, plus the no-AI evidence validator.
-4. The ladder: escalation plumbing, rungs 2b and 2c, the census.
+   rule, contract states, triggers, plus the no-AI evidence validator. **DONE** (T3, T4).
+4. The ladder: escalation plumbing, rungs 2b and 2c, the census. **DONE** (T5).
 5. P3 wiring: digests, identity verdicts, verify passes and grounding
    spot-checks into the run and the gate. Own small calibration first (5,086
-   planned prompts on VS Code).
-6. P1 orientation.
-7. P4 synthesis: tours (additive overlay kind), narrative, lenses, work orders.
-8. P5 determination, forced-iteration policy, the Run Report.
+   planned prompts on VS Code). **DONE** (T6); the calibration is part of the owner-gated first run.
+6. P1 orientation. **DONE** (T7).
+7. P4 synthesis: tours (additive overlay kind), narrative, lenses, work orders. **DONE** (T8, T9).
+8. P5 determination, forced-iteration policy, the Run Report. **DONE** (T10, T11).
 9. Persona review with engagement proxies; rinse and repeat.
 
 Everything local until the map has been through reviews. Cloudflare, domains

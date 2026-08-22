@@ -64,7 +64,25 @@ OPTIONAL_COMPONENT_FIELDS = frozenset({
     "testing_gaps", "testing_maturity",
     "external_services_assessment", "port_assessment",
     "complexity_assessment", "tech_context",
+    # The Enrichment Engine's honest-gap markers: "this could not be established,
+    # and here is why", written by the top of the ladder when two rungs could not
+    # ground a required question. Product-visible and deliberately NOT scored:
+    # this scorer is the form instrument, demoted to a sanity floor, and an
+    # honest gap is a truth-instrument outcome. Scoring it either way would be
+    # wrong: rewarding it invites manufactured gaps, penalising it invites the
+    # faked answers the design exists to prevent.
+    "honest_gaps",
 })
+
+# Fields this scorer TOLERATES on an ai_enhance block without scoring them and
+# without treating them as unexpected. Separate from the optional set on purpose:
+# the enrichment engine derives its stamped-payload allowlist from
+# REQUIRED | OPTIONAL, so anything listed here is accepted if it turns up but is
+# still stripped before it can reach the product. "contract" is the completeness
+# contract's answer scaffolding, which belongs in the store and the Run Report.
+TOLERATED_COMPONENT_FIELDS = frozenset({"contract"})
+
+TOLERATED_RELATIONSHIP_FIELDS = frozenset({"contract"})
 
 # Relationship ai_enhance fields that are always expected
 REQUIRED_RELATIONSHIP_FIELDS = frozenset({
@@ -132,7 +150,9 @@ def validate_component_ai_enhance(comp_id, ai, component_data=None):
 
     # Check for unexpected keys
     all_valid_keys = (
-        REQUIRED_COMPONENT_FIELDS | OPTIONAL_COMPONENT_FIELDS
+        REQUIRED_COMPONENT_FIELDS
+        | OPTIONAL_COMPONENT_FIELDS
+        | TOLERATED_COMPONENT_FIELDS
     )
     for key in ai:
         if key not in all_valid_keys:
@@ -173,7 +193,9 @@ def validate_relationship_ai_enhance(rel_key, ai):
 
     # Check for unexpected keys
     all_valid_keys = (
-        REQUIRED_RELATIONSHIP_FIELDS | OPTIONAL_RELATIONSHIP_FIELDS
+        REQUIRED_RELATIONSHIP_FIELDS
+        | OPTIONAL_RELATIONSHIP_FIELDS
+        | TOLERATED_RELATIONSHIP_FIELDS
     )
     for key in ai:
         if key not in all_valid_keys:

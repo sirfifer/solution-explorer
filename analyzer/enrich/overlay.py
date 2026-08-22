@@ -23,6 +23,11 @@ from typing import Optional
 from .digest import DigestIndex, relationship_target_id
 from .staleness import staleness_of
 
+# The enrichment target kind P4 synthesis writes tours under. Defined here rather
+# than imported from synthesis.py: the overlay is a projection concern and must
+# not depend on the phase that happens to produce the rows.
+TOUR_TARGET_KIND = "tour"
+
 __all__ = ["apply_enrichment_overlay"]
 
 
@@ -61,6 +66,7 @@ def apply_enrichment_overlay(
     by_component: dict[str, dict] = {}
     by_relationship: dict[str, dict] = {}
     arch_row: Optional[dict] = None
+    tour_rows: list[dict] = []
     for row in rows:
         kind = row["target_kind"]
         if kind == "component":
@@ -69,6 +75,8 @@ def apply_enrichment_overlay(
             by_relationship[row["target_id"]] = row
         elif kind == "architecture":
             arch_row = row
+        elif kind == TOUR_TARGET_KIND:
+            tour_rows.append(row)
 
     def marked_payload(row: dict) -> dict:
         current = index.for_target(row["target_kind"], row["target_id"])
@@ -106,6 +114,38 @@ def apply_enrichment_overlay(
             walk(comp.get("children", []))
 
     walk(arch.get("components", []))
+
+    # Tours (P4 synthesis). The viewer's Tour contract is the shape, and the key
+    # appears ONLY when tour rows exist, so a store that has never run synthesis
+    # projects byte-identically to before. Sorted by id so the projection is
+    # stable across runs (I4).
+    if tour_rows:
+        tours = []
+        for row in sorted(tour_rows, key=lambda r: r["target_id"]):
+            payload = row.get("payload")
+            if not isinstance(payload, dict) or not payload.get("steps"):
+                continue
+            tour = {
+                "id": payload.get("id") or row["target_id"],
+                "title": payload.get("title") or "",
+                "description": payload.get("description") or "",
+                "steps": payload.get("steps") or [],
+            }
+            # Provenance carries the commit the tour was anchored against, and
+            # the stale marker when its anchors have drifted since. A walkthrough
+            # is never silently served as current when the code moved under it.
+            current = index.for_target(TOUR_TARGET_KIND, row["target_id"])
+            stale = staleness_of(row.get("derived_from_hash"), current)
+            provenance: dict = {}
+            if row.get("commit_sha"):
+                provenance["derived_from_commit"] = row["commit_sha"]
+            if stale is True:
+                provenance["stale"] = True
+            if provenance:
+                tour["provenance"] = provenance
+            tours.append(tour)
+        if tours:
+            arch["tours"] = tours
 
     # Relationships, matched by (source, target, type).
     for rel in arch.get("relationships", []):

@@ -25,7 +25,8 @@ is built yet. **The next unit of work is N3: the demo harness and demo one.**
 | Live demos | `solution-explorer.unamentis.org` and `um-arch.unamentis.org`, both redeployed and verified carrying the new engine output |
 | `wt/demo-program` branch | The planning docs. Merge it or work from it; it is documentation only |
 | Domain | `syscorpus.com` (owner also holds `.org`). DNS and Cloudflare projects not yet created |
-| Demo harness | Does not exist. Designed in `DEMO-PROGRAM.md` section 4. **This is the next thing to build** |
+| Demo harness | Built. `scripts/demo-site.py`, with the ladder plumbed through `enhance` and the `enrichment_quality` gate reading the contract census and adjudication verdicts rather than the form scorer |
+| Enrichment Engine | Built, never run for real. `analyzer/enrich/` P1 through P5, `--ladder` opt-in. The first real run is owner-gated |
 | VS Code pre-flight | Measured and viable. 668 published files against a 20,000 ceiling, 136 s cold, 0.10% detect-only on code lines. `docs/publication/PREFLIGHT-MEASUREMENTS.md` |
 | VS Code clone and store | Already on disk at `/Volumes/Studio/dev/.scratch/n2/`, ~1.2 GB. Reusable for demo one; reproducible if deleted |
 | Live demo data | Fixed 2026-08-21. The Live overlay had been serving 2026-02-23 data that looked fresh; UnaMentis/unamentis#123 removed the stale committed file. Both front doors now report 254 |
@@ -143,6 +144,32 @@ taken when their turn comes.
 tokens nor cost. Enrichment runs on the owner's `claude` subscription rather
 than an API key, so this is a real call about when to spend that usage, not a
 line item. It can only be settled by an actual `enhance` run.
+
+### N3a. The Enrichment Engine. BUILT, 2026-08-21, not yet run for real
+
+T1 through T12 of `ENRICHMENT-ENGINE-BUILD.md` are complete and merged. The
+ladder runs orientation through determination against a real store and writes a
+Run Report. `--ladder` defaults off and the projection is unchanged with it off,
+proven by both golden corpora at every task boundary.
+
+**No model has been invoked.** Every phase was built and tested against the
+injectable invoker seam with canned responses. The reference Run Report at
+`tests/fixtures/enrichment-run/` was produced by a full-pipeline mock run and
+costs nothing to regenerate.
+
+**Planned against the real VS Code store, dry run, 2026-08-21:** 55 partitions
+for rung 2a, an orientation prompt of ~5,800 tokens, a synthesis prompt of
+~74,700 tokens, 3 criteria, 1 forced round. Zero invocations, zero cost.
+
+**The first real run is owner-gated and is the N2 open question made concrete.**
+The exact command is in PR #105's description. It will spend real Claude Max
+usage; nobody should run it without the owner saying so.
+
+Tier bindings are now configuration, not architecture (owner direction,
+2026-08-21). A rung is bound to a SOURCE plus an optionally pinned model, and
+`source:auto` leaves the model unpinned so that source routes the call itself.
+Only the `claude` CLI provider ships; adding a lab or an aggregator is a
+registration in `analyzer/enrich/models.py`, not a refactor.
 
 ### N3. The demo harness and demo one
 
