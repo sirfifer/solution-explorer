@@ -128,11 +128,18 @@ Invoker = Callable[[str], InvokeResult]
 class ClaudeCliInvoker:
     """Invoke Claude headlessly via the `claude` CLI (the installed mechanism).
 
-    Runs ``claude -p --output-format json --model <model>`` with the prompt on
+    Runs ``claude -p --output-format json [--model <model>]`` with the prompt on
     stdin (stdin avoids ARG_MAX limits on large partition prompts), then parses
     the JSON envelope's ``result`` (model text), ``total_cost_usd``, and
     ``usage``. The Python Agent SDK is not installed in this environment; the CLI
     is the simplest available headless path and reports cost per call.
+
+    ``model`` is optional. A model name pins the call to that model, which is
+    what every caller does today. ``model=None`` OMITS the flag entirely and lets
+    the CLI route the call itself, which is the unpinned half of a tier binding
+    (see :mod:`analyzer.enrich.models`). Both forms are exercised by tests that
+    assert the exact argv, because argv construction is where a routing change
+    would otherwise be invisible.
     """
 
     def __init__(
