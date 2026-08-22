@@ -1,21 +1,161 @@
 # Handoff: the SysCorpus demo program
 
-Written 2026-08-18 for a fresh session. Self-contained: everything needed to
-pick up is here or linked from here. Read this first, then
-`DEMO-PROGRAM.md` (the plan and the register) and `DEMO-PREREQUISITES.md`
-(what had to be true first, and what it surfaced).
+**If you are a new session, this document is your only required reading.**
+Everything you need is here or linked from here. Read "Start here" first, then
+the rest of this file, then follow the links only as you need them.
 
-## The one-paragraph situation
+Last updated **2026-08-22**, after the Enrichment Engine landed (PR #105).
+`main` is green at `bfbc3fd`.
 
-Solution Explorer is being built to sell, and the demo program is its shop
-window: a maintained register of well-known codebases mapped by the product,
-published on `syscorpus.com`, refreshed weekly from the owner's Mac Studio, with
-every refresh feeding fixes back into the tool. The plan, the project register
-and the execution design are agreed and decided. **All six prerequisites are
-built and merged** (PRs #96, #97, #98; `main` is green at `71e7a8d` or later).
-**N1 (the calibration run) and N2 (pre-flight measurement for VS Code) are both
-complete**, merged in PR #100 on 2026-08-21. Nothing of the demo program itself
-is built yet. **The next unit of work is N3: the demo harness and demo one.**
+---
+
+## Start here
+
+### What we are trying to do
+
+Solution Explorer analyzes a codebase and produces a navigable architecture map:
+components, relationships, capabilities, data entities, findings, and a viewer
+that renders all of it. It is **being built to sell**, and the demo program is
+its shop window.
+
+The demo program is a maintained register of well-known open-source codebases
+mapped by the product, published on `syscorpus.com`, refreshed weekly from the
+owner's Mac Studio, with every refresh feeding fixes back into the tool. Wave 1
+is **VS Code, then Home Assistant Core, then Kubernetes**, one at a time,
+iterating until each is right before starting the next.
+
+The whole bet is that **a map can be trusted**. That is why so much of what
+follows is about instruments, gates and honest gaps rather than features. A map
+that is confidently wrong is worse than no map, and most of the hard-won lessons
+in this document are variations on that one theme.
+
+### Where it has got to
+
+Read this table as the story, in order. The detail for each line is further down
+this file.
+
+| Stage | State |
+|---|---|
+| Six prerequisites | **Done and merged** (PRs #96, #97, #98) |
+| N1, the calibration run | **Done** 2026-08-19. Three personas, measured before and after. PR #100 |
+| N2, VS Code pre-flight | **Done** 2026-08-20. Viable on every axis measured |
+| The demo harness | **Built.** `scripts/demo-site.py`: fetch, analyze, enhance, validate, diff, deploy, report |
+| The Enrichment Engine | **Built, and has never been run for real.** PR #105 |
+| Demo one, VS Code, end to end | **Not done.** Blocked, see below |
+| Publishing anything | **Parked by the owner.** No Cloudflare, no domains, no DNS, no deploys |
+
+**The Enrichment Engine is the big recent thing and the thing most likely to
+matter to you.** It is the permanent process by which every subject goes from
+deterministic fact to something a person is drawn into. It is a ladder:
+
+```
+P0  deterministic foundation   (no AI)      structure, symbols, importance ranking
+P1  orientation                (Fable)      what is this, who reads it, the criteria
+P2  the ladder    2a bulk      (Sonnet)     everything, weighted by importance
+                  2b escalated (Opus)       only the items the contract failed
+                  2c residue   (Fable)      resolve, or declare an honest gap
+P3  adjudication               (Opus)       verify passes, grounding spot-checks
+P4  synthesis                  (Fable)      tours, narrative, lenses, work orders
+P5  determination              (Fable)      done or not, and the Run Report
+```
+
+Every item ends in exactly one terminal state: `grounded@sonnet`,
+`grounded@opus`, `grounded@fable`, or `honest-gap`. A claim that cannot cite
+evidence a mechanical validator can check is not an answer. What three rungs
+cannot establish becomes a visible "this could not be determined, and here is
+why" in the product, never a faked answer.
+
+It is opt-in (`analyze.py enhance --ladder`), the default path is byte-for-byte
+unchanged with the flag off, and both golden corpora prove it.
+
+### What to do next
+
+**Read `docs/publication/ENRICHMENT-INTEGRATION.md` first.** The engine is
+built, but most of what it produces does not yet reach a person, and one of its
+findings is a blocker that would have silently ruined demo one: the harness
+projects the bundle BEFORE it enriches and never re-projects, so it would publish
+an unenriched map while every gate approved it. That plan is the current unit of
+work.
+
+**After that, there is exactly one thing next, and it is a decision, not a task:
+the first real ladder run on VS Code.** Nothing in the engine has ever invoked a
+model. The whole thing was built and tested against an injectable seam with
+canned responses, so it cost nothing. The first real run spends the owner's
+Claude Max usage, and section N3a below has the exact command and the projected
+scale.
+
+**Do not run it without the owner explicitly saying so in this session.**
+
+If the owner has said so, run it, then read the Run Report it writes and report
+what actually happened, including what the determination said and what the
+census looks like. That output is the point; the run is not the deliverable.
+
+If the owner has NOT said so, the useful unblocked work is, roughly in order of
+value:
+
+1. **The findings-to-issues filer** (`DEMO-PROGRAM.md` 5.2). Specified, not
+   built. Turns parser findings into deduplicated GitHub issues.
+2. **The generated hub and the launchd schedule** (`DEMO-PROGRAM.md` 4.3, 4.4).
+   Buildable and testable locally; only the deploy needs Cloudflare.
+3. **Cards M2, M3 and M4**, cross-repo edges (section N4 below). The
+   differentiator, and currently invisible because it has no cards at all.
+
+Bring the owner a decision packet rather than guessing, per the working
+agreement at the end of this file.
+
+### The rules that are not negotiable
+
+These have all cost real time. Sections below give the evidence for each.
+
+1. **Environment first, every time.** `python3 -m venv .venv-wt && .venv-wt/bin/pip
+   install -e ".[all,dev]"`. A venv without tree-sitter silently falls back to
+   regex parsers and **every number you produce will be wrong**. It has already
+   caused one bogus 989-symbol diff and silently skipped a guard that would have
+   caught two real failures.
+2. **No real model invocation without the owner's say-so.** Every phase works
+   against the injectable `Invoker` seam in `analyzer/enrich/engine.py`. Build and
+   test with canned responses and `--dry-run`. If you believe a real invocation is
+   unavoidable, stop and ask.
+3. **No Cloudflare, no deploys, no domains, no DNS.** Parked by the owner.
+4. **No regression, proven not asserted.** Run
+   `scripts/golden-corpus.py check flask` AND `check fastapi` at every task
+   boundary. Both must report no drift.
+5. **Know your baselines and do not hide behind them.** In a **worktree**,
+   pytest has exactly one pre-existing failure
+   (`test_pruned_directory_row_stands_in_for_its_contents`, because `.git` is a
+   file in a worktree). In the **primary checkout** there are zero failures. The
+   viewer has 86 vitest failures across 11 files, environment-only: capture the
+   failing FILE set before and after and diff the lists. Any new failing file is
+   yours.
+6. **Cost figures are API-equivalent units** the CLI reports, metered against the
+   owner's Claude Max subscription. **Never present them as money spent.**
+7. **No em dashes or en dashes** as sentence interrupters, anywhere, including
+   code comments. `.claude/rules/writing-style.md`.
+8. **Hold confirmations to the same standard as refutations.** The three defects
+   that survived one delegated build were all checks that passed, so nobody
+   looked. During the Enrichment Engine build, five defects were found by reading
+   the artifact rather than the test result, and two of them were hiding behind
+   green tests that asserted the wrong thing.
+
+### The map of the documents
+
+Read these only when you need them. This file is the entry point.
+
+| Document | What it is | When you need it |
+|---|---|---|
+| `docs/publication/ENRICHMENT-ENGINE.md` | **Design of record** for the enrichment ladder, the completeness contract, the Run Report | Before touching anything in `analyzer/enrich/` |
+| `docs/publication/ENRICHMENT-ENGINE-BUILD.md` | The build plan, T1 to T12. **All executed**, PR #105 | Historical. Useful for the module map and canonical data shapes |
+| `docs/publication/ENRICHMENT-INTEGRATION.md` | **Plan of record** for wiring the engine into the existing tech, with the blockers before demo one | **Now.** This is the current unit of work |
+| `DEMO-PROGRAM.md` | The plan, the eleven-subject register, execution design, the findings loop, commercial framing | Building any part of the demo program |
+| `DEMO-PREREQUISITES.md` | The six prerequisites, what each surfaced, the multi-repo correction | Understanding why the demo order is what it is |
+| `docs/publication/PREFLIGHT-MEASUREMENTS.md` | The VS Code pre-flight numbers | Sizing a subject |
+| `docs/quality/COMPREHENSION-REVIEW.md` | The comprehension instrument and rubric | Running or scoring a persona sitting |
+| `docs/remediation/COMPREHENSION-STUDY-2026-08-17.md` | Where this whole thread started | Context on why the trust work exists |
+| `DISCLOSURE-POLICY.md`, `LICENSE-REVIEW.md`, `PUBLICATION-METADATA.md` | What a publication owes its subject | Anything published, or any consent question |
+| `docs/commercial/VALUATION-SNAPSHOT.md` | Commercial framing | Milestones |
+| `tests/fixtures/enrichment-run/REPORT.md` | A **reference Run Report** from a full mock run | Seeing what the engine actually produces, for free |
+
+---
 
 ## State of the world
 
@@ -56,18 +196,17 @@ Decided, do not re-litigate (owner decisions 2026-08-18):
    the parity snapshots are pinned to the tree-sitter tier and skip loudly on
    the regex lane. **Always `pip install -e ".[all,dev]"` before trusting any
    local diff or test posture.**
-2. **The current test posture in a normal checkout is 1642 passed, 4 skipped, 1
-   xfailed, 0 failed** (verified 2026-08-20), not the "1451 / 3" an older
-   handoff recorded, which was measured in that broken environment. **In a
-   worktree checkout the posture is 1641 passed, 4 skipped, 1 xfailed, 1
-   failed**, and the one failure is
-   `test_pruned_directory_row_stands_in_for_its_contents`. It asserts that the
-   `.git` *directory* contributes exactly one pruned-directory ledger row; in a
-   worktree `.git` is a file, so the row cannot exist and the assertion gets 0.
-   Environment-only, and it does **not** indicate a real regression. Corrected
-   2026-08-20 in N3: this handoff previously said the failure "no longer
-   reproduces", which was measured in the primary checkout and is wrong for a
-   worktree. Baseline against the posture for the checkout kind you are in.
+2. **Know the posture for the checkout kind you are in, and re-measure it.**
+   As of 2026-08-22 on `main` at `bfbc3fd`: a **normal checkout** is 1928 passed,
+   4 skipped, 1 xfailed, **0 failed**. A **worktree** checkout is the same except
+   for one failure, `test_pruned_directory_row_stands_in_for_its_contents`, which
+   asserts that the `.git` *directory* contributes exactly one pruned-directory
+   ledger row; in a worktree `.git` is a file, so the row cannot exist.
+   Environment-only, and it does **not** indicate a regression. These counts move
+   every time tests land, so measure yours before you change anything and compare
+   against that, not against this number. An older handoff recorded "1451 / 3",
+   measured in a venv without tree-sitter, which is trap 1 producing a wrong
+   baseline that then looked authoritative for weeks.
 3. **The viewer's 86 local test failures are environment-only** (`localStorage`
    unavailable in the local Node). They pass in CI. Do not chase them, and do not
    let a real failure hide among them: capture the failing FILE set before and
@@ -85,7 +224,16 @@ Decided, do not re-litigate (owner decisions 2026-08-18):
    is worth checking against `id_normalization.py`'s re-identification logic
    before assuming it is real churn. This is the same shape as the
    989-phantom-symbol-losses trap above.
-5. **Fixing a classification can remove an accidental exclusion elsewhere.**
+5. **Enrichment lives in the store; the bundle only carries it if you project
+   AFTER enhancing.** `analyze` projects, `enhance` writes store rows, and
+   nothing re-projects on its own. The harness's `refresh` gets this order wrong
+   today (see `ENRICHMENT-INTEGRATION.md` I1), and the failure is silent: the
+   deployed bundle simply has no `ai_enhance`, no tours and no honest gaps, and
+   every gate agrees it is fine because they check either the enhance report or
+   internal consistency, both of which hold when nothing is enriched. Verified
+   empirically 2026-08-22. **If you touch the analyze/enhance/publish order,
+   check the manifest itself, not the report.**
+6. **Fixing a classification can remove an accidental exclusion elsewhere.**
    Stopping test directories being typed `api-server` produced 68 bogus
    "unreferenced" findings on FastAPI, because the unreferenced rule had been
    skipping them only as a side effect of the mislabel. The golden corpus caught
@@ -262,20 +410,48 @@ the artifact.
 ## Verification commands
 
 ```bash
-# ALWAYS first, in any fresh worktree
+# ALWAYS first, in any fresh checkout or worktree. Without tree-sitter the
+# parsers silently degrade and every number below is wrong.
 python3 -m venv .venv-wt && .venv-wt/bin/pip install -e ".[all,dev]"
 
-.venv-wt/bin/python -m pytest tests/ -q          # expect 1642 passed, 4 skipped, 1 xfailed, 0 failed in a normal checkout
+# Posture. Measure BEFORE you change anything and compare against your own
+# baseline, not against a number written in a document.
+.venv-wt/bin/python -m pytest tests/ -q
 .venv-wt/bin/python -m ruff check analyze.py analyzer/ scripts/ tests/
 node --test infrastructure/preview-gate/*.test.mjs
 cd viewer && npx tsc --noEmit && npx eslint src/ && npx vitest run
 
+# No regression, proven. Both, every time, at every task boundary.
 .venv-wt/bin/python scripts/golden-corpus.py check flask
 .venv-wt/bin/python scripts/golden-corpus.py check fastapi
+
 .venv-wt/bin/python scripts/gui-plan-check.py
 .venv-wt/bin/python scripts/validate-publication.py <bundle-dir> --require
 .venv-wt/bin/python scripts/comprehension-score.py score <run-dir>
 ```
+
+**The enrichment ladder, without spending anything.** Every one of these invokes
+no model:
+
+```bash
+# Plan the whole ladder against a real store. Zero invocations, zero cost.
+.venv-wt/bin/python analyze.py enhance <root> --store <store.db> --ladder --dry-run \
+    --run-dir /tmp/ladder-dryrun
+
+# See what the engine actually produces, for free: the reference Run Report from
+# a full-pipeline mock run.
+cat tests/fixtures/enrichment-run/REPORT.md
+
+# Check the bundle really carries the enrichment, not the report's claim about it.
+# See ENRICHMENT-INTEGRATION.md I1 for why this is the check that matters.
+python3 -c "import json,sys; m=json.load(open(sys.argv[1])); \
+  print('tours:', len(m.get('tours') or []), \
+        '| honest_gaps:', 'yes' if 'honest_gaps' in json.dumps(m) else 'no')" \
+  <bundle-dir>/manifest.json
+```
+
+**A real ladder run spends the owner's Claude Max usage and requires his
+explicit say-so in your session.** The command is in PR #105 and in N3a below.
 
 ## Reference
 
