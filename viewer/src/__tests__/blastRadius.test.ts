@@ -128,39 +128,37 @@ describe("the mode", () => {
         relationships: [rel("b", "a")],
       }),
       blastRadiusMode: false,
-      blastRadiusFocusId: null,
       selectedComponentId: null,
     });
   });
 
   it("starts off", () => {
     expect(useArchStore.getState().blastRadiusMode).toBe(false);
-    expect(useArchStore.getState().blastRadiusFocusId).toBeNull();
   });
 
-  it("toggles on, accepts an anchor, and drops the anchor on the way out", () => {
+  it("toggles on and off; the anchor is the selection itself (I12)", () => {
     useArchStore.getState().toggleBlastRadiusMode();
     expect(useArchStore.getState().blastRadiusMode).toBe(true);
-    useArchStore.getState().setBlastRadiusFocus("a");
-    expect(useArchStore.getState().blastRadiusFocusId).toBe("a");
+    // Selecting a component IS anchoring: no second id exists to drift from
+    // the selection when a scatter dot, finding row or search selects instead
+    // of a canvas click.
+    useArchStore.getState().selectComponent("a");
+    expect(useArchStore.getState().selectedComponentId).toBe("a");
     useArchStore.getState().toggleBlastRadiusMode();
     expect(useArchStore.getState().blastRadiusMode).toBe(false);
-    expect(useArchStore.getState().blastRadiusFocusId).toBeNull();
   });
 
-  it("setBlastRadiusMode clears any stale anchor", () => {
-    useArchStore.getState().setBlastRadiusFocus("a");
-    useArchStore.getState().setBlastRadiusMode(true);
+  it("switching lens turns the mode off, because its only control lives in the Design panel", () => {
+    useArchStore.getState().toggleBlastRadiusMode();
     expect(useArchStore.getState().blastRadiusMode).toBe(true);
-    expect(useArchStore.getState().blastRadiusFocusId).toBeNull();
+    useArchStore.getState().setLens("structure");
+    expect(useArchStore.getState().blastRadiusMode).toBe(false);
   });
 
   it("resets on architecture reload so no shading survives a new scan", () => {
     useArchStore.getState().toggleBlastRadiusMode();
-    useArchStore.getState().setBlastRadiusFocus("a");
     useArchStore.getState().setArchitecture(makeArchitecture());
     expect(useArchStore.getState().blastRadiusMode).toBe(false);
-    expect(useArchStore.getState().blastRadiusFocusId).toBeNull();
   });
 });
 
@@ -171,13 +169,13 @@ describe("the card count", () => {
         components: [makeComponent({ id: "a", design: design({ blast_radius: 47 }) })],
       }),
     });
-    expect(useArchStore.getState().getDesignForComponent("a")!.blast_radius).toBe(47);
+    expect(useArchStore.getState().getComponentById("a")!.design!.blast_radius).toBe(47);
   });
 
   it("degrades by absence on a dataset analyzed without the flag", () => {
     useArchStore.setState({
       architecture: makeArchitecture({ components: [makeComponent({ id: "a" })] }),
     });
-    expect(useArchStore.getState().getDesignForComponent("a")).toBeNull();
+    expect(useArchStore.getState().getComponentById("a")!.design).toBeUndefined();
   });
 });

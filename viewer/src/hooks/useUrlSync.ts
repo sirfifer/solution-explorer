@@ -69,6 +69,13 @@ export function useUrlSync(): void {
       store.selectRule(urlState.rule);
       return;
     }
+    // Design lens selection (D4). If the link names a finding (under the
+    // Design lens), select it; selection navigates to the first implicated
+    // component, mirroring the sibling lenses.
+    if (urlState.finding && useArchStore.getState().lens === "design") {
+      store.selectDesignFinding(urlState.finding);
+      return;
+    }
 
     // Inbound file/line deep link takes precedence: it computes its own drill and
     // selection from the owning component, so it overrides any component/drill
@@ -110,7 +117,9 @@ export function useUrlSync(): void {
         state.selectedCapabilityId !== prev.selectedCapabilityId ||
         state.selectedEntityId !== prev.selectedEntityId;
       const ruleChanged = state.selectedRuleId !== prev.selectedRuleId;
-      if (selChanged || drillChanged || lensChanged || flowChanged || capEntityChanged || ruleChanged) {
+      const findingChanged =
+        state.selectedDesignFindingId !== prev.selectedDesignFindingId;
+      if (selChanged || drillChanged || lensChanged || flowChanged || capEntityChanged || ruleChanged || findingChanged) {
         const update = {
           component: state.selectedComponentId || undefined,
           drill: state.drillLevel || undefined,
@@ -125,6 +134,8 @@ export function useUrlSync(): void {
           entity: state.selectedEntityId || undefined,
           // Carry the Rules lens selection so it is shareable (P6-6).
           rule: state.selectedRuleId || undefined,
+          // Carry the Design lens finding so it is shareable (D4).
+          finding: state.selectedDesignFindingId || undefined,
           // Preserve the active-tab param that DetailPanel manages; rebuilding
           // the URL from component/drill alone would erase it (F-VW-7).
           tab: parseUrlState().tab,
@@ -181,9 +192,15 @@ export function useUrlSync(): void {
           store.selectRule(urlState.rule);
           return;
         }
+        // Design lens selection (D4): same contract as the rule branch.
+        if (urlState.finding && useArchStore.getState().lens === "design") {
+          store.selectDesignFinding(urlState.finding);
+          return;
+        }
         if (useArchStore.getState().selectedCapabilityId) store.clearCapability();
         if (useArchStore.getState().selectedEntityId) store.clearEntity();
         if (useArchStore.getState().selectedRuleId) store.clearRule();
+        if (useArchStore.getState().selectedDesignFindingId) store.clearDesignFinding();
 
         if (urlState.drill) {
           const drillComp = store.getComponentById(urlState.drill);

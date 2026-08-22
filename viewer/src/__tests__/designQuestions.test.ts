@@ -111,7 +111,6 @@ function seed() {
     selectedDesignFindingId: null,
     selectedComponentId: null,
     blastRadiusMode: false,
-    blastRadiusFocusId: null,
     drillLevel: null,
   });
   useArchStore.getState().setLens("design");
@@ -164,12 +163,13 @@ const gestures: Record<string, () => void> = {
     expect(designMethodCaveat(useArchStore.getState().architecture!)).toBe(CAVEAT);
   },
   "blast-radius": () => {
-    // The count is on the component's card, and the mode shades the graph.
-    expect(useArchStore.getState().getDesignForComponent("core")!.blast_radius).toBe(12);
+    // The count is on the component's card, and the mode shades the graph
+    // around the shared selection (I12): selecting IS anchoring.
+    expect(useArchStore.getState().getComponentById("core")!.design!.blast_radius).toBe(12);
     useArchStore.getState().toggleBlastRadiusMode();
     expect(useArchStore.getState().blastRadiusMode).toBe(true);
-    useArchStore.getState().setBlastRadiusFocus("core");
-    expect(useArchStore.getState().blastRadiusFocusId).toBe("core");
+    useArchStore.getState().selectComponent("core");
+    expect(useArchStore.getState().selectedComponentId).toBe("core");
   },
   "seams": () => {
     // The boundary-strength summary counts the seams by how they are held.

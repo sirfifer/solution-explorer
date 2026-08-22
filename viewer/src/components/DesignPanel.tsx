@@ -5,8 +5,7 @@ import {
   designMethodCaveat,
   groupDesignFindings,
   METHOD_LABEL,
-  ZONE_OF_PAIN_MAX_SUM,
-  ZONE_OF_USELESSNESS_MIN_SUM,
+  readZoneThresholds,
   type ScatterPoint,
 } from "../lenses";
 import type { DesignFinding } from "../types";
@@ -128,6 +127,12 @@ function Scatter() {
     () => (architecture ? buildScatter(architecture) : { points: [], omitted: 0 }),
     [architecture],
   );
+  // The zone corners come from the payload (falling back to the mirrored
+  // constants for older datasets), so the shading marks exactly the regions
+  // the findings beside the chart were computed against.
+  const zones = architecture
+    ? readZoneThresholds(architecture)
+    : { painMaxSum: 0.5, uselessnessMinSum: 1.5 };
 
   if (data.points.length === 0) {
     return (
@@ -156,12 +161,12 @@ function Scatter() {
       >
         {/* Zone of pain: concrete and load-bearing, the bottom-left corner. */}
         <polygon
-          points={`${px(0)},${py(0)} ${px(ZONE_OF_PAIN_MAX_SUM)},${py(0)} ${px(0)},${py(ZONE_OF_PAIN_MAX_SUM)}`}
+          points={`${px(0)},${py(0)} ${px(zones.painMaxSum)},${py(0)} ${px(0)},${py(zones.painMaxSum)}`}
           fill={darkMode ? "rgba(245,158,11,0.16)" : "rgba(245,158,11,0.14)"}
         />
         {/* Zone of uselessness: abstract and unused, the top-right corner. */}
         <polygon
-          points={`${px(1)},${py(1)} ${px(ZONE_OF_USELESSNESS_MIN_SUM - 1)},${py(1)} ${px(1)},${py(ZONE_OF_USELESSNESS_MIN_SUM - 1)}`}
+          points={`${px(1)},${py(1)} ${px(zones.uselessnessMinSum - 1)},${py(1)} ${px(1)},${py(zones.uselessnessMinSum - 1)}`}
           fill={darkMode ? "rgba(56,189,248,0.16)" : "rgba(56,189,248,0.14)"}
         />
         {/* The main sequence. */}

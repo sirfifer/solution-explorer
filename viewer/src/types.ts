@@ -572,6 +572,13 @@ export interface DesignSignals {
   method_caveat: string;
   has_activity: boolean;
   component_count: number;
+  // The zone corners the findings were computed against, carried as data so
+  // the scatter shades exactly those regions. Optional: datasets projected
+  // before this key existed fall back to the viewer's mirrored constants.
+  zone_thresholds?: {
+    zone_of_pain_max_sum: number;
+    zone_of_uselessness_min_sum: number;
+  };
   finding_counts: Record<string, number>;
   findings: DesignFinding[];
   boundaries: DesignBoundary[];

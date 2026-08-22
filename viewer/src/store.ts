@@ -33,7 +33,6 @@ import type {
   StatusOverlay,
   ChangelogEntry,
   Publication,
-  ComponentDesign,
   DesignFinding,
 } from "./types";
 import type { SearchResult } from "./utils/search";
@@ -242,19 +241,16 @@ interface ArchStore {
   selectDesignFinding: (findingId: string) => void;
   clearDesignFinding: () => void;
   getDesignFindings: () => DesignFinding[];
-  // The per-component design metrics, or null when the dataset carries none for
-  // that component. Null is "not measured", never "zero".
-  getDesignForComponent: (componentId: string) => ComponentDesign | null;
 
-  // Blast radius mode (D5): when on, hovering or selecting a node shades its
-  // transitive dependents one way and its transitive dependencies another.
-  // Computed client-side from the graph the viewer already holds.
+  // Blast radius mode (D5): when on, the selected component's transitive
+  // dependents shade one way and its transitive dependencies another. The
+  // shading anchors on selectedComponentId, the shared selection identity
+  // (I12), so every path that selects a component (graph click, scatter dot,
+  // finding row, search) moves the shading with it. The mode is design-lens
+  // state: setLens clears it, because its only control lives in the Design
+  // panel and a mode with no visible off switch would trap the reader.
   blastRadiusMode: boolean;
   toggleBlastRadiusMode: () => void;
-  setBlastRadiusMode: (on: boolean) => void;
-  // The component the blast-radius shading is currently anchored on.
-  blastRadiusFocusId: string | null;
-  setBlastRadiusFocus: (componentId: string | null) => void;
 
   // A one-shot request to open a specific detail-panel tab (P6-3). Set when
   // selecting a capability/entity so the panel jumps to its Capabilities/Data tab;
@@ -932,7 +928,6 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   selectedRuleId: null,
   selectedDesignFindingId: null,
   blastRadiusMode: false,
-  blastRadiusFocusId: null,
   pendingDetailTab: null,
 
   activePanel: null,
@@ -1038,7 +1033,6 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       // with no stale shading anchored on a component that may not exist (D4/D5).
       selectedDesignFindingId: null,
       blastRadiusMode: false,
-      blastRadiusFocusId: null,
       pendingDetailTab: null,
       // The findings overlay and any staged selection set belong to a specific
       // dataset; reset on reload so a new scan starts closed (P6-8).
@@ -1152,7 +1146,15 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     return false;
   },
 
-  setLens: (id) => set((s) => ({ lens: resolveLensId(id, s.architecture, resolveChannel()) })),
+  setLens: (id) =>
+    set((s) => ({
+      lens: resolveLensId(id, s.architecture, resolveChannel()),
+      // Leaving the Design lens must turn blast-radius mode off: its only
+      // control is in the Design panel, and a mode that survives the panel's
+      // unmount would suppress selection highlighting everywhere with no
+      // visible way back.
+      blastRadiusMode: false,
+    })),
 
   // The active lens's node/edge selection, fed to the graph pipeline. For
   // Structure this is exactly the existing selectors, so old data renders
@@ -1319,21 +1321,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   getDesignFindings: () => get().architecture?.design_signals?.findings ?? [],
 
-  getDesignForComponent: (componentId) => {
-    return get().getComponentById(componentId)?.design ?? null;
-  },
-
-  // Blast radius mode (D5). The initial values live with the other lens state
-  // at the top of the store; these are the actions.
-  toggleBlastRadiusMode: () =>
-    set((s) => ({
-      blastRadiusMode: !s.blastRadiusMode,
-      // Leaving the mode drops the anchor, so re-entering starts clean rather
-      // than resuming a shading the reader has forgotten about.
-      blastRadiusFocusId: s.blastRadiusMode ? null : s.blastRadiusFocusId,
-    })),
-  setBlastRadiusMode: (on) => set({ blastRadiusMode: on, blastRadiusFocusId: null }),
-  setBlastRadiusFocus: (componentId) => set({ blastRadiusFocusId: componentId }),
+  // Blast radius mode (D5). The initial value lives with the other lens state
+  // at the top of the store; the shading anchors on selectedComponentId.
+  toggleBlastRadiusMode: () => set((s) => ({ blastRadiusMode: !s.blastRadiusMode })),
 
   // Cross-lens jump L6 -> L3: switch to the Data lens with the rule's linked
   // entity focused. setLens resolves to Data (available when data_entities exist)

@@ -14,14 +14,11 @@ import {
   collectDesignSubjectIds,
   buildDesignFindingGraph,
   buildDesignLandingGraph,
-  designEdgeMarks,
-  designBoundaryMap,
-  rollUpEdgeMarks,
+  readZoneThresholds,
   DESIGN_KIND_ORDER,
   METHOD_LABEL,
   ZONE_OF_PAIN_MAX_SUM,
   ZONE_OF_USELESSNESS_MIN_SUM,
-  type DesignEdgeMark,
 } from "../lenses";
 import type {
   Architecture,
@@ -307,49 +304,31 @@ describe("the abstractness / instability scatter", () => {
   });
 });
 
-// --- 6. edge marks and the worst-case roll-up ---------------------------------------
+// --- 6. zone thresholds travel as data --------------------------------------------
 
-describe("edge marks", () => {
-  it("marks cycle and inversion edges, and nothing else", () => {
+describe("zone thresholds", () => {
+  it("reads the payload's thresholds so the chart shades what the findings used", () => {
     const arch = makeArchitecture({
       design_signals: makeSignals({
-        findings: [
-          makeFinding({ id: "cycle-001", kind: "cycle", edges: [["a", "b"]] }),
-          makeFinding({ id: "si-001", kind: "stability_inversion", targets: ["b", "c"], edges: [["b", "c"]] }),
-          makeFinding({ id: "cc-001", kind: "change_coupling", targets: ["d", "e"], edges: [["d", "e"]] }),
-        ],
+        zone_thresholds: {
+          zone_of_pain_max_sum: 0.4,
+          zone_of_uselessness_min_sum: 1.6,
+        },
       }),
     });
-    const marks = designEdgeMarks(arch);
-    expect([...(marks.get("a->b") ?? [])]).toEqual(["cycle"]);
-    expect([...(marks.get("b->c") ?? [])]).toEqual(["stability_inversion"]);
-    // Change coupling is not an edge mark; it has no static edge to badge.
-    expect(marks.has("d->e")).toBe(false);
+    const t = readZoneThresholds(arch);
+    expect(t.painMaxSum).toBe(0.4);
+    expect(t.uselessnessMinSum).toBe(1.6);
+    // The zone classification follows the dataset, not the mirrored constants.
+    expect(zoneFor(0.2, 0.2, t)).toBe("pain");
+    expect(zoneFor(0.25, 0.25, t)).toBe("balanced");
   });
 
-  it("rolls up worst-case, so a summary never looks healthier than what it hides", () => {
-    const hidden: Set<DesignEdgeMark>[] = [
-      new Set<DesignEdgeMark>(),
-      new Set<DesignEdgeMark>(["cycle"]),
-      new Set<DesignEdgeMark>(),
-    ];
-    // Two of three hidden edges are clean; the roll-up must still show the cycle.
-    expect([...rollUpEdgeMarks(hidden)]).toEqual(["cycle"]);
-    expect([...rollUpEdgeMarks([new Set<DesignEdgeMark>()])]).toEqual([]);
-  });
-
-  it("exposes boundary strength per directed pair", () => {
-    const arch = makeArchitecture({
-      design_signals: makeSignals({
-        boundaries: [
-          { source: "a", target: "b", strength: "source" },
-          { source: "b", target: "c", strength: "service" },
-        ],
-      }),
-    });
-    const map = designBoundaryMap(arch);
-    expect(map.get("a->b")).toBe("source");
-    expect(map.get("b->c")).toBe("service");
+  it("falls back to the mirrored constants for datasets projected before the key existed", () => {
+    const arch = makeArchitecture({ design_signals: makeSignals({}) });
+    const t = readZoneThresholds(arch);
+    expect(t.painMaxSum).toBe(ZONE_OF_PAIN_MAX_SUM);
+    expect(t.uselessnessMinSum).toBe(ZONE_OF_USELESSNESS_MIN_SUM);
   });
 });
 
@@ -359,7 +338,7 @@ describe("store integration", () => {
   beforeEach(() => {
     useArchStore.setState({
       architecture: null, selectedDesignFindingId: null,
-      blastRadiusMode: false, blastRadiusFocusId: null,
+      blastRadiusMode: false,
     });
   });
 
@@ -372,9 +351,9 @@ describe("store integration", () => {
         ],
       }),
     });
-    expect(useArchStore.getState().getDesignForComponent("with")?.blast_radius).toBe(7);
-    expect(useArchStore.getState().getDesignForComponent("without")).toBeNull();
-    expect(useArchStore.getState().getDesignForComponent("missing")).toBeNull();
+    expect(useArchStore.getState().getComponentById("with")?.design?.blast_radius).toBe(7);
+    expect(useArchStore.getState().getComponentById("without")?.design).toBeUndefined();
+    expect(useArchStore.getState().getComponentById("missing")).toBeNull();
   });
 
   it("returns an empty finding list rather than throwing on a bare dataset", () => {
@@ -382,14 +361,11 @@ describe("store integration", () => {
     expect(useArchStore.getState().getDesignFindings()).toEqual([]);
   });
 
-  it("toggles blast radius mode and drops the anchor on the way out", () => {
+  it("toggles blast radius mode; the anchor is the shared selection (I12)", () => {
     const store = useArchStore.getState();
     store.toggleBlastRadiusMode();
     expect(useArchStore.getState().blastRadiusMode).toBe(true);
-    useArchStore.getState().setBlastRadiusFocus("a");
-    expect(useArchStore.getState().blastRadiusFocusId).toBe("a");
     useArchStore.getState().toggleBlastRadiusMode();
     expect(useArchStore.getState().blastRadiusMode).toBe(false);
-    expect(useArchStore.getState().blastRadiusFocusId).toBeNull();
   });
 });

@@ -2,8 +2,8 @@
  * Design lens (D4, docs/research/architecture-quality-signals.md Part 3):
  * "Is this architecture any good, and where is it weak?"
  *
- * The seventh sibling of Structure, Inventory, Flow, Activity, Capability, Data
- * and Rules, and it follows their contract exactly: a ranked panel is the
+ * The eighth lens, joining Structure, Inventory, Flow, Activity, Capability,
+ * Data and Rules, and it follows their contract exactly: a ranked panel is the
  * landing surface (invariant I11), each row navigates into the graph with the
  * implicated nodes and edges highlighted, and the lens appears only when the
  * dataset can answer its question.
@@ -32,10 +32,10 @@ import type {
   Architecture,
   Component,
   ComponentDesign,
-  DesignBoundary,
   DesignFinding,
   Relationship,
 } from "../types";
+import { collectComponentsByIds } from "./collect";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
 
 // The panel order, taken from the ranked-finding list in Part 3 of the research
@@ -159,20 +159,42 @@ export interface ScatterData {
   omitted: number;
 }
 
-// Thresholds mirroring analyzer/derive/design_signals.py, so the shading on the
-// chart marks the same regions the findings are drawn from. Kept in sync by
-// designLens.test.
+// Fallback thresholds mirroring analyzer/derive/design_signals.py, used only
+// for datasets projected before the payload carried `zone_thresholds`. Current
+// datasets ship the thresholds as data, so the chart shades exactly the
+// corners the findings were computed against even if the analyzer retunes
+// them; readZoneThresholds resolves payload-first.
 export const ZONE_OF_PAIN_MAX_SUM = 0.5;
 export const ZONE_OF_USELESSNESS_MIN_SUM = 1.5;
 
-export function zoneFor(a: number, i: number): ScatterPoint["zone"] {
+export interface ZoneThresholds {
+  painMaxSum: number;
+  uselessnessMinSum: number;
+}
+
+export function readZoneThresholds(arch: Architecture): ZoneThresholds {
+  const t = arch.design_signals?.zone_thresholds;
+  return {
+    painMaxSum: t?.zone_of_pain_max_sum ?? ZONE_OF_PAIN_MAX_SUM,
+    uselessnessMinSum: t?.zone_of_uselessness_min_sum ?? ZONE_OF_USELESSNESS_MIN_SUM,
+  };
+}
+
+export function zoneFor(
+  a: number,
+  i: number,
+  thresholds?: ZoneThresholds,
+): ScatterPoint["zone"] {
+  const painMax = thresholds?.painMaxSum ?? ZONE_OF_PAIN_MAX_SUM;
+  const uselessnessMin = thresholds?.uselessnessMinSum ?? ZONE_OF_USELESSNESS_MIN_SUM;
   const sum = a + i;
-  if (sum <= ZONE_OF_PAIN_MAX_SUM) return "pain";
-  if (sum >= ZONE_OF_USELESSNESS_MIN_SUM) return "uselessness";
+  if (sum <= painMax) return "pain";
+  if (sum >= uselessnessMin) return "uselessness";
   return "balanced";
 }
 
 export function buildScatter(arch: Architecture): ScatterData {
+  const thresholds = readZoneThresholds(arch);
   const points: ScatterPoint[] = [];
   let omitted = 0;
   const walk = (components: Component[]) => {
@@ -189,7 +211,7 @@ export function buildScatter(arch: Architecture): ScatterData {
             a,
             i,
             distance: design.distance_main_sequence ?? Math.abs(a + i - 1),
-            zone: zoneFor(a, i),
+            zone: zoneFor(a, i, thresholds),
           });
         }
       }
@@ -202,18 +224,6 @@ export function buildScatter(arch: Architecture): ScatterData {
 }
 
 // --- the graph ----------------------------------------------------------------
-
-function collectComponentsByIds(components: Component[], ids: Set<string>): Component[] {
-  const out: Component[] = [];
-  const walk = (comps: Component[]) => {
-    for (const c of comps) {
-      if (ids.has(c.id)) out.push(c);
-      walk(c.children);
-    }
-  };
-  walk(components);
-  return out;
-}
 
 // Every component named by any finding. The landing graph, so the reader sees
 // the implicated parts of the system rather than a hairball (I11).
@@ -250,50 +260,6 @@ export function buildDesignLandingGraph(arch: Architecture): {
   const nodes = collectComponentsByIds(arch.components, ids);
   const edges = arch.relationships.filter((r) => ids.has(r.source) && ids.has(r.target));
   return { nodes, edges };
-}
-
-// --- edge badges ---------------------------------------------------------------
-
-// Which design findings mark a given edge, so the graph can badge it. Cycle
-// membership and stability inversion are the two the research document names.
-export type DesignEdgeMark = "cycle" | "stability_inversion";
-
-export function designEdgeMarks(arch: Architecture): Map<string, Set<DesignEdgeMark>> {
-  const marks = new Map<string, Set<DesignEdgeMark>>();
-  for (const finding of arch.design_signals?.findings ?? []) {
-    if (finding.kind !== "cycle" && finding.kind !== "stability_inversion") continue;
-    for (const [source, target] of finding.edges) {
-      const key = `${source}->${target}`;
-      let set = marks.get(key);
-      if (!set) {
-        set = new Set<DesignEdgeMark>();
-        marks.set(key, set);
-      }
-      set.add(finding.kind);
-    }
-  }
-  return marks;
-}
-
-// Boundary strength per directed pair, for the edge attribute the research
-// document asks for.
-export function designBoundaryMap(arch: Architecture): Map<string, DesignBoundary["strength"]> {
-  const map = new Map<string, DesignBoundary["strength"]>();
-  for (const b of arch.design_signals?.boundaries ?? []) {
-    map.set(`${b.source}->${b.target}`, b.strength);
-  }
-  return map;
-}
-
-// The worst-case-propagating roll-up (research document Part 1.12): a collapsed
-// view never looks healthier than the worst thing it hides. Given the marks on
-// every edge inside an aggregate, the aggregate shows a cycle badge if ANY
-// hidden edge is in a cycle. A summary that averaged these away would be a JPEG
-// artifact presented as a photograph.
-export function rollUpEdgeMarks(sets: Iterable<Set<DesignEdgeMark>>): Set<DesignEdgeMark> {
-  const out = new Set<DesignEdgeMark>();
-  for (const set of sets) for (const mark of set) out.add(mark);
-  return out;
 }
 
 // --- blast radius, as an interaction (D5) ---------------------------------------
@@ -354,10 +320,19 @@ export function computeBlastRadius(
   edges: { source: string; target: string }[],
 ): BlastRadius {
   if (!focusId) return { dependents: new Set(), dependencies: new Set() };
-  const { forward, reverse } = buildBlastAdjacency(edges);
+  return blastRadiusFrom(focusId, buildBlastAdjacency(edges));
+}
+
+// The same walk over a prebuilt adjacency. The graph memoizes the adjacency on
+// its edge set (it does not change between anchor clicks), so each re-anchor
+// pays only the two reachable-set walks instead of rebuilding both maps.
+export function blastRadiusFrom(
+  focusId: string,
+  adjacency: { forward: Map<string, string[]>; reverse: Map<string, string[]> },
+): BlastRadius {
   return {
-    dependents: reachable(focusId, reverse),
-    dependencies: reachable(focusId, forward),
+    dependents: reachable(focusId, adjacency.reverse),
+    dependencies: reachable(focusId, adjacency.forward),
   };
 }
 
@@ -414,7 +389,15 @@ export const designLens: LensDefinition = {
       if (nodes.length > 0) return { nodes, aggregates: [], edges };
     }
     const { nodes, edges } = buildDesignLandingGraph(ctx.architecture);
-    return { nodes, aggregates: [], edges };
+    if (nodes.length > 0) return { nodes, aggregates: [], edges };
+    // No finding names a component (say, the only finding is the boundary
+    // summary): show the standard visible graph rather than an empty canvas,
+    // so the lens still presents the system with its design metrics.
+    return {
+      nodes: ctx.getVisibleComponents(),
+      aggregates: ctx.getAggregateNodes(),
+      edges: ctx.getComponentRelationships(),
+    };
   },
   questions: DESIGN_QUESTIONS,
 };
