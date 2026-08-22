@@ -24,7 +24,7 @@ import type {
   EntityAccess,
   Relationship,
 } from "../types";
-import { collectComponentsByIds } from "./collect";
+import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
 
 // The kinds in the order the panel presents them, most specific source first.

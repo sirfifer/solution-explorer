@@ -28,7 +28,7 @@
  * architecture, old data) never shows the lens.
  */
 import type { Architecture, Component, Relationship, Rule } from "../types";
-import { collectComponentsByIds } from "./collect";
+import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
 
 // The kinds in the order the panel and the graph present them: decisions and

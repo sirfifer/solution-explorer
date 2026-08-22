@@ -35,7 +35,7 @@ import type {
   DesignFinding,
   Relationship,
 } from "../types";
-import { collectComponentsByIds } from "./collect";
+import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
 
 // The panel order, taken from the ranked-finding list in Part 3 of the research

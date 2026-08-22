@@ -216,3 +216,67 @@ that blob first.
    `analyzer/solution/compose.py` calls those drivers but does not pass it, and
    the solution front door has no per-member design roll-up. Out of scope here,
    and a clean follow-on card.
+
+## The independent verification round, 2026-08-21
+
+A separate session verified this branch before shipping, treating everything
+above as claims. What held: the full posture reproduced exactly (pytest,
+ruff, both corpora, tsc, eslint, and the vitest failing-file set was diffed
+against a fresh main-checkout baseline, not against this file). The
+MCP-versus-projection agreement held on the real VS Code store, not just the
+polyglot fixture. What did not hold is recorded here, because the next reader
+should trust the round, not the original claims.
+
+**The branch missed main's last enrichment commit.** It forked at T12;
+`ad691bc` (tour-target-kind single ownership, its guard test, the invoker
+docstring) landed after. The ship branch (`wt/design-signals-ship`) merges
+main so those fixes survive; a naive merge of the original branch would have
+silently reverted all three.
+
+**The derivation contradicted its own method caveat, and the vet run caught
+it on VS Code.** The caveat promises "static import and declared
+communication edges only"; the graph consumed every edge type at every
+confidence tier, including 2,621 inferred name-matched `uses` edges and 62
+inferred imports. Some were demonstrably false (a TypeScript `util` import
+resolved to the Rust CLI's util component; `electron` and
+`@vscode/prompt-tsx` resolved to unrelated local components), and they merged
+three real cycles of 119, 23 and 20 members into one reported 209-member
+cycle. The dependency graph now admits certain imports, declared structural
+edges and communication edges only (`is_dependency_edge`); on VS Code the top
+finding is now a real 119-part cycle. Boundary strength still classifies
+every seam. The bare-name resolver producing those false edges is a
+pre-existing analyzer behavior and is follow-on 10 below.
+
+**A code review over the D diff confirmed and fixed** (commits on the ship
+branch): stale blast-radius rings surviving every mode exit, the shading
+anchor drifting from the selection, blast mode trapping the reader when the
+lens switched, the suppressed pan on deep links, the missing URL round-trip
+for the selected finding, the empty Design canvas when no finding names a
+component, se_blast_radius reporting in_cycle false beyond the 50-finding
+cap, silent truncation of depends_on, the has_git_history versus has_activity
+key drift between the two machine surfaces, a zone classification versus
+projection rounding mismatch, a latent fan-in disagreement between
+importance.py and design_signals.py, the double per-run signal derivation in
+the enrichment phases, and assorted dead code (the read tier, the manifest
+summary, two store APIs). The never-rendered edge-badge machinery was
+DELETED rather than shipped as a tested export presenting an unbuilt
+feature; what this file's D4 row previously claimed about edge marks was
+wrong, and edge badges are now follow-on 11.
+
+**The D8 sweep never ran gui-plan-check.** It fails on the branch: the
+Design lens, its six subviews and DesignPanel had no plan coverage. Waivers
+now record the honest reason (no committed GUI dataset carries
+design_signals); retiring them by regenerating the dogfood dataset with the
+flag and writing executed cases is follow-on 12.
+
+Follow-ons added by the round:
+
+10. **Stop the bare-name import resolver matching npm packages and language
+    builtins to local components.** The false-edge mechanism above. An
+    analyzer fix with golden-corpus implications, worth doing before any
+    subject where cross-area name collisions are likely.
+11. **Edge badges (the original D4 claim).** Cycle and inversion marks on
+    graph edges with the worst-case roll-up. The deleted machinery is in git
+    history at `233fdc3` if wanted.
+12. **Retire the Design lens GUI-plan waivers** with a design-signals
+    dogfood dataset and executed cases.
