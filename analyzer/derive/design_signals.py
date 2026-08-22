@@ -87,10 +87,16 @@ __all__ = [
     "DesignSignals",
     "derive_design_signals",
     "design_digest",
+    "design_digest_for",
     "store_design_signals",
-    "load_design_signals",
     "boundary_strength_for",
     "strongly_connected_components",
+    "dependency_adjacency",
+    "reachable_set",
+    "is_dependency_edge",
+    "DEPENDENCY_EDGE_TYPES",
+    "METRIC_TERMS",
+    "NULL_RATIO_NOTE",
     "pair_key",
     "split_pair_key",
     "META_KEY",
@@ -237,6 +243,58 @@ BOUNDARY_ORDER = ("source", "deployment", "process", "service")
 # grown a term this module has not been taught.
 DEFAULT_BOUNDARY_STRENGTH = "source"
 
+# Which edges count as DEPENDENCIES for the metrics and findings. This is the
+# method caveat made executable: the caveat promises "static import and
+# declared communication edges only", so the dependency graph consumes exactly
+# those and nothing else.
+#
+# Excluded, and why:
+#   - ``uses`` edges: always confidence "inferred", produced by matching a
+#     symbol name to a component name. On the VS Code vet run (2026-08-21)
+#     name matching resolved TypeScript imports of ``util`` (Node's builtin)
+#     to the Rust CLI's ``cli/src/util`` component, and npm package names
+#     (``electron``, ``@vscode/prompt-tsx``) to unrelated local components.
+#     Those false edges merged three separate dependency cycles of 119, 23 and
+#     20 members into one reported 209-member cycle. A headline finding must
+#     not rest on edges of that class.
+#   - ``import`` edges with confidence "inferred": the same name-matching
+#     mechanism (a bare, non-relative import matched by name), with the same
+#     demonstrated false positives.
+#   - UI-flow edges (``navigation``, ``tab``, ``modal``, ``embed``,
+#     ``companion``): a screen reachable from another screen is not a
+#     source-code dependency, and counting it would put view wiring into
+#     fan-in.
+#
+# Boundary strength deliberately still classifies EVERY edge: a seam is a seam
+# whatever the evidence tier, and the boundary summary claims nothing about
+# direction or reachability.
+DEPENDENCY_EDGE_TYPES = frozenset(
+    {
+        "import",
+        "ffi",
+        "docker",
+        "file",
+        "http",
+        "websocket",
+        "grpc",
+        "database",
+        "message_queue",
+        "pubsub",
+        "event_bus",
+        "cache",
+    }
+)
+
+
+def is_dependency_edge(edge: dict) -> bool:
+    """True when an edge is solid enough to feed the dependency graph."""
+    edge_type = (edge.get("type") or "").strip().lower()
+    if edge_type not in DEPENDENCY_EDGE_TYPES:
+        return False
+    if edge_type == "import":
+        return (edge.get("confidence") or "").strip().lower() == "certain"
+    return True
+
 # --- findings: the two-audience copy source -----------------------------------
 #
 # Epistemic class, which is what the method chip states. Part 3 of the research
@@ -269,6 +327,35 @@ TERMS = {
     "change_coupling": ("Cross-boundary change coupling", "CCP"),
     "boundary_strength": ("Boundary strength", "source vs service boundary"),
 }
+
+# The per-metric glossary, single-sourced for the same reason METHOD_CAVEAT is:
+# the MCP component tool, its tool description and the front door all explain
+# these numbers, and three hand-written copies of "I = Ce / (Ca + Ce)" drift
+# the first time one is edited without the others.
+METRIC_TERMS = {
+    "fan_in": "afferent coupling Ca: how many components depend on this one",
+    "fan_out": "efferent coupling Ce: how many components this one depends on",
+    "instability": (
+        "I = Ce / (Ca + Ce): near 0 is load-bearing and hard to change, "
+        "near 1 is volatile and easy to change"
+    ),
+    "abstractness": (
+        "A: abstract type declarations over all type declarations, measured "
+        "only in languages whose declarations distinguish an interface from "
+        "a class"
+    ),
+    "distance_main_sequence": (
+        "D = |A + I - 1|: distance from the balance line between "
+        "abstractness and stability"
+    ),
+    "blast_radius": (
+        "count of components that transitively depend on this one; what "
+        "could break if it changes"
+    ),
+}
+
+# One sentence every machine surface repeats about null ratios, verbatim.
+NULL_RATIO_NOTE = "a null ratio means not measurable, never zero"
 
 # Findings are capped per kind so a pathological subject cannot produce an
 # unbounded payload. The cap is per kind, never across kinds, because ranking
@@ -336,21 +423,6 @@ class ComponentDesign:
         record["abstract_symbols"] = self.abstract_symbols
         return record
 
-    @classmethod
-    def from_record(cls, data: dict) -> ComponentDesign:
-        return cls(
-            component_id=str(data.get("component_id", "")),
-            fan_in=_int(data.get("fan_in")),
-            fan_out=_int(data.get("fan_out")),
-            instability=_opt_float(data.get("instability")),
-            abstractness=_opt_float(data.get("abstractness")),
-            distance_main_sequence=_opt_float(data.get("distance_main_sequence")),
-            blast_radius=_int(data.get("blast_radius")),
-            churn=_int(data.get("churn")),
-            type_symbols=_int(data.get("type_symbols")),
-            abstract_symbols=_int(data.get("abstract_symbols")),
-            bands=dict(data.get("bands") or {}),
-        )
 
 
 @dataclass
@@ -388,20 +460,6 @@ class DesignFinding:
             "rank_within_kind": self.rank_within_kind,
         }
 
-    @classmethod
-    def from_dict(cls, data: dict) -> DesignFinding:
-        return cls(
-            id=str(data.get("id", "")),
-            kind=str(data.get("kind", "")),
-            lead=str(data.get("lead", "")),
-            term=str(data.get("term", "")),
-            term_detail=str(data.get("term_detail", "") or ""),
-            method=str(data.get("method", "")),
-            targets=list(data.get("targets") or []),
-            edges=[list(pair) for pair in data.get("edges") or []],
-            evidence=[dict(item) for item in data.get("evidence") or []],
-            rank_within_kind=_int(data.get("rank_within_kind")) or 1,
-        )
 
 
 @dataclass
@@ -415,6 +473,17 @@ class DesignSignals:
     # resolved. Kept beside the metrics because the findings and the projection
     # both read it.
     boundaries: dict[str, str] = field(default_factory=dict)
+    # Component id to the sorted members of its strongly connected component,
+    # for every component that sits in a cycle, UNCAPPED. The findings list
+    # caps cycles at MAX_FINDINGS_PER_KIND for payload discipline; a consumer
+    # answering "is THIS component in a cycle" (the MCP blast-radius tool's
+    # parallel-safety gate) must read this map, because a component in the
+    # 51st cycle is still in a cycle. Not projected: to_dict carries findings,
+    # and this map is derivable from the same graph on demand.
+    cycle_membership: dict[str, list[str]] = field(default_factory=dict)
+    _by_id_cache: Optional[dict[str, ComponentDesign]] = field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     def __len__(self) -> int:
         return len(self.items)
@@ -424,13 +493,30 @@ class DesignSignals:
 
     @property
     def by_id(self) -> dict[str, ComponentDesign]:
-        return {item.component_id: item for item in self.items}
+        # Built once, lazily. items are never mutated after derivation, so the
+        # cache cannot go stale; without it every get() pays an O(N) rebuild,
+        # which turns a caller looping over components into O(N^2).
+        if self._by_id_cache is None:
+            self._by_id_cache = {item.component_id: item for item in self.items}
+        return self._by_id_cache
 
     def get(self, component_id: str) -> Optional[ComponentDesign]:
         return self.by_id.get(component_id)
 
     def findings_of_kind(self, kind: str) -> list[DesignFinding]:
         return [f for f in self.findings if f.kind == kind]
+
+    def finding_counts(self) -> dict[str, int]:
+        """Findings per kind, the one count every surface reports.
+
+        The digest, the projection section and the MCP overview all publish
+        this number; they must all call this method so a change to what counts
+        cannot make three surfaces disagree.
+        """
+        counts: dict[str, int] = {}
+        for finding in self.findings:
+            counts[finding.kind] = counts.get(finding.kind, 0) + 1
+        return counts
 
     def boundary_list(self) -> list[dict]:
         """Boundaries as a sorted list, the shape consumers read.
@@ -453,19 +539,18 @@ class DesignSignals:
             "method_caveat": METHOD_CAVEAT,
             "has_activity": self.has_activity,
             "band_count": BAND_COUNT,
+            # The zone corners travel as data so the viewer's scatter shades
+            # exactly the zones the findings were computed against, instead of
+            # each surface hard-coding its own copy of the thresholds.
+            "zone_thresholds": {
+                "zone_of_pain_max_sum": ZONE_OF_PAIN_MAX_SUM,
+                "zone_of_uselessness_min_sum": ZONE_OF_USELESSNESS_MIN_SUM,
+            },
             "items": [item.to_record() for item in self.items],
             "findings": [f.to_dict() for f in self.findings],
             "boundaries": dict(self.boundaries),
         }
 
-    @classmethod
-    def from_dict(cls, data: dict) -> DesignSignals:
-        return cls(
-            items=[ComponentDesign.from_record(d) for d in data.get("items") or []],
-            findings=[DesignFinding.from_dict(d) for d in data.get("findings") or []],
-            has_activity=bool(data.get("has_activity")),
-            boundaries=dict(data.get("boundaries") or {}),
-        )
 
 
 # --- small helpers ------------------------------------------------------------
@@ -536,33 +621,68 @@ def _bands_for(values: dict[str, int]) -> dict[str, str]:
     return out
 
 
+def reachable_set(start: str, adjacency: dict[str, set[str]]) -> set[str]:
+    """Every node transitively reachable from ``start``, excluding ``start``.
+
+    Visited-set traversal, cycle-safe: a node inside a cycle that reaches back
+    to ``start`` never counts ``start`` as reachable from itself. This is THE
+    closure walk for the design graph: the blast-radius count, and any consumer
+    that answers "what could break" or "what does this stand on" (the MCP
+    blast-radius tool), must call this rather than roll its own, so one
+    definition owns the number every surface reports.
+    """
+    seen: set[str] = set()
+    frontier = [start]
+    while frontier:
+        current = frontier.pop()
+        for neighbour in adjacency.get(current, ()):
+            if neighbour not in seen and neighbour != start:
+                seen.add(neighbour)
+                frontier.append(neighbour)
+    return seen
+
+
+def dependency_adjacency(store) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """The (inbound, outbound) dependency adjacency the design graph uses.
+
+    Distinct-partner sets over dependency-grade edges only (see
+    :func:`is_dependency_edge`), both endpoints known components, self-edges
+    dropped. This is the exact graph :func:`derive_design_signals` computes
+    metrics from, exposed so other surfaces (the MCP tools) walk the same
+    graph instead of maintaining a second edge-filtering policy.
+    """
+    known_ids = {comp["id"] for comp in store.components()}
+    inbound: dict[str, set[str]] = {cid: set() for cid in known_ids}
+    outbound: dict[str, set[str]] = {cid: set() for cid in known_ids}
+    for edge in store.edges():
+        source = edge.get("source_id")
+        target = edge.get("target_id")
+        if source == target:
+            continue
+        if source not in known_ids or target not in known_ids:
+            continue
+        if not is_dependency_edge(edge):
+            continue
+        inbound[target].add(source)
+        outbound[source].add(target)
+    return inbound, outbound
+
+
 def _transitive_dependents(
     component_ids: list[str], inbound: dict[str, set[str]]
 ) -> dict[str, int]:
     """Count, per component, how many components transitively depend on it.
 
-    Breadth-first over reversed dependency edges from every node. The graph may
-    contain cycles, so the walk is a visited-set traversal rather than a
-    memoized DAG recursion; a component is never counted as its own dependent
-    even when it sits inside a cycle that reaches back to it.
-
-    Cost is O(V * E) worst case. Component graphs are small (tens to low
-    hundreds of nodes on real subjects, against thousands of files), so this
-    stays negligible, and the simple version is the one that stays obviously
-    correct in the presence of cycles.
+    Breadth-first over reversed dependency edges from every node, via
+    :func:`reachable_set`. Cost is O(V * E) worst case. Component graphs are
+    small (tens to low hundreds of nodes on real subjects, against thousands
+    of files), so this stays negligible, and the simple version is the one
+    that stays obviously correct in the presence of cycles.
     """
-    counts: dict[str, int] = {}
-    for component_id in component_ids:
-        seen: set[str] = set()
-        frontier = [component_id]
-        while frontier:
-            current = frontier.pop()
-            for dependent in inbound.get(current, ()):  # who depends on current
-                if dependent not in seen and dependent != component_id:
-                    seen.add(dependent)
-                    frontier.append(dependent)
-        counts[component_id] = len(seen)
-    return counts
+    return {
+        component_id: len(reachable_set(component_id, inbound))
+        for component_id in component_ids
+    }
 
 
 # --- cycles -------------------------------------------------------------------
@@ -976,11 +1096,16 @@ def derive_design_signals(store) -> DesignSignals:
             continue
         if source not in known_ids or target not in known_ids:
             continue
-        inbound[target].add(source)
-        outbound[source].add(target)
+        # Every edge is a seam, so boundary strength classifies all of them.
+        # Only dependency-grade edges (see DEPENDENCY_EDGE_TYPES) feed the
+        # metrics and findings.
         key = pair_key(source, target)
         strength = boundary_strength_for(edge.get("type"))
         boundaries[key] = _strongest(boundaries[key], strength) if key in boundaries else strength
+        if not is_dependency_edge(edge):
+            continue
+        inbound[target].add(source)
+        outbound[source].add(target)
 
     # Files per component, so symbol kinds and churn can be attributed, and the
     # reverse index the co-change lift needs. A file can belong to more than one
@@ -993,6 +1118,9 @@ def derive_design_signals(store) -> DesignSignals:
         if cid in files_by_component:
             files_by_component[cid].append(path)
             component_by_path.setdefault(path, []).append(cid)
+    # Sorted once, read everywhere: the metrics loop and the findings both
+    # want deterministic file order, and one O(P log P) pass covers both.
+    sorted_files = {cid: sorted(paths) for cid, paths in files_by_component.items()}
 
     # Symbol kinds per file path, counted only in files whose language can
     # express abstraction. A file in a language the extractor cannot read
@@ -1031,7 +1159,7 @@ def derive_design_signals(store) -> DesignSignals:
     items: list[ComponentDesign] = []
     for comp in components:
         cid = comp["id"]
-        paths = sorted(files_by_component.get(cid, []))
+        paths = sorted_files.get(cid, [])
         fan_in = len(inbound.get(cid, ()))
         fan_out = len(outbound.get(cid, ()))
 
@@ -1056,14 +1184,20 @@ def derive_design_signals(store) -> DesignSignals:
         else:
             distance = abs(abstractness + instability - 1.0)
 
+        # Ratios are rounded HERE, not only at projection time, so the values
+        # the zone findings compare against the thresholds are the same values
+        # every other surface renders. Classifying on the raw float while
+        # projecting the rounded one would let a component sit visually inside
+        # a shaded zone with no matching finding at exactly the boundary
+        # values, where a reader is most likely to compare chart and list.
         items.append(
             ComponentDesign(
                 component_id=cid,
                 fan_in=fan_in,
                 fan_out=fan_out,
-                instability=instability,
-                abstractness=abstractness,
-                distance_main_sequence=distance,
+                instability=_round(instability),
+                abstractness=_round(abstractness),
+                distance_main_sequence=_round(distance),
                 blast_radius=blast.get(cid, 0),
                 churn=sum(commits_by_path.get(path, 0) for path in paths),
                 type_symbols=type_symbols,
@@ -1097,17 +1231,15 @@ def derive_design_signals(store) -> DesignSignals:
     # The order of the kinds below follows the ranked-panel order in Part 3 of
     # the research document; it is a presentation order, not a severity claim.
     items_by_id = {item.component_id: item for item in items}
-    sorted_files = {cid: sorted(paths) for cid, paths in files_by_component.items()}
+    cycles = strongly_connected_components(ordered_ids, outbound)
     findings: list[DesignFinding] = []
-    findings.extend(
-        _cycle_findings(strongly_connected_components(ordered_ids, outbound), outbound)
-    )
+    findings.extend(_cycle_findings(cycles, outbound))
     zone = _zone_findings(items, sorted_files, has_activity)
     findings.extend(f for f in zone if f.kind == "zone_of_pain")
     findings.extend(_stability_inversion_findings(items_by_id, outbound))
     if has_activity:
         findings.extend(
-            _change_coupling_findings(store, set(known_ids), component_by_path)
+            _change_coupling_findings(store, known_ids, component_by_path)
         )
     findings.extend(f for f in zone if f.kind == "zone_of_uselessness")
     findings.extend(_boundary_strength_finding(boundaries))
@@ -1117,6 +1249,9 @@ def derive_design_signals(store) -> DesignSignals:
         findings=findings,
         has_activity=has_activity,
         boundaries=boundaries,
+        cycle_membership={
+            member: members for members in cycles for member in members
+        },
     )
 
 
@@ -1141,9 +1276,7 @@ def design_digest(
     if not signals.items:
         return None
 
-    counts: dict[str, int] = {}
-    for finding in signals.findings:
-        counts[finding.kind] = counts.get(finding.kind, 0) + 1
+    counts = signals.finding_counts()
 
     # The most load-bearing components, which is what a brief most needs to know
     # about. Ranked by blast radius, since "how much rides on this" is the
@@ -1168,7 +1301,7 @@ def design_digest(
         # The caveat first, so a phase that quotes a finding into a brief
         # inherits what the method cannot see rather than losing it.
         "method_caveat": METHOD_CAVEAT,
-        "has_git_history": signals.has_activity,
+        "has_activity": signals.has_activity,
         "component_count": len(signals.items),
         "finding_counts": counts,
         "findings": [
@@ -1191,26 +1324,25 @@ def design_digest(
     }
 
 
+def design_digest_for(store) -> Optional[dict]:
+    """Derive the signals and digest them, the one recipe context assembly uses.
+
+    Both enrichment phases that offer the digest (P1 orientation, P4 synthesis)
+    must obtain it through :meth:`analyzer.enrich.pipeline.RunContext.design_digest`,
+    which caches this call, so one run derives the signals once and both phases
+    brief the model on the same picture of the subject.
+    """
+    return design_digest(derive_design_signals(store))
+
+
 def store_design_signals(store, signals: DesignSignals) -> None:
-    """Persist design signals into the store's meta table as one JSON document."""
+    """Persist design signals into the store's meta table as one JSON document.
+
+    Write-only by design: the document is a run record for later inspection
+    with SQL, not a cache. Every production consumer calls
+    :func:`derive_design_signals` against current store state instead, because
+    ``derive_all`` rebuilds components and edges without clearing meta, so a
+    trusted blob could outlive the facts it was computed from.
+    """
     store.set_meta(META_KEY, json.dumps(signals.to_dict(), sort_keys=True))
 
-
-def load_design_signals(store) -> Optional[DesignSignals]:
-    """Read previously persisted design signals, or None when the store has none.
-
-    Callers that need signals for a run should call
-    :func:`derive_design_signals` instead: this is for inspecting what a past
-    run recorded, and a stored document can be older than the components it
-    names.
-    """
-    raw = store.get_meta(META_KEY)
-    if not raw:
-        return None
-    try:
-        data = json.loads(raw)
-    except (TypeError, ValueError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    return DesignSignals.from_dict(data)

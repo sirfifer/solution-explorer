@@ -312,7 +312,7 @@ class SynthesisPhase:
         prompt = build_synthesis_prompt(
             brief=brief, components=components, census=census,
             honest_gaps=honest_gaps, adjudication=adjudication,
-            design=self._design_digest(ctx),
+            design=ctx.design_digest(),
         )
 
         if ctx.dry_run:
@@ -343,12 +343,6 @@ class SynthesisPhase:
             return None
         data = brief.to_dict() if hasattr(brief, "to_dict") else dict(brief)
         return data if data.get("generated") else None
-
-    def _design_digest(self, ctx: RunContext) -> Optional[dict]:
-        """The compact design-signals digest for this subject, or None (D7)."""
-        from ..derive.design_signals import derive_design_signals, design_digest
-
-        return design_digest(derive_design_signals(ctx.store))
 
     def _component_digests(self, ctx: RunContext) -> list[dict]:
         from ..derive.importance import rank_components

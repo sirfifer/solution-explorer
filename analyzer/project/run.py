@@ -143,6 +143,15 @@ def run_v2(args) -> None:
             print(f"Error: Config file not found: {config_path}", file=sys.stderr)
             sys.exit(1)
         print(f"Multi-repo mode (engine=v2): {config_path}")
+        if design_signals:
+            # The solution composer does not thread the flag through to the
+            # per-member drivers yet (a named follow-on), and an accepted flag
+            # that silently produces nothing is the failure mode this codebase
+            # announces rather than tolerates.
+            print(
+                "Note: --design-signals is not yet supported in multi-repo "
+                "mode; no design signals will be emitted for this run."
+            )
         # v2 multi-repo assembles per-repo stores from LOCAL paths. Remote-clone
         # (a repo defined by `url` rather than `path`) is not yet wired into v2
         # (deferred, see TASKS.md P4-7 Discovered). Fail loudly rather than crash

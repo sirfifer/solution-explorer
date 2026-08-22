@@ -21,7 +21,12 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from ..contracts import require
-from ..derive.design_signals import METHOD_CAVEAT
+from ..derive.design_signals import (
+    METHOD_CAVEAT,
+    METRIC_TERMS,
+    NULL_RATIO_NOTE,
+    reachable_set,
+)
 from .context import StoreContext
 
 # Response bounds (invariant: no silent truncation, always an "N more" notice).
@@ -933,21 +938,19 @@ def _concern_has_component(concern: dict, component: str) -> bool:
 
 
 def _design_finding_payload(finding) -> dict:
-    """One finding, term-first for a machine reader."""
-    return {
-        # Term first. This is the inversion.
-        "term": finding.term,
-        "term_detail": finding.term_detail,
-        "kind": finding.kind,
-        # The plain sentence becomes the description field.
-        "description": finding.lead,
-        "method": finding.method,
-        "targets": list(finding.targets),
-        "edges": [list(pair) for pair in finding.edges],
-        "evidence": [dict(item) for item in finding.evidence],
-        "rank_within_kind": finding.rank_within_kind,
-        "id": finding.id,
-    }
+    """One finding, term-first for a machine reader.
+
+    Built from the finding's own serializer so the field list lives in one
+    place; this wrapper only performs the machine front door's inversion, the
+    plain sentence riding as the description while the term leads.
+    """
+    payload = finding.to_dict()
+    payload["description"] = payload.pop("lead")
+    # Term first. This is the inversion: re-keyed so a reader paging through
+    # raw JSON sees the canonical term before anything else.
+    ordered = {"term": payload.pop("term"), "term_detail": payload.pop("term_detail")}
+    ordered.update(payload)
+    return ordered
 
 
 def _tool_design(ctx: StoreContext, args: dict) -> ToolResult:
@@ -964,16 +967,14 @@ def _tool_design(ctx: StoreContext, args: dict) -> ToolResult:
         findings = [f for f in findings if f.kind == kind]
     shown = findings[:limit]
 
-    counts: dict[str, int] = {}
-    for f in signals.findings:
-        counts[f.kind] = counts.get(f.kind, 0) + 1
+    counts = signals.finding_counts()
 
     data = {
         "available": True,
         # The caveat leads the payload, not a footnote, because an agent that
         # reports these findings onward must carry it.
         "method_caveat": METHOD_CAVEAT,
-        "has_git_history": signals.has_activity,
+        "has_activity": signals.has_activity,
         "component_count": len(signals.items),
         "finding_counts": counts,
         "findings": [_design_finding_payload(f) for f in shown],
@@ -1025,17 +1026,12 @@ def _tool_design_component(ctx: StoreContext, args: dict) -> ToolResult:
         "available": True,
         "method_caveat": METHOD_CAVEAT,
         "metrics": item.to_dict(),
-        # Term-first glossary so an agent need not carry the definitions.
-        "metric_terms": {
-            "fan_in": "afferent coupling (Ca): distinct components that depend on this one",
-            "fan_out": "efferent coupling (Ce): distinct components this one depends on",
-            "instability": "I = Ce / (Ca + Ce). Low is load-bearing, high is volatile. Null when isolated",
-            "abstractness": "A = abstract type declarations / all type declarations. Null when not measurable",
-            "distance_main_sequence": "D = |A + I - 1|. Null when either input is null",
-            "blast_radius": "count of transitive dependents: how many components could break if this changes",
-        },
+        # Term-first glossary from the derive module's single source, so this
+        # payload, the tool description and the front door cannot drift into
+        # three different definitions of the same number.
+        "metric_terms": dict(METRIC_TERMS),
         "null_note": (
-            "A null ratio means NOT MEASURABLE, never zero. Abstractness is only "
+            NULL_RATIO_NOTE + ". Abstractness is only "
             "computed where the language distinguishes an interface from a class, "
             "so Python, C++, Ruby and JavaScript components report null. Do not "
             "coerce null to 0: that would place a load-bearing component in the "
@@ -1074,37 +1070,19 @@ def _tool_blast_radius(ctx: StoreContext, args: dict) -> ToolResult:
         raise ToolError(f"unknown component id: {cid}")
     limit = _limit_arg(args, DEFAULT_LIST_LIMIT)
 
-    known = set(ctx.component_by_id)
-    inbound: dict[str, set[str]] = {}
-    outbound: dict[str, set[str]] = {}
-    for edge in ctx.edges:
-        source, target = edge.get("source_id"), edge.get("target_id")
-        if source == target or source not in known or target not in known:
-            continue
-        inbound.setdefault(target, set()).add(source)
-        outbound.setdefault(source, set()).add(target)
-
-    def walk(start: str, adjacency: dict[str, set[str]]) -> list[str]:
-        seen: set[str] = set()
-        frontier = [start]
-        while frontier:
-            current = frontier.pop()
-            for nxt in adjacency.get(current, ()):
-                if nxt != start and nxt not in seen:
-                    seen.add(nxt)
-                    frontier.append(nxt)
-        return sorted(seen)
-
-    dependents = walk(cid, inbound)
-    dependencies = walk(cid, outbound)
+    # The SAME graph and the SAME walk the design metrics use, via the derive
+    # module's shared helpers, so this tool and se_design_component cannot
+    # report two different blast radii for one component.
+    inbound, outbound = ctx.design_adjacency
+    dependents = sorted(reachable_set(cid, inbound))
+    dependencies = sorted(reachable_set(cid, outbound))
 
     # Cycle membership matters more than either count: inside a cycle the
     # members can only be changed as a unit, so an agent must not split them.
-    cycles = [
-        list(f.targets)
-        for f in ctx.design_signals.findings
-        if f.kind == "cycle" and cid in f.targets
-    ]
+    # Read from the UNCAPPED membership map, never from the findings list: the
+    # findings cap cycles at 50 for payload discipline, and a component in the
+    # 51st cycle is still in a cycle.
+    members = ctx.design_signals.cycle_membership.get(cid)
 
     data = {
         "id": cid,
@@ -1113,8 +1091,8 @@ def _tool_blast_radius(ctx: StoreContext, args: dict) -> ToolResult:
         "dependents": dependents[:limit],
         "depends_on_count": len(dependencies),
         "depends_on": dependencies[:limit],
-        "in_cycle": bool(cycles),
-        "cycle_members": cycles,
+        "in_cycle": members is not None,
+        "cycle_members": [list(members)] if members else [],
         "parallel_safety_note": (
             "Components inside a cycle with this one can only be changed as a "
             "unit. Components in `dependents` could break if this changes; "
@@ -1127,12 +1105,18 @@ def _tool_blast_radius(ctx: StoreContext, args: dict) -> ToolResult:
         f"  {len(dependents)} component(s) could break if this changes",
         f"  it stands on {len(dependencies)} component(s)",
     ]
-    if cycles:
-        lines.append(f"  IN A CYCLE with: {', '.join(sorted({m for c in cycles for m in c if m != cid}))}")
+    if members:
+        lines.append(f"  IN A CYCLE with: {', '.join(m for m in members if m != cid)}")
+    notes = []
     note = _truncation_note(len(dependents), len(data["dependents"]), "dependents")
     if note:
-        data["truncation_note"] = note
-        lines.append(f"  ({note})")
+        notes.append(note)
+    note = _truncation_note(len(dependencies), len(data["depends_on"]), "dependencies")
+    if note:
+        notes.append(note)
+    if notes:
+        data["truncation_note"] = "; ".join(notes)
+        lines.append(f"  ({data['truncation_note']})")
     lines.append(f"  caveat: {METHOD_CAVEAT}")
     return ToolResult("\n".join(lines), data)
 

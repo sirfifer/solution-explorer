@@ -205,6 +205,21 @@ class StoreContext:
 
         return derive_design_signals(self.store)
 
+    @cached_property
+    def design_adjacency(self) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+        """The (inbound, outbound) dependency adjacency of the design graph.
+
+        Cached for the same reason design_signals is: the blast-radius tool is
+        advertised as the per-component coordination primitive for agent
+        fleets, and rebuilding the adjacency from the edge table on every call
+        would turn a fleet's planning pass into O(V * E) of repeated work.
+        Derived by the same function the design metrics use, so the two
+        surfaces walk one graph.
+        """
+        from ..derive.design_signals import dependency_adjacency
+
+        return dependency_adjacency(self.store)
+
     # -- helpers ----------------------------------------------------------
 
     def enrichment_for(self, kind: str, target_id: str) -> Optional[dict]:

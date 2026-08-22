@@ -153,15 +153,41 @@ def test_the_synthesis_prompt_has_no_design_section_without_a_digest():
 
 
 def test_the_phases_assemble_the_digest_from_the_store():
-    """The wiring itself: both phases reach the derivation, not a stale blob."""
+    """The wiring itself: both phases read the run's one cached digest.
+
+    Both call ``ctx.design_digest()``, which derives the signals at most once
+    per run, so orientation and synthesis brief the model on the same picture
+    of the subject and the full-store derivation is never paid twice.
+    """
     import inspect
 
     from analyzer.enrich.orientation import OrientationPhase
+    from analyzer.enrich.pipeline import RunContext
     from analyzer.enrich.synthesis import SynthesisPhase
 
-    assert "design=design_digest(" in inspect.getsource(OrientationPhase.run)
-    assert "design=self._design_digest(ctx)" in inspect.getsource(SynthesisPhase.run)
-    assert "derive_design_signals" in inspect.getsource(SynthesisPhase._design_digest)
+    assert "design=ctx.design_digest()" in inspect.getsource(OrientationPhase.run)
+    assert "design=ctx.design_digest()" in inspect.getsource(SynthesisPhase.run)
+    assert "design_digest_for" in inspect.getsource(RunContext.design_digest)
+
+
+def test_the_run_derives_the_signals_at_most_once():
+    """The cache is real, and None (no signals) is cached like any result."""
+    from unittest import mock
+
+    from analyzer.enrich.pipeline import RunContext
+
+    ctx = mock.Mock(spec=RunContext)
+    ctx._design_digest_cache = RunContext.__dataclass_fields__[
+        "_design_digest_cache"
+    ].default
+    ctx.store = object()
+    with mock.patch(
+        "analyzer.derive.design_signals.design_digest_for", return_value=None
+    ) as derived:
+        first = RunContext.design_digest(ctx)
+        second = RunContext.design_digest(ctx)
+    assert first is None and second is None
+    assert derived.call_count == 1
 
 
 # --- 4. the caveat and the tension framing travel ----------------------------------

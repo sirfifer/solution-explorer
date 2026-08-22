@@ -37,11 +37,11 @@ from analyzer.derive.design_signals import (
     MAX_FINDINGS_PER_KIND,
     META_KEY,
     METHOD_CAVEAT,
+    MIN_COCHANGE_SUPPORT,
     TERMS,
     TYPE_DECLARATION_KINDS,
     boundary_strength_for,
     derive_design_signals,
-    load_design_signals,
     pair_key,
     store_design_signals,
     strongly_connected_components,
@@ -83,9 +83,11 @@ def _store_with(components, edges=(), files=(), symbols=(), activity=()):
         for path in comp.get("files", []):
             if path in path_to_id:
                 store.link_component_file(comp["id"], path_to_id[path])
-    for source, target, kind in edges:
+    for entry in edges:
+        source, target, kind = entry[:3]
+        confidence = entry[3] if len(entry) > 3 else "certain"
         store.add_edge(
-            source_id=source, target_id=target, type=kind, evidence=[], confidence="inferred"
+            source_id=source, target_id=target, type=kind, evidence=[], confidence=confidence
         )
     for index, (path, kind, name) in enumerate(symbols):
         store.add_symbol(
@@ -317,8 +319,7 @@ def test_the_store_document_preserves_null_rather_than_coercing_to_zero():
         assert record["instability"] is None
         assert record["abstractness"] is None
         assert record["distance_main_sequence"] is None
-        reloaded = load_design_signals(store)
-        assert reloaded.by_id["island"].instability is None
+        assert raw["zone_thresholds"]["zone_of_pain_max_sum"] == 0.5
     finally:
         store.close()
 
@@ -1038,10 +1039,8 @@ def test_findings_survive_the_store_round_trip():
     try:
         signals = derive_design_signals(store)
         store_design_signals(store, signals)
-        reloaded = load_design_signals(store)
-        assert [f.to_dict() for f in reloaded.findings] == [
-            f.to_dict() for f in signals.findings
-        ]
+        raw = json.loads(store.get_meta(META_KEY))
+        assert raw["findings"] == [f.to_dict() for f in signals.findings]
     finally:
         store.close()
 
@@ -1093,3 +1092,107 @@ def test_edge_evidence_names_a_real_edge_the_validator_can_find():
         ).ok
     finally:
         store.close()
+
+
+# --- 11. the dependency graph admits only what the caveat promises ------------
+
+
+def test_inferred_imports_and_uses_edges_do_not_feed_the_metrics():
+    """The method caveat made executable.
+
+    The caveat promises "static import and declared communication edges only".
+    On the VS Code vet run (2026-08-21), name-matched edges (a TypeScript
+    import of ``util`` resolved to the Rust CLI's util component; npm package
+    names resolved to unrelated local components) merged three real cycles of
+    119, 23 and 20 members into one reported 209-member cycle. Edges of that
+    class must not feed a headline finding.
+    """
+    store = _store_with(
+        components=[_plain(c) for c in ("a", "b", "c")],
+        edges=[
+            ("a", "b", "import"),                       # certain: counts
+            ("b", "c", "import", "inferred"),           # name-matched: excluded
+            ("c", "a", "uses", "inferred"),             # always inferred: excluded
+        ],
+    )
+    try:
+        signals = derive_design_signals(store)
+        assert signals.by_id["b"].fan_in == 1
+        assert signals.by_id["c"].fan_in == 0
+        assert signals.by_id["a"].fan_in == 0
+        assert signals.findings_of_kind("cycle") == []
+        # Every seam is still classified: exclusion from the metrics does not
+        # hide the boundary.
+        assert len(signals.boundaries) == 3
+    finally:
+        store.close()
+
+
+def test_communication_edges_feed_the_metrics_whatever_their_confidence():
+    store = _store_with(
+        components=[_plain(c) for c in ("api", "worker")],
+        edges=[("api", "worker", "http", "inferred")],
+    )
+    try:
+        signals = derive_design_signals(store)
+        assert signals.by_id["worker"].fan_in == 1
+    finally:
+        store.close()
+
+
+def test_the_mcp_adjacency_is_the_metrics_adjacency():
+    """One graph, two consumers: the shared helper and the derivation agree."""
+    from analyzer.derive.design_signals import dependency_adjacency
+
+    store = _store_with(
+        components=[_plain(c) for c in ("a", "b", "c")],
+        edges=[
+            ("a", "b", "import"),
+            ("b", "c", "import", "inferred"),
+            ("a", "c", "websocket", "inferred"),
+        ],
+    )
+    try:
+        inbound, outbound = dependency_adjacency(store)
+        signals = derive_design_signals(store)
+        for item in signals.items:
+            assert item.fan_in == len(inbound[item.component_id])
+            assert item.fan_out == len(outbound[item.component_id])
+    finally:
+        store.close()
+
+
+def test_cycle_membership_is_uncapped_unlike_the_findings_list():
+    """A component in the 51st cycle is still in a cycle.
+
+    The findings list caps cycles at MAX_FINDINGS_PER_KIND for payload
+    discipline; the membership map answers "is THIS component in a cycle" and
+    must not inherit the cap, because the MCP blast-radius tool gates
+    parallel-edit safety on it.
+    """
+    pairs = []
+    comps = []
+    for index in range(MAX_FINDINGS_PER_KIND + 5):
+        left, right = f"l{index:03d}", f"r{index:03d}"
+        comps += [_plain(left), _plain(right)]
+        pairs += [(left, right, "import"), (right, left, "import")]
+    store = _store_with(components=comps, edges=pairs)
+    try:
+        signals = derive_design_signals(store)
+        assert len(signals.findings_of_kind("cycle")) == MAX_FINDINGS_PER_KIND
+        # Every member of every cycle is in the map, including the dropped tail.
+        assert len(signals.cycle_membership) == 2 * (MAX_FINDINGS_PER_KIND + 5)
+    finally:
+        store.close()
+
+
+def test_the_cochange_threshold_matches_the_activity_lens():
+    """The Activity lens ranks coupling from the same table.
+
+    The constant is duplicated (derive must not import from project), so this
+    test is the guard that keeps the two surfaces naming the same coupled
+    pairs. If this fails, one threshold changed without the other.
+    """
+    from analyzer.project.activity import MIN_COCHANGE_SUPPORT as ACTIVITY_SUPPORT
+
+    assert MIN_COCHANGE_SUPPORT == ACTIVITY_SUPPORT

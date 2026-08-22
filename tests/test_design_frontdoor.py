@@ -204,7 +204,7 @@ def test_every_number_the_mcp_reports_equals_the_projected_number():
         assert overview["component_count"] == section["component_count"]
         assert overview["finding_counts"] == section["finding_counts"]
         assert overview["method_caveat"] == section["method_caveat"]
-        assert overview["has_git_history"] == section["has_activity"]
+        assert overview["has_activity"] == section["has_activity"]
 
         # Finding for finding, the same facts under the two orderings.
         projected = {f["id"]: f for f in section["findings"]}
@@ -319,5 +319,90 @@ def test_no_global_score_is_offered_to_a_machine():
         note = call_tool(ctx, "se_design", {}).data["ranking_note"]
         assert "own kind only" in note
         assert "do not synthesize" in note
+    finally:
+        store.close()
+
+
+# --- 8. the blast-radius tool tells the whole truth --------------------------------
+
+
+def _fleet_store(cycle_count: int = 0, chain: int = 0):
+    """A synthetic store: optional 2-member cycles plus one deep dependency chain."""
+    store = FactStore(":memory:")
+
+    def add(cid):
+        store.add_component(
+            component_id=cid, name=cid, type="module", path=cid,
+            parent_id=None, role="module", meta={"metrics": {"lines": 10}},
+        )
+
+    for index in range(cycle_count):
+        left, right = f"l{index:03d}", f"r{index:03d}"
+        add(left)
+        add(right)
+        store.add_edge(source_id=left, target_id=right, type="import", evidence=[], confidence="certain")
+        store.add_edge(source_id=right, target_id=left, type="import", evidence=[], confidence="certain")
+    for index in range(chain):
+        add(f"n{index:03d}")
+        if index:
+            store.add_edge(
+                source_id=f"n{index:03d}", target_id=f"n{index - 1:03d}",
+                type="import", evidence=[], confidence="certain",
+            )
+    store.commit()
+    return store
+
+
+def test_in_cycle_is_true_beyond_the_findings_cap():
+    """The parallel-safety gate must not inherit the payload cap.
+
+    The findings list caps cycles at MAX_FINDINGS_PER_KIND. A component in a
+    cycle past the cap is still unsafe to edit in parallel with its partner,
+    and the tool's own safety note tells agent fleets to rely on this field.
+    """
+    from analyzer.derive.design_signals import MAX_FINDINGS_PER_KIND
+
+    store = _fleet_store(cycle_count=MAX_FINDINGS_PER_KIND + 3)
+    try:
+        ctx = StoreContext(store)
+        # The premise: more cycles exist than the findings list carries.
+        assert len(ctx.design_signals.findings_of_kind("cycle")) == MAX_FINDINGS_PER_KIND
+        # 2-member cycles all tie on size, so at least one pair was dropped
+        # from the findings; every pair must still answer in_cycle correctly.
+        for index in range(MAX_FINDINGS_PER_KIND + 3):
+            cid = f"l{index:03d}"
+            result = call_tool(ctx, "se_blast_radius", {"id": cid})
+            assert result.data["in_cycle"] is True, cid
+            assert any(cid in members for members in result.data["cycle_members"])
+    finally:
+        store.close()
+
+
+def test_blast_radius_notes_truncation_in_both_directions():
+    """No silent truncation: dependencies get the same N-more notice dependents do."""
+    store = _fleet_store(chain=8)
+    try:
+        ctx = StoreContext(store)
+        result = call_tool(ctx, "se_blast_radius", {"id": "n007", "limit": 3})
+        assert result.data["depends_on_count"] == 7
+        assert len(result.data["depends_on"]) == 3
+        assert "truncation_note" in result.data
+        assert "dependencies" in result.data["truncation_note"]
+        # And the reverse direction still notes its own cut.
+        tail = call_tool(ctx, "se_blast_radius", {"id": "n000", "limit": 3})
+        assert tail.data["blast_radius"] == 7
+        assert "dependents" in tail.data["truncation_note"]
+    finally:
+        store.close()
+
+
+def test_the_tool_walks_the_same_graph_as_the_metrics():
+    """se_blast_radius and the projected design block agree by construction."""
+    store = _fleet_store(chain=5)
+    try:
+        ctx = StoreContext(store)
+        for cid in ("n000", "n002", "n004"):
+            result = call_tool(ctx, "se_blast_radius", {"id": cid})
+            assert result.data["blast_radius"] == ctx.design_signals.get(cid).blast_radius
     finally:
         store.close()

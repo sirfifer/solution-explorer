@@ -37,6 +37,8 @@ from typing import Optional
 
 from ..derive.design_signals import (
     METHOD_CAVEAT,
+    ZONE_OF_PAIN_MAX_SUM,
+    ZONE_OF_USELESSNESS_MIN_SUM,
     DesignSignals,
     derive_design_signals,
     store_design_signals,
@@ -45,7 +47,6 @@ from ..derive.design_signals import (
 __all__ = [
     "emit_design_signals",
     "apply_design_overlay",
-    "design_manifest_summary",
 ]
 
 
@@ -78,17 +79,20 @@ def emit_design_signals(
 
 def _section(signals: DesignSignals) -> dict:
     """The architecture-level ``design_signals`` block."""
-    counts: dict[str, int] = {}
-    for finding in signals.findings:
-        counts[finding.kind] = counts.get(finding.kind, 0) + 1
     return {
         "version": 1,
         # Data, not decoration. Every surface that renders these findings reads
-        # this string rather than composing its own.
+        # this string rather than composing its own, and the same goes for the
+        # zone thresholds: the viewer shades exactly the corners the findings
+        # were computed against.
         "method_caveat": METHOD_CAVEAT,
         "has_activity": signals.has_activity,
         "component_count": len(signals.items),
-        "finding_counts": counts,
+        "zone_thresholds": {
+            "zone_of_pain_max_sum": ZONE_OF_PAIN_MAX_SUM,
+            "zone_of_uselessness_min_sum": ZONE_OF_USELESSNESS_MIN_SUM,
+        },
+        "finding_counts": signals.finding_counts(),
         "findings": [f.to_dict() for f in signals.findings],
         "boundaries": signals.boundary_list(),
     }
@@ -111,22 +115,3 @@ def apply_design_overlay(arch: dict, signals: DesignSignals) -> None:
             walk(comp.get("children") or [])
 
     walk(arch.get("components") or [])
-
-
-def design_manifest_summary(section: Optional[dict]) -> Optional[dict]:
-    """The lightweight slice that rides in the split-mode manifest.
-
-    Counts and the caveat, not the findings themselves, so the manifest stays a
-    manifest. The full list is already in the same document in monolith mode and
-    in the manifest's own ``design_signals`` in split mode, so this exists only
-    for the summary read.
-    """
-    if not section:
-        return None
-    return {
-        "version": section.get("version", 1),
-        "method_caveat": section.get("method_caveat", METHOD_CAVEAT),
-        "has_activity": section.get("has_activity", False),
-        "component_count": section.get("component_count", 0),
-        "finding_counts": dict(section.get("finding_counts") or {}),
-    }

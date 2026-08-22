@@ -33,7 +33,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from ..derive.design_signals import derive_design_signals, design_digest
 from ..derive.importance import ImportanceRanking, rank_components
 from .engine import _parse_json_object
 from .pipeline import PhaseResult, RunContext
@@ -392,7 +391,7 @@ class OrientationPhase:
             readme=readme,
             top_components=_top_components(ctx.arch, ranking, TOP_COMPONENTS_SHOWN),
             ranking_note=ranking_note,
-            design=design_digest(derive_design_signals(ctx.store)),
+            design=ctx.design_digest(),
         )
 
         if ctx.dry_run:
