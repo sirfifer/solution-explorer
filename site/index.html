@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SysCorpus. Living maps of real software.</title>
+<meta name="description" content="SysCorpus builds complete, navigable maps of real codebases. Every file accounted for, every claim backed by evidence, all the way down to the code.">
+<meta property="og:title" content="SysCorpus">
+<meta property="og:description" content="Living maps of real software. Complete enough to trust, deep enough to reach the code.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://syscorpus.com">
+<meta property="og:image" content="https://syscorpus.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://syscorpus.com/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='10' y='10' width='80' height='80' rx='18' fill='%230a0a12'/%3E%3Ccircle cx='35' cy='38' r='9' fill='%2322d3ee'/%3E%3Ccircle cx='66' cy='60' r='9' fill='%23a78bfa'/%3E%3Cpath d='M42 44 L59 54' stroke='%2334d399' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="48x48" href="/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Fraunces:wght@600&family=Alegreya:ital,wght@0,400;0,500;1,400&family=Libre+Franklin:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #08080e;
+    --bg-raise: #0d0d16;
+    --panel: rgba(255, 255, 255, 0.033);
+    --panel-edge: rgba(255, 255, 255, 0.09);
+    --text: #e4e4ec;
+    --text-dim: #9a9aad;
+    --text-faint: #83839a;
+    --cyan: #22d3ee;
+    --violet: #a78bfa;
+    --emerald: #34d399;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --display: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+    --body: "Inter", "Helvetica Neue", Arial, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: rgba(34, 211, 238, 0.28); }
+
+  .grid-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image: radial-gradient(rgba(255,255,255,0.055) 1px, transparent 1px);
+    background-size: 26px 26px;
+    mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 30%, transparent 75%);
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1060px; margin: 0 auto; padding: 0 28px; }
+
+  header.site {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 26px 0 0;
+  }
+  .wordmark {
+    font-family: var(--display); font-weight: 700; font-size: 21px;
+    letter-spacing: 0.01em; color: var(--text); text-decoration: none;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .wordmark svg { display: block; }
+  nav.site { display: flex; gap: 26px; }
+  nav.site a {
+    color: var(--text-dim); text-decoration: none; font-size: 14.5px; font-weight: 500;
+  }
+  nav.site a:hover { color: var(--text); }
+  @media (max-width: 640px) { nav.site { display: none; } }
+
+  .hero { padding: 92px 0 30px; text-align: left; }
+  .hero .eyebrow {
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--cyan); margin-bottom: 22px;
+  }
+  .hero h1 {
+    font-family: var(--display); font-weight: 700;
+    font-size: clamp(34px, 5.4vw, 58px); line-height: 1.08;
+    letter-spacing: -0.015em; max-width: 17ch;
+  }
+  .hero h1 em {
+    font-style: normal;
+    background: linear-gradient(92deg, var(--cyan), var(--violet) 55%, var(--emerald));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .sub {
+    margin-top: 26px; max-width: 60ch; font-size: 19px; color: var(--text-dim);
+  }
+  .hero .cta-row { margin-top: 36px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    display: inline-block; text-decoration: none; font-weight: 600; font-size: 15px;
+    padding: 12px 22px; border-radius: 10px;
+  }
+  .btn-primary { background: var(--cyan); color: #04222a; }
+  .btn-primary:hover { background: #4be0f5; }
+  .btn-ghost { color: var(--text); border: 1px solid var(--panel-edge); }
+  .btn-ghost:hover { border-color: rgba(255,255,255,0.22); }
+  .chip {
+    font-family: var(--mono); font-size: 12.5px; color: var(--emerald);
+    border: 1px solid rgba(52, 211, 153, 0.35); border-radius: 999px;
+    padding: 6px 13px; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .chip .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--emerald);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  /* ===== The dress demo: one block of HTML, three stylesheets, zero JS.
+     The radio inputs are the only state; every visual change below is CSS
+     keyed off :checked. Inspect the markup while switching: it never changes. */
+  .dress { margin: 66px 0 0; }
+  .d-r { position: absolute; opacity: 0; pointer-events: none; }
+  .d-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .d-tabs label {
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.04em;
+    padding: 9px 18px; border: 1px solid var(--panel-edge); border-radius: 999px;
+    color: var(--text-dim); cursor: pointer;
+  }
+  .d-tabs label:hover { color: var(--text); border-color: rgba(255,255,255,0.25); }
+  #d-atlas:checked ~ .d-tabs label[for="d-atlas"],
+  #d-ledger:checked ~ .d-tabs label[for="d-ledger"],
+  #d-signal:checked ~ .d-tabs label[for="d-signal"] {
+    background: var(--text); color: var(--bg); border-color: var(--text);
+  }
+  #d-atlas:focus-visible ~ .d-tabs label[for="d-atlas"],
+  #d-ledger:focus-visible ~ .d-tabs label[for="d-ledger"],
+  #d-signal:focus-visible ~ .d-tabs label[for="d-signal"] {
+    outline: 2px solid var(--cyan); outline-offset: 2px;
+  }
+  .d-scroll { overflow-x: auto; border: 1px solid var(--panel-edge); border-radius: 14px; }
+  .d-cap { margin-top: 14px; font-size: 13.5px; color: var(--text-faint); max-width: 74ch; }
+  .d-cap strong { color: var(--text-dim); font-weight: 600; }
+
+  .specimen { min-width: 860px; display: grid; grid-template-columns: 1fr 268px; }
+  .stage { position: relative; height: 430px; overflow: hidden; }
+  .stage svg.edges { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .node { position: absolute; width: 240px; }
+  .node-a { left: 8%; top: 44px; }
+  .node-b { left: 52%; top: 226px; }
+  .lensbar { position: absolute; left: 8%; bottom: 22px; display: flex; gap: 8px; }
+  .chrome-row { display: flex; align-items: center; gap: 5px; }
+  .led { width: 8px; height: 8px; border-radius: 50%; }
+  .urlbar { flex: 1; height: 12px; border-radius: 6px; margin-left: 6px; }
+  .n-name { font-size: 15px; font-weight: 600; margin-top: 10px; }
+  .n-badges { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .n-badge { font-size: 10.5px; padding: 2px 8px; border-radius: 5px; }
+  .n-purpose { font-size: 12px; margin-top: 8px; }
+  .n-metrics { display: flex; align-items: center; gap: 9px; margin-top: 10px; font-size: 11px; }
+  .langdot { width: 7px; height: 7px; border-radius: 50%; }
+  .term { font-family: var(--mono); font-size: 11px; margin-left: 8px; }
+  .edge-label { position: absolute; pointer-events: none; }
+  .el-http { left: 40%; top: 56%; }
+  .el-ws { left: 28%; top: 72%; }
+  .lens-chip { font-size: 11.5px; padding: 4px 12px; border-radius: 999px; }
+  .spanel { padding: 18px 18px 16px; }
+  .sp-name { font-size: 15px; font-weight: 600; }
+  .sp-kind { font-size: 10.5px; margin-top: 4px; }
+  .sp-tabs { display: flex; gap: 14px; margin-top: 14px; font-size: 12px; }
+  .sp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .stat { padding: 9px 10px; }
+  .stat .k { font-size: 10px; }
+  .stat .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sp-eps { margin-top: 14px; display: grid; gap: 6px; }
+  .ep { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; padding: 5px 8px; }
+  .method { font-size: 9.5px; font-weight: 600; padding: 2px 6px; border-radius: 4px; letter-spacing: 0.04em; }
+  @keyframes dashflow { to { stroke-dashoffset: -22; } }
+  .edge-live { animation: dashflow 1.4s linear infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .edge-live, .chip .dot { animation: none; }
+  }
+
+  /* ---- Dress: ATLAS (default) ---- */
+  #d-atlas:checked ~ .d-scroll .stage {
+    background: #F3EBD9;
+    background-image:
+      radial-gradient(ellipse 380px 200px at 18% 82%, rgba(138,115,84,0.13), transparent 62%),
+      radial-gradient(ellipse 300px 190px at 85% 12%, rgba(43,91,140,0.10), transparent 60%),
+      repeating-radial-gradient(circle at 30% 40%, transparent 0 34px, rgba(138,115,84,0.09) 34px 35px),
+      repeating-radial-gradient(circle at 75% 70%, transparent 0 46px, rgba(138,115,84,0.07) 46px 47px);
+    font-family: "Alegreya", Georgia, serif;
+  }
+  #d-atlas:checked ~ .d-scroll .node { background: #FBF5E8; border: 1px solid #8A7354; border-radius: 8px; padding: 12px 14px 13px; box-shadow: 0 0 0 3px #FBF5E8, 0 0 0 4px #B39F7E, 2px 4px 10px rgba(90,70,40,0.18); }
+  #d-atlas:checked ~ .d-scroll .led { transform: rotate(45deg); border-radius: 1px; width: 7px; height: 7px; }
+  #d-atlas:checked ~ .d-scroll .led:nth-child(1) { background: #A64D42; }
+  #d-atlas:checked ~ .d-scroll .led:nth-child(2) { background: #C8912E; }
+  #d-atlas:checked ~ .d-scroll .led:nth-child(3) { background: #3D7A5D; }
+  #d-atlas:checked ~ .d-scroll .urlbar { background: #EFE5CE; border: 1px solid #C9B896; border-radius: 999px; }
+  #d-atlas:checked ~ .d-scroll .term { color: #7A6034; }
+  #d-atlas:checked ~ .d-scroll .n-name { color: #3E3120; font-family: "Fraunces", Georgia, serif; font-size: 16.5px; }
+  #d-atlas:checked ~ .d-scroll .n-badge { border-radius: 999px; font-family: "Alegreya", serif; font-style: italic; font-size: 11px; }
+  #d-atlas:checked ~ .d-scroll .b-type { background: rgba(43,91,140,0.14); color: #2B5B8C; }
+  #d-atlas:checked ~ .d-scroll .b-fw { background: rgba(61,122,93,0.15); color: #33664E; }
+  #d-atlas:checked ~ .d-scroll .n-purpose { color: #6B5A3E; font-style: italic; }
+  #d-atlas:checked ~ .d-scroll .n-metrics { color: #7A6A4D; }
+  #d-atlas:checked ~ .d-scroll .langdot.py { background: #2B5B8C; }
+  #d-atlas:checked ~ .d-scroll .langdot.ts { background: #3D7A5D; }
+  #d-atlas:checked ~ .d-scroll .edge-http { stroke: #2B5B8C; }
+  #d-atlas:checked ~ .d-scroll .edge-ws { stroke: #A64D42; }
+  #d-atlas:checked ~ .d-scroll .arrh { stroke: #2B5B8C; }
+  #d-atlas:checked ~ .d-scroll .arrw { stroke: #A64D42; }
+  #d-atlas:checked ~ .d-scroll .edge-label { color: #7A6034; font-family: "Alegreya", serif; font-style: italic; font-size: 11px; }
+  #d-atlas:checked ~ .d-scroll .lens-chip { background: transparent; border: 1px solid #B39F7E; color: #6B5A3E; font-family: "Alegreya", serif; font-style: italic; }
+  #d-atlas:checked ~ .d-scroll .lens-chip.active { background: #C8912E; border-color: #C8912E; color: #FBF5E7; }
+  #d-atlas:checked ~ .d-scroll .spanel { background: #F8F1E1; border-left: 1px double #B39F7E; font-family: "Alegreya", serif; }
+  #d-atlas:checked ~ .d-scroll .sp-name { color: #3E3120; font-family: "Fraunces", Georgia, serif; }
+  #d-atlas:checked ~ .d-scroll .sp-kind { color: #A64D42; font-style: italic; }
+  #d-atlas:checked ~ .d-scroll .sp-tabs { color: #7A6A4D; }
+  #d-atlas:checked ~ .d-scroll .sp-tabs .active { color: #3E3120; border-bottom: 2px solid #C8912E; padding-bottom: 3px; }
+  #d-atlas:checked ~ .d-scroll .stat { background: rgba(179,159,126,0.14); border-radius: 6px; }
+  #d-atlas:checked ~ .d-scroll .stat .k { color: #7A6A4D; font-style: italic; }
+  #d-atlas:checked ~ .d-scroll .stat .v { color: #3E3120; }
+  #d-atlas:checked ~ .d-scroll .ep { background: rgba(179,159,126,0.12); border-radius: 6px; color: #55452C; }
+  #d-atlas:checked ~ .d-scroll .method { border-radius: 999px; color: #FBF5E7; }
+  #d-atlas:checked ~ .d-scroll .m-get { background: #3D7A5D; }
+  #d-atlas:checked ~ .d-scroll .m-post { background: #2B5B8C; }
+  #d-atlas:checked ~ .d-scroll .m-del { background: #A64D42; }
+
+  /* ---- Dress: LEDGER ---- */
+  #d-ledger:checked ~ .d-scroll .stage {
+    background: #FBFAF6;
+    background-image:
+      linear-gradient(#ECEAE1 1px, transparent 1px),
+      linear-gradient(90deg, #ECEAE1 1px, transparent 1px);
+    background-size: 28px 28px;
+    font-family: "Libre Franklin", sans-serif;
+  }
+  #d-ledger:checked ~ .d-scroll .node { background: #FFFFFF; border: 1px solid #1F2A37; border-radius: 3px; padding: 12px 14px 13px; box-shadow: 3px 3px 0 rgba(31,42,55,0.08); }
+  #d-ledger:checked ~ .d-scroll .node-a { border-top: 4px solid #0F766E; }
+  #d-ledger:checked ~ .d-scroll .node-b { border-top: 4px solid #1D4ED8; }
+  #d-ledger:checked ~ .d-scroll .led { border-radius: 1px; width: 7px; height: 7px; background: #1F2A37; }
+  #d-ledger:checked ~ .d-scroll .led:nth-child(2), #d-ledger:checked ~ .d-scroll .led:nth-child(3) { opacity: 0.35; }
+  #d-ledger:checked ~ .d-scroll .urlbar { background: #EEF0F2; border: 1px solid #D5DAE1; }
+  #d-ledger:checked ~ .d-scroll .term { color: #0F766E; }
+  #d-ledger:checked ~ .d-scroll .n-name { color: #101826; }
+  #d-ledger:checked ~ .d-scroll .n-badge { border: 1px solid #1F2A37; border-radius: 1px; text-transform: uppercase; letter-spacing: 0.07em; font-size: 9px; padding: 2.5px 7px; color: #1F2A37; background: transparent; }
+  #d-ledger:checked ~ .d-scroll .b-fw { border-color: #0F766E; color: #0F766E; }
+  #d-ledger:checked ~ .d-scroll .node-b .b-fw { border-color: #1D4ED8; color: #1D4ED8; }
+  #d-ledger:checked ~ .d-scroll .n-purpose { color: #4B5563; }
+  #d-ledger:checked ~ .d-scroll .n-metrics { color: #6B7280; font-variant-numeric: tabular-nums; }
+  #d-ledger:checked ~ .d-scroll .langdot { border-radius: 1px; }
+  #d-ledger:checked ~ .d-scroll .langdot.py { background: #1D4ED8; }
+  #d-ledger:checked ~ .d-scroll .langdot.ts { background: #0F766E; }
+  #d-ledger:checked ~ .d-scroll .edge-http { stroke: #0F766E; }
+  #d-ledger:checked ~ .d-scroll .edge-ws { stroke: #64748B; }
+  #d-ledger:checked ~ .d-scroll .arrh { stroke: #0F766E; }
+  #d-ledger:checked ~ .d-scroll .arrw { stroke: #64748B; }
+  #d-ledger:checked ~ .d-scroll .edge-label { color: #64748B; font-family: var(--mono); font-size: 10px; }
+  #d-ledger:checked ~ .d-scroll .lens-chip { background: transparent; color: #4B5563; border-radius: 0; border-bottom: 2px solid transparent; padding: 4px 4px; }
+  #d-ledger:checked ~ .d-scroll .lens-chip.active { color: #0F766E; border-bottom-color: #0F766E; font-weight: 600; }
+  #d-ledger:checked ~ .d-scroll .spanel { background: #FFFFFF; border-left: 1px solid #D9DDE3; font-family: "Libre Franklin", sans-serif; }
+  #d-ledger:checked ~ .d-scroll .sp-name { color: #101826; }
+  #d-ledger:checked ~ .d-scroll .sp-kind { color: #0F766E; text-transform: uppercase; letter-spacing: 0.09em; font-size: 9.5px; font-weight: 600; }
+  #d-ledger:checked ~ .d-scroll .sp-tabs { color: #6B7280; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.07em; }
+  #d-ledger:checked ~ .d-scroll .sp-tabs .active { color: #101826; border-bottom: 2px solid #101826; padding-bottom: 3px; font-weight: 600; }
+  #d-ledger:checked ~ .d-scroll .stat { border-top: 1px solid #101826; background: transparent; padding: 8px 2px; }
+  #d-ledger:checked ~ .d-scroll .stat .k { color: #6B7280; text-transform: uppercase; letter-spacing: 0.08em; font-size: 9px; }
+  #d-ledger:checked ~ .d-scroll .stat .v { color: #101826; }
+  #d-ledger:checked ~ .d-scroll .ep { background: #F7F8F9; border: 1px solid #E5E8EC; border-radius: 0; color: #374151; }
+  #d-ledger:checked ~ .d-scroll .method { border-radius: 0; color: #fff; }
+  #d-ledger:checked ~ .d-scroll .m-get { background: #0F766E; }
+  #d-ledger:checked ~ .d-scroll .m-post { background: #1D4ED8; }
+  #d-ledger:checked ~ .d-scroll .m-del { background: #B91C1C; }
+
+  /* ---- Dress: SIGNAL ---- */
+  #d-signal:checked ~ .d-scroll .stage {
+    background: #0a0a11;
+    background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: "Inter", sans-serif;
+  }
+  #d-signal:checked ~ .d-scroll .node { background: #101019; border-radius: 12px; padding: 12px 14px 13px; }
+  #d-signal:checked ~ .d-scroll .node-a { border: 1.5px solid #34d399; box-shadow: 0 0 22px rgba(52,211,153,0.3); }
+  #d-signal:checked ~ .d-scroll .node-b { border: 1.5px solid #38bdf8; box-shadow: 0 0 22px rgba(56,189,248,0.28); }
+  #d-signal:checked ~ .d-scroll .node-a .led { background: #34d399; }
+  #d-signal:checked ~ .d-scroll .node-a .led:nth-child(2) { opacity: 0.5; }
+  #d-signal:checked ~ .d-scroll .node-a .led:nth-child(3) { opacity: 0.25; }
+  #d-signal:checked ~ .d-scroll .node-b .led:nth-child(1) { background: #fb7185; }
+  #d-signal:checked ~ .d-scroll .node-b .led:nth-child(2) { background: #fbbf24; }
+  #d-signal:checked ~ .d-scroll .node-b .led:nth-child(3) { background: #34d399; }
+  #d-signal:checked ~ .d-scroll .urlbar { background: #1c1c2a; }
+  #d-signal:checked ~ .d-scroll .term { color: #34d399; }
+  #d-signal:checked ~ .d-scroll .n-name { color: #f1f1f6; }
+  #d-signal:checked ~ .d-scroll .n-badge { background: rgba(255,255,255,0.07); }
+  #d-signal:checked ~ .d-scroll .b-type { color: #34d399; }
+  #d-signal:checked ~ .d-scroll .node-b .b-type { color: #38bdf8; }
+  #d-signal:checked ~ .d-scroll .b-fw { color: #a78bfa; }
+  #d-signal:checked ~ .d-scroll .n-purpose { color: #8e8ea3; }
+  #d-signal:checked ~ .d-scroll .n-metrics { color: #6d6d84; }
+  #d-signal:checked ~ .d-scroll .langdot.py { background: #3b82f6; }
+  #d-signal:checked ~ .d-scroll .langdot.ts { background: #38bdf8; }
+  #d-signal:checked ~ .d-scroll .edge-http { stroke: #34d399; }
+  #d-signal:checked ~ .d-scroll .edge-ws { stroke: #8b7cf6; }
+  #d-signal:checked ~ .d-scroll .arrh { stroke: #34d399; }
+  #d-signal:checked ~ .d-scroll .arrw { stroke: #8b7cf6; }
+  #d-signal:checked ~ .d-scroll .edge-label { color: #77778f; font-family: var(--mono); font-size: 10px; }
+  #d-signal:checked ~ .d-scroll .lens-chip { background: rgba(255,255,255,0.06); color: #9c9cb2; }
+  #d-signal:checked ~ .d-scroll .lens-chip.active { background: rgba(34,211,238,0.16); color: #22d3ee; }
+  #d-signal:checked ~ .d-scroll .spanel { background: #0e0e16; border-left: 1px solid rgba(255,255,255,0.08); font-family: "Inter", sans-serif; }
+  #d-signal:checked ~ .d-scroll .sp-name { color: #f1f1f6; }
+  #d-signal:checked ~ .d-scroll .sp-kind { color: #34d399; font-family: var(--mono); }
+  #d-signal:checked ~ .d-scroll .sp-tabs { color: #77778f; }
+  #d-signal:checked ~ .d-scroll .sp-tabs .active { color: #60a5fa; border-bottom: 2px solid #60a5fa; padding-bottom: 3px; }
+  #d-signal:checked ~ .d-scroll .stat { background: rgba(255,255,255,0.05); border-radius: 8px; }
+  #d-signal:checked ~ .d-scroll .stat .k { color: #77778f; }
+  #d-signal:checked ~ .d-scroll .stat .v { color: #f1f1f6; }
+  #d-signal:checked ~ .d-scroll .ep { background: rgba(255,255,255,0.04); border-radius: 6px; color: #b9b9cb; }
+  #d-signal:checked ~ .d-scroll .m-get { background: rgba(52,211,153,0.15); color: #34d399; }
+  #d-signal:checked ~ .d-scroll .m-post { background: rgba(59,130,246,0.18); color: #60a5fa; }
+  #d-signal:checked ~ .d-scroll .m-del { background: rgba(251,113,133,0.15); color: #fb7185; }
+
+  section { padding: 88px 0 8px; }
+  .kicker {
+    font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; margin-bottom: 16px;
+  }
+  h2 {
+    font-family: var(--display); font-weight: 700;
+    font-size: clamp(26px, 3.4vw, 36px); line-height: 1.15;
+    letter-spacing: -0.01em; max-width: 24ch;
+  }
+  .prose { margin-top: 22px; max-width: 66ch; color: var(--text-dim); }
+  .prose p + p { margin-top: 16px; }
+  .prose strong { color: var(--text); font-weight: 600; }
+
+  .cards { margin-top: 44px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  @media (max-width: 760px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--panel-edge);
+    border-radius: 16px; padding: 26px 26px 24px;
+  }
+  .card .glyph {
+    width: 38px; height: 38px; border-radius: 10px; display: flex;
+    align-items: center; justify-content: center; margin-bottom: 18px;
+  }
+  .card h3 { font-family: var(--display); font-size: 19px; font-weight: 600; margin-bottom: 10px; }
+  .card p { font-size: 15.5px; color: var(--text-dim); }
+  .card p code, .prose code {
+    font-family: var(--mono); font-size: 0.86em; color: var(--cyan);
+    background: rgba(34, 211, 238, 0.08); padding: 1px 6px; border-radius: 5px;
+  }
+
+  .principles { margin-top: 44px; display: grid; gap: 14px; }
+  .principle {
+    display: grid; grid-template-columns: 200px 1fr; gap: 22px;
+    background: var(--panel); border: 1px solid var(--panel-edge);
+    border-radius: 14px; padding: 24px 26px;
+  }
+  @media (max-width: 700px) { .principle { grid-template-columns: 1fr; gap: 8px; } }
+  .principle .name {
+    font-family: var(--display); font-weight: 600; font-size: 17px; line-height: 1.35;
+  }
+  .principle .body { color: var(--text-dim); font-size: 15.5px; }
+  .accent-cyan { color: var(--cyan); }
+  .accent-violet { color: var(--violet); }
+  .accent-emerald { color: var(--emerald); }
+  .accent-amber { color: var(--amber); }
+  .accent-rose { color: var(--rose); }
+
+  .demo-panel {
+    margin-top: 44px; border: 1px solid rgba(52, 211, 153, 0.3);
+    background: linear-gradient(180deg, rgba(52, 211, 153, 0.05), rgba(52, 211, 153, 0.015));
+    border-radius: 18px; padding: 34px 32px;
+  }
+  .demo-panel h3 { font-family: var(--display); font-size: 21px; font-weight: 600; margin-bottom: 12px; }
+  .demo-panel p { color: var(--text-dim); max-width: 64ch; font-size: 16px; }
+  .demo-panel p + p { margin-top: 14px; }
+
+  .honesty {
+    margin-top: 44px; border-left: 3px solid var(--amber);
+    padding: 6px 0 6px 26px; max-width: 68ch;
+  }
+  .honesty p { color: var(--text-dim); }
+  .honesty p + p { margin-top: 14px; }
+  .honesty .lead { color: var(--text); font-weight: 500; }
+
+  footer.site {
+    margin-top: 110px; border-top: 1px solid var(--panel-edge);
+    padding: 34px 0 46px; font-size: 14px; color: var(--text-faint);
+  }
+  footer.site .row {
+    display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+  }
+  footer.site a { color: var(--text-dim); text-decoration: none; }
+  footer.site a:hover { color: var(--text); }
+  footer.site .fine { margin-top: 14px; max-width: 72ch; }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="wrap">
+
+<header class="site">
+  <a class="wordmark" href="#">
+    <svg width="26" height="26" viewBox="0 0 100 100" aria-hidden="true">
+      <rect x="6" y="6" width="88" height="88" rx="20" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="6"/>
+      <circle cx="35" cy="38" r="10" fill="#22d3ee"/>
+      <circle cx="66" cy="61" r="10" fill="#a78bfa"/>
+      <path d="M43 44 L58 55" stroke="#34d399" stroke-width="6" stroke-linecap="round"/>
+    </svg>
+    SysCorpus
+  </a>
+  <nav class="site">
+    <a href="#vision">Vision</a>
+    <a href="#map">The map</a>
+    <a href="#principles">Principles</a>
+    <a href="#demos">Demos</a>
+  </nav>
+</header>
+
+<div class="hero">
+  <div class="eyebrow">syscorpus.com</div>
+  <h1>Software is being written faster than it can be <em>understood</em>.</h1>
+  <p class="sub">
+    SysCorpus builds living maps of real codebases: complete enough to trust,
+    deep enough to take you all the way down to the code, and honest enough to
+    tell you what they don't know.
+  </p>
+  <div class="cta-row">
+    <a class="btn btn-primary" href="#vision">Read the vision</a>
+    <a class="btn btn-ghost" href="#demos">About the demos</a>
+    <span class="chip"><span class="dot"></span>First public maps: coming soon</span>
+  </div>
+
+  <div class="dress">
+    <input type="radio" name="dress" id="d-atlas" class="d-r" checked>
+    <input type="radio" name="dress" id="d-ledger" class="d-r">
+    <input type="radio" name="dress" id="d-signal" class="d-r">
+    <div class="d-tabs">
+      <label for="d-atlas">Atlas · the map</label>
+      <label for="d-ledger">Ledger · the boardroom</label>
+      <label for="d-signal">Signal · the control room</label>
+    </div>
+    <div class="d-scroll" tabindex="0" role="region" aria-label="Live theme demo: one map dressed three ways">
+      <div class="specimen">
+        <div class="stage">
+          <svg class="edges" viewBox="0 0 800 430" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <marker id="arr-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path class="arrh" d="M 0 1 L 9 5 L 0 9" fill="none" stroke-width="1.6"/>
+              </marker>
+              <marker id="arr-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path class="arrw" d="M 0 1 L 9 5 L 0 9" fill="none" stroke-width="1.6"/>
+              </marker>
+            </defs>
+            <path class="edge-http" d="M 300 130 C 380 130, 380 235, 404 252" stroke-width="2" fill="none" marker-end="url(#arr-h)"/>
+            <path class="edge-ws edge-live" d="M 210 190 C 240 300, 320 330, 402 330" stroke-width="1.8" fill="none" stroke-dasharray="4 6" marker-end="url(#arr-w)"/>
+          </svg>
+          <span class="edge-label el-http">HTTP :8443</span>
+          <span class="edge-label el-ws">WebSocket</span>
+          <div class="node node-a">
+            <div class="chrome-row">
+              <span class="led"></span><span class="led"></span><span class="led"></span>
+              <span class="term">$ ~/api</span>
+            </div>
+            <div class="n-name">management-api</div>
+            <div class="n-badges">
+              <span class="n-badge b-type">API Server</span>
+              <span class="n-badge b-fw">aiohttp</span>
+            </div>
+            <div class="n-purpose">Session, deployment and knowledge APIs</div>
+            <div class="n-metrics">
+              <span class="langdot py"></span>
+              <span>26 files</span><span>19,847 lines</span><span>:8443</span>
+            </div>
+          </div>
+          <div class="node node-b">
+            <div class="chrome-row">
+              <span class="led"></span><span class="led"></span><span class="led"></span>
+              <span class="urlbar"></span>
+            </div>
+            <div class="n-name">console</div>
+            <div class="n-badges">
+              <span class="n-badge b-type">Web Client</span>
+              <span class="n-badge b-fw">Next.js</span>
+            </div>
+            <div class="n-purpose">Operator console and dashboards</div>
+            <div class="n-metrics">
+              <span class="langdot ts"></span>
+              <span>38 files</span><span>8,120 lines</span>
+            </div>
+          </div>
+          <div class="lensbar">
+            <span class="lens-chip active">Structure</span>
+            <span class="lens-chip">Flow</span>
+            <span class="lens-chip">Data</span>
+            <span class="lens-chip">Design</span>
+          </div>
+        </div>
+        <aside class="spanel">
+          <div class="sp-name">management-api</div>
+          <div class="sp-kind">API Server · aiohttp · :8443</div>
+          <div class="sp-tabs">
+            <span class="active">Overview</span><span>Docs</span><span>Symbols</span>
+          </div>
+          <div class="sp-stats">
+            <div class="stat"><div class="k">Files</div><div class="v">26</div></div>
+            <div class="stat"><div class="k">Lines</div><div class="v">19,847</div></div>
+            <div class="stat"><div class="k">Symbols</div><div class="v">342</div></div>
+            <div class="stat"><div class="k">Size</div><div class="v">704 KB</div></div>
+          </div>
+          <div class="sp-eps">
+            <div class="ep"><span class="method m-get">GET</span>/api/sessions</div>
+            <div class="ep"><span class="method m-post">POST</span>/api/deployments</div>
+            <div class="ep"><span class="method m-del">DEL</span>/api/deployments/{id}</div>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <p class="d-cap">
+      <strong>This is not a screenshot.</strong> It is one block of HTML on
+      this page, a miniature of the map with illustrative numbers, dressed by
+      three stylesheets. The buttons are radio inputs and the switch is pure
+      CSS. Open your inspector and watch while you click: the markup never
+      changes. That separation is the standard we are building the product
+      toward: a map's dress never welded to the map, all the way to dressing
+      your own map in your own brand.
+    </p>
+  </div>
+</div>
+
+<section id="vision">
+  <div class="kicker accent-cyan">The problem</div>
+  <h2>Comprehension is the new bottleneck.</h2>
+  <div class="prose">
+    <p>
+      AI can now produce a working system in an afternoon. Understanding that
+      system still takes as long as it ever did, and the tools we reach for
+      assume knowledge the reader doesn't have yet. Class diagrams assume you
+      know the object model. Dependency graphs assume you recognize the
+      libraries. Documentation assumes someone kept it current.
+    </p>
+    <p>
+      The result is a widening gap between what exists and what anyone
+      actually understands. Code gets reviewed without being comprehended,
+      extended without being mapped, and trusted without being verified. Every
+      serious decision about a system, whether to change it, buy it, secure it,
+      or bet on it, rests on somebody's mental model of what it is. Those
+      mental models are getting thinner while the systems get bigger.
+    </p>
+    <p>
+      <strong>SysCorpus exists to close that gap.</strong> Not with a summary,
+      and not with a chatbot's paraphrase, but with a map: complete, navigable,
+      and accountable for every claim it makes.
+    </p>
+  </div>
+</section>
+
+<section id="map">
+  <div class="kicker accent-violet">What we're building</div>
+  <h2>A living map of the whole system.</h2>
+  <div class="prose">
+    <p>
+      Point the engine at a codebase and it produces an interactive
+      architecture map. Not a diagram someone drew once and let rot: a map
+      generated from the code itself, regenerated as the code changes, and
+      navigable from the whole system down to a single line.
+    </p>
+  </div>
+  <div class="cards">
+    <div class="card">
+      <div class="glyph" style="background: rgba(34,211,238,0.12);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.5 8.5 L15.5 15.5"/><circle cx="18" cy="6" r="3"/><path d="M15.5 8.5 L8.5 15.5"/><circle cx="6" cy="18" r="3"/></svg>
+      </div>
+      <h3>Every file accounted for</h3>
+      <p>
+        The map carries a coverage ledger: every file in the codebase is either
+        on the map or listed with a stated reason it isn't. No sampling, no
+        approximation, no silent gaps. When the map can't account for
+        something, it says so instead of pretending.
+      </p>
+    </div>
+    <div class="card">
+      <div class="glyph" style="background: rgba(167,139,250,0.12);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M2 12 C 5 6, 9 4, 12 4 C 15 4, 19 6, 22 12 C 19 18, 15 20, 12 20 C 9 20, 5 18, 2 12 Z"/></svg>
+      </div>
+      <h3>Eight lenses on one system</h3>
+      <p>
+        Structure, flow, data, rules, activity, capability, inventory, and
+        design stress. The same map answers different questions depending on
+        how you look at it, and a lens only appears when the underlying data
+        can actually support its answers.
+      </p>
+    </div>
+    <div class="card">
+      <div class="glyph" style="background: rgba(52,211,153,0.12);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round"><path d="M12 3 L12 21"/><path d="M6 9 L12 15 L18 9"/></svg>
+      </div>
+      <h3>All the way down</h3>
+      <p>
+        System, then component, then module, then file, then symbol, then the
+        code itself, with documentation, tooltips, and tests along the way.
+        Every level links back to the real repository, because the map is a way
+        into the code, never a replacement for it.
+      </p>
+    </div>
+    <div class="card">
+      <div class="glyph" style="background: rgba(251,191,36,0.12);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 9 L10 12 L7 15"/><path d="M12 15 L17 15"/></svg>
+      </div>
+      <h3>Two front doors</h3>
+      <p>
+        Humans get the interactive viewer. AI agents get a structured front
+        door: the same facts, exposed as tools they can call directly. Both
+        are generated from the same underlying facts and checked against each
+        other, so a claim appearing in one and not the other is treated as a
+        defect, not a difference of opinion.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="principles">
+  <div class="kicker accent-emerald">How we work</div>
+  <h2>Principles we don't trade away.</h2>
+  <div class="principles">
+    <div class="principle">
+      <div class="name accent-cyan">The map must never lie</div>
+      <div class="body">
+        A map that is obviously broken costs you an afternoon. A map that is
+        quietly, credibly wrong costs you the decision you made on top of it.
+        So every claim is tied to evidence, counts are labelled with the method
+        that produced them, and when two surfaces disagree the interface says so
+        loudly. Where the tool cannot support a claim, it declines to make it.
+      </div>
+    </div>
+    <div class="principle">
+      <div class="name accent-emerald">Complete, or declared</div>
+      <div class="body">
+        Coverage is a contract, not an aspiration. What the map cannot parse or
+        represent is declared as a gap, in the open, on the map itself. An
+        honest gap is a feature. A hidden one is a defect.
+      </div>
+    </div>
+    <div class="principle">
+      <div class="name accent-violet">Depth is the point</div>
+      <div class="body">
+        The conventional advice is to pick a narrow slice, polish it, and
+        iterate. We are deliberately not doing that, because we believe
+        comprehension is a property of the whole: the moment the map stops
+        short of the code, or drops the documentation, or flattens the detail,
+        it becomes a summary, and summaries are what got us here. That is a
+        bet, and we hold it honestly: it may prove too ambitious. We would
+        rather test it in the open than trim it quietly.
+      </div>
+    </div>
+    <div class="principle">
+      <div class="name accent-amber">Proof over promises</div>
+      <div class="body">
+        Claims about a comprehension tool should be verifiable by the people
+        reading them. That is why our demos will be real, well-known codebases
+        anyone can check us against, refreshed on a schedule, and published
+        only after passing hard quality gates. A map that isn't good enough to
+        publish doesn't get published, no matter how famous its subject is.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="demos">
+  <div class="kicker accent-amber">What's next</div>
+  <h2>The maps are coming.</h2>
+  <div class="demo-panel">
+    <h3><span class="accent-emerald">Starting soon:</span> live maps of well-known open-source projects.</h3>
+    <p>
+      We will be publishing interactive maps of multiple widely used
+      open-source codebases, beginning shortly and growing over time. Each one
+      is kept fresh on a schedule, stamped with the exact commit it was built
+      from, and held to the same gates: complete coverage, verified claims, and
+      fair representation of its subject.
+    </p>
+    <p>
+      We're not announcing the subjects yet. When they arrive, they will be
+      here, and you'll be able to judge the maps against codebases you already
+      know. That's the point.
+    </p>
+  </div>
+  <div class="honesty">
+    <p class="lead">Where this stands, honestly.</p>
+    <p>
+      SysCorpus is early and independent, the work of a very small team with a
+      very large ambition. The engine, the viewer, the quality gates, and the
+      instruments that measure whether a map actually teaches are built and
+      tested. The public proof is what comes next, and we intend to prove it
+      in public: demos on codebases you know, refreshed on a schedule, open to
+      challenge and feedback at every step. We're confident, and we're also
+      aware that confidence isn't evidence. This page states intent. The demos
+      will carry the proof, or they won't ship.
+    </p>
+  </div>
+</section>
+
+<footer class="site">
+  <div class="row">
+    <div>© 2026 <a href="https://inlookingout.com">Richard Amerman</a> · SysCorpus, an independent project</div>
+    <div><a href="mailto:hello@syscorpus.com">hello@syscorpus.com</a></div>
+  </div>
+  <p class="fine">
+    SysCorpus maps are unofficial and unaffiliated with the projects they
+    depict. Every published map names its source, its license, and the exact
+    commit it was generated from.
+  </p>
+</footer>
+
+</div>
+</body>
+</html>

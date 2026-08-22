@@ -4,6 +4,8 @@ AI coding assistants can generate entire codebases in hours. They scaffold proje
 
 Solution Explorer closes that gap. It scans any codebase, extracts the full component structure, relationships, and metrics, then renders everything as an interactive architecture diagram. An optional AI enhancement layer adds human-readable descriptions, role classifications, and criticality ratings to every component. And a built-in review system lets you annotate anything you see, then export those annotations as structured prompts that go back to the AI for implementation. The loop closes: AI builds, human reviews, AI refines.
 
+A note on names. Solution Explorer is the tool: the codebase, the CLI, the packages. **SysCorpus** (`syscorpus.com`) is the name the work is going public under: a maintained corpus of well-known systems mapped by the tool, published as interactive demos and refreshed on a schedule. When this document says Solution Explorer, it means the engine; when it says SysCorpus, it means the published program built on it.
+
 This document covers the vision, the user experience, the system architecture, and the project's evolution. For installation and configuration, see [README.md](README.md). For contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
@@ -97,7 +99,7 @@ In split mode (for larger codebases), the detail panel lazy-loads component data
 
 The graph answers "what is here". Lenses answer narrower questions without
 making you leave it. A selector above the canvas switches between them. Structure
-is the default view; the other six dock their own ranked panel beside the graph
+is the default view; the other seven dock their own ranked panel beside the graph
 while the graph itself stays live and navigable.
 
 | Lens | The question it answers |
@@ -109,6 +111,7 @@ while the graph itself stays live and navigable.
 | **Capability** | What can this system do, expressed as capabilities rather than files? |
 | **Data** | What data exists, and which entities relate to which? |
 | **Rules** | What business rules are encoded, and where? |
+| **Design** | Where is the structure under stress, and what would a change here break? |
 
 A lens only appears when the loaded dataset can actually answer its question. A
 project with no detected business rules does not get a Rules lens showing an
@@ -120,6 +123,13 @@ component, an external dependency's caller, or a listening port navigates
 straight to the component that owns it. On a phone the panel becomes a bottom
 sheet rather than disappearing, so a lens is usable in a hallway, not only at a
 desk.
+
+The Design lens carries one interaction of its own: **blast radius**. Toggle the
+mode and select any component. Everything that could break if it changes shades
+one way, everything it stands on shades another, and the rest of the graph dims.
+The computation runs client-side, so it works at any drill level and on any
+dataset that carries design signals, and each card shows its blast radius count
+so the heavy hitters are visible before you ask.
 
 ### Search
 
@@ -249,6 +259,18 @@ An optional layer enriches the analyzer's output with AI-generated content. The 
 
 All AI data lives in optional `ai_enhance` sub-objects at the component, relationship, and architecture levels. The viewer works identically with or without AI data. Every access uses optional chaining, so the same viewer renders both enhanced and non-enhanced JSON without any configuration.
 
+**The Enrichment Engine (`enhance --ladder`, default off).** The newer enrichment path treats "the map must never lie" as an engineering constraint rather than a hope. It runs five phases against the fact store: orientation, a three-rung model ladder, adjudication, synthesis, and determination, and it always writes a Run Report. Every claim it produces must answer a completeness contract (purpose, mechanism, place, identity, next step) with citations that a no-AI validator checks against the repository and the store. A claim that cannot cite does not ship. Items that cannot be grounded escalate rung by rung and terminate either grounded or as a declared honest gap, never as silently missing. Model tiers are configuration, not architecture: a rung binds to a source plus an optionally pinned model, so adding a provider is a registration rather than a refactor. Cost is budget-metered with a ceiling that stops new work gracefully, and the default path without `--ladder` is byte-identical to not having the engine at all.
+
+Two supporting capabilities ride along. A deterministic **navigation-importance ranking** (dependency fan-in, git activity, entry points, size) orders enrichment work and adjudication sampling, and is deliberately not projected into the output. And enrichment can author **tours**: guided walkthroughs through the architecture, each an ordered component sequence with narration and file evidence, validated against the viewer's tour contract at write time.
+
+### Design Signals
+
+Architecture quality signals (`--design-signals`, default off) are the deterministic sibling of AI enhancement: the analyzer derives them with no model and no spend, so they cost nothing to refresh and cannot hallucinate. Per component: fan-in, fan-out, instability, abstractness, distance from the main sequence, blast radius, and quintile bands. Per architecture: findings for dependency cycles, the zones of pain and uselessness, stability inversions, cross-boundary change coupling, and boundary strength. Each finding carries three things together: a plain-language statement of the consequence, the canonical term for readers who know the literature, and the method naming its evidence class.
+
+The signals decline to claim more than they can support, and the schema enforces that rather than a policy requesting it. There is no overall architecture score, no grade, and no ranking of one kind of finding against another anywhere in the payload; findings rank within their own kind only. Abstractness is measured only in languages whose declarations distinguish an interface from a class (C#, Go, Java, Rust, Swift, TypeScript), so a Python component reports it as unknown rather than as zero. That distinction prevents a load-bearing module being reported in the zone of pain on a number nobody measured.
+
+In the viewer, the Design lens renders these findings plain-language first with the canonical term as a secondary chip, alongside an abstractness against instability scatter with the main sequence and both zones shaded. The method caveat is rendered verbatim from the payload, never composed by the viewer. With `--design-signals` off, the output is byte-identical to not having the feature.
+
 ### The Viewer
 
 The viewer is built with React 19, TypeScript, and Tailwind CSS. React Flow renders the graph. ELK (Eclipse Layout Kernel) computes automatic layouts. Zustand manages state. Vite builds the production bundle.
@@ -259,14 +281,22 @@ The key architectural decision in the viewer is hierarchical drill-down. At any 
 
 The viewer is not the only consumer of a projection. Every published map also
 carries an `ai.json` front door and an `llms.txt` pointer, and an MCP server
-exposes the same facts as tools an AI agent can call directly: overview, search,
-component detail, rules, findings, coverage. An agent answering a question about
-an unfamiliar codebase can read a structured projection instead of the raw
-repository, which is a different order of magnitude of context.
+exposes the same facts as twelve tools an AI agent can call directly: overview,
+search, component and symbol detail, references, impact, coverage, rules,
+findings, design signals per architecture and per component, and blast radius.
+An agent answering a question about an unfamiliar codebase can read a structured
+projection instead of the raw repository, which is a different order of
+magnitude of context. For design signals, `ai.json` leads with the canonical
+term and carries the plain sentence as the description, and it adds a walk
+order for planning safe parallel changes.
 
 This is the same design principle as the viewer, applied to a different reader.
-Both consume the fact store; neither is privileged. A claim that appears in one
-and not the other is a defect, and the two are checked against each other.
+Both consume the fact store; neither is privileged. A claim that appears in
+one and not the other is a defect, and the two are checked against each other,
+including by a publish gate that blocks a release when the front door and the
+manifest disagree. For design signals specifically the guarantee is stronger:
+both surfaces derive from the same function over the same store, so those
+numbers agree by construction.
 
 ### Deployment
 
@@ -461,9 +491,36 @@ a plausible fact, a partial check, a confident conclusion.
 Where this leads is a programme of published maps: well-known open-source
 codebases, mapped by the tool, refreshed on a schedule, with every refresh
 feeding what it exposes back into the engine. Any map good enough to publish
-under its subject's name is a map worth trusting. None of that is built yet. The
-instrument that decides when it is ready, however, now exists, and it has
-already been sharp enough to be unflattering.
+under its subject's name is a map worth trusting. The instrument that decides
+when a map is ready now exists, and it has already been sharp enough to be
+unflattering. Its first calibration run measured three cold personas against
+the same subject before and after a known change, verified every claim in both
+directions, and moved the scores it was built to move.
+
+### SysCorpus: The Publication Program
+
+That programme now has a name, a domain, and most of its machinery. SysCorpus
+(`syscorpus.com`) is the public face of the work: a maintained register of
+well-known codebases mapped by the tool, refreshed weekly from a single
+machine, with every refresh feeding fixes back into the product.
+
+The machinery built for it spans three layers. The demo harness
+(`scripts/demo-site.py`) runs the whole chain per subject: fetch a pinned
+clone, analyze into a split projection, enrich, validate against a graduation
+gate, diff against last week, bundle, and deploy, stopping at the first gate
+failure. The graduation gate is a hard gate, not a guideline: complete coverage
+ledger, bounded detect-only share, enrichment quality at threshold, front door
+agreeing with the manifest, license review passed, upstream LICENSE shipped.
+A demo that cannot pass stays private. The Enrichment Engine and Design
+Signals, described above, are the two newest layers, and both follow the same
+rule the whole product follows: default off, byte-identical when off, and
+never claiming what they cannot cite.
+
+The honest state of the program, at the time of this writing: the harness, the
+gates, the engine, and the instrument are built and tested. The first public
+demos are being prepared and are not yet live. What is published under the
+SysCorpus name will have passed every gate above, and nothing gets to skip
+them for being famous.
 
 ### The Decision Not to Rewrite
 
@@ -536,9 +593,12 @@ For projects exceeding 5,000 files, additional optimizations are planned:
 | Device frame styles | 10 |
 | Annotation target types | 9 |
 | Detail panel tabs | 6 |
-| Lenses | 7 (Structure, Inventory, Flow, Activity, Capability, Data, Rules), each shown only when the dataset supports it |
+| Lenses | 8 (Structure, Inventory, Flow, Activity, Capability, Data, Rules, Design), each shown only when the dataset supports it |
+| MCP tools in the machine front door | 12 |
+| Design signal finding kinds | 6 (cycles, zone of pain, zone of uselessness, stability inversions, change coupling, boundary strength) |
+| Enrichment ladder phases | 5 (orientation, ladder, adjudication, synthesis, determination) |
 | Comprehension Review personas | 3, each scored on 6 dimensions |
-| CI workflows | 9 (quality gate, architecture viz, live monitor, golden corpus, GUI plan check, SBOM, scorecard, release, downstream deploy) |
+| CI workflows | 10 (quality gate, architecture viz, live monitor, golden corpus, GUI plan check, SBOM, scorecard, release, downstream deploy, demo domain) |
 
 ### Related Documents
 
@@ -546,6 +606,9 @@ For projects exceeding 5,000 files, additional optimizations are planned:
 |----------|---------|
 | [README.md](README.md) | Installation, configuration, CLI reference, deployment options |
 | [docs/quality/COMPREHENSION-REVIEW.md](docs/quality/COMPREHENSION-REVIEW.md) | The instrument that measures whether the map teaches: personas, battery, rubric, answer keys |
+| [docs/publication/DEMO-PROGRAM.md](docs/publication/DEMO-PROGRAM.md) | The SysCorpus demo program: the register, the two tracks, the graduation gate, the refresh loop |
+| [docs/publication/ENRICHMENT-ENGINE.md](docs/publication/ENRICHMENT-ENGINE.md) | The Enrichment Engine: the ladder, the completeness contract, the Run Report |
+| [docs/research/architecture-quality-signals.md](docs/research/architecture-quality-signals.md) | Design signals: the research base and the tier plan |
 | [docs/publication/PREFLIGHT-MEASUREMENTS.md](docs/publication/PREFLIGHT-MEASUREMENTS.md) | Measured scale, timing and cost figures per subject |
 | [docs/architecture.md](docs/architecture.md) | Technical architecture and data model. **Predates v1.2.0; see its banner** |
 | [docs/architectural-assessment.md](docs/architectural-assessment.md) | Technical design decisions, industry research, evolution plan |
