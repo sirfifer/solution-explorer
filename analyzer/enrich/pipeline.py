@@ -323,6 +323,20 @@ class MeteredInvoker:
         # RetryingInvoker exposes the attempt count it used for the last logical
         # invoke; a plain invoker does not, so absence reads as no retries.
         retries = int(getattr(self._inner, "last_attempts", 1) or 1) - 1
+        # A pinned pure-inference call is one turn. More than one means the
+        # transport ran an agentic loop, which multiplies tokens and replaces
+        # the JSON answer with tool narration: say so loudly.
+        turns = 0
+        if isinstance(result.usage, dict):
+            try:
+                turns = int(result.usage.get("num_turns") or 0)
+            except (TypeError, ValueError):
+                turns = 0
+        if turns > 1:
+            self._ctx.notes.append(
+                f"agentic drift: a {self.phase}/{self.rung} invocation used "
+                f"{turns} turns; the transport is not pinned to pure inference"
+            )
         self._ctx.record_ledger_row(
             LedgerRow(
                 phase=self.phase,

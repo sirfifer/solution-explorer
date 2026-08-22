@@ -58,7 +58,11 @@ def test_a_pinned_binding_builds_the_same_cli_call_it_always_did(monkeypatch):
 
     monkeypatch.setattr("analyzer.enrich.engine.subprocess.run", fake_run)
     ClaudeCliInvoker(model="sonnet")("a prompt")
-    assert seen["argv"][1:] == ["-p", "--output-format", "json", "--model", "sonnet"]
+    assert seen["argv"][1:] == [
+        "-p", "--output-format", "json",
+        "--tools", "", "--setting-sources", "user",
+        "--model", "sonnet",
+    ]
 
 
 def test_an_unpinned_binding_omits_the_model_flag_so_the_source_routes(monkeypatch):
@@ -77,7 +81,10 @@ def test_an_unpinned_binding_omits_the_model_flag_so_the_source_routes(monkeypat
     monkeypatch.setattr("analyzer.enrich.engine.subprocess.run", fake_run)
     ClaudeCliInvoker(model=None)("a prompt")
     assert "--model" not in seen["argv"]
-    assert seen["argv"][1:] == ["-p", "--output-format", "json"]
+    assert seen["argv"][1:] == [
+        "-p", "--output-format", "json",
+        "--tools", "", "--setting-sources", "user",
+    ]
 
 
 # --- 2. a binding is a source plus an optional model --------------------------

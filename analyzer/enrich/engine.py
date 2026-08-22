@@ -160,7 +160,19 @@ class ClaudeCliInvoker:
             # "unpinned" half of a tier binding (see enrich/models.py): the same
             # option a routing provider offers, expressed on the provider we
             # actually run on today.
-            argv = [self.claude_bin, "-p", "--output-format", "json"]
+            # Pure single-turn inference, pinned explicitly. Without these
+            # flags the CLI runs its full agentic loop from whatever cwd the
+            # caller happens to have: on the 2026-08-22 smoke run the model
+            # toured the repository with tools across multiple turns instead
+            # of answering, multiplying a 13k-token prompt into 193k input
+            # tokens and returning prose instead of the JSON object.
+            # --tools "" disables every tool; --setting-sources user keeps
+            # the project's .claude settings out of a call that must not
+            # depend on which directory launched it.
+            argv = [
+                self.claude_bin, "-p", "--output-format", "json",
+                "--tools", "", "--setting-sources", "user",
+            ]
             if self.model:
                 argv += ["--model", self.model]
             proc = subprocess.run(
@@ -202,7 +214,10 @@ class ClaudeCliInvoker:
             return InvokeResult(
                 ok=False, text=str(envelope.get("result", "")),
                 cost_usd=float(envelope.get("total_cost_usd", 0.0) or 0.0),
-                usage=envelope.get("usage", {}) or {},
+                usage=dict(
+                    envelope.get("usage", {}) or {},
+                    num_turns=envelope.get("num_turns", 1),
+                ),
                 error="model reported error",
                 status_code=_coerce_status(envelope.get("api_error_status")),
             )

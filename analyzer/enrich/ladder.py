@@ -439,7 +439,19 @@ class LadderPhase:
                 return job_id, None, f"did not return: {result.error}"
             obj = _parse_json_object(result.text)
             if obj is None:
-                return job_id, None, "returned unparseable text"
+                failure_path = ctx.run_path(
+                    "failures", f"{rung}-job-{job_id}.txt"
+                )
+                try:
+                    failure_path.write_text(result.text[:2_000_000])
+                except OSError:
+                    pass
+                return (
+                    job_id,
+                    None,
+                    "returned unparseable text "
+                    f"(raw response preserved at failures/{failure_path.name})",
+                )
             return job_id, obj, None
 
         def _drain(in_flight):
