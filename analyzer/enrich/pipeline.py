@@ -509,6 +509,7 @@ class RunContext:
     max_lines: int = 50_000
     max_components: int = 30
     min_components: int = 5
+    max_relationships: int = 40
     # Filled in by T9 so P4 and P5 can send work orders back down the ladder.
     # The default records orders without executing them, so a pipeline missing
     # the descent seam degrades visibly rather than silently dropping the order.
@@ -687,6 +688,9 @@ class LadderConfig:
     max_lines: int = 50_000
     max_components: int = 30
     min_components: int = 5
+    # Response bound: relationships per partition (each demands a contract
+    # block in the reply). See partition.DEFAULT_MAX_RELATIONSHIPS.
+    max_relationships: int = 40
 
 
 def build_run_context(
@@ -755,6 +759,7 @@ def build_run_context(
             max_lines=config.max_lines,
             max_components=config.max_components,
             min_components=config.min_components,
+            max_relationships=config.max_relationships,
             clock=clock,
             timer=timer,
             scorer=load_scorer(),

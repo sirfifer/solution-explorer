@@ -145,9 +145,12 @@ def escalation_assignment(rung: str, terminal: bool = False) -> str:
             "You are the LAST rung of an enrichment ladder. Two tiers before you "
             "attempted these items and could not ground them; their attempts and "
             "the specific questions they failed are below.\n\n"
+            "You have NO tools: you cannot read files, run commands, or "
+            "browse the repository. Everything you may use is already in this "
+            "prompt. Do not narrate an intention to go look at anything.\n\n"
             "For each item, do one of exactly two things:\n"
             "  1. GROUND IT. Answer the named questions with evidence you can "
-            "cite, using the deeper reading the previous rungs did not do.\n"
+            "cite from the material below.\n"
             "  2. DECLARE AN HONEST GAP. Say plainly that it could not be "
             "established, and why, in the 'honest_gaps' key: a list of "
             "{\"question\": \"...\", \"why\": \"...\"} entries. The 'why' is shown "
@@ -161,7 +164,8 @@ def escalation_assignment(rung: str, terminal: bool = False) -> str:
     return (
         "You are a HIGHER RUNG of an enrichment ladder. A previous tier already "
         "worked these items. Its attempt and the specific questions it failed are "
-        "below.\n\n"
+        "below. You have NO tools: you cannot read files or browse the "
+        "repository; everything you may use is already in this prompt.\n\n"
         "For each item, in this order:\n"
         "  1. ADJUDICATE what the previous rung wrote. Where you agree, keep it "
         "as it is: repeat it back unchanged. Do not rewrite an answer that was "
@@ -346,6 +350,7 @@ class LadderPhase:
             max_lines=ctx.max_lines,
             max_components=ctx.max_components,
             min_components=ctx.min_components,
+            max_relationships=ctx.max_relationships,
         )
         return order_partitions(plan.partitions, ranking)
 
