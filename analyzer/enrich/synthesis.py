@@ -34,6 +34,13 @@ from .contract import ContractState
 from .engine import _enhance_architecture, _parse_json_object
 from .evidence import EvidenceValidator, normalize_path
 from .ladder import CONTRACT_TARGET_KIND
+
+# Imported, never redefined. The overlay owns this constant because projection is
+# the lower-level concern and must not depend on the phase that happens to
+# produce the rows. Writing the literal in both places invites a rename in one to
+# silently break the other, and the round-trip test would not catch it: it reads
+# the overlay's constant while this module stamps with its own.
+from .overlay import TOUR_TARGET_KIND
 from .partition import flatten_components
 from .pipeline import PhaseResult, RunContext
 from .provenance import stamp_enrichment
@@ -46,8 +53,6 @@ __all__ = [
     "validate_tour",
     "build_synthesis_prompt",
 ]
-
-TOUR_TARGET_KIND = "tour"
 
 # A tour with one step is not a walkthrough, and a tour with twenty is a
 # document. Both bounds are enforced at write time rather than suggested.

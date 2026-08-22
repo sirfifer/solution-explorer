@@ -22,6 +22,7 @@ import copy
 import json
 import os
 import re
+from pathlib import Path
 
 import pytest
 
@@ -134,6 +135,25 @@ def _viewer_interface(name: str) -> set[str]:
     match = re.search(rf"export interface {name} \{{(.*?)\n\}}", source, re.S)
     assert match, f"{name} not found in viewer/src/types.ts"
     return set(re.findall(r"^\s*(\w+)\??:", match.group(1), re.M))
+
+
+def test_the_tour_target_kind_has_exactly_one_definition():
+    """Stamping and projection must not be able to drift apart.
+
+    The overlay owns the constant and synthesis imports it. Written as a literal
+    in both places, a rename in one would silently break the other, and the
+    round-trip test above would NOT catch it: that test reads the overlay's
+    constant while synthesis stamps with its own, so both halves would agree with
+    themselves and disagree with each other.
+    """
+    from analyzer.enrich import overlay, synthesis
+
+    assert synthesis.TOUR_TARGET_KIND is overlay.TOUR_TARGET_KIND
+
+    source = (Path(REPO_ROOT) / "analyzer" / "enrich" / "synthesis.py").read_text()
+    assert 'TOUR_TARGET_KIND = "tour"' not in source, (
+        "synthesis.py must import the tour target kind, never redefine it"
+    )
 
 
 def test_a_written_tour_uses_only_fields_the_viewer_declares(world):
