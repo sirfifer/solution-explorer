@@ -43,6 +43,15 @@ __all__ = [
 DEFAULT_MAX_LINES = 50_000
 DEFAULT_MAX_COMPONENTS = 30
 DEFAULT_MIN_COMPONENTS = 5
+# Cap on relationships per partition, because every relationship demands a
+# full contract block in the RESPONSE: the partitioner bounded input (lines,
+# components) but never demanded output, and the first real smoke run
+# (2026-08-22) planned a partition carrying src/vs/workbench with 331
+# relationships, whose ~78k-token response came back truncated mid-JSON and
+# unparseable. Oversized partitions are split into chunks that repeat the
+# same components (context and component answers stay intact) with the
+# relationship set sliced across them.
+DEFAULT_MAX_RELATIONSHIPS = 40
 
 
 def relationship_key(rel: dict) -> str:
@@ -149,6 +158,7 @@ def plan_partitions(
     max_lines: int = DEFAULT_MAX_LINES,
     max_components: int = DEFAULT_MAX_COMPONENTS,
     min_components: int = DEFAULT_MIN_COMPONENTS,
+    max_relationships: int = DEFAULT_MAX_RELATIONSHIPS,
     include_ids: Optional[Iterable[str]] = None,
 ) -> PartitionPlan:
     """Partition the arch component tree deterministically (DPEA Phase 2).
@@ -236,13 +246,26 @@ def plan_partitions(
         if owner is not None:
             rel_by_partition[owner].append(relationship_key(rel))
 
+    # Chunk any partition whose relationship set exceeds the response bound.
+    # Each chunk repeats the group's components (their facts are the context
+    # the relationship contracts need, and absorbing a component twice is a
+    # deterministic overwrite), while the sorted relationship list is sliced
+    # across chunks. Ids are renumbered sequentially afterwards so they stay
+    # dense and deterministic.
+    assembled: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+    for pid, group in enumerate(groups):
+        rels = sorted(set(rel_by_partition.get(pid, [])))
+        if max_relationships > 0 and len(rels) > max_relationships:
+            for start in range(0, len(rels), max_relationships):
+                assembled.append(
+                    (tuple(group), tuple(rels[start : start + max_relationships]))
+                )
+        else:
+            assembled.append((tuple(group), tuple(rels)))
+
     partitions = tuple(
-        Partition(
-            id=pid,
-            component_ids=tuple(group),
-            relationship_keys=tuple(sorted(set(rel_by_partition.get(pid, [])))),
-        )
-        for pid, group in enumerate(groups)
+        Partition(id=pid, component_ids=comp_ids, relationship_keys=rel_keys)
+        for pid, (comp_ids, rel_keys) in enumerate(assembled)
     )
 
     total = len(set().union(*groups)) if groups else 0

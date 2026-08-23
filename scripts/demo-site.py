@@ -635,6 +635,20 @@ def run_enhance(
     if enrichment.get("pipeline") == "ladder":
         run_dir = _run_dir(slug, runs_dir=None) / "enrichment"
         cmd += ["--ladder", "--run-dir", str(run_dir)]
+        # The registry wall budget now reaches the run. Enforced INSIDE the
+        # engine (stop launching, finish in flight, honest partial report),
+        # never as a subprocess kill that would lose the Run Report. The first
+        # real run went 10.8 hours against a 45-minute registry budget that
+        # this path silently dropped.
+        wall = corpus.get("budget", {}).get("max_wall_minutes")
+        if wall is not None:
+            cmd += ["--max-wall-minutes", str(wall)]
+        if enrichment.get("max_parallel") is not None:
+            cmd += ["--max-parallel", str(enrichment["max_parallel"])]
+        if enrichment.get("invoke_timeout_seconds") is not None:
+            cmd += ["--invoke-timeout-seconds", str(enrichment["invoke_timeout_seconds"])]
+        print(f"enrichment run dir: {run_dir}", flush=True)
+        print(f"watch live: tail -f {run_dir / 'ledger.jsonl'}", flush=True)
         for key, binding in sorted((enrichment.get("models") or {}).items()):
             cmd += ["--phase-model", f"{key}={binding}"]
         iteration = enrichment.get("iteration") or {}
@@ -648,7 +662,11 @@ def run_enhance(
     if dry_run:
         cmd += ["--dry-run"]
 
-    result = subprocess.run(cmd)
+    # Unbuffered, so the child's phase output reaches the log as it happens
+    # instead of arriving in one block when the run ends. The streaming ledger
+    # is the primary observability channel; this keeps the fallback honest too.
+    env = dict(os.environ, PYTHONUNBUFFERED="1")
+    result = subprocess.run(cmd, env=env)
     return result.returncode
 
 

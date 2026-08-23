@@ -33,6 +33,7 @@ knows what a model is beyond "something that turns a prompt into text".
 from __future__ import annotations
 
 import json
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -144,9 +145,12 @@ def escalation_assignment(rung: str, terminal: bool = False) -> str:
             "You are the LAST rung of an enrichment ladder. Two tiers before you "
             "attempted these items and could not ground them; their attempts and "
             "the specific questions they failed are below.\n\n"
+            "You have NO tools: you cannot read files, run commands, or "
+            "browse the repository. Everything you may use is already in this "
+            "prompt. Do not narrate an intention to go look at anything.\n\n"
             "For each item, do one of exactly two things:\n"
             "  1. GROUND IT. Answer the named questions with evidence you can "
-            "cite, using the deeper reading the previous rungs did not do.\n"
+            "cite from the material below.\n"
             "  2. DECLARE AN HONEST GAP. Say plainly that it could not be "
             "established, and why, in the 'honest_gaps' key: a list of "
             "{\"question\": \"...\", \"why\": \"...\"} entries. The 'why' is shown "
@@ -160,7 +164,8 @@ def escalation_assignment(rung: str, terminal: bool = False) -> str:
     return (
         "You are a HIGHER RUNG of an enrichment ladder. A previous tier already "
         "worked these items. Its attempt and the specific questions it failed are "
-        "below.\n\n"
+        "below. You have NO tools: you cannot read files or browse the "
+        "repository; everything you may use is already in this prompt.\n\n"
         "For each item, in this order:\n"
         "  1. ADJUDICATE what the previous rung wrote. Where you agree, keep it "
         "as it is: repeat it back unchanged. Do not rewrite an answer that was "
@@ -345,6 +350,7 @@ class LadderPhase:
             max_lines=ctx.max_lines,
             max_components=ctx.max_components,
             min_components=ctx.min_components,
+            max_relationships=ctx.max_relationships,
         )
         return order_partitions(plan.partitions, ranking)
 
@@ -365,6 +371,30 @@ class LadderPhase:
             "nothing invoked. Rungs 2b and 2c depend on 2a's outcome and cannot "
             "be planned without it."
         )
+        # What pulling the trigger translates to, so the launch decision is
+        # informed rather than discovered at runtime. The per-call estimate is
+        # the first real run's measured 2a average (554s of wall per call);
+        # 2b/2c/adjudication/synthesis are unplannable before 2a, so this is a
+        # floor and says so.
+        measured_call_s = 554
+        workers = max(1, int(ctx.policy.max_parallel))
+        projected_s = (len(partitions) * measured_call_s) / workers
+        limits = [
+            f"cost ceiling ${ctx.budget.ceiling:.2f}" if ctx.budget.ceiling is not None else "no cost ceiling",
+            (
+                f"wall ceiling {ctx.policy.max_wall_minutes:.0f} min"
+                if ctx.policy.max_wall_minutes is not None
+                else "no wall ceiling"
+            ),
+            f"max_parallel {workers}",
+            f"invoke timeout {ctx.policy.invoke_timeout_s}s",
+        ]
+        outcome.notes.append(
+            f"projection: rung 2a alone is ~{projected_s / 3600:.1f}h of wall at "
+            f"{workers} worker(s) (measured 554s per call); later phases add to "
+            f"this and cannot be planned before 2a. Armed limits: {', '.join(limits)}. "
+            f"Watch the run live: {ctx.run_dir / 'ledger.jsonl'}"
+        )
         return PhaseResult(
             name=self.name, status="ok", notes=list(outcome.notes),
             data={"ladder": outcome, "plan_preview": preview},
@@ -372,29 +402,120 @@ class LadderPhase:
 
     # --- rung 2a -------------------------------------------------------------
 
+
+    # --- bounded-parallel invocation ------------------------------------------
+
+    def _invoke_parallel(
+        self, ctx: RunContext, jobs: list[tuple[int, str, int]], *,
+        invoker_key: str, rung: str,
+    ) -> tuple[dict[int, Optional[dict]], dict[int, str], int]:
+        """Run independent prompts through a bounded pool, deterministically.
+
+        ``jobs`` is ``(job_id, prompt, target_count)``. Returns parsed payloads
+        by job id (None for a failed or unparseable job), error text by job id,
+        and how many jobs were never launched because a ceiling tripped.
+
+        The coordinator owns all shared state: workers only invoke and parse.
+        Results are collected and the caller absorbs them in job order after
+        the pool drains, so a run's stores, census and report are identical
+        whatever order the network returned things in; parallelism buys wall
+        time, never a different answer.
+
+        The pattern (incremental submission, drain on first-completed, ceiling
+        checks at top-up, per-job bulkhead, honest skip accounting) is the
+        engine's R2 partition loop, applied to the ladder that had quietly
+        dropped it: the first real run executed 76 calls strictly one at a
+        time for 10.8 hours.
+
+        ``warm_first`` runs the first job alone before fanning out, so the
+        shared prompt prefix lands in the provider cache once instead of
+        max_parallel times.
+        """
+        payloads: dict[int, Optional[dict]] = {}
+        errors: dict[int, str] = {}
+        pending = list(jobs)
+        workers = max(1, min(int(ctx.policy.max_parallel), len(jobs) or 1))
+
+        def _task(job):
+            job_id, prompt, targets = job
+            invoker = ctx.invoker(invoker_key, phase=self.name, rung=rung, targets=targets)
+            result = invoker(prompt)
+            if not result.ok:
+                return job_id, None, f"did not return: {result.error}"
+            obj = _parse_json_object(result.text)
+            if obj is None:
+                failure_path = ctx.run_path(
+                    "failures", f"{rung}-job-{job_id}.txt"
+                )
+                try:
+                    failure_path.write_text(result.text[:2_000_000])
+                except OSError:
+                    pass
+                return (
+                    job_id,
+                    None,
+                    "returned unparseable text "
+                    f"(raw response preserved at failures/{failure_path.name})",
+                )
+            return job_id, obj, None
+
+        def _drain(in_flight):
+            done, _ = wait(in_flight, return_when=FIRST_COMPLETED)
+            for fut in done:
+                job = in_flight.pop(fut)
+                try:
+                    job_id, obj, err = fut.result()
+                except Exception as exc:  # noqa: BLE001 - per-job bulkhead
+                    job_id, obj, err = job[0], None, f"raised unexpectedly: {exc}"
+                payloads[job_id] = obj
+                if err:
+                    errors[job_id] = err
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            in_flight: dict = {}
+            if pending and ctx.policy.warm_first and ctx.budget.under():
+                job = pending.pop(0)
+                in_flight[pool.submit(_task, job)] = job
+                while in_flight:
+                    _drain(in_flight)
+            while pending and len(in_flight) < workers and ctx.budget.under():
+                job = pending.pop(0)
+                in_flight[pool.submit(_task, job)] = job
+            while in_flight:
+                _drain(in_flight)
+                while pending and len(in_flight) < workers and ctx.budget.under():
+                    job = pending.pop(0)
+                    in_flight[pool.submit(_task, job)] = job
+
+        return payloads, errors, len(pending)
+
     def _rung_2a(
         self, ctx: RunContext, partitions: list[Partition],
         validator: EvidenceValidator, facts_by_id: dict, brief, outcome: LadderOutcome,
     ) -> None:
-        invoker = ctx.invoker("p2a_bulk", phase=self.name, rung="2a")
-        skipped = 0
+        jobs = [
+            (
+                part.id,
+                build_contract_partition_prompt(part, ctx.facts, brief=brief),
+                len(part.component_ids),
+            )
+            for part in partitions
+        ]
+        payloads, errors, skipped = self._invoke_parallel(
+            ctx, jobs, invoker_key="p2a_bulk", rung="2a"
+        )
+        # Absorption runs in the coordinator, in partition order, after the
+        # pool drains: store writes, states and notes are byte-identical to a
+        # sequential run whatever order the calls returned in.
         for part in partitions:
-            if not ctx.budget.under():
-                skipped += 1
+            if part.id not in payloads:
                 continue
-            prompt = build_contract_partition_prompt(part, ctx.facts, brief=brief)
-            invoker.targets = len(part.component_ids)
-            result = invoker(prompt)
-            if not result.ok:
+            if part.id in errors:
                 outcome.notes.append(
-                    f"rung 2a partition {part.id} did not return: {result.error}"
+                    f"rung 2a partition {part.id} {errors[part.id]}"
                 )
-                continue
-            obj = _parse_json_object(result.text)
+            obj = payloads[part.id]
             if obj is None:
-                outcome.notes.append(
-                    f"rung 2a partition {part.id} returned unparseable text"
-                )
                 continue
             self._absorb(
                 ctx, obj, validator, facts_by_id, outcome,
@@ -404,8 +525,9 @@ class LadderPhase:
             )
         if skipped:
             outcome.notes.append(
-                f"rung 2a: {skipped} partition(s) not launched, run cost ceiling "
-                "reached; the most important partitions ran first"
+                f"rung 2a: {skipped} partition(s) not launched, "
+                f"{ctx.budget.stop_reason()}; the most important partitions "
+                "ran first"
             )
 
     # --- rungs 2b and 2c -----------------------------------------------------
@@ -426,15 +548,17 @@ class LadderPhase:
         else:
             outcome.escalated = label
 
-        invoker = ctx.invoker(key, phase=self.name, rung=rung)
-        for start in range(0, len(pending), self.escalation_batch):
-            batch = pending[start : start + self.escalation_batch]
-            if not ctx.budget.under():
-                outcome.notes.append(
-                    f"rung {rung}: {len(pending) - start} item(s) not attempted, "
-                    "run cost ceiling reached"
-                )
-                break
+        # Batches and their prompts are assembled in the coordinator BEFORE the
+        # pool runs, because building an escalation item reads outcome.states;
+        # workers must never touch shared state. Batches are independent of one
+        # another (each carries disjoint items), so they parallelize exactly
+        # like 2a partitions, and absorption below runs in batch order.
+        batches = [
+            pending[start : start + self.escalation_batch]
+            for start in range(0, len(pending), self.escalation_batch)
+        ]
+        jobs = []
+        for index, batch in enumerate(batches):
             items = [
                 self._escalation_item(ctx, state, facts_by_id, outcome)
                 for state in batch
@@ -442,14 +566,17 @@ class LadderPhase:
             prompt = build_escalation_prompt(
                 items, rung=rung, terminal=terminal, brief=brief
             )
-            invoker.targets = len(batch)
-            result = invoker(prompt)
-            if not result.ok:
-                outcome.notes.append(f"rung {rung} batch did not return: {result.error}")
+            jobs.append((index, prompt, len(batch)))
+        payloads, errors, skipped_batches = self._invoke_parallel(
+            ctx, jobs, invoker_key=key, rung=rung
+        )
+        for index, batch in enumerate(batches):
+            if index not in payloads:
                 continue
-            obj = _parse_json_object(result.text)
+            if index in errors:
+                outcome.notes.append(f"rung {rung} batch {errors[index]}")
+            obj = payloads[index]
             if obj is None:
-                outcome.notes.append(f"rung {rung} batch returned unparseable text")
                 continue
             self._absorb(
                 ctx, obj, validator, facts_by_id, outcome,
@@ -459,6 +586,12 @@ class LadderPhase:
                     s.target_id for s in batch if s.target_kind == "relationship"
                 ],
                 terminal=terminal,
+            )
+        if skipped_batches:
+            unattempted = sum(len(b) for b in batches[-skipped_batches:])
+            outcome.notes.append(
+                f"rung {rung}: {unattempted} item(s) not attempted, "
+                f"{ctx.budget.stop_reason()}"
             )
 
         if terminal:

@@ -1,6 +1,6 @@
 # Enrichment Run Report: polyglot
 
-Commit `<commit-of-the-run>`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
+Commit `24cc01aaf1dee039e4bffd98c7061897d91cebed`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
 
 **Determination: DONE**
 

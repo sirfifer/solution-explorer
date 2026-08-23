@@ -150,6 +150,22 @@ def build_parser() -> argparse.ArgumentParser:
         + ", ".join(known_sources()) + ". Ladder only.",
     )
     parser.add_argument(
+        "--max-wall-minutes",
+        type=float,
+        default=None,
+        help="Wall-clock ceiling for the whole ladder run, minutes. Soft, like "
+        "the cost ceiling: in-flight work finishes, no new work launches, and "
+        "the partial state is reported honestly. Ladder only.",
+    )
+    parser.add_argument(
+        "--invoke-timeout-seconds",
+        type=int,
+        default=None,
+        help="Per-attempt subprocess timeout for real model invocations "
+        "(default 1200). The retry budget scales with it so a timed-out call "
+        "gets one recovery attempt. Ladder only.",
+    )
+    parser.add_argument(
         "--min-rounds",
         type=int,
         default=None,
@@ -345,7 +361,12 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
         iteration=iteration,
         max_cost_usd=args.max_cost_usd,
         threshold=args.threshold,
+        max_parallel=max(1, int(args.max_parallel or 1)),
     )
+    if args.max_wall_minutes is not None:
+        policy.max_wall_minutes = args.max_wall_minutes
+    if args.invoke_timeout_seconds is not None:
+        policy.invoke_timeout_s = args.invoke_timeout_seconds
     config = LadderConfig(
         store_path=store_path,
         root=root,

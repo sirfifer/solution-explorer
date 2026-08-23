@@ -149,3 +149,40 @@ def _boom_partition(*_args, **_kwargs):
 
 def _boom_with_address(*_args, **_kwargs):
     raise RuntimeError(f"partition worker {object()!r} exploded")
+
+
+def test_a_relationship_heavy_partition_is_chunked_to_bound_the_response():
+    """The demanded response is bounded, not just the input.
+
+    Fail-before: the 2026-08-22 smoke planned src/vs/workbench with 331
+    relationships in one partition; the ~78k-token response truncated
+    mid-JSON and the run's most important items vanished from the census.
+    """
+    from analyzer.enrich.partition import plan_partitions
+
+    components = [
+        {"id": "hub", "metrics": {"lines": 10}, "children": []},
+        {"id": "spoke", "metrics": {"lines": 10}, "children": []},
+    ]
+    relationships = [
+        {"source": "hub", "target": f"ext-{i:03d}", "type": "import"}
+        for i in range(101)
+    ]
+    plan = plan_partitions(
+        components, relationships,
+        max_lines=50_000, max_components=30, min_components=1,
+        max_relationships=40,
+    )
+    chunks = [p for p in plan.partitions if "hub" in p.component_ids]
+    assert len(chunks) == 3, "101 relationships at a bound of 40 is three chunks"
+    assert all(len(p.relationship_keys) <= 40 for p in plan.partitions)
+    # Every chunk repeats the owning components, so relationship contracts
+    # keep their context and component answers are never lost.
+    assert all(set(p.component_ids) >= {"hub"} for p in chunks)
+    # Nothing dropped: the union of chunk relationships is the full set.
+    seen = set()
+    for p in chunks:
+        seen.update(p.relationship_keys)
+    assert len(seen) == 101
+    # Ids stay dense and deterministic after renumbering.
+    assert [p.id for p in plan.partitions] == list(range(len(plan.partitions)))
