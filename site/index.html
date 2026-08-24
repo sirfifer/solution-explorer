@@ -157,7 +157,9 @@
   .langdot { width: 7px; height: 7px; border-radius: 50%; }
   .term { font-family: var(--mono); font-size: 11px; margin-left: 8px; }
   .edge-label { position: absolute; pointer-events: none; }
-  .el-http { left: calc(8% + 252px); top: 24%; }
+  /* Sits one gutter right of node-a, which is left:8% and 240px wide. Written
+     as the sum rather than 252px so the two numbers it depends on are named. */
+  .el-http { left: calc(8% + 240px + 12px); top: 24%; }
   .el-ws { left: 28%; top: 72%; }
   .lens-chip { font-size: 11.5px; padding: 4px 12px; border-radius: 999px; }
   .spanel { padding: 18px 18px 16px; }
