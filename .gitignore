@@ -52,3 +52,8 @@ infrastructure/cloudflare/worker/.wrangler/
 # (scripts/demo-site.py deploy) runs it from the repo root, so ignore it here
 # too, not only under infrastructure/cloudflare/worker/.
 .wrangler/
+
+# Testboard run records (scripts/testboard.py). Every harness writes its run
+# here as it executes so the dashboard can show it live. Regenerable by
+# rerunning the harness, and one record per run adds up, so never tracked.
+.testboard/

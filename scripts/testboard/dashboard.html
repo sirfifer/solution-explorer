@@ -1,0 +1,2947 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testboard</title>
+<style>
+/* Palette. Dark is the default because this board is usually open beside a
+   terminal. Light follows the system preference. */
+:root {
+  --bg: #0e1116;
+  --panel: #151a21;
+  --panel-2: #1b212b;
+  --border: #262e3a;
+  --border-soft: #1f2632;
+  --fg: #dde3ec;
+  --fg-strong: #ffffff;
+  --muted: #8a94a4;
+  --faint: #616c7d;
+  --accent: #4f8cff;
+  --ok: #3fbf6b;
+  --ok-bg: rgba(63, 191, 107, 0.14);
+  --fail: #ff5f56;
+  --fail-bg: rgba(255, 95, 86, 0.14);
+  --warn: #e2a53c;
+  --warn-bg: rgba(226, 165, 60, 0.15);
+  --run: #4f8cff;
+  --run-bg: rgba(79, 140, 255, 0.16);
+  --skip: #7d879a;
+  --skip-bg: rgba(125, 135, 154, 0.16);
+  /* Nature is its own axis, not a severity. A threshold judgement is not a
+     milder defect, it is a different kind of thing, so it gets its own hue
+     rather than a lighter shade of red. */
+  --nature: #b48ef7;
+  --nature-bg: rgba(180, 142, 247, 0.16);
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f6f9;
+    --panel: #ffffff;
+    --panel-2: #f0f3f7;
+    --border: #d5dbe4;
+    --border-soft: #e3e8ef;
+    --fg: #1d232c;
+    --fg-strong: #000000;
+    --muted: #5d6675;
+    --faint: #808b9c;
+    --accent: #1f5fd0;
+    --ok: #197a3f;
+    --ok-bg: rgba(25, 122, 63, 0.12);
+    --fail: #c62b21;
+    --fail-bg: rgba(198, 43, 33, 0.12);
+    --warn: #96650a;
+    --warn-bg: rgba(150, 101, 10, 0.14);
+    --run: #1f5fd0;
+    --run-bg: rgba(31, 95, 208, 0.12);
+    --skip: #6b7484;
+    --skip-bg: rgba(107, 116, 132, 0.14);
+    --nature: #6d28d9;
+    --nature-bg: rgba(109, 40, 217, 0.12);
+    --shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.mono, code, .sha, .ev, .path {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Header */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 18px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+header h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--fg-strong);
+}
+.versions { color: var(--muted); font-size: 12px; }
+.versions .sep { color: var(--faint); padding: 0 6px; }
+.versions .val { color: var(--fg); }
+.headright {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  display: inline-block;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-bg);
+}
+.dot.bad { background: var(--fail); box-shadow: 0 0 0 3px var(--fail-bg); }
+.dot.wait { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-bg); }
+
+/* Tabs. Tests, processing, and the fleet answer three different questions, so
+   they get three different rooms rather than one long scroll. */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 8px 16px 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  position: relative;
+  top: 1px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+  padding: 6px 13px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.tab:hover { color: var(--fg); background: var(--panel-2); }
+.tab[aria-selected="true"] {
+  color: var(--fg-strong);
+  background: var(--bg);
+  border-color: var(--border);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tab .badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.tab[aria-selected="true"] .badge { background: var(--panel); color: var(--fg); }
+.tab .livedot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--run);
+  box-shadow: 0 0 0 3px var(--run-bg);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.tab.haslive[aria-selected="false"] { color: var(--run); }
+.pane { display: none; }
+.pane.on { display: block; }
+
+/* Tooltips. A title attribute cannot hold two sentences readably, and this
+   board is full of numbers the reader has no way to guess the origin of. */
+#tip {
+  position: fixed;
+  z-index: 100;
+  display: none;
+  max-width: 380px;
+  padding: 7px 10px;
+  border-radius: 5px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-size: 11.5px;
+  line-height: 1.5;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  pointer-events: none;
+}
+@media (prefers-color-scheme: light) {
+  #tip { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16); }
+}
+#tip.on { display: block; }
+[data-tip] { cursor: help; }
+/* A value that carries a definition says so only while the pointer is on it.
+   No persistent underlines, no question marks, no legend. The hover is the
+   whole affordance. */
+[data-def]:hover {
+  text-decoration: underline dotted 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--faint);
+}
+.stat[data-def]:hover, .ph[data-def]:hover, .lastrun[data-def]:hover,
+.tab[data-def]:hover, .crow[data-def]:hover, .clist-note[data-def]:hover {
+  text-decoration: none;
+}
+.stat[data-def]:hover { border-color: var(--faint); }
+[data-tip]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Offline banner */
+#banner {
+  display: none;
+  padding: 8px 16px;
+  background: var(--fail-bg);
+  border-bottom: 1px solid var(--fail);
+  color: var(--fg);
+  font-size: 12px;
+}
+#banner.show { display: block; }
+#banner b { color: var(--fail); }
+
+main { padding: 14px 16px 48px; max-width: 1500px; }
+section { margin-bottom: 26px; }
+h2 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+h2 .count {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--faint);
+}
+.empty {
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+}
+
+/* Pills */
+.pill {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.pill.passed { color: var(--ok); background: var(--ok-bg); border-color: var(--ok); }
+.pill.failed { color: var(--fail); background: var(--fail-bg); border-color: var(--fail); }
+.pill.running { color: var(--run); background: var(--run-bg); border-color: var(--run); animation: pulse 1.6s ease-in-out infinite; }
+.pill.stalled, .pill.warned { color: var(--warn); background: var(--warn-bg); border-color: var(--warn); }
+.pill.skipped, .pill.neutral { color: var(--skip); background: var(--skip-bg); border-color: var(--border); }
+.pill.plain { color: var(--muted); background: var(--panel-2); border-color: var(--border); font-weight: 500; }
+.pill.drift {
+  color: var(--warn); background: var(--warn-bg); border-color: var(--warn);
+  cursor: help;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+/* Live run cards */
+.live {
+  background: var(--panel);
+  border: 1px solid var(--run);
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.live-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+.live-subject { font-size: 15px; font-weight: 650; color: var(--fg-strong); }
+.live-meta { margin-left: auto; color: var(--muted); font-size: 12px; }
+.live-meta .val { color: var(--fg); }
+
+.bar {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.bar > i {
+  display: block;
+  height: 100%;
+  background: var(--run);
+  transition: width 0.4s ease;
+}
+.barline {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.barline .num { color: var(--fg); font-weight: 600; }
+.tally-pass { color: var(--ok); font-weight: 600; }
+.tally-fail { color: var(--fail); font-weight: 600; }
+.tally-skip { color: var(--skip); font-weight: 600; }
+.tally-warn { color: var(--warn); font-weight: 600; }
+
+.now {
+  margin: 12px 0 4px;
+  padding: 9px 11px;
+  background: var(--run-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.now .label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: block;
+}
+.now .what {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-strong);
+  word-break: break-word;
+}
+.now .what.idle { font-weight: 500; color: var(--muted); }
+.now .headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+}
+.now .oncase {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.now .oncase b { color: var(--fg-strong); font-weight: 650; }
+.now .oncase.note { white-space: normal; }
+
+/* Timing suspicions. Never phrased as a verdict, because the board cannot see
+   the process, only the timestamps it left behind. */
+.stall-hint {
+  margin-top: 7px;
+  padding: 6px 9px;
+  border: 1px solid var(--warn);
+  border-radius: 4px;
+  background: var(--warn-bg);
+  color: var(--fg);
+  font-size: 11.5px;
+}
+.stall-hint b { color: var(--warn); }
+.hidden { display: none !important; }
+
+/* Derived metric tiles */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+.metric {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  min-width: 0;
+}
+.metric .k {
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.metric .v {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--fg-strong);
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+.metric .s {
+  font-size: 10.5px;
+  color: var(--muted);
+  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.metric.soft .v { font-size: 12px; font-weight: 500; color: var(--muted); line-height: 1.35; }
+.metric.hot { border-color: var(--warn); background: var(--warn-bg); }
+.metric.hot .v { color: var(--warn); }
+
+/* What is being crawled, so nobody has to guess which dataset this run reads */
+.ctx {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 18px;
+  padding: 7px 9px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+  min-width: 0;
+}
+.ctx .val { color: var(--fg); }
+.ctx .val.path { word-break: break-all; }
+
+/* Two-column instrument area, collapsing to one on narrow windows */
+.live-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+@media (max-width: 1080px) {
+  .live-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.panel {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  min-width: 0;
+}
+.panel > .ph {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.panel > .ph .n {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--faint);
+}
+.panel > .ph .n.bad { color: var(--fail); font-weight: 600; }
+.panel .pb { padding: 5px 9px 7px; }
+.scrollbox { overflow-y: auto; overflow-x: hidden; }
+.panel .none { color: var(--muted); font-size: 11.5px; }
+
+/* Live per-case list. Every finished case, newest first, failures readable
+   immediately rather than after the run ends. */
+.clist { max-height: 340px; font-size: 12px; }
+.crow {
+  display: grid;
+  grid-template-columns: 30px 60px minmax(0, 1fr) 62px 104px;
+  gap: 8px;
+  align-items: start;
+  padding: 3px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.crow:first-child { border-top: none; }
+.crow .ix { text-align: right; color: var(--faint); font-variant-numeric: tabular-nums; font-size: 11px; }
+.crow .ti { min-width: 0; word-break: break-word; }
+.crow .dur { text-align: right; color: var(--fg); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+.crow .cmp { position: relative; min-width: 0; }
+.crow.bad { background: var(--fail-bg); border-radius: 4px; }
+.crow.warn { background: var(--warn-bg); border-radius: 4px; }
+.crow.now { background: var(--run-bg); border-radius: 4px; }
+.crow .msg {
+  margin-top: 3px;
+  padding: 5px 7px;
+  border-left: 3px solid var(--fail);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.crow.warn .msg { border-left-color: var(--warn); }
+.crow .cov { margin-top: 2px; color: var(--muted); font-size: 11px; }
+.crow .cov span { display: block; word-break: break-word; }
+.crow .cmp > span { display: block; }
+.dbar {
+  display: block;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 3px;
+  background: var(--border-soft);
+  overflow: hidden;
+}
+.dbar > i { display: block; height: 100%; background: var(--skip); }
+.dbar.over > i { background: var(--warn); }
+.dbar.way > i { background: var(--fail); }
+.dmark {
+  position: absolute;
+  top: 3px;
+  width: 1px;
+  height: 10px;
+  background: var(--faint);
+}
+.ratio { display: block; font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.ratio.over { color: var(--warn); }
+.ratio.way { color: var(--fail); font-weight: 600; }
+.clist-note { padding: 5px 0 0; color: var(--faint); font-size: 11px; }
+
+/* Coverage annotations. What the suite claims it actually proved, promoted
+   from a footnote to a panel because it is the substance of the run. */
+.covlist { max-height: 340px; font-size: 11.5px; }
+.covline {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 1px 12px;
+  padding: 2px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.covline:first-child { border-top: none; }
+.covline .ck { color: var(--muted); }
+.covline .cv { color: var(--fg); word-break: break-word; }
+.covline.solo { grid-template-columns: minmax(0, 1fr); }
+
+.events {
+  max-height: 210px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 5px 9px 7px;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.ev { display: flex; gap: 8px; white-space: pre-wrap; word-break: break-word; }
+.ev .ts { color: var(--faint); flex: 0 0 auto; min-width: 54px; font-variant-numeric: tabular-nums; }
+.ev .ty { flex: 0 0 auto; min-width: 76px; color: var(--muted); }
+.ev .tx { min-width: 0; word-break: break-word; }
+.ev.e-passed .ty { color: var(--ok); }
+.ev.e-failed .ty { color: var(--fail); }
+.ev.e-skipped .ty { color: var(--skip); }
+.ev.e-warned .ty { color: var(--warn); }
+.ev.e-run_start .ty, .ev.e-run_end .ty { color: var(--accent); }
+.events .none { color: var(--muted); }
+
+/* Recent runs table */
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+}
+tbody tr.run-row { cursor: pointer; border-bottom: 1px solid var(--border-soft); background: var(--panel); }
+tbody tr.run-row:hover { background: var(--panel-2); }
+tbody tr.run-row > td { padding: 6px 10px; vertical-align: middle; }
+tbody tr.run-row.is-stalled { background: var(--warn-bg); box-shadow: inset 3px 0 0 var(--warn); }
+td.c-dur.stall-age { color: var(--warn); font-weight: 600; }
+tbody tr.run-row.is-open > td { border-bottom: none; }
+td.c-subject { font-weight: 600; color: var(--fg-strong); }
+td.c-when, td.c-dur { color: var(--muted); white-space: nowrap; }
+td.c-kind { color: var(--muted); }
+td.c-tally { white-space: nowrap; }
+td.caret { width: 16px; color: var(--faint); }
+tr.detail-row > td {
+  padding: 0 10px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+tr.detail-row.is-stalled > td { background: var(--warn-bg); }
+
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  padding: 8px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  border-top: 1px dashed var(--border);
+}
+.detail-meta .val { color: var(--fg); }
+.stall-note {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--warn);
+  border-radius: 5px;
+  background: var(--warn-bg);
+  color: var(--fg);
+}
+.case {
+  display: grid;
+  grid-template-columns: 66px 1fr 70px;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--border-soft);
+  align-items: start;
+}
+.case .st { padding-top: 1px; }
+.case .ti { word-break: break-word; }
+.case .du { text-align: right; color: var(--faint); font-size: 11.5px; }
+.case.bad { background: var(--fail-bg); border-radius: 4px; padding: 6px; }
+.case.warn { background: var(--warn-bg); border-radius: 4px; padding: 6px; }
+.case.warn .msg { border-left-color: var(--warn); }
+.case .msg {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--fail);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.case .cov { margin-top: 3px; color: var(--muted); font-size: 11.5px; }
+.case .cov span { display: block; }
+.cov-run {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.cov-run b { color: var(--fg); font-weight: 600; display: block; margin-bottom: 4px; }
+.cov-grid { display: grid; grid-template-columns: auto 1fr; gap: 1px 14px; }
+.cov-grid .ck { color: var(--muted); }
+.cov-grid .cv { color: var(--fg); word-break: break-all; }
+
+/* Fleet */
+.fleet { display: grid; grid-template-columns: repeat(auto-fill, minmax(370px, 1fr)); gap: 12px; }
+.demo {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 11px 13px;
+}
+.demo.drift { border-color: var(--warn); border-left-width: 3px; }
+.demo-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.demo-subject { font-size: 14px; font-weight: 650; color: var(--fg-strong); }
+.demo-slug { color: var(--faint); }
+.demo-pills { margin: 7px 0 8px; display: flex; flex-wrap: wrap; gap: 5px; }
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.stat {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 7px;
+}
+.stat .n { font-size: 14px; font-weight: 650; color: var(--fg-strong); }
+.stat .k { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; color: var(--fg); word-break: break-all; }
+.sha { font-size: 11.5px; }
+.lastrun {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* --- Findings: instances versus distinct ---------------------------------
+ *
+ * The whole point of this block. One number can never answer "is this fifty
+ * copies of one problem or fifty separate problems", so the two counts are
+ * always rendered together, always labelled, and never summed into one figure.
+ */
+.found { display: flex; flex-direction: column; line-height: 1.35; white-space: nowrap; }
+.found .n { font-weight: 650; font-variant-numeric: tabular-nums; color: var(--fg-strong); }
+.found .n.err { color: var(--fail); }
+.found .lbl { color: var(--muted); font-size: 11px; }
+.found .soft { color: var(--faint); font-style: normal; }
+.found .shp { color: var(--warn); font-weight: 600; }
+td.c-found { white-space: nowrap; }
+
+/* The plain-English reading of those two numbers, so nobody has to do the
+   division in their head. */
+.shape {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.shape.repeat { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
+.shape.spread { color: var(--fail); border-color: var(--fail); background: var(--fail-bg); }
+
+.inst-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Nature pills. Deliberately louder than the severity pill beside them,
+   because "is it broken or just not built yet" is the question that decides
+   whether anyone needs to act. */
+.pill.nat { font-weight: 700; letter-spacing: 0.03em; }
+.pill.nat-unclassified { color: var(--warn); background: var(--warn-bg); border-color: var(--warn); }
+.pill.nat-defect { color: var(--fail); background: var(--fail-bg); border-color: var(--fail); }
+.pill.nat-unbuilt { color: var(--accent); background: var(--run-bg); border-color: var(--accent); }
+.pill.nat-threshold { color: var(--nature); background: var(--nature-bg); border-color: var(--nature); }
+.pill.nat-subject { color: var(--skip); background: var(--skip-bg); border-color: var(--skip); }
+.pill.nat-accepted { color: var(--ok); background: var(--ok-bg); border-color: var(--ok); }
+
+/* Findings inside an expanded run */
+.findings { margin: 6px 0 2px; }
+.finding {
+  padding: 6px 8px;
+  margin-top: 5px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 4px;
+  background: var(--panel-2);
+}
+.finding.sev-error { border-left-color: var(--fail); }
+.finding.sev-warn { border-left-color: var(--warn); }
+.finding-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 9px;
+  min-width: 0;
+}
+.finding-head .ftitle { font-weight: 600; color: var(--fg-strong); word-break: break-word; min-width: 0; }
+.finding .frule { color: var(--muted); font-size: 11.5px; }
+.finding .fid {
+  color: var(--faint);
+  font-size: 11px;
+  word-break: break-all;
+  -webkit-user-select: all;
+  user-select: all;
+}
+.finding .examples {
+  margin-top: 5px;
+  padding: 5px 7px;
+  border-radius: 3px;
+  background: var(--bg);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.finding .examples div { word-break: break-word; color: var(--fg); }
+.finding .examples div + div { margin-top: 3px; border-top: 1px solid var(--border-soft); padding-top: 3px; }
+.finding .examples .more { color: var(--faint); border-top: none; }
+
+/* --- Issues pane ---------------------------------------------------------- */
+.issue-tote {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.unclassified-note {
+  margin-bottom: 10px;
+  padding: 8px 11px;
+  border: 1px solid var(--warn);
+  border-left-width: 3px;
+  border-radius: 5px;
+  background: var(--warn-bg);
+  color: var(--fg);
+  font-size: 12px;
+}
+.unclassified-note b { color: var(--warn); }
+.issue {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  margin-bottom: 6px;
+}
+.issue.closed { opacity: 0.62; }
+.issue.sev-error { border-left: 3px solid var(--fail); }
+.issue.sev-warn { border-left: 3px solid var(--warn); }
+.issue-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 10px;
+  min-width: 0;
+}
+.issue-title {
+  font-weight: 600;
+  color: var(--fg-strong);
+  word-break: break-word;
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.issue-right {
+  display: flex;
+  align-items: baseline;
+  gap: 5px 10px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.issue-seen { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.issue-seen b { color: var(--fg); }
+.issue-trace {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  font-size: 11px;
+  color: var(--faint);
+}
+/* The traceability thread. Selectable on purpose: these two strings are what
+   you paste into a search to find out where a problem came from. */
+.issue-trace .sel {
+  color: var(--muted);
+  word-break: break-all;
+  -webkit-user-select: all;
+  user-select: all;
+}
+.issue-note {
+  margin-top: 5px;
+  padding: 5px 8px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel-2);
+  font-size: 11.5px;
+  color: var(--fg);
+}
+.issue-ex {
+  margin-top: 5px;
+  padding: 5px 8px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  font-size: 11px;
+  color: var(--fg);
+}
+.issue-ex div { word-break: break-word; }
+.issue-ex div + div { margin-top: 3px; border-top: 1px solid var(--border-soft); padding-top: 3px; }
+.issue-ex .more { color: var(--faint); border-top: none; }
+.pill.unfiled { color: var(--warn); background: var(--warn-bg); border-color: var(--warn); }
+.pill.filed { color: var(--ok); background: var(--ok-bg); border-color: var(--ok); }
+a.pill.filed:hover { text-decoration: none; filter: brightness(1.1); }
+
+footer {
+  padding: 0 16px 30px;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+footer .path { word-break: break-all; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Testboard</h1>
+  <div class="versions" id="versions">reading the checkout</div>
+  <div class="headright">
+    <span id="refreshed">connecting</span>
+    <span class="dot wait" id="dot" title="connection status"></span>
+  </div>
+</header>
+
+<div id="banner">
+  <b>Server unreachable.</b>
+  <span id="banner-detail"></span>
+</div>
+
+<nav class="tabs" id="tabs" role="tablist" aria-label="board sections">
+  <button class="tab" id="tab-tests" data-tab="tests" role="tab" aria-selected="true"
+          aria-controls="pane-tests" type="button">
+    <span>Tests</span>
+    <span class="badge" id="badge-tests">0</span>
+    <span class="livedot hidden" id="livedot-tests"></span>
+  </button>
+  <button class="tab" id="tab-processing" data-tab="processing" role="tab" aria-selected="false"
+          aria-controls="pane-processing" type="button" tabindex="-1">
+    <span>Processing</span>
+    <span class="badge" id="badge-processing">0</span>
+    <span class="livedot hidden" id="livedot-processing"></span>
+  </button>
+  <button class="tab" id="tab-fleet" data-tab="fleet" role="tab" aria-selected="false"
+          aria-controls="pane-fleet" type="button" tabindex="-1">
+    <span>Fleet</span>
+    <span class="badge" id="badge-fleet">0</span>
+  </button>
+</nav>
+
+<main>
+  <div class="pane on" id="pane-tests" role="tabpanel" aria-labelledby="tab-tests">
+    <section>
+      <h2>Executing now <span class="count" id="live-count-tests"></span></h2>
+      <div id="live-body-tests"></div>
+    </section>
+    <section>
+      <h2>Test run history <span class="count" id="recent-count-tests"></span></h2>
+      <div id="recent-body-tests"></div>
+    </section>
+    <section>
+      <h2>Open issues <span class="count" id="issues-count"></span></h2>
+      <div id="issues-body"></div>
+    </section>
+  </div>
+
+  <div class="pane" id="pane-processing" role="tabpanel" aria-labelledby="tab-processing">
+    <section>
+      <h2>Executing now <span class="count" id="live-count-processing"></span></h2>
+      <div id="live-body-processing"></div>
+    </section>
+    <section>
+      <h2>Processing history <span class="count" id="recent-count-processing"></span></h2>
+      <div id="recent-body-processing"></div>
+    </section>
+  </div>
+
+  <div class="pane" id="pane-fleet" role="tabpanel" aria-labelledby="tab-fleet">
+    <section>
+      <h2>Demo fleet <span class="count" id="fleet-count"></span></h2>
+      <div id="fleet-body"></div>
+    </section>
+  </div>
+</main>
+
+<footer id="footer"></footer>
+
+<script>
+"use strict";
+
+/* ----------------------------------------------------------------------------
+ * Helpers. Everything interpolated into HTML goes through esc(), because run
+ * records carry file paths, error messages, and case titles written elsewhere.
+ * -------------------------------------------------------------------------- */
+
+function esc(value) {
+  if (value === null || value === undefined) return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function parseTs(iso) {
+  if (!iso) return null;
+  var t = Date.parse(iso);
+  return isNaN(t) ? null : t;
+}
+
+/** "3m ago", with sub-minute resolution while something is happening. */
+function relative(iso, now) {
+  var t = parseTs(iso);
+  if (t === null) return "unknown";
+  var delta = Math.round(((now || Date.now()) - t) / 1000);
+  var future = delta < 0;
+  var s = Math.abs(delta);
+  var text;
+  if (s < 5) text = "just now";
+  else if (s < 60) text = s + "s";
+  else if (s < 3600) text = Math.floor(s / 60) + "m";
+  else if (s < 86400) text = Math.floor(s / 3600) + "h";
+  else text = Math.floor(s / 86400) + "d";
+  if (text === "just now") return text;
+  return future ? "in " + text : text + " ago";
+}
+
+/** Bare duration, no "ago" suffix. Used for elapsed and for stall age. */
+function spanText(seconds) {
+  var s = Math.max(0, Math.round(seconds));
+  if (s < 60) return s + "s";
+  var m = Math.floor(s / 60);
+  if (m < 60) return m + "m " + (s % 60) + "s";
+  var h = Math.floor(m / 60);
+  return h + "h " + (m % 60) + "m";
+}
+
+function duration(ms) {
+  if (ms === null || ms === undefined || isNaN(ms)) return "n/a";
+  if (ms < 1000) return Math.round(ms) + "ms";
+  return spanText(ms / 1000);
+}
+
+function num(n) {
+  if (n === null || n === undefined || n === "") return "n/a";
+  if (typeof n !== "number") return esc(n);
+  return n.toLocaleString();
+}
+
+/** A relative time that keeps ticking without a re-render. */
+function relSpan(iso, extra) {
+  if (!iso) return '<span class="muted">unknown</span>';
+  return '<span data-rel="' + esc(iso) + '" title="' + esc(iso) + '"' +
+    (extra ? ' class="' + esc(extra) + '"' : "") + ">" + esc(relative(iso)) + "</span>";
+}
+
+function pad2(n) { return n < 10 ? "0" + n : String(n); }
+
+/** "+2m14s" from the run's start. Reads better than wall clock when following
+    a run, because the question is always "how far in", never "what time is it". */
+function offsetText(ms) {
+  var sign = ms < 0 ? "-" : "+";
+  var s = Math.round(Math.abs(ms) / 1000);
+  if (s < 60) return sign + s + "s";
+  var m = Math.floor(s / 60);
+  if (m < 60) return sign + m + "m" + pad2(s % 60) + "s";
+  var hh = Math.floor(m / 60);
+  return sign + hh + "h" + pad2(m % 60) + "m";
+}
+
+function clockText(ts) {
+  return new Date(ts).toTimeString().slice(0, 8);
+}
+
+function rateText(count, minutes) {
+  if (!(minutes > 0.01) || !(count > 0)) return "n/a";
+  var r = count / minutes;
+  return (r < 10 ? r.toFixed(1) : Math.round(r)) + "/min";
+}
+
+/* ----------------------------------------------------------------------------
+ * Tooltips. The owner's complaint was that he could only guess what any of
+ * these numbers were, so every label carries a sentence saying what it means
+ * and, where it is not obvious, where it came from. The distinction that
+ * matters most is reported (a harness wrote it) versus derived (the board
+ * worked it out), and every derived number says so.
+ * -------------------------------------------------------------------------- */
+
+function mapOf(obj) {
+  var out = Object.create(null);
+  for (var k in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, k)) out[k] = obj[k];
+  }
+  return out;
+}
+
+var TIP = {
+  /* Field labels only. Every definition of a rendered VALUE lives in the
+     payload's glossary and is looked up at render time, never written here.
+     See glossaryText below for why that boundary is load bearing. */
+
+  /* live instrument */
+  elapsed: "Elapsed: now minus started_at in the run record. Derived by the board and ticked once a second.",
+  started: "Started: when the harness wrote its first record for this run.",
+  progress: "Progress: completed divided by total. Both numbers are reported by the harness, and total is the number of cases the suite queued before it started.",
+  cases: "Cases: how many of the queued cases have finished, over how many were queued. Reported by the harness.",
+  left: "Left: queued cases minus completed cases. Derived by the board.",
+  tallyPass: "Passed cases so far, counted by the harness as each case ends.",
+  tallyFail: "Failed cases so far, counted by the harness as each case ends.",
+  tallyWarn: "Warned cases so far. The board derives this by counting cases with the warned status, because a warning is a finding rather than a failure.",
+  tallySkip: "Skipped cases so far, counted by the harness.",
+  current: "Running now: the case the harness says it is executing, read from the current field of the run record. It is cleared between cases, so a blank here is normal for a moment.",
+  oncase: "Time on this case: now minus the timestamp of the most recent case_start line in events.jsonl. Derived by the board and ticked once a second. This is the strongest stuck signal on the board, because a case sitting at minutes when its neighbours took seconds is the tell.",
+  oncaseMult: "How the current case compares to the mean completed case, derived by the board. Above three times the mean, and past 15 seconds, the board raises a suspicion.",
+  mean: "Mean case duration: the average of every completed case that has a duration. Skipped cases are excluded, because they take no real time and would drag the average down. Derived by the board from the cases in the run record.",
+  slowest: "Slowest case so far: the longest completed case duration in this run. Derived by the board. It is the outlier check: if this is far above the mean, one case is doing something the others are not.",
+  rate: "Throughput: completed cases divided by the minutes since started_at. Derived by the board and ticked once a second. It is wall clock, so setup, teardown, and the gaps between cases are all in it.",
+  remaining: "Estimated remaining: the mean completed case duration times the number of cases left, minus the time already spent on the case in flight. An estimate, not a promise. It assumes the cases still to come look like the ones already done.",
+  eta: "Estimated finish: local clock time of now plus the estimated remaining time. Derived by the board, and it moves whenever the mean moves.",
+  notEnough: "Not enough data yet: fewer than two completed cases carry a duration, so any projection would be a wild guess. The board would rather say nothing than print a number it cannot stand behind.",
+  stuck: "Possibly stuck: this case has been running for more than three times the mean, and for at least 15 seconds. That is a suspicion drawn from timing alone. The board cannot see the process, only the timestamps it left behind, and a genuinely heavy case looks exactly like this.",
+  caselist: "Every case this run has finished, newest first, with the case in flight at the top. Failures show their message here immediately rather than waiting for the run to end.",
+  events: "Event tail: the last lines of events.jsonl, the append-only log the harness writes as it goes. Times are offsets from the start of the run rather than wall clock. The server sends the last 40 lines only, so a long run's early history is not shown here.",
+  durReported: "Duration reported by the harness for this case.",
+  durDerived: "Duration derived by the board from the gap between this case's case_start and case_end lines, because the harness did not report one.",
+  durNone: "This harness did not report a duration for the case, and the event log does not carry both ends of it, so the board has nothing to measure.",
+  noCaseStart: "This harness writes no case_start line, so the board cannot tell when the current case began. Per-case elapsed needs that timestamp.",
+
+  /* run context */
+  subject: "Subject: the name of the dataset this run reads, taken from the analyzed manifest.",
+  kind: "Kind: which harness produced this run. A crawl drives a browser over the built viewer, a lint reads the analyzer's output files directly.",
+  dsAnalyzer: "Dataset analyzer version: the analyzer that produced the dataset under test. It is not necessarily the analyzer in the current checkout, and when the two differ the run is exercising older output.",
+  dsGenerated: "Dataset generated: when the dataset under test was produced by the analyzer.",
+  sourceChecked: "Source checked: the working copy the run compared its data against, when the check needed the original files.",
+  runId: "Run id: the directory name of this run's record, which is its timestamp plus kind plus subject. It is what you would look up on disk.",
+  duration: "Duration: how long the run took, reported by the harness where it records one, otherwise derived by the board from the start and end timestamps.",
+  when: "When the run started, relative to now.",
+
+  /* header */
+  hdAnalyzer: "Analyzer version in the current checkout, read from analyzer/__init__.py.",
+  hdViewer: "Viewer version in the current checkout, read from viewer/package.json.",
+  hdGit: "The branch and commit the checkout is on right now. Every artifact on this board is judged against this.",
+  hdDirty: "Dirty: the checkout has uncommitted changes, so its version numbers do not fully describe the code that is running.",
+  conn: "Connection to the testboard server. The board keeps showing the last data it received when the server goes away, so a restart never blanks the screen.",
+  refreshed: "How long ago the board last got a successful response. It polls every 2 seconds.",
+
+  /* findings and issues */
+  instances: "Instances: how many times the thing was found. One rule firing 340 times is 340 instances. Counted by the harness, and never merged with the distinct count, because the two answer different questions.",
+  distinct: "Distinct problems: how many different problems those instances represent, identified by a stable fingerprint of the kind of problem rather than by its wording. 340 instances of 1 distinct problem is one thing to fix. 340 instances of 340 distinct problems is a different situation entirely.",
+  shape: "The relationship between the two counts, stated plainly so nobody has to do the division. This is derived by the board from the instance and distinct counts.",
+  foundCol: "What the run actually found, as instances and as distinct problems. A run that examined hundreds of thousands of things and found one problem should not read the same as one that found hundreds.",
+  foundNone: "This harness does not report finding detail yet, so the board can only count the cases that failed or warned. The case count is not an instance count and is shown apart from one for that reason.",
+  findings: "Findings: the distinct problems this check reported, each with how many times it occurred and up to five concrete sightings. The examples are the harness's own words, not a summary.",
+  findingId: "Finding id: a stable fingerprint of this kind of problem. It survives rewording and re-runs, so it is what ties a sighting in one run to the same problem in another. Selectable, because it is meant to be pasted into a search.",
+  severity: "Severity as the harness classified it. An error fails the run, a warning does not.",
+  nature: "Nature: what kind of thing this is, which is a separate question from how loud it is. It is the difference between something being broken and something not being built yet.",
+  issueState: "State: whether this issue is still open or has been closed.",
+  runsSeen: "How many recorded runs have reported this same problem. One run means it has been seen once, which is not yet a pattern. Many runs means it is persistent.",
+  firstSeenRun: "The run that first reported this problem, by id. Together with the finding id this is the traceability thread: it tells you where to go to see the problem in its original context. Selectable on purpose.",
+  peak: "The largest instance count any single run has reported for this problem, when that is higher than the most recent count.",
+  filed: "This issue has a tracker entry. The link opens it.",
+  unfiled: "No tracker entry exists for this issue. It is visible here and nowhere else, so it depends on somebody reading this board.",
+  issuesPane: "Issues are problems the runs found, carried across runs by their fingerprint rather than re-reported from scratch each time. This is the standing list, not a run log, so a problem that keeps recurring appears once with the number of runs that have seen it.",
+  unclassified: "An unclassified issue is one nobody has decided about yet. It is neither confirmed broken nor accepted, so it is the thing most worth chasing.",
+  issueSubject: "The subject the problem was found in.",
+
+  /* fleet */
+  flFiles: "Files the analyzer accounted for in this demo.",
+  flSymbols: "Symbols the analyzer extracted from this demo.",
+  flRelations: "Relationships the analyzer found between components in this demo.",
+  flFetched: "Fetched: when the subject repository was last downloaded for this demo.",
+  flGenerated: "Generated: when this demo's manifest was produced by the analyzer.",
+  flUrl: "Hosted at: where this demo is published, taken from its registry entry.",
+  flNoRun: "No run on record has read this demo's output, so nothing on this board vouches for it.",
+
+  /* tabs */
+  tabFleet: "Fleet: every registered demo, what commit it was built from, which tool versions produced it, and whether that has drifted behind the checkout.",
+  badge: "How many runs on this board belong to this section.",
+  liveDot: "A run is executing in this section right now."
+};
+
+/* ----------------------------------------------------------------------------
+ * Value definitions. The owner's point: hovering the word "crawl" has to say
+ * what a crawl is, not what the kind column is for. Those definitions ship in
+ * the payload rather than living here, and are looked up by value at render
+ * time. The page never carries a definition of its own, so a kind that ships
+ * without one renders bare instead of being quietly papered over with a
+ * plausible sentence. That silence is the signal that a definition is owed.
+ * -------------------------------------------------------------------------- */
+
+function glossaryText(section, value) {
+  var g = state && state.glossary;
+  if (!g || value === null || value === undefined || value === "") return "";
+  var sec = g[section];
+  if (!sec || typeof sec !== "object") return "";
+  var key = String(value);
+  if (!Object.prototype.hasOwnProperty.call(sec, key)) return "";
+  return typeof sec[key] === "string" ? sec[key] : "";
+}
+
+/** Attributes for a rendered value, empty when the payload defines no such
+    value. The appendix is never a rewording of the definition, only a datum
+    the truncated display cannot show, such as a full commit hash. */
+function defAttr(section, value, appendix) {
+  var text = glossaryText(section, value);
+  if (!text) return "";
+  return ' data-def="1"' + tipAttr(appendix ? text + " " + appendix : text);
+}
+
+function tipAttr(text, focusable) {
+  if (!text) return "";
+  var e = esc(text);
+  return ' data-tip="' + e + '" title="' + e + '"' + (focusable ? ' tabindex="0"' : "");
+}
+
+var tipEl = null;
+var tipOwner = null;
+
+function tipNode() {
+  if (!tipEl) {
+    tipEl = document.createElement("div");
+    tipEl.id = "tip";
+    tipEl.setAttribute("role", "tooltip");
+    document.body.appendChild(tipEl);
+  }
+  return tipEl;
+}
+
+function showTip(el) {
+  var text = el.getAttribute("data-tip");
+  if (!text) return;
+  var n = tipNode();
+  n.textContent = text;
+  n.className = "on";
+  tipOwner = el;
+  /* The title attribute stays on the element as the accessible fallback, but
+     it is lifted while our own tooltip is up so the two do not stack. */
+  if (el.hasAttribute("title")) {
+    el.setAttribute("data-title", el.getAttribute("title"));
+    el.removeAttribute("title");
+  }
+  placeTip(el, n);
+}
+
+/** The tooltip is position:fixed, so it has to be re-placed whenever the page
+    moves under it. Scrolling used to dismiss it, which lost the tooltip any
+    time hovering a row scrolled that row into view. */
+function placeTip(el, n) {
+  var r = el.getBoundingClientRect();
+  n.style.left = "-9999px";
+  n.style.top = "0px";
+  var w = n.offsetWidth;
+  var h = n.offsetHeight;
+  var left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+  var top = r.bottom + 8;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 8);
+  n.style.left = Math.round(left) + "px";
+  n.style.top = Math.round(top) + "px";
+}
+
+function followTip() {
+  if (!tipOwner) return;
+  if (!document.body.contains(tipOwner)) { hideTip(); return; }
+  var r = tipOwner.getBoundingClientRect();
+  /* Once the thing being explained has scrolled away, the explanation goes
+     with it rather than hanging at the edge pointing at nothing. */
+  if (r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth) {
+    hideTip();
+    return;
+  }
+  placeTip(tipOwner, tipNode());
+}
+
+function hideTip() {
+  if (tipOwner && tipOwner.hasAttribute("data-title")) {
+    tipOwner.setAttribute("title", tipOwner.getAttribute("data-title"));
+    tipOwner.removeAttribute("data-title");
+  }
+  tipOwner = null;
+  if (tipEl) tipEl.className = "";
+}
+
+function tipTarget(event) {
+  var t = event.target;
+  return t && t.closest ? t.closest("[data-tip]") : null;
+}
+
+document.addEventListener("mouseover", function (event) {
+  var el = tipTarget(event);
+  if (el === tipOwner) return;
+  hideTip();
+  if (el) showTip(el);
+});
+document.addEventListener("mouseout", function (event) {
+  var el = tipTarget(event);
+  if (!el || el !== tipOwner) return;
+  var to = event.relatedTarget;
+  if (to && el.contains(to)) return;
+  hideTip();
+});
+document.addEventListener("focusin", function (event) {
+  var el = tipTarget(event);
+  hideTip();
+  if (el) showTip(el);
+});
+document.addEventListener("focusout", hideTip);
+window.addEventListener("scroll", followTip, true);
+window.addEventListener("resize", followTip);
+
+function statusPill(status) {
+  var s = String(status || "unknown");
+  var cls = "neutral";
+  if (s === "passed") cls = "passed";
+  else if (s === "failed" || s === "timedOut" || s === "interrupted") cls = "failed";
+  else if (s === "running") cls = "running";
+  else if (s === "stalled") cls = "stalled";
+  else if (s === "warned") cls = "warned";
+  else if (s === "skipped") cls = "skipped";
+  return '<span class="pill ' + cls + '"' + defAttr("status", s) + ">" + esc(s) + "</span>";
+}
+
+/* ----------------------------------------------------------------------------
+ * Polling. Last known data stays on screen when the server goes away, so a
+ * restarted server never blanks the board.
+ * -------------------------------------------------------------------------- */
+
+var POLL_MS = 2000;
+var state = null;
+var lastSuccessAt = null;
+var failures = 0;
+var lastError = "";
+var expanded = Object.create(null);   /* run id -> true, survives re-render */
+var renderKeys = Object.create(null); /* section -> last rendered payload key */
+/* run id -> when its record was last written, in local epoch ms. Held outside
+   the render key so a record's age can tick every second without rebuilding
+   the card, which is what keeps a text selection alive between polls. */
+var runMeta = Object.create(null);
+
+function poll() {
+  fetch("/api/state", { cache: "no-store" })
+    .then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    })
+    .then(function (data) {
+      state = data;
+      lastSuccessAt = Date.now();
+      failures = 0;
+      lastError = "";
+      render();
+      connection();
+    })
+    .catch(function (err) {
+      failures += 1;
+      lastError = err && err.message ? err.message : String(err);
+      connection();
+    });
+}
+
+function connection() {
+  var dot = document.getElementById("dot");
+  var banner = document.getElementById("banner");
+  var detail = document.getElementById("banner-detail");
+  if (failures > 0) {
+    dot.className = "dot bad";
+    dot.setAttribute("data-tip", "Cannot reach the testboard server. " + TIP.conn);
+    dot.title = "cannot reach the testboard server";
+    banner.className = "show";
+    var since = lastSuccessAt
+      ? "Showing the last data received, " + relative(new Date(lastSuccessAt).toISOString()) + "."
+      : "No data has been received yet.";
+    detail.textContent =
+      since + " " + failures + " failed " + (failures === 1 ? "attempt" : "attempts") +
+      " (" + lastError + "). Retrying every " + (POLL_MS / 1000) + " seconds.";
+  } else {
+    dot.className = "dot";
+    dot.setAttribute("data-tip", "Connected to the testboard server. " + TIP.conn);
+    dot.title = "connected to the testboard server";
+    banner.className = "";
+  }
+  tick();
+}
+
+/** Re-times everything on screen once a second without touching the DOM shape.
+    Everything that moves while a run is in flight moves from here, so the
+    board reads continuously rather than jumping on the 2 second poll. */
+function tick() {
+  var now = Date.now();
+  var i;
+
+  var rels = document.querySelectorAll("[data-rel]");
+  for (i = 0; i < rels.length; i++) {
+    rels[i].textContent = relative(rels[i].getAttribute("data-rel"), now);
+  }
+
+  var els = document.querySelectorAll("[data-elapsed]");
+  for (i = 0; i < els.length; i++) {
+    var start = parseTs(els[i].getAttribute("data-elapsed"));
+    els[i].textContent = start === null ? "n/a" : spanText((now - start) / 1000);
+  }
+
+  /* Projected remaining, counting down from the estimate made at render time. */
+  var cds = document.querySelectorAll("[data-countdown]");
+  for (i = 0; i < cds.length; i++) {
+    var left = (Number(cds[i].getAttribute("data-countdown")) - now) / 1000;
+    cds[i].textContent = left <= 1 ? "any moment now" : spanText(left);
+  }
+
+  /* Cases per minute since the run started. */
+  var rates = document.querySelectorAll("[data-rate-since]");
+  for (i = 0; i < rates.length; i++) {
+    var since = parseTs(rates[i].getAttribute("data-rate-since"));
+    var count = Number(rates[i].getAttribute("data-rate-count"));
+    rates[i].textContent =
+      since === null ? "n/a" : rateText(count, (now - since) / 60000);
+  }
+
+  /* How the case in flight compares to the mean of the ones already done. */
+  var mults = document.querySelectorAll("[data-mult-since]");
+  for (i = 0; i < mults.length; i++) {
+    var msince = parseTs(mults[i].getAttribute("data-mult-since"));
+    var base = Number(mults[i].getAttribute("data-mult-base"));
+    if (msince === null || !(base > 0)) { mults[i].textContent = ""; continue; }
+    var mult = (now - msince) / base;
+    mults[i].textContent = "x" + (mult < 10 ? mult.toFixed(1) : Math.round(mult)) + " mean";
+    mults[i].className = "ratio" + (mult >= 3 ? " way" : mult >= 2 ? " over" : "");
+  }
+
+  /* Timing suspicions appear on their own, without waiting for a poll. */
+  var hides = document.querySelectorAll("[data-hide-until]");
+  for (i = 0; i < hides.length; i++) {
+    setHidden(hides[i], now < Number(hides[i].getAttribute("data-hide-until")));
+  }
+  var hots = document.querySelectorAll("[data-hot-after]");
+  for (i = 0; i < hots.length; i++) {
+    var hot = now >= Number(hots[i].getAttribute("data-hot-after"));
+    hots[i].className = "metric" + (hot ? " hot" : "");
+  }
+
+  /* How long the run record itself has gone untouched. */
+  var quiets = document.querySelectorAll("[data-quiet]");
+  for (i = 0; i < quiets.length; i++) {
+    var meta = runMeta[quiets[i].getAttribute("data-quiet")];
+    quiets[i].textContent =
+      meta && meta.writtenAt ? spanText((now - meta.writtenAt) / 1000) : "an unknown time";
+  }
+  var qwarns = document.querySelectorAll("[data-quiet-warn]");
+  for (i = 0; i < qwarns.length; i++) {
+    var wmeta = runMeta[qwarns[i].getAttribute("data-quiet-warn")];
+    var quietFor = wmeta && wmeta.writtenAt ? (now - wmeta.writtenAt) / 1000 : 0;
+    setHidden(qwarns[i], quietFor < QUIET_AFTER_SECONDS);
+  }
+
+  var label = document.getElementById("refreshed");
+  if (lastSuccessAt === null) {
+    label.textContent = failures > 0 ? "no data yet" : "connecting";
+  } else {
+    var age = Math.round((now - lastSuccessAt) / 1000);
+    label.textContent = "last refreshed " + (age < 1 ? "0" : age) + "s ago";
+  }
+}
+
+function setHidden(el, hidden) {
+  var has = el.classList.contains("hidden");
+  if (hidden && !has) el.classList.add("hidden");
+  else if (!hidden && has) el.classList.remove("hidden");
+}
+
+/* ----------------------------------------------------------------------------
+ * Rendering. Each section rebuilds only when its slice of the payload changed,
+ * which keeps text selections and hover states alive between polls. Scroll
+ * positions and expanded rows are restored explicitly.
+ * -------------------------------------------------------------------------- */
+
+function renderIfChanged(name, payload, target, build, key) {
+  var k = key === undefined ? JSON.stringify(payload) : key;
+  if (renderKeys[name] === k) return false;
+  renderKeys[name] = k;
+  build(target);
+  return true;
+}
+
+/* ----------------------------------------------------------------------------
+ * Tabs. Three questions, three rooms. The selected tab lives in the URL hash,
+ * so a reload lands where you were and a link can point at one section.
+ * -------------------------------------------------------------------------- */
+
+var TABS = ["tests", "processing", "fleet"];
+var activeTab = "tests";
+
+function initTabs() {
+  var fromHash = (location.hash || "").replace(/^#/, "");
+  if (TABS.indexOf(fromHash) >= 0) activeTab = fromHash;
+  applyTab();
+
+  document.getElementById("tabs").addEventListener("click", function (event) {
+    var btn = event.target.closest ? event.target.closest("button.tab") : null;
+    if (btn) setTab(btn.getAttribute("data-tab"));
+  });
+  document.getElementById("tabs").addEventListener("keydown", function (event) {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    var at = TABS.indexOf(activeTab);
+    var next = TABS[(at + (event.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+    setTab(next);
+    var el = document.getElementById("tab-" + next);
+    if (el) el.focus();
+    event.preventDefault();
+  });
+  window.addEventListener("hashchange", function () {
+    var t = (location.hash || "").replace(/^#/, "");
+    if (TABS.indexOf(t) >= 0 && t !== activeTab) { activeTab = t; applyTab(); }
+  });
+}
+
+function setTab(name) {
+  if (TABS.indexOf(name) < 0 || name === activeTab) return;
+  activeTab = name;
+  if (location.hash !== "#" + name) location.hash = "#" + name;
+  applyTab();
+}
+
+function applyTab() {
+  for (var i = 0; i < TABS.length; i++) {
+    var t = TABS[i];
+    var on = t === activeTab;
+    var pane = document.getElementById("pane-" + t);
+    var btn = document.getElementById("tab-" + t);
+    if (pane) pane.className = "pane" + (on ? " on" : "");
+    if (btn) {
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+      btn.setAttribute("tabindex", on ? "0" : "-1");
+    }
+  }
+  hideTip();
+  repin();
+}
+
+/* A pane that was display:none has no scroll position to keep, so the tails in
+   it are put back at the bottom the moment it becomes visible again. */
+function repin() {
+  var nodes = document.querySelectorAll(".pane.on [data-keep]");
+  for (var i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    var pin = n.getAttribute("data-pin") || "bottom";
+    if (pin === "bottom" && n.scrollTop === 0 && n.scrollHeight > n.clientHeight) {
+      n.scrollTop = n.scrollHeight;
+    }
+  }
+}
+
+/* Which room a run belongs in. The payload says so; the fallback exists because
+   records written before the field existed are still on disk and must not
+   silently vanish from the board. The table mirrors RUN_CATEGORIES in
+   scripts/testboard.py, so keep the two in step. If they ever disagree the
+   record wins, because the server sets the field before the board sees it. */
+var PROCESSING_KINDS = [
+  "fetch", "analyze", "enhance", "validate", "diff",
+  "bundle", "deploy", "refresh", "report"
+];
+var TEST_KINDS = ["crawl", "lint", "gui"];
+
+function runCategory(run) {
+  var c = run.category;
+  if (c === "test" || c === "processing" || c === "other") return c;
+  var kind = String(run.kind || "").toLowerCase();
+  if (TEST_KINDS.indexOf(kind) >= 0) return "test";
+  if (PROCESSING_KINDS.indexOf(kind) >= 0) return "processing";
+  return "other";
+}
+
+var glossaryStamp = null;
+
+function render() {
+  if (!state) return;
+  if (tipOwner && !document.body.contains(tipOwner)) hideTip();
+  /* Definitions are baked into the rendered markup, so a glossary that changes
+     under us has to invalidate every section at once. */
+  var stamp = JSON.stringify(state.glossary || null);
+  if (stamp !== glossaryStamp) {
+    glossaryStamp = stamp;
+    renderKeys = Object.create(null);
+  }
+  renderHeader();
+
+  var runs = state.runs || [];
+  var tests = [];
+  var processing = [];
+  var uncategorised = 0;
+  for (var i = 0; i < runs.length; i++) {
+    var cat = runCategory(runs[i]);
+    if (cat === "test") {
+      tests.push(runs[i]);
+    } else {
+      /* An uncategorised run is listed rather than dropped. A run that falls
+         off the board entirely is the one failure this board cannot afford. */
+      processing.push(runs[i]);
+      if (cat !== "processing") uncategorised += 1;
+    }
+  }
+
+  renderTabBar(tests, processing, state.fleet || []);
+  renderLiveSection("tests", tests);
+  renderLiveSection("processing", processing);
+  renderRecentSection("tests", tests, 0);
+  renderRecentSection("processing", processing, uncategorised);
+  renderIssues();
+  renderFleet();
+  renderFooter();
+  tick();
+}
+
+function renderTabBar(tests, processing, fleet) {
+  var groups = [
+    { name: "tests", runs: tests, category: "test" },
+    { name: "processing", runs: processing, category: "processing" }
+  ];
+  for (var i = 0; i < groups.length; i++) {
+    var g = groups[i];
+    var live = g.runs.filter(isLive).length;
+    var btn = document.getElementById("tab-" + g.name);
+    var badge = document.getElementById("badge-" + g.name);
+    var dot = document.getElementById("livedot-" + g.name);
+    badge.textContent = String(g.runs.length);
+    badge.setAttribute("data-tip", TIP.badge);
+    badge.setAttribute("title", TIP.badge);
+    setHidden(dot, live === 0);
+    dot.setAttribute("data-tip", TIP.liveDot);
+    dot.setAttribute("title", TIP.liveDot);
+    btn.className = "tab" + (live ? " haslive" : "");
+    /* The tab label is the category, so it carries the category's definition
+       verbatim rather than anything this page thinks a category is. */
+    setDefinition(btn, glossaryText("category", g.category));
+  }
+  var fb = document.getElementById("badge-fleet");
+  fb.textContent = String(fleet.length);
+  fb.setAttribute("data-tip", "How many demos are registered.");
+  fb.setAttribute("title", "How many demos are registered.");
+  var ft = document.getElementById("tab-fleet");
+  ft.setAttribute("data-tip", TIP.tabFleet);
+  ft.setAttribute("title", TIP.tabFleet);
+}
+
+/** Puts a definition on an element that is updated rather than rebuilt, and
+    strips any stale one when the payload has nothing to say about the value. */
+function setDefinition(el, text) {
+  if (text) {
+    el.setAttribute("data-def", "1");
+    el.setAttribute("data-tip", text);
+    el.setAttribute("title", text);
+  } else {
+    el.removeAttribute("data-def");
+    el.removeAttribute("data-tip");
+    el.removeAttribute("title");
+  }
+}
+
+function isLive(run) { return !!run.live; }
+
+function renderHeader() {
+  var v = state.versions || {};
+  renderIfChanged("header", v, document.getElementById("versions"), function (el) {
+    var parts = [];
+    parts.push('analyzer <span class="val"' + tipAttr(TIP.hdAnalyzer) + ">" +
+      esc(v.analyzer_version || "unknown") + "</span>");
+    parts.push('viewer <span class="val"' + tipAttr(TIP.hdViewer) + ">" +
+      esc(v.viewer_version || "unknown") + "</span>");
+    parts.push(
+      '<span class="val mono"' + tipAttr(TIP.hdGit + " Full commit: " + (v.git_sha || "unknown") + ".") + ">" +
+      esc(v.git_branch || "detached") + "@" + esc(v.git_short || "unknown") + "</span>"
+    );
+    var html = parts.join('<span class="sep">·</span>');
+    if (v.git_dirty) {
+      html += ' <span class="pill stalled"' + tipAttr(TIP.hdDirty) + ">dirty</span>";
+    }
+    el.innerHTML = html;
+  });
+  var refreshed = document.getElementById("refreshed");
+  if (!refreshed.hasAttribute("data-tip")) {
+    refreshed.setAttribute("data-tip", TIP.refreshed);
+    refreshed.setAttribute("title", TIP.refreshed);
+  }
+}
+
+/* --- Live runs ------------------------------------------------------------
+ *
+ * The live card is the instrument. Everything on it comes from the two files a
+ * harness already writes, run.json and events.jsonl. Nothing here asks a
+ * harness for anything new: the timings, the projection, the throughput and the
+ * stall suspicion are all arithmetic over what is already on disk.
+ * -------------------------------------------------------------------------- */
+
+/* How long a running record may go untouched before the board says so out loud.
+   The server declares a run stalled at 180 seconds; this is the earlier, softer
+   note that something has gone quiet. */
+var QUIET_AFTER_SECONDS = 45;
+
+/* A case must be at least this far in before slowness is worth mentioning.
+   Without a floor, a suite whose mean case is 300ms raises a suspicion every
+   time one case takes a second, which teaches people to ignore the board. */
+var STUCK_FLOOR_MS = 15000;
+
+var LIVE_COPY = {
+  tests: '<div class="empty">No test run is executing right now. Start a crawl or a lint run from ' +
+    "any terminal, session, or workflow and it will appear here within a couple of seconds, with " +
+    "its cases, timings, and coverage filling in as it goes.</div>",
+  processing: '<div class="empty">No processing run is executing right now. These are the runs that ' +
+    "produce the product rather than check it: fetching a subject, analyzing it, enriching it, " +
+    "bundling the viewer, deploying, refreshing a demo. When one of those harnesses writes a run " +
+    "record, it appears here with the same per-case timing, coverage, and stall detection a test " +
+    "run gets.</div>"
+};
+
+function renderLiveSection(name, categoryRuns) {
+  var runs = categoryRuns.filter(isLive);
+  var body = document.getElementById("live-body-" + name);
+  document.getElementById("live-count-" + name).textContent =
+    runs.length ? runs.length + (runs.length === 1 ? " run in flight" : " runs in flight") : "";
+
+  /* The age of the record is held outside the render key, because it changes on
+     every single poll and would otherwise rebuild the card twice a second. */
+  for (var i = 0; i < runs.length; i++) {
+    var ss = runs[i].seconds_since_update;
+    runMeta[runs[i].id || ""] = {
+      writtenAt: typeof ss === "number"
+        ? (lastSuccessAt || Date.now()) - ss * 1000
+        : null
+    };
+  }
+  var key = JSON.stringify(runs, function (k, v) {
+    return k === "seconds_since_update" ? undefined : v;
+  });
+
+  var scrolls = captureScroll();
+  var rebuilt = renderIfChanged("live-" + name, runs, body, function (el) {
+    el.innerHTML = runs.length ? runs.map(liveCard).join("") : LIVE_COPY[name];
+  }, key);
+  if (rebuilt) restoreScroll(scrolls);
+}
+
+function captureScroll() {
+  var out = Object.create(null);
+  var nodes = document.querySelectorAll("[data-keep]");
+  for (var i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    out[n.getAttribute("data-keep")] = {
+      top: n.scrollTop,
+      atTop: n.scrollTop < 24,
+      pinned: n.scrollHeight - n.scrollTop - n.clientHeight < 24
+    };
+  }
+  return out;
+}
+
+function restoreScroll(saved) {
+  var nodes = document.querySelectorAll("[data-keep]");
+  for (var i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    var pin = n.getAttribute("data-pin") || "bottom";
+    var prev = saved[n.getAttribute("data-keep")];
+    if (!prev) { n.scrollTop = pin === "bottom" ? n.scrollHeight : 0; continue; }
+    if (pin === "bottom") n.scrollTop = prev.pinned ? n.scrollHeight : prev.top;
+    else n.scrollTop = prev.atTop ? 0 : prev.top;
+  }
+}
+
+/* --- Derivations ---------------------------------------------------------- */
+
+/** When the case in flight began, from the event log. Null when the harness
+    writes no case_start line, or when the last thing that happened was a case
+    ending, which means the run is between cases. */
+function currentCaseStart(run) {
+  var events = run.events || [];
+  var startTs = null;
+  for (var i = 0; i < events.length; i++) {
+    var ev = events[i];
+    if (ev.type === "case_start") startTs = parseTs(ev.ts);
+    else if (ev.type === "case_end" || ev.type === "run_end") startTs = null;
+  }
+  return startTs;
+}
+
+/** Every completed case with a duration attached. The harness reports one where
+    it can; where it does not, the board measures the gap between that case's
+    case_start and case_end lines, which is the same number by a different road
+    and is marked as derived wherever it is shown. */
+function caseSamples(run) {
+  var events = run.events || [];
+  var open = Object.create(null);
+  var derived = Object.create(null);
+  for (var i = 0; i < events.length; i++) {
+    var ev = events[i];
+    var t = parseTs(ev.ts);
+    if (t === null || !ev.title) continue;
+    if (ev.type === "case_start") {
+      open[ev.title] = t;
+    } else if (ev.type === "case_end" && open[ev.title] !== undefined) {
+      derived[ev.title] = t - open[ev.title];
+      delete open[ev.title];
+    }
+  }
+  var cases = run.cases || [];
+  var out = [];
+  for (var j = 0; j < cases.length; j++) {
+    var c = cases[j];
+    var reported = typeof c.duration_ms === "number" && isFinite(c.duration_ms) && c.duration_ms > 0;
+    var ms = reported ? c.duration_ms
+      : (c.title && derived[c.title] !== undefined ? derived[c.title] : null);
+    out.push({
+      index: j + 1,
+      title: c.title,
+      status: c.status,
+      message: c.message,
+      coverage: c.coverage,
+      instances: c.instances,
+      distinct: c.distinct,
+      findings: c.findings,
+      ms: ms,
+      derived: !reported && ms !== null
+    });
+  }
+  return out;
+}
+
+function liveStats(run, now) {
+  var samples = caseSamples(run);
+  var sum = 0;
+  var count = 0;
+  var max = 0;
+  var maxTitle = null;
+  for (var i = 0; i < samples.length; i++) {
+    var s = samples[i];
+    /* Skipped cases take no real time. Averaging them in would make the mean
+       optimistic and the stall threshold hair triggered. */
+    if (s.ms === null || s.ms <= 0 || s.status === "skipped") continue;
+    sum += s.ms;
+    count += 1;
+    if (s.ms > max) { max = s.ms; maxTitle = s.title; }
+  }
+  var mean = count ? sum / count : null;
+  var total = run.total || 0;
+  var completed = run.completed || 0;
+  var remaining = Math.max(0, total - completed);
+  var caseStartTs = currentCaseStart(run);
+  var enough = count >= 2 && mean > 0;
+
+  var projectedMs = null;
+  var etaTs = null;
+  if (enough) {
+    var spent = caseStartTs === null ? 0 : Math.max(0, now - caseStartTs);
+    projectedMs = Math.max(0, remaining * mean - spent);
+    etaTs = now + projectedMs;
+  }
+
+  return {
+    samples: samples,
+    measured: count,
+    mean: mean,
+    max: max || null,
+    maxTitle: maxTitle,
+    total: total,
+    completed: completed,
+    remaining: remaining,
+    caseStartTs: caseStartTs,
+    enough: enough,
+    projectedMs: projectedMs,
+    etaTs: etaTs,
+    stuckAt: enough && caseStartTs !== null
+      ? caseStartTs + Math.max(3 * mean, STUCK_FLOOR_MS)
+      : null
+  };
+}
+
+/* --- The card ------------------------------------------------------------- */
+
+function liveCard(run) {
+  var now = Date.now();
+  var s = liveStats(run, now);
+  var id = run.id || "";
+  var percent = typeof run.percent === "number" ? run.percent : 0;
+  var h = [];
+
+  h.push('<div class="live">');
+  h.push(liveHead(run, id));
+  h.push(liveProgress(run, s, percent));
+  h.push(liveNow(run, s, id));
+  h.push(liveMetrics(run, s));
+  h.push(liveContext(run));
+
+  h.push('<div class="live-grid">');
+  h.push(casePanel(run, s, id));
+  h.push(coveragePanel(run, id));
+  h.push("</div>");
+
+  h.push(eventPanel(run, id));
+  h.push("</div>");
+  return h.join("");
+}
+
+function liveHead(run, id) {
+  var h = [];
+  h.push('<div class="live-head">');
+  h.push('<span class="live-subject"' + tipAttr(TIP.subject) + ">" +
+    esc(run.subject || "unknown subject") + "</span>");
+  h.push('<span class="pill plain"' + defAttr("kind", run.kind) + ">" + esc(run.kind || "run") + "</span>");
+  h.push(statusPill("running"));
+  h.push('<span class="live-meta">');
+  h.push('<span' + tipAttr(TIP.elapsed) + '>elapsed <span class="val mono" data-elapsed="' +
+    esc(run.started_at || "") + '">' + esc(spanText(0)) + "</span></span>");
+  h.push('<span class="sep"> · </span><span' + tipAttr(TIP.started) + ">started " +
+    relSpan(run.started_at) + "</span>");
+  h.push('<span class="sep"> · </span><span' + defAttr("field", "seconds_since_update") +
+    '>record written <span class="val mono" data-quiet="' + esc(id) + '">just now</span> ago</span>');
+  h.push("</span></div>");
+  return h.join("");
+}
+
+function liveProgress(run, s, percent) {
+  var h = [];
+  h.push('<div class="bar"' + tipAttr(TIP.progress) + '><i style="width:' +
+    Math.max(0, Math.min(100, percent)) + '%"></i></div>');
+  h.push('<div class="barline">');
+  h.push('<span' + tipAttr(TIP.progress) + '><span class="num">' + percent + "%</span></span>");
+  h.push('<span' + tipAttr(TIP.cases) + '><span class="num">' + num(s.completed) + " / " +
+    num(s.total) + "</span> cases</span>");
+  h.push('<span' + tipAttr(TIP.left) + '><span class="num">' + num(s.remaining) + "</span> left</span>");
+  h.push('<span class="tally-pass"' + tipAttr(TIP.tallyPass) + ">" + num(run.passed || 0) + " passed</span>");
+  h.push('<span class="tally-fail"' + tipAttr(TIP.tallyFail) + ">" + num(run.failed || 0) + " failed</span>");
+  if (warnCount(run)) {
+    h.push('<span class="tally-warn"' + tipAttr(TIP.tallyWarn) + ">" + warnCount(run) + " warned</span>");
+  }
+  if (run.skipped) {
+    h.push('<span class="tally-skip"' + tipAttr(TIP.tallySkip) + ">" + num(run.skipped) + " skipped</span>");
+  }
+  var ft = findingTotals(run);
+  if (ft && ft.instances) {
+    h.push('<span' + tipAttr(TIP.instances) + '><span class="num">' + num(ft.instances) +
+      "</span> instances</span>");
+    h.push('<span' + tipAttr(TIP.distinct) + '><span class="num">' + num(ft.distinct) +
+      "</span> distinct</span>");
+    h.push(shapeTag(ft.instances, ft.distinct));
+  }
+  h.push("</div>");
+  return h.join("");
+}
+
+function liveNow(run, s, id) {
+  var h = [];
+  h.push('<div class="now"><span class="label"' + tipAttr(TIP.current) + ">running now</span>");
+  h.push('<div class="headline">');
+  if (run.current) {
+    h.push('<span class="what">' + esc(run.current) + "</span>");
+    if (s.caseStartTs !== null) {
+      var iso = new Date(s.caseStartTs).toISOString();
+      h.push('<span class="oncase"' + tipAttr(TIP.oncase) + '>on this case <b data-elapsed="' +
+        esc(iso) + '">' + esc(spanText(0)) + "</b></span>");
+      if (s.mean) {
+        h.push('<span class="ratio"' + tipAttr(TIP.oncaseMult) + ' data-mult-since="' + esc(iso) +
+          '" data-mult-base="' + Math.round(s.mean) + '"></span>');
+      }
+      if (s.stuckAt !== null) {
+        h.push('<span class="pill stalled hidden" data-hide-until="' + s.stuckAt + '"' +
+          tipAttr(TIP.stuck) + ">possibly stuck</span>");
+      }
+    } else {
+      h.push('<span class="oncase note"' + tipAttr(TIP.noCaseStart) +
+        ">per-case elapsed unavailable, this harness writes no case_start line</span>");
+    }
+  } else {
+    h.push('<span class="what idle">between cases, nothing executing at this instant</span>');
+  }
+  h.push("</div>");
+
+  if (s.stuckAt !== null) {
+    h.push('<div class="stall-hint hidden" data-hide-until="' + s.stuckAt + '">' +
+      "<b>Possibly stuck.</b> This case has been running for <span data-elapsed=\"" +
+      esc(new Date(s.caseStartTs).toISOString()) + '">' + esc(spanText(0)) + "</span>, well past " +
+      "three times the " + esc(duration(s.mean)) + " mean of the " + s.measured +
+      " cases measured so far. That is a suspicion drawn from timing, nothing more. The board " +
+      "cannot see the process, only the timestamps it left behind, and a genuinely heavy case " +
+      "looks exactly like this.</div>");
+  }
+
+  h.push('<div class="stall-hint hidden" data-quiet-warn="' + esc(id) + '">' +
+    "<b>Gone quiet.</b> The run record has not been rewritten for <span data-quiet=\"" + esc(id) +
+    '">a while</span>. The harness rewrites it at every case boundary, so either the case in ' +
+    "flight is still working or the process stopped. The board waits 3 minutes of silence before " +
+    "it calls a run stalled.</div>");
+
+  h.push("</div>");
+  return h.join("");
+}
+
+function liveMetrics(run, s) {
+  var h = [];
+  h.push('<div class="metrics">');
+
+  /* The single most important "is it stuck" number, which is why it leads. */
+  if (s.caseStartTs !== null) {
+    var iso = new Date(s.caseStartTs).toISOString();
+    h.push('<div class="metric"' + (s.stuckAt !== null ? ' data-hot-after="' + s.stuckAt + '"' : "") + ">" +
+      '<div class="k"' + tipAttr(TIP.oncase, true) + '>on this case</div>' +
+      '<div class="v" data-elapsed="' + esc(iso) + '">' + esc(spanText(0)) + "</div>" +
+      '<div class="s"><span data-mult-since="' + esc(iso) + '" data-mult-base="' +
+      (s.mean ? Math.round(s.mean) : 0) + '"></span></div></div>');
+  } else {
+    h.push(metricSoft("on this case", run.current
+      ? "no case_start line from this harness"
+      : "nothing executing at this instant", TIP.noCaseStart));
+  }
+
+  if (s.measured) {
+    h.push(metric("mean case", duration(s.mean),
+      s.measured + (s.measured === 1 ? " case measured" : " cases measured"), TIP.mean));
+    h.push(metric("slowest case", duration(s.max), s.maxTitle || "",
+      TIP.slowest + (s.maxTitle ? " Slowest so far: " + s.maxTitle + "." : "")));
+  } else {
+    h.push(metricSoft("mean case", "no case durations reported yet", TIP.mean));
+    h.push(metricSoft("slowest case", "no case durations reported yet", TIP.slowest));
+  }
+
+  h.push('<div class="metric"><div class="k"' + tipAttr(TIP.rate, true) + ">throughput</div>" +
+    '<div class="v" data-rate-since="' + esc(run.started_at || "") + '" data-rate-count="' +
+    s.completed + '">n/a</div><div class="s">cases per minute, wall clock</div></div>');
+
+  if (s.enough) {
+    h.push('<div class="metric"><div class="k"' + tipAttr(TIP.remaining, true) + ">est. remaining</div>" +
+      '<div class="v" data-countdown="' + Math.round(s.etaTs) + '">' +
+      esc(spanText(s.projectedMs / 1000)) + "</div>" +
+      '<div class="s">estimate, mean x ' + num(s.remaining) + " left</div></div>");
+    h.push(metric("est. finish", clockText(s.etaTs), "estimate, local clock", TIP.eta));
+  } else {
+    h.push(metricSoft("est. remaining", "not enough data yet, " + s.measured +
+      (s.measured === 1 ? " case measured" : " cases measured") + " of the 2 needed", TIP.notEnough));
+    h.push(metricSoft("est. finish", "not enough data yet", TIP.notEnough));
+  }
+
+  h.push("</div>");
+  return h.join("");
+}
+
+function metric(label, value, sub, tip) {
+  return '<div class="metric"><div class="k"' + tipAttr(tip, true) + ">" + esc(label) + "</div>" +
+    '<div class="v">' + esc(value) + "</div>" +
+    (sub ? '<div class="s" title="' + esc(sub) + '">' + esc(sub) + "</div>" : "") + "</div>";
+}
+
+function metricSoft(label, value, tip) {
+  return '<div class="metric soft"><div class="k"' + tipAttr(tip, true) + ">" + esc(label) + "</div>" +
+    '<div class="v">' + esc(value) + "</div></div>";
+}
+
+function liveContext(run) {
+  var ds = (run.versions || {}).dataset || {};
+  var h = [];
+  h.push('<div class="ctx">');
+  h.push("<span" + tipAttr(TIP.subject) + ">subject <span class=\"val\">" +
+    esc(ds.name || run.subject || "unknown") + "</span></span>");
+  if (ds.components) {
+    h.push("<span" + defAttr("fleet", "components") + ">components <span class=\"val\">" +
+      num(ds.components) + "</span></span>");
+  }
+  if (ds.subject_sha) {
+    h.push("<span" + defAttr("fleet", "subject_sha", "Full value: " + ds.subject_sha + ".") +
+      ">subject sha <span class=\"val mono\">" + esc(String(ds.subject_sha).slice(0, 9)) +
+      "</span></span>");
+  }
+  if (ds.analyzer_version) {
+    h.push("<span" + tipAttr(TIP.dsAnalyzer) + ">dataset analyzer <span class=\"val\">" +
+      esc(ds.analyzer_version) + "</span></span>");
+  }
+  if (ds.generated_at) {
+    h.push("<span" + tipAttr(TIP.dsGenerated) + ">dataset generated <span class=\"val\">" +
+      relSpan(ds.generated_at) + "</span></span>");
+  }
+  if (run.budget) {
+    h.push("<span" + defAttr("field", "budget") + ">budget <span class=\"val\">" + esc(run.budget) + "</span></span>");
+  }
+  if (run.base_url) {
+    h.push("<span" + defAttr("field", "base_url") + ">base url <span class=\"val mono\">" +
+      esc(run.base_url) + "</span></span>");
+  }
+  if (run.data_dir) {
+    h.push("<span" + defAttr("field", "data_dir") + ">data <span class=\"val mono path\">" +
+      esc(run.data_dir) + "</span></span>");
+  }
+  h.push("</div>");
+  return h.join("");
+}
+
+/* Every finished case, newest first, so a failure is readable the instant it
+   happens rather than after the run ends. Long runs are trimmed, but never at
+   the expense of a failure: those are always kept. */
+var CASE_WINDOW = 40;
+
+function casePanel(run, s, id) {
+  var rows = s.samples.slice();
+  var badOnes = [];
+  var keep = Object.create(null);
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    if (isBadCase(rows[i]) || isWarnCase(rows[i])) { badOnes.push(rows[i]); keep[rows[i].index] = true; }
+  }
+  for (i = Math.max(0, rows.length - CASE_WINDOW); i < rows.length; i++) keep[rows[i].index] = true;
+  var shown = rows.filter(function (r) { return keep[r.index]; }).reverse();
+  var hiddenCount = rows.length - shown.length;
+
+  var h = [];
+  h.push('<div class="panel"><div class="ph"' + tipAttr(TIP.caselist) + ">cases" +
+    '<span class="n">' + num(s.completed) + " of " + num(s.total) + "</span>" +
+    (run.failed ? '<span class="n bad">' + num(run.failed) + " failing</span>" : "") + "</div>");
+  h.push('<div class="pb clist scrollbox" data-keep="' + esc(id) + '|cases" data-pin="top">');
+
+  if (run.current && s.caseStartTs !== null) {
+    h.push(runningRow(run, s));
+  }
+  if (!shown.length && !run.current) {
+    h.push('<div class="none">No case has finished yet. The first row appears the moment one does.</div>');
+  }
+  for (i = 0; i < shown.length; i++) h.push(caseRow(shown[i], s));
+  if (hiddenCount > 0) {
+    h.push('<div class="clist-note">' + num(hiddenCount) + " earlier " +
+      (hiddenCount === 1 ? "case is" : "cases are") + " not listed, so the panel stays readable. " +
+      "Every failure and every warning is kept regardless of age.</div>");
+  }
+  h.push("</div></div>");
+  return h.join("");
+}
+
+function runningRow(run, s) {
+  var iso = new Date(s.caseStartTs).toISOString();
+  var h = [];
+  h.push('<div class="crow now">');
+  h.push('<div class="ix">' + num(s.completed + 1) + "</div>");
+  h.push("<div>" + statusPill("running") + "</div>");
+  h.push('<div class="ti">' + esc(run.current) + "</div>");
+  h.push('<div class="dur" data-elapsed="' + esc(iso) + '"' + tipAttr(TIP.oncase) + ">" +
+    esc(spanText(0)) + "</div>");
+  h.push('<div class="cmp"><span class="ratio" data-mult-since="' + esc(iso) + '" data-mult-base="' +
+    (s.mean ? Math.round(s.mean) : 0) + '"' + tipAttr(TIP.oncaseMult) + "></span></div>");
+  h.push("</div>");
+  return h.join("");
+}
+
+function caseRow(c, s) {
+  var bad = isBadCase(c);
+  var warn = isWarnCase(c);
+  var h = [];
+  h.push('<div class="crow' + (bad ? " bad" : warn ? " warn" : "") + '">');
+  h.push('<div class="ix">' + num(c.index) + "</div>");
+  h.push("<div>" + statusPill(c.status) + "</div>");
+
+  h.push('<div class="ti">' + esc(c.title || "untitled case") + caseInstanceBadge(c));
+  /* A failure's message is shown immediately. Waiting for the run to end, or
+     making someone expand a row, is exactly the delay this panel removes. */
+  if ((bad || warn) && c.message) h.push('<div class="msg">' + esc(c.message) + "</div>");
+  h.push(findingBlock(c.findings));
+  if (c.coverage && c.coverage.length) {
+    h.push('<div class="cov"' + defAttr("field", "coverage") + ">" +
+      c.coverage.map(function (line) { return "<span>" + esc(line) + "</span>"; }).join("") + "</div>");
+  }
+  h.push("</div>");
+
+  h.push('<div class="dur"' + tipAttr(c.ms === null ? TIP.durNone : c.derived ? TIP.durDerived : TIP.durReported) +
+    ">" + (c.ms === null ? "n/a" : esc(duration(c.ms))) + (c.derived ? "*" : "") + "</div>");
+
+  h.push('<div class="cmp">');
+  if (c.ms !== null && s.max) {
+    var width = Math.max(2, Math.round(100 * c.ms / s.max));
+    var ratio = s.mean ? c.ms / s.mean : null;
+    var band = ratio === null ? "" : ratio >= 3 ? " way" : ratio >= 2 ? " over" : "";
+    var ratioTip = ratio === null
+      ? "No mean to compare against yet."
+      : "This case took " + (ratio < 10 ? ratio.toFixed(1) : Math.round(ratio)) +
+        " times the " + duration(s.mean) + " mean of the " + s.measured +
+        " measured cases. Derived by the board. The bar is scaled against the slowest case so far, " +
+        "and the tick marks where the mean falls.";
+    h.push('<span' + tipAttr(ratioTip) + ">");
+    h.push('<span class="dbar' + band + '"><i style="width:' + width + '%"></i></span>');
+    if (s.mean && s.max) {
+      h.push('<span class="dmark" style="left:' +
+        Math.max(0, Math.min(100, Math.round(100 * s.mean / s.max))) + '%"></span>');
+    }
+    if (ratio !== null) {
+      h.push('<span class="ratio' + band + '">x' +
+        (ratio < 10 ? ratio.toFixed(1) : Math.round(ratio)) + " mean</span>");
+    }
+    h.push("</span>");
+  }
+  h.push("</div>");
+
+  h.push("</div>");
+  return h.join("");
+}
+
+/* The coverage panel is what the suite claims it actually reached. It is the
+   substance behind a green tick, so it gets a panel rather than a footnote. */
+function coveragePanel(run, id) {
+  var coverage = run.coverage || [];
+  var h = [];
+  h.push('<div class="panel"><div class="ph"' + defAttr("field", "coverage") + ">coverage reported" +
+    '<span class="n">' + num(coverage.length) +
+    (coverage.length === 1 ? " line" : " lines") + "</span></div>");
+  h.push('<div class="pb covlist scrollbox" data-keep="' + esc(id) + '|cov" data-pin="bottom">');
+  if (!coverage.length) {
+    h.push('<div class="none">No coverage annotation yet. The suite attaches these to its cases as ' +
+      "they finish, so lines appear here while the run works.</div>");
+  } else {
+    h.push(coverage.map(coverageLine).join(""));
+  }
+  h.push("</div></div>");
+  return h.join("");
+}
+
+function eventPanel(run, id) {
+  var startTs = parseTs(run.started_at);
+  var events = (run.events || []).slice(-14);
+  var h = [];
+  h.push('<div class="panel" style="margin-top:10px"><div class="ph"' + tipAttr(TIP.events) +
+    ">event tail" + '<span class="n">offsets from the start of the run</span></div>');
+  h.push('<div class="events scrollbox" data-keep="' + esc(id) + '|events" data-pin="bottom">');
+  if (!events.length) {
+    h.push('<div class="none">No events have been written for this run yet.</div>');
+  } else {
+    h.push(events.map(function (ev) { return eventLine(ev, startTs); }).join(""));
+  }
+  h.push("</div></div>");
+  return h.join("");
+}
+
+function eventLine(ev, startTs) {
+  var type = String(ev.type || "event");
+  var cls = "ev e-" + type.replace(/[^a-z_]/gi, "");
+  if (type === "case_end") cls = "ev e-" + (ev.status ? String(ev.status).replace(/[^a-z]/gi, "") : "failed");
+  var t = parseTs(ev.ts);
+  var stamp = t === null ? "--:--" : (startTs === null ? clockText(t) : offsetText(t - startTs));
+  var full = t === null ? "no timestamp on this event" : "at " + clockText(t) + " local time";
+  return '<div class="' + cls + '"><span class="ts" title="' + esc(full) + '">' + esc(stamp) + "</span>" +
+    '<span class="ty">' + esc(type) + "</span>" +
+    '<span class="tx">' + esc(eventDetail(ev)) + "</span></div>";
+}
+
+function eventDetail(ev) {
+  switch (ev.type) {
+    case "run_start":
+      return (ev.subject ? ev.subject + ", " : "") + (ev.total || 0) + " cases queued";
+    case "case_start":
+      return ev.title || "";
+    case "case_end":
+      return (ev.status || "?") + "  " + (ev.title || "") +
+        (ev.duration_ms ? "  (" + duration(ev.duration_ms) + ")" : "") +
+        (ev.message ? "  " + ev.message : "");
+    case "run_end":
+      return (ev.status || "?") + ", " + (ev.passed || 0) + " passed, " + (ev.failed || 0) + " failed";
+    default:
+      var rest = {};
+      for (var k in ev) {
+        if (Object.prototype.hasOwnProperty.call(ev, k) && k !== "ts" && k !== "type") rest[k] = ev[k];
+      }
+      return JSON.stringify(rest);
+  }
+}
+
+/* --- Recent runs ---------------------------------------------------------- */
+
+var RECENT_COPY = {
+  tests: '<div class="empty">No finished test run is on record. Records appear here as soon as a ' +
+    "harness writes one, so a run launched from any terminal, session, or workflow shows up whether " +
+    "or not anyone was watching it.</div>",
+  processing: '<div class="empty">No processing run is on record yet. These are the runs that build ' +
+    "the product rather than check it: fetching a subject repository, analyzing it, enriching it, " +
+    "bundling the viewer, deploying it, refreshing a demo. As soon as one of those harnesses writes " +
+    "a run record into the runs directory shown at the foot of this page, its history appears here, " +
+    "with the same expandable detail, coverage, and stall detection the test runs get.</div>"
+};
+
+function renderRecentSection(name, categoryRuns, uncategorised) {
+  var runs = categoryRuns.filter(function (r) { return !r.live; });
+  var body = document.getElementById("recent-body-" + name);
+  document.getElementById("recent-count-" + name).textContent =
+    runs.length ? runs.length + " on record" : "";
+
+  renderIfChanged("recent-" + name, { runs: runs, open: expanded, un: uncategorised }, body,
+    function (el) {
+      if (!runs.length) {
+        el.innerHTML = RECENT_COPY[name];
+        return;
+      }
+      var note = uncategorised
+        ? '<div class="clist-note"' + defAttr("category", "other") + ">" + uncategorised + " of these " +
+          (uncategorised === 1 ? "runs carries" : "runs carry") + " no category in its record, so it " +
+          "is listed here rather than dropped from the board. Its kind column says what it was.</div>"
+        : "";
+      var rows = runs.map(recentRow).join("");
+      el.innerHTML =
+        "<table><thead><tr>" +
+        '<th class="caret"></th>' +
+        "<th" + tipAttr("The run's own verdict, or the board's reading of a record that stopped being updated. Hover any status pill for what that particular word means.", true) + ">status</th>" +
+        "<th" + tipAttr(TIP.kind, true) + ">kind</th>" +
+        "<th" + tipAttr(TIP.subject, true) + ">subject</th>" +
+        "<th" + tipAttr(TIP.when, true) + ">when</th>" +
+        "<th" + tipAttr(TIP.duration, true) + ">duration</th>" +
+        "<th" + tipAttr("Cases that passed and cases that failed, counted by the harness. Warnings and skips are added after them when there are any, because they are outcomes rather than failures.", true) + ">passed / failed</th>" +
+        "<th" + tipAttr(TIP.foundCol, true) + ">found</th>" +
+        "</tr></thead><tbody>" + rows + "</tbody></table>" + note;
+    });
+}
+
+function recentRow(run) {
+  var id = run.id || "";
+  var open = !!expanded[id];
+  var stalled = run.status === "stalled";
+  var h = [];
+  h.push('<tr class="run-row' + (open ? " is-open" : "") + (stalled ? " is-stalled" : "") +
+    '" data-id="' + esc(id) + '">');
+  h.push('<td class="caret"' + tipAttr("Click the row to open the full record: every case, every " +
+    "message, the coverage the suite reported, and which versions produced it.") + ">" +
+    (open ? "&#9662;" : "&#9656;") + "</td>");
+  h.push("<td>" + statusPill(run.status) + "</td>");
+  h.push('<td class="c-kind"><span' + defAttr("kind", run.kind) + ">" +
+    esc(run.kind || "run") + "</span></td>");
+  h.push('<td class="c-subject"' + tipAttr(TIP.subject) + ">" +
+    esc(run.subject || "unknown subject") + "</td>");
+  h.push('<td class="c-when"' + tipAttr(TIP.when) + ">" + relSpan(run.started_at) + "</td>");
+  if (run.status === "stalled") {
+    var silent = run.seconds_since_update;
+    h.push('<td class="c-dur stall-age"' + defAttr("field", "seconds_since_update") + ">silent " +
+      (silent === null || silent === undefined ? "for an unknown time" : esc(spanText(silent))) +
+      "</td>");
+  } else {
+    h.push('<td class="c-dur"' + tipAttr(TIP.duration) + ">" + esc(runDuration(run)) + "</td>");
+  }
+  h.push('<td class="c-tally"><span class="tally-pass"' + tipAttr(TIP.tallyPass) + ">" +
+    num(run.passed || 0) + "</span>" +
+    ' <span style="color:var(--faint)">/</span> <span class="tally-fail"' + tipAttr(TIP.tallyFail) + ">" +
+    num(run.failed || 0) + "</span>" +
+    (warnCount(run) ? ' <span class="tally-warn"' + tipAttr(TIP.tallyWarn) + ">+" + warnCount(run) + " warned</span>" : "") +
+    (run.skipped ? ' <span class="tally-skip"' + tipAttr(TIP.tallySkip) + ">+" + num(run.skipped) + " skipped</span>" : "") +
+    "</td>");
+  h.push(foundCell(run));
+  h.push("</tr>");
+  if (open) {
+    h.push('<tr class="detail-row' + (stalled ? " is-stalled" : "") + '"><td colspan="8">' +
+      runDetail(run) + "</td></tr>");
+  }
+  return h.join("");
+}
+
+function runDuration(run) {
+  if (run.duration_ms) return duration(run.duration_ms);
+  var start = parseTs(run.started_at);
+  var end = parseTs(run.ended_at);
+  if (start !== null && end !== null) return duration(end - start);
+  return "n/a";
+}
+
+function runDetail(run) {
+  var h = [];
+  var v = run.versions || {};
+  var ds = v.dataset || null;
+
+  if (run.status === "stalled") {
+    var age = run.seconds_since_update;
+    h.push('<div class="stall-note"><b>Stalled.</b> This run still says it is running, but its ' +
+      "record has not been touched for " +
+      (age === null || age === undefined ? "an unknown time" : esc(spanText(age))) +
+      ". The process most likely died, so treat the counts below as the last thing it managed to write.</div>");
+  }
+
+  h.push('<div class="detail-meta">');
+  h.push("<span" + tipAttr(TIP.runId) + ">id <span class=\"val mono\">" + esc(run.id || "unknown") + "</span></span>");
+  h.push("<span" + tipAttr(TIP.started) + ">started <span class=\"val\">" + relSpan(run.started_at) + "</span></span>");
+  if (run.ended_at) {
+    h.push("<span" + tipAttr("Ended: when the harness wrote its final record for this run.") +
+      ">ended <span class=\"val\">" + relSpan(run.ended_at) + "</span></span>");
+  }
+  h.push("<span" + tipAttr(TIP.cases) + ">cases <span class=\"val\">" + num(run.completed || 0) +
+    " of " + num(run.total || 0) + "</span></span>");
+  if (run.budget) h.push("<span" + defAttr("field", "budget") + ">budget <span class=\"val\">" + esc(run.budget) + "</span></span>");
+  if (run.base_url) h.push("<span" + defAttr("field", "base_url") + ">base url <span class=\"val mono\">" + esc(run.base_url) + "</span></span>");
+  if (run.data_dir) h.push("<span" + defAttr("field", "data_dir") + ">data <span class=\"val mono path\">" + esc(run.data_dir) + "</span></span>");
+  if (run.source_checked) {
+    h.push("<span" + tipAttr(TIP.sourceChecked) + ">source <span class=\"val mono path\">" + esc(run.source_checked) + "</span></span>");
+  }
+  h.push("<span" + tipAttr("Built by: the viewer and analyzer versions the harness saw in the " +
+    "checkout when it ran. Blank means the harness did not record them, which the lint does not.") +
+    ">built by <span class=\"val\">viewer " + esc(v.viewer_version || "unknown") +
+    ", analyzer " + esc(v.analyzer_version || "unknown") + "</span></span>");
+  if (ds) {
+    h.push("<span" + tipAttr("Dataset: the analyzer output this run read, with the analyzer that " +
+      "produced it, its size, and the commit of the subject repository it was built from. " +
+      (ds.subject_sha ? "Full subject commit: " + ds.subject_sha + "." : "")) +
+      ">dataset <span class=\"val\">" + esc(ds.name || "unnamed") +
+      ", analyzer " + esc(ds.analyzer_version || "unknown") +
+      (ds.components ? ", " + num(ds.components) + " components" : "") +
+      (ds.subject_sha ? ", subject " + esc(String(ds.subject_sha).slice(0, 9)) : "") +
+      "</span></span>");
+  }
+  h.push("</div>");
+
+  /* What the run found, before what the run concluded. The verdict is one
+     word; this is the size and shape of the evidence behind it. */
+  var ft = findingTotals(run);
+  if (ft) {
+    h.push('<div class="metrics issue-tote">');
+    h.push(metric("instances found", num(ft.instances),
+      ft.instances === 1 ? "one sighting in total" : "sightings in total", TIP.instances));
+    h.push(metric("distinct problems", num(ft.distinct),
+      ft.distinct === 1 ? "one problem, however many sightings" : "different problems", TIP.distinct));
+    h.push(metric("errors", num(ft.errors),
+      num(ft.errorInstances) + (ft.errorInstances === 1 ? " instance" : " instances"), TIP.severity));
+    h.push(metric("warnings", num(ft.warnings),
+      num(ft.warningInstances) + (ft.warningInstances === 1 ? " instance" : " instances"), TIP.severity));
+    h.push("</div>");
+    h.push('<div class="detail-meta">' + shapeTag(ft.instances, ft.distinct) + "</div>");
+  }
+
+  var cases = run.cases || [];
+  if (!cases.length) {
+    h.push('<div class="empty">This run recorded no cases. Either it died before the first case ' +
+      "finished, or the harness wrote no case entries.</div>");
+  } else {
+    var failed = cases.filter(isBadCase);
+    var warned = cases.filter(isWarnCase);
+    var rest = cases.filter(function (c) { return !isBadCase(c) && !isWarnCase(c); });
+    if (failed.length || warned.length) {
+      if (failed.length) {
+        h.push('<div class="detail-meta"><span class="tally-fail">' + failed.length +
+          " failing " + (failed.length === 1 ? "case" : "cases") + " first</span></div>");
+        h.push(failed.map(caseLine).join(""));
+      }
+      if (warned.length) {
+        h.push('<div class="detail-meta"><span class="tally-warn">' + warned.length +
+          " warning " + (warned.length === 1 ? "case" : "cases") + "</span></div>");
+        h.push(warned.map(caseLine).join(""));
+      }
+      if (rest.length) {
+        h.push('<div class="detail-meta"><span>' + rest.length + " other " +
+          (rest.length === 1 ? "case" : "cases") + "</span></div>");
+        h.push(rest.map(caseLine).join(""));
+      }
+    } else {
+      h.push(cases.map(caseLine).join(""));
+    }
+  }
+
+  var coverage = run.coverage || [];
+  if (coverage.length) {
+    h.push('<div class="cov-run"><b' + defAttr("field", "coverage") + ">Coverage reported by the suite</b>" +
+      coverage.map(coverageLine).join("") + "</div>");
+  }
+  return h.join("");
+}
+
+/* A failure is a verdict the run cannot stand behind. A warning is a finding
+   worth reading that did not fail the run, so it gets its own colour rather
+   than being rounded up into red. */
+function coverageLine(line) {
+  var text = String(line);
+  var at = text.indexOf(": ");
+  if (at > 0 && at < 40) {
+    return '<div class="covline"><span class="ck">' + esc(text.slice(0, at)) + "</span>" +
+      '<span class="cv mono">' + esc(text.slice(at + 2)) + "</span></div>";
+  }
+  return '<div class="covline solo"><span class="cv">' + esc(text) + "</span></div>";
+}
+
+/* ----------------------------------------------------------------------------
+ * Findings. A run that examined 188,841 citations and reported "1 failed, 2
+ * warned" told the owner nothing about what it found. These helpers exist so
+ * that never happens again: how many times something was found, and how many
+ * different things were found, are rendered together and never collapsed.
+ * -------------------------------------------------------------------------- */
+
+function findingTotals(run) {
+  var ft = run.finding_totals;
+  if (!ft || typeof ft !== "object") return null;
+  var instances = numberOr(ft.instances, null);
+  var distinct = numberOr(ft.distinct, null);
+  if (instances === null && distinct === null) return null;
+  return {
+    instances: instances === null ? 0 : instances,
+    distinct: distinct === null ? 0 : distinct,
+    errors: numberOr(ft.errors, 0),
+    errorInstances: numberOr(ft.error_instances, 0),
+    warnings: numberOr(ft.warnings, 0),
+    warningInstances: numberOr(ft.warning_instances, 0)
+  };
+}
+
+function numberOr(v, fallback) {
+  return typeof v === "number" && isFinite(v) ? v : fallback;
+}
+
+/** The two counts read out loud. This is the sentence the owner asked for:
+    fifty copies of one problem and fifty separate problems must never look
+    alike, and nobody should have to do the division to tell them apart. */
+function shapePhrase(instances, distinct) {
+  if (!instances) return { text: "nothing found", cls: "" };
+  if (distinct <= 1) {
+    return instances === 1
+      ? { text: "1 instance of 1 problem", cls: "" }
+      : { text: num(instances) + " instances, all one problem", cls: "repeat" };
+  }
+  if (instances === distinct) {
+    return { text: num(distinct) + " separate problems", cls: "spread" };
+  }
+  var per = instances / distinct;
+  return {
+    text: num(instances) + " instances across " + num(distinct) + " separate problems",
+    cls: per >= 3 ? "repeat" : "spread"
+  };
+}
+
+/** The same reading, short enough for a table cell. Empty when the two counts
+    are both one, because there is no shape to describe. */
+function shapeShort(instances, distinct) {
+  if (!instances) return "";
+  if (distinct <= 1) return instances === 1 ? "" : "all one problem";
+  if (instances === distinct) return "all separate";
+  return "about " + num(Math.round(instances / distinct)) + " each";
+}
+
+function shapeTag(instances, distinct) {
+  var sp = shapePhrase(instances, distinct);
+  return '<span class="shape ' + sp.cls + '"' + tipAttr(TIP.shape) + ">" + esc(sp.text) + "</span>";
+}
+
+/** The history table cell. Two labelled numbers, never one. */
+function foundCell(run) {
+  var ft = findingTotals(run);
+  if (ft) {
+    var hot = ft.errorInstances > 0 ? " err" : "";
+    var short = shapeShort(ft.instances, ft.distinct);
+    return '<td class="c-found"' + tipAttr(TIP.foundCol) + '><span class="found">' +
+      '<span><span class="n' + hot + '">' + num(ft.instances) + '</span> ' +
+      '<span class="lbl">' + (ft.instances === 1 ? "instance" : "instances") + "</span></span>" +
+      '<span><span class="n">' + num(ft.distinct) + '</span> ' +
+      '<span class="lbl">distinct</span></span>' +
+      (short ? '<span class="lbl shp"' + tipAttr(TIP.shape) + ">" + esc(short) + "</span>" : "") +
+      "</span></td>";
+  }
+  /* No finding detail from this harness. The case count is shown in its place,
+     visibly softer, because a case count is not an instance count. */
+  var cases = run.cases || [];
+  var flagged = cases.filter(function (c) { return isBadCase(c) || isWarnCase(c); }).length;
+  return '<td class="c-found"' + tipAttr(TIP.foundNone) + '><span class="found"><span class="soft">' +
+    (flagged ? num(flagged) + (flagged === 1 ? " case" : " cases") : "no findings") +
+    '</span><span class="lbl">not itemised</span></span></td>';
+}
+
+/** Instances and distinct beside a single case, when the case carries them. */
+function caseInstanceBadge(c) {
+  var instances = numberOr(c.instances, null);
+  if (instances === null || instances === 0) return "";
+  var distinct = numberOr(c.distinct, null);
+  var text = num(instances) + (instances === 1 ? " instance" : " instances");
+  if (distinct !== null) text += ", " + num(distinct) + " distinct";
+  return '<span class="inst-badge"' + tipAttr(TIP.instances + " " + TIP.distinct) + ">" +
+    esc(text) + "</span>";
+}
+
+function severityPill(severity) {
+  var sv = String(severity || "unknown");
+  var cls = sv === "error" ? "failed" : sv === "warn" ? "warned" : "neutral";
+  return '<span class="pill ' + cls + '"' + tipAttr(TIP.severity) + ">" + esc(sv) + "</span>";
+}
+
+/* Nature is the "is it broken or just not built yet" answer, so it is louder
+   than the severity beside it. Its definition comes from the payload. */
+function naturePill(nature) {
+  var n = String(nature || "unclassified");
+  var cls = "pill nat nat-" + n.replace(/[^a-z]/gi, "");
+  return "<span class=\"" + cls + "\"" + defAttr("nature", n) + ">" + esc(n) + "</span>";
+}
+
+function findingBlock(findings) {
+  var list = findings || [];
+  if (!list.length) return "";
+  var h = ['<div class="findings">'];
+  for (var i = 0; i < list.length; i++) {
+    var f = list[i];
+    var sev = String(f.severity || "");
+    h.push('<div class="finding sev-' + (sev === "error" ? "error" : "warn") + '">');
+    h.push('<div class="finding-head">');
+    h.push(severityPill(f.severity));
+    h.push(naturePill(f.nature));
+    h.push('<span class="ftitle">' + esc(f.title || "untitled finding") + "</span>");
+    var inst = numberOr(f.instances, null);
+    if (inst !== null) {
+      h.push('<span class="inst-badge"' + tipAttr(TIP.instances) + ">" + num(inst) +
+        (inst === 1 ? " instance" : " instances") + "</span>");
+    }
+    h.push("</div>");
+    if (f.rule) {
+      h.push('<div class="frule"' + tipAttr("The check that reported this finding.") + ">rule " +
+        esc(f.rule) + "</div>");
+    }
+    if (f.id) {
+      h.push('<div class="fid"' + tipAttr(TIP.findingId) + ">" + esc(f.id) + "</div>");
+    }
+    /* A single example that is word for word the title tells nobody anything
+       twice, and at five findings a case it buries the ones that do. */
+    h.push(exampleBlock(dropEchoedExamples(f.examples, f.title), "examples"));
+    h.push("</div>");
+  }
+  h.push("</div>");
+  return h.join("");
+}
+
+function dropEchoedExamples(examples, title) {
+  var list = examples || [];
+  if (list.length === 1 && String(list[0]) === String(title)) return [];
+  return list;
+}
+
+/** Up to five concrete sightings, in the harness's own words. */
+function exampleBlock(examples, cls) {
+  var list = examples || [];
+  if (!list.length) return "";
+  var h = ['<div class="' + cls + '"' + tipAttr(TIP.findings) + ">"];
+  var shown = list.slice(0, 5);
+  for (var i = 0; i < shown.length; i++) h.push("<div>" + esc(shown[i]) + "</div>");
+  if (list.length > shown.length) {
+    h.push('<div class="more">' + (list.length - shown.length) + " further " +
+      (list.length - shown.length === 1 ? "example is" : "examples are") +
+      " not carried in the record.</div>");
+  }
+  h.push("</div>");
+  return h.join("");
+}
+
+function isBadCase(c) {
+  return c.status === "failed" || c.status === "timedOut" || c.status === "interrupted";
+}
+
+function warnCount(run) {
+  return (run.cases || []).filter(isWarnCase).length;
+}
+
+function isWarnCase(c) {
+  return c.status === "warned";
+}
+
+function caseLine(c) {
+  var bad = isBadCase(c);
+  var warn = isWarnCase(c);
+  var h = [];
+  h.push('<div class="case' + (bad ? " bad" : warn ? " warn" : "") + '">');
+  h.push('<div class="st">' + statusPill(c.status) + "</div>");
+  h.push('<div class="ti">' + esc(c.title || "untitled case") + caseInstanceBadge(c));
+  if ((bad || warn) && c.message) h.push('<div class="msg">' + esc(c.message) + "</div>");
+  h.push(findingBlock(c.findings));
+  if (c.coverage && c.coverage.length) {
+    h.push('<div class="cov"' + defAttr("field", "coverage") + ">" +
+      c.coverage.map(function (line) { return "<span>" + esc(line) + "</span>"; }).join("") +
+      "</div>");
+  }
+  h.push("</div>");
+  h.push('<div class="du"' + tipAttr(typeof c.duration_ms === "number" ? TIP.durReported : TIP.durNone) +
+    ">" + esc(duration(c.duration_ms)) + "</div>");
+  h.push("</div>");
+  return h.join("");
+}
+
+document.addEventListener("click", function (event) {
+  var row = event.target.closest ? event.target.closest("tr.run-row") : null;
+  if (!row) return;
+  var id = row.getAttribute("data-id");
+  if (!id) return;
+  if (expanded[id]) delete expanded[id];
+  else expanded[id] = true;
+  /* Force one rebuild of both histories, the poll cadence is unaffected. */
+  renderKeys["recent-tests"] = null;
+  renderKeys["recent-processing"] = null;
+  hideTip();
+  render();
+});
+
+/* --- Issues ---------------------------------------------------------------
+ *
+ * A run log answers "what happened". This answers "what is still wrong", which
+ * is a different question and the one that survives the week. Issues are keyed
+ * by a fingerprint of the kind of problem, so a thing seen in nine runs is one
+ * row saying nine, not nine rows.
+ * -------------------------------------------------------------------------- */
+
+function renderIssues() {
+  var payload = state.issues || {};
+  var issues = payload.issues || [];
+  var totals = payload.totals || {};
+  var body = document.getElementById("issues-body");
+  var open = numberOr(totals.open, issues.filter(function (i) { return i.state !== "closed"; }).length);
+  document.getElementById("issues-count").textContent =
+    issues.length ? open + " open of " + num(numberOr(totals.total, issues.length)) + " tracked" : "";
+
+  renderIfChanged("issues", payload, body, function (el) {
+    if (!issues.length) {
+      el.innerHTML = '<div class="empty">No issue is on the books. Issues are raised from what runs ' +
+        "actually find, so this stays empty until a check reports something. It is not a to do list " +
+        "that anyone maintains by hand.</div>";
+      return;
+    }
+    var h = [];
+
+    h.push('<div class="metrics issue-tote">');
+    h.push(metric("open", num(open), num(numberOr(totals.total, issues.length)) + " tracked in total",
+      TIP.issuesPane));
+    h.push(metric("unclassified", num(numberOr(totals.unclassified, 0)),
+      "nobody has decided yet", TIP.unclassified));
+    h.push(metric("errors", num(numberOr(totals.errors, 0)), "the rest are warnings", TIP.severity));
+    h.push(metric("instances", num(numberOr(totals.instances, 0)),
+      "sightings across every open issue", TIP.instances));
+    h.push("</div>");
+
+    /* The unclassified count leads, because an unclassified issue is one nobody
+       has looked at hard enough to say what it is. */
+    var unclassified = numberOr(totals.unclassified, 0);
+    if (unclassified > 0) {
+      h.push('<div class="unclassified-note"' + defAttr("nature", "unclassified") + "><b>" +
+        num(unclassified) + " of " + num(open) + " open " + (open === 1 ? "issue" : "issues") +
+        (unclassified === 1 ? " is" : " are") + " unclassified.</b> Nobody has yet decided " +
+        "whether these are defects, surfaces that are simply not built yet, threshold judgements, " +
+        "or facts about the subject rather than about our tool. Until that call is made, none of " +
+        "them can be read as either safe or urgent.</div>");
+    }
+
+    h.push(issues.slice().sort(issueOrder).map(issueRow).join(""));
+
+    if (payload.updated_at) {
+      h.push('<div class="clist-note"' + tipAttr("When the issue ledger was last recomputed from " +
+        "the run records.") + ">Ledger last rebuilt " + relative(payload.updated_at) + ".</div>");
+    }
+    el.innerHTML = h.join("");
+  });
+}
+
+/** Open before closed, then the biggest problem first. */
+function issueOrder(a, b) {
+  var ao = a.state === "closed" ? 1 : 0;
+  var bo = b.state === "closed" ? 1 : 0;
+  if (ao !== bo) return ao - bo;
+  var ai = numberOr(a.max_instances, numberOr(a.last_instances, 0));
+  var bi = numberOr(b.max_instances, numberOr(b.last_instances, 0));
+  if (ai !== bi) return bi - ai;
+  return String(a.title || "").localeCompare(String(b.title || ""));
+}
+
+function issueRow(issue) {
+  var sev = String(issue.severity || "");
+  var closed = issue.state === "closed";
+  var runs = issue.runs_seen || [];
+  var last = numberOr(issue.last_instances, null);
+  var peak = numberOr(issue.max_instances, null);
+  var h = [];
+
+  h.push('<div class="issue sev-' + (sev === "error" ? "error" : "warn") +
+    (closed ? " closed" : "") + '">');
+
+  h.push('<div class="issue-top">');
+  h.push(severityPill(issue.severity));
+  h.push(naturePill(issue.nature));
+  if (issue.state) {
+    h.push('<span class="pill ' + (closed ? "skipped" : "plain") + '"' + tipAttr(TIP.issueState) +
+      ">" + esc(issue.state) + "</span>");
+  }
+  h.push('<span class="issue-title">' + esc(issue.title || "untitled issue") + "</span>");
+
+  h.push('<span class="issue-right">');
+  if (last !== null) {
+    h.push('<span class="issue-seen"' + tipAttr(TIP.instances) + "><b>" + num(last) + "</b> " +
+      (last === 1 ? "instance" : "instances") + "</span>");
+  }
+  if (peak !== null && last !== null && peak > last) {
+    h.push('<span class="issue-seen"' + tipAttr(TIP.peak) + ">peak <b>" + num(peak) + "</b></span>");
+  }
+  h.push('<span class="issue-seen"' + tipAttr(TIP.runsSeen + (runs.length ? " Seen in: " +
+    runs.join(", ") + "." : "")) + "><b>" + num(runs.length) + "</b> " +
+    (runs.length === 1 ? "run" : "runs") + "</span>");
+  if (issue.subject) {
+    h.push('<span class="issue-seen"' + tipAttr(TIP.issueSubject) + ">" + esc(issue.subject) + "</span>");
+  }
+  if (issue.kind) h.push('<span class="pill plain"' + defAttr("kind", issue.kind) + ">" + esc(issue.kind) + "</span>");
+  /* Filed or not filed is never left to inference. An unfiled issue exists on
+     this board and nowhere else. */
+  if (issue.github_issue) {
+    h.push('<a class="pill filed" href="' + esc(issue.github_issue) + '" target="_blank" ' +
+      'rel="noreferrer"' + tipAttr(TIP.filed) + ">filed</a>");
+  } else {
+    h.push('<span class="pill unfiled"' + tipAttr(TIP.unfiled) + ">not filed</span>");
+  }
+  h.push("</span></div>");
+
+  /* The traceability thread: the fingerprint, and the run it first came from.
+     Both are selectable, because both exist to be pasted somewhere. */
+  h.push('<div class="issue-trace">');
+  if (issue.rule) h.push("<span>rule <span class=\"sel\">" + esc(issue.rule) + "</span></span>");
+  if (issue.id) {
+    h.push("<span" + tipAttr(TIP.findingId) + ">id <span class=\"sel\">" + esc(issue.id) + "</span></span>");
+  }
+  if (issue.first_seen_run) {
+    h.push("<span" + tipAttr(TIP.firstSeenRun) + ">first seen in <span class=\"sel\">" +
+      esc(issue.first_seen_run) + "</span></span>");
+  }
+  if (issue.first_seen_at) h.push("<span>first " + relSpan(issue.first_seen_at) + "</span>");
+  if (issue.last_seen_at) h.push("<span>last " + relSpan(issue.last_seen_at) + "</span>");
+  h.push("</div>");
+
+  if (issue.note) {
+    h.push('<div class="issue-note"' + tipAttr("A note somebody recorded against this issue.") +
+      ">" + esc(issue.note) + "</div>");
+  }
+  /* The title is already the first example, so examples only earn their space
+     when there is more than one thing to see. */
+  var examples = dropEchoedExamples(issue.examples, issue.title);
+  if (examples.length > 1) h.push(exampleBlock(examples, "issue-ex"));
+
+  h.push("</div>");
+  return h.join("");
+}
+
+/* --- Demo fleet ----------------------------------------------------------- */
+
+function renderFleet() {
+  var fleet = state.fleet || [];
+  var body = document.getElementById("fleet-body");
+  var drifted = fleet.filter(function (d) { return d.analyzer_drift; }).length;
+  document.getElementById("fleet-count").textContent =
+    fleet.length
+      ? fleet.length + " registered" + (drifted ? ", " + drifted + " drifted" : "")
+      : "";
+
+  renderIfChanged("fleet", { fleet: fleet, current: (state.versions || {}).analyzer_version },
+    body, function (el) {
+      if (!fleet.length) {
+        el.innerHTML =
+          '<div class="empty">No demos are registered. Registry entries live in ' +
+          '<span class="mono">demos/registry</span>, and each one shows up here with its ' +
+          "build provenance once it exists.</div>";
+        return;
+      }
+      el.innerHTML = '<div class="fleet">' + fleet.map(demoCard).join("") + "</div>";
+    });
+}
+
+function demoCard(d) {
+  var current = (state.versions || {}).analyzer_version;
+  var h = [];
+  h.push('<div class="demo' + (d.analyzer_drift ? " drift" : "") + '">');
+
+  h.push('<div class="demo-head">');
+  h.push('<span class="demo-subject"' + tipAttr("The name of the subject repository this demo maps, " +
+    "taken from its registry entry.") + ">" + esc(d.subject || d.slug || "unnamed demo") + "</span>");
+  h.push('<span class="demo-slug mono"' + tipAttr("Slug: the demo's short identifier. It names its " +
+    "registry file, its output directory, and is one of the keys the board joins runs on.") + ">" +
+    esc(d.slug || "") + "</span>");
+  h.push("</div>");
+
+  h.push('<div class="demo-pills">');
+  /* Each pill is a fleet field's value, so each one carries that field's
+     definition from the payload. The negative states use the same definition:
+     what "analyzed" means is exactly what "not analyzed" is the absence of. */
+  if (d.track) h.push('<span class="pill plain"' + defAttr("fleet", "track") + ">" + esc(d.track) + " track</span>");
+  if (d.cadence) h.push('<span class="pill plain"' + defAttr("fleet", "cadence") + ">" + esc(d.cadence) + "</span>");
+  h.push(d.analyzed
+    ? '<span class="pill passed"' + defAttr("fleet", "analyzed") + ">analyzed</span>"
+    : '<span class="pill neutral"' + defAttr("fleet", "analyzed") + ">not analyzed</span>");
+  if (d.bundle_built) h.push('<span class="pill passed"' + defAttr("fleet", "bundle_built") + ">bundle built</span>");
+  else if (d.analyzed) h.push('<span class="pill neutral"' + defAttr("fleet", "bundle_built") + ">no bundle</span>");
+  if (d.analyzed) {
+    h.push(d.enriched
+      ? '<span class="pill plain"' + defAttr("fleet", "enriched") + ">enriched</span>"
+      : '<span class="pill plain"' + defAttr("fleet", "enriched") + ">deterministic</span>");
+  }
+  if (d.analyzer_drift) {
+    h.push('<span class="pill drift"' + defAttr("fleet", "analyzer_drift",
+      "Built with analyzer " + (d.built_with_analyzer || "unknown") + ", the checkout is " +
+      (current || "unknown") + ".") + ">DRIFT</span>");
+  }
+  h.push("</div>");
+
+  if (d.analyzed) {
+    h.push('<div class="stats">');
+    h.push(stat(d.components, "components", glossaryText("fleet", "components"), true));
+    h.push(stat(d.files, "files", TIP.flFiles));
+    h.push(stat(d.symbols, "symbols", TIP.flSymbols));
+    h.push(stat(d.relationships, "relations", TIP.flRelations));
+    h.push("</div>");
+  }
+
+  h.push('<dl class="kv">');
+  h.push("<dt>subject sha</dt><dd>" +
+    (d.subject_sha
+      ? '<span class="mono sha"' + defAttr("fleet", "subject_sha", "Full value: " + d.subject_sha + ".") + ">" +
+        esc(String(d.subject_sha).slice(0, 9)) + "</span>"
+      : '<span' + defAttr("fleet", "subject_sha") + ">not fetched</span>") + "</dd>");
+  if (d.head_at_analysis && d.head_at_analysis !== d.subject_sha) {
+    h.push("<dt>head at analysis</dt><dd><span class=\"mono sha\"" +
+      defAttr("fleet", "head_at_analysis", "Full value: " + d.head_at_analysis + ".") + ">" +
+      esc(String(d.head_at_analysis).slice(0, 9)) + "</span></dd>");
+  }
+  h.push("<dt" + tipAttr(TIP.flFetched) + ">fetched</dt><dd>" +
+    (d.fetched_at ? relSpan(d.fetched_at) : "never") + "</dd>");
+  h.push("<dt" + tipAttr(TIP.flGenerated) + ">generated</dt><dd>" +
+    (d.generated_at ? relSpan(d.generated_at) : "never") + "</dd>");
+  h.push("<dt>built with</dt><dd><span" + defAttr("fleet", "built_with_analyzer") + ">analyzer " +
+    esc(d.built_with_analyzer || "unknown") + "</span>" +
+    (d.analyzer_drift ? ', checkout is <span class="mono">' + esc(current || "unknown") + "</span>" : "") +
+    "</dd>");
+  if (d.url) {
+    h.push("<dt" + tipAttr(TIP.flUrl) + ">hosted at</dt><dd><a href=\"" + esc(d.url) +
+      '" target="_blank" rel="noreferrer">' + esc(d.url) + "</a></dd>");
+  }
+  h.push("</dl>");
+
+  if (d.last_run) {
+    var r = d.last_run;
+    h.push('<div class="lastrun"><span' + defAttr("fleet", "last_run") + ">last run</span> " + statusPill(r.status) +
+      "<span" + defAttr("kind", r.kind) + ">" + esc(r.kind || "run") + "</span>" +
+      "<span" + tipAttr(TIP.when) + ">" + relSpan(r.started_at) + "</span>" +
+      '<span class="tally-pass"' + tipAttr(TIP.tallyPass) + ">" + num(r.passed || 0) + " passed</span>" +
+      '<span class="tally-fail"' + tipAttr(TIP.tallyFail) + ">" + num(r.failed || 0) + " failed</span>" +
+      (r.finding_totals ? shapeTag(numberOr(r.finding_totals.instances, 0),
+        numberOr(r.finding_totals.distinct, 0)) : "") +
+      "</div>");
+  } else {
+    h.push('<div class="lastrun"><span' + tipAttr(TIP.flNoRun) +
+      ">No run on record has exercised this demo.</span></div>");
+  }
+
+  h.push("</div>");
+  return h.join("");
+}
+
+function stat(value, label, tip, isDefinition) {
+  return '<div class="stat"' + (isDefinition && tip ? ' data-def="1"' : "") + tipAttr(tip) +
+    '><div class="n">' + num(value) + '</div><div class="k">' + esc(label) + "</div></div>";
+}
+
+/* --- Footer --------------------------------------------------------------- */
+
+function renderFooter() {
+  renderIfChanged("footer", { root: state.repo_root, runs: state.runs_dir },
+    document.getElementById("footer"), function (el) {
+      el.innerHTML =
+        "<span" + tipAttr("The checkout this board is reading, and the source of every version " +
+          "number in the header.") + '>repo <span class="path mono">' +
+        esc(state.repo_root || "unknown") + "</span></span>" +
+        '<span style="padding:0 6px">·</span>' +
+        "<span" + tipAttr("The directory the board watches. Every harness writes one folder per run " +
+          "here, holding run.json and events.jsonl. Point a harness elsewhere with the TESTBOARD_DIR " +
+          "environment variable and the board follows it.") + '>run records <span class="path mono">' +
+        esc(state.runs_dir || "unknown") + "</span></span>";
+    });
+}
+
+/* --- Boot ----------------------------------------------------------------- */
+
+initTabs();
+poll();
+setInterval(poll, POLL_MS);
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
