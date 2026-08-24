@@ -110,6 +110,36 @@ export function subscribeShardLoadState(
 // metadata (kind/language) is preserved and the shard's free text is folded in,
 // so a component gains searchable description/help text without losing its type
 // badge (P6-4).
+/**
+ * How many times the index has been rebuilt.
+ *
+ * Load bearing, and the fix for a real defect. The search index is module state
+ * that GROWS as shards stream in, and SearchOverlay memoised its results on the
+ * query alone. So a query typed before the shards landed was answered once,
+ * against a partial index, and never recomputed. Components and files were
+ * unaffected because they come from the manifest and are indexed at boot; all
+ * 153,231 VS Code symbols live only in the shards, so symbol search returned
+ * "No results" permanently.
+ *
+ * It was invisible on a small subject, where the shards land in milliseconds.
+ * On a 60 MB index it made 91% of the index unreachable.
+ */
+let indexVersion = 0;
+const indexListeners = new Set<(version: number) => void>();
+
+/** The current index generation. Changes whenever entries are added. */
+export function getSearchIndexVersion(): number {
+  return indexVersion;
+}
+
+/** Subscribe to index changes. Returns an unsubscribe function. */
+export function subscribeSearchIndex(listener: (version: number) => void): () => void {
+  indexListeners.add(listener);
+  return () => {
+    indexListeners.delete(listener);
+  };
+}
+
 function rebuildFuse() {
   const byKey = new Map<string, SearchResult>();
   const put = (r: SearchResult, mergeText: boolean) => {
@@ -140,6 +170,8 @@ function rebuildFuse() {
 
   allResults = [...byKey.values()];
   componentFuse = new Fuse(allResults, FUSE_OPTIONS);
+  indexVersion += 1;
+  for (const listener of indexListeners) listener(indexVersion);
 }
 
 function fileResult(file: FileInfo): SearchResult {

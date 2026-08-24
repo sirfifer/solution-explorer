@@ -10,6 +10,7 @@ import {
 import { getSourceUrl } from "../utils/sourceLinks";
 import type { Rule, Component, Evidence } from "../types";
 import { Tooltip } from "./Tooltip";
+import { VirtualList } from "./VirtualList";
 import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
 // The Rules lens surface (P6-6, LENS-DESIGN.md L6). The landing view is a ranked
@@ -310,6 +311,38 @@ function FocusedRule({ rule }: { rule: Rule }) {
 }
 
 // One rule row in the landing view: mechanical summary, inferred marker, evidence.
+/**
+ * One flat row list for a whole rule kind: owner headers interleaved with their
+ * rules, in the order the grouped view would have rendered them.
+ *
+ * Flat because the cost is in the TOTAL number of rendered rows, not in any one
+ * bucket. The first attempt at this virtualized each owner bucket separately,
+ * which did almost nothing: on VS Code the 3,745 rules are spread over 265
+ * owner buckets and only 5 of them exceed the threshold, so 260 buckets still
+ * rendered eagerly and the lens still hung. Measured, not assumed: 200 rules
+ * rendered in 328 ms, 800 in 2.6 s, and 2,000 never finished at all, which is
+ * superlinear in the total and indifferent to how the total is divided up.
+ */
+type RuleGroupRow =
+  | { key: string; kind: "owner"; owner: string; count: number; rule?: undefined }
+  | { key: string; kind: "rule"; rule: Rule; owner?: undefined; count?: undefined };
+
+function flattenGroup(group: { components: { componentId: string; count: number; items: Rule[] }[] }): RuleGroupRow[] {
+  const rows: RuleGroupRow[] = [];
+  for (const cg of group.components) {
+    rows.push({
+      key: `owner:${cg.componentId || "__unowned__"}`,
+      kind: "owner",
+      owner: cg.componentId,
+      count: cg.count,
+    });
+    for (const rule of cg.items) {
+      rows.push({ key: `rule:${rule.id}`, kind: "rule", rule });
+    }
+  }
+  return rows;
+}
+
 function RuleRow({ rule, selected }: { rule: Rule; selected: boolean }) {
   const darkMode = useArchStore((s) => s.darkMode);
   const selectRule = useArchStore((s) => s.selectRule);
@@ -365,6 +398,19 @@ export function RulesPanel({ mobile = false }: { mobile?: boolean } = {}) {
   const nameMap = useMemo(() => buildNameMap(architecture?.components ?? []), [architecture]);
 
   const focused = selectedRuleId ? rules.find((r) => r.id === selectedRuleId) : null;
+
+  // Past this many rules in one owner bucket, render through the windowed
+  // VirtualList (the same threshold and the same reason as the symbols tab in
+  // DetailPanel). Below it, keep the plain list so common cases are unchanged.
+  //
+  // This is not a nicety. On the VS Code projection the Rules lens carries
+  // 3,745 rules, and rendering them all synchronously blocked the main thread
+  // so completely that the app never painted at all: not the panel, not even
+  // the tree beside it. Every other lens entered in under 600 ms while this one
+  // never finished. Found by the deterministic crawl, then isolated by timing
+  // each lens separately.
+  const VIRTUALIZE_THRESHOLD = 150;
+  const RULE_ROW_HEIGHT = 56;
 
   // Which kind groups are collapsed. Default: all expanded so the reader sees the
   // whole surface at once (I11 landing).
@@ -434,6 +480,28 @@ export function RulesPanel({ mobile = false }: { mobile?: boolean } = {}) {
                 </span>
               </button>
               {!isCollapsed && (
+                group.count > VIRTUALIZE_THRESHOLD ? (
+                  <VirtualList
+                    items={flattenGroup(group)}
+                    rowHeight={RULE_ROW_HEIGHT}
+                    getKey={(row) => row.key}
+                    className="mt-1 max-h-[70vh] overflow-y-auto"
+                    renderRow={(row) =>
+                      row.kind === "owner" ? (
+                        <div className={`px-2 py-0.5 text-[10px] flex items-center justify-between ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                          <span className="truncate" title={row.owner}>
+                            {row.owner ? (nameMap[row.owner] ?? row.owner) : "unowned"}
+                          </span>
+                          <span className={`shrink-0 tabular-nums px-1 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+                            {row.count}
+                          </span>
+                        </div>
+                      ) : (
+                        <RuleRow rule={row.rule!} selected={row.rule!.id === selectedRuleId} />
+                      )
+                    }
+                  />
+                ) : (
                 <div className="mt-1 space-y-2">
                   {group.components.map((cg) => {
                     const owner = cg.componentId ? (nameMap[cg.componentId] ?? cg.componentId) : "unowned";
@@ -447,15 +515,28 @@ export function RulesPanel({ mobile = false }: { mobile?: boolean } = {}) {
                             </span>
                           </Tooltip>
                         </div>
-                        <ul className="space-y-1">
-                          {cg.items.map((rule) => (
-                            <RuleRow key={rule.id} rule={rule} selected={rule.id === selectedRuleId} />
-                          ))}
-                        </ul>
+                        {cg.items.length > VIRTUALIZE_THRESHOLD ? (
+                          <VirtualList
+                            items={cg.items}
+                            rowHeight={RULE_ROW_HEIGHT}
+                            getKey={(rule) => rule.id}
+                            className="max-h-[60vh] overflow-y-auto"
+                            renderRow={(rule) => (
+                              <RuleRow rule={rule} selected={rule.id === selectedRuleId} />
+                            )}
+                          />
+                        ) : (
+                          <ul className="space-y-1">
+                            {cg.items.map((rule) => (
+                              <RuleRow key={rule.id} rule={rule} selected={rule.id === selectedRuleId} />
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     );
                   })}
                 </div>
+                )
               )}
             </div>
           );

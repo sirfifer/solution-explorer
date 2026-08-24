@@ -5,6 +5,8 @@ import {
   loadSearchShards,
   getShardLoadState,
   subscribeShardLoadState,
+  getSearchIndexVersion,
+  subscribeSearchIndex,
   type SearchResult,
   type ShardLoadState,
 } from "../utils/search";
@@ -39,9 +41,16 @@ export function SearchOverlay() {
   const shardsPending =
     shardLoadState === "loading" || shardLoadState === "partial" || shardLoadState === "failed";
 
+  // The index grows as shards arrive, so results must depend on the index
+  // GENERATION as well as the query. Memoising on the query alone answered a
+  // query once against whatever was indexed at that instant and never again,
+  // which made every symbol on a large subject permanently unfindable.
+  const [indexVersion, setIndexVersion] = useState(getSearchIndexVersion());
+  useEffect(() => subscribeSearchIndex(setIndexVersion), []);
+
   const results = useMemo(
     () => (searchQuery ? search(searchQuery) : []),
-    [searchQuery],
+    [searchQuery, indexVersion],
   );
 
   // Focus input and reset the selection whenever the overlay opens. Kept in its
@@ -167,7 +176,12 @@ export function SearchOverlay() {
   };
 
   return (
+    // The identity attributes below are the crawl's contract with search
+    // (viewer/tests/crawl/). Search is the one navigation path nothing proved
+    // end to end: the linter shows every index entry resolves in the DATA, and
+    // nothing showed that picking a result lands you on it in the UI.
     <div
+      data-testid="search-overlay"
       className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
       onClick={() => setSearchOpen(false)}
     >
@@ -187,6 +201,7 @@ export function SearchOverlay() {
           <span className={darkMode ? "text-zinc-500" : "text-zinc-400"}>&#x1F50D;</span>
           <input
             ref={inputRef}
+            data-testid="search-input"
             type="text"
             placeholder="Search components, files, symbols..."
             value={searchQuery}
@@ -212,6 +227,11 @@ export function SearchOverlay() {
               {results.map((result, i) => (
                 <button
                   key={`${result.type}-${result.id}`}
+                  data-testid="search-result"
+                  data-result-kind={result.type}
+                  data-result-id={result.id}
+                  data-result-component={result.componentId}
+                  data-result-index={i}
                   className={`
                     w-full flex items-center gap-3 px-4 py-2.5 text-left
                     ${i === selectedIndex
@@ -257,7 +277,10 @@ export function SearchOverlay() {
               ))}
             </div>
           ) : searchQuery ? (
-            <div className={`py-8 text-center text-sm ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            <div
+              data-testid="search-no-results"
+              className={`py-8 text-center text-sm ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}
+            >
               No results for "{searchQuery}"
             </div>
           ) : (
