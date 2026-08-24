@@ -90,6 +90,23 @@ function versionStamp(dataDir: string | undefined) {
  */
 const HEARTBEAT_MS = 20_000;
 
+/**
+ * A subject name reduced to something safe to use as one path segment.
+ *
+ * Everything outside a conservative allowlist becomes "-", runs are collapsed,
+ * and the result is capped and never empty. Deliberately an allowlist: the
+ * failure mode of guessing which characters are dangerous is that the one you
+ * did not think of is the one that shows up.
+ */
+function pathSafe(value: string): string {
+  const cleaned = value
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^[.-]+/, "")
+    .replace(/-+$/, "")
+    .slice(0, 64);
+  return cleaned || "unknown";
+}
+
 export default class TestboardReporter implements Reporter {
   private runDir!: string;
   private eventsPath!: string;
@@ -112,7 +129,13 @@ export default class TestboardReporter implements Reporter {
 
     const root =
       process.env.TESTBOARD_DIR ?? path.join(REPO_ROOT, ".testboard", "runs");
-    this.runDir = path.join(root, `${stamp}-crawl-${subject}`);
+    // The directory name gets a sanitised subject; the record below keeps the
+    // real one. `subject` is read from the analysed project's manifest, so it
+    // is the SUBJECT's data rather than ours, and a repo-style name such as
+    // "microsoft/vscode" would silently nest the run two levels down where the
+    // board cannot find it. A leading ".." would climb out of .testboard
+    // entirely, and ":" is simply not a legal filename character on Windows.
+    this.runDir = path.join(root, `${stamp}-crawl-${pathSafe(subject)}`);
     fs.mkdirSync(this.runDir, { recursive: true });
     this.eventsPath = path.join(this.runDir, "events.jsonl");
 

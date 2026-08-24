@@ -74,18 +74,26 @@ inventory in `viewer/tests/gui/datasets.yaml`.
 
 The suite drives the app through attributes the components publish on purpose.
 
-Where an ARIA role states the same fact honestly, it was added alongside: the
-tree gained `role="tree"`, `role="treeitem"`, `aria-level` and `aria-expanded`,
-because a scripted walk and a screen reader need the same thing, the structure
-stated rather than implied by styling.
+An ARIA role is a contract, not a label, so one is added only where the
+component keeps the promise the role makes.
 
 The tab bar deliberately did **not** gain `role="tablist"`/`role="tab"`. That
-pattern is a contract, not a label: it obliges arrow-key navigation between
-tabs and `aria-controls` pairing, neither of which these buttons implement, and
-claiming the role without the behavior leaves a screen-reader user worse off
-than a plain button does. Adding it also changed the accessible role that seven
-existing unit tests query by, which is how the overreach got caught. The tabs
-carry identity attributes only.
+pattern obliges arrow-key navigation between tabs and `aria-controls` pairing,
+neither of which these buttons implement, and claiming the role without the
+behavior leaves a screen-reader user worse off than a plain button does. Adding
+it also changed the accessible role that seven existing unit tests query by,
+which is how the overreach got caught. The tabs carry identity attributes only.
+
+The tree did not gain `role="tree"`/`role="treeitem"` either, for the same
+reason and after making the same mistake. An earlier revision added them, along
+with `aria-level` and `aria-selected`. The tree pattern obliges a roving
+tabindex, Up/Down between visible items, Right to expand, Left to collapse and
+move to the parent, and Home/End; this tree implements none of it. Announcing
+"tree" and then ignoring every key that announcement teaches a reader to press
+is the tab-bar error wearing a different role name. `aria-expanded` stays on
+the expanders, because a disclosure button really does expand.
+
+So the crawl drives the tree through `data-*` attributes alone.
 
 | Attribute | On | Carries |
 |---|---|---|

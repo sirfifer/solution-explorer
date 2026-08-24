@@ -46,19 +46,25 @@ const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggl
   const langColor = component.language ? getLanguageColor(component.language) : null;
 
   return (
-    <div role="none">
+    <div>
       {/*
         The identity attributes are the crawler's contract with this tree
         (viewer/tests/crawl/). A scripted walk cannot discover what the data
         says should be here from tailwind classes, so the node publishes its
-        own id, depth, and expandability. The ARIA roles carry the same facts
-        to a screen reader, which is why they are the same attributes rather
-        than a test-only sidecar.
+        own id, depth, and expandability.
+
+        Identity attributes only, and deliberately no role="tree"/"treeitem".
+        An earlier revision of this file added them, which was the exact mistake
+        DetailPanel refuses a few files away: the ARIA tree pattern is a
+        contract, not a label. It obliges roving tabindex, Up/Down between
+        visible items, Right to expand, Left to collapse and move to the parent,
+        and Home/End. This tree implements none of that. Announcing "tree" and
+        then ignoring every key it teaches the reader to press leaves a
+        screen-reader user worse off than plain buttons, which at least tab
+        predictably. aria-expanded stays, because a disclosure button really
+        does expand and that claim is kept.
       */}
       <button
-        role="treeitem"
-        aria-level={depth + 1}
-        aria-selected={isSelected}
         aria-expanded={hasChildren ? expanded : undefined}
         data-testid="tree-node"
         data-component-id={component.id}
@@ -134,7 +140,7 @@ const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggl
       </button>
 
       {expanded && hasChildren && (
-        <div role="group" data-testid="tree-children" data-parent-id={component.id}>
+        <div data-testid="tree-children" data-parent-id={component.id}>
           {component.children.map((child) => (
             <TreeNode
               key={child.id}
@@ -229,10 +235,8 @@ const FolderNode = memo(function FolderNode({
   const expanded = folderExpandedIds.has(name);
 
   return (
-    <div role="none">
+    <div>
       <button
-        role="treeitem"
-        aria-level={1}
         aria-expanded={expanded}
         data-testid="tree-folder"
         data-folder-name={name}
@@ -251,7 +255,7 @@ const FolderNode = memo(function FolderNode({
         </span>
       </button>
       {expanded && (
-        <div role="group" data-testid="tree-children" data-folder-name={name}>
+        <div data-testid="tree-children" data-folder-name={name}>
           {children.map((child) => (
             <TreeNode
               key={child.id}
@@ -416,8 +420,6 @@ export function TreeNavigator() {
         </h2>
       </div>
       <div
-        role="tree"
-        aria-label="Architecture"
         data-testid="tree-navigator"
         className="flex-1 overflow-y-auto py-2"
       >

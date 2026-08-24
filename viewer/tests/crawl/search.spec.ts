@@ -141,99 +141,99 @@ test.describe("search", () => {
     const broke: string[] = [];
     for (const target of targets) {
       try {
-      recorder.reset();
-      // Close any overlay left open by the previous target, then reopen.
-      await crawlPage.keyboard.press("Escape").catch(() => {});
-      await crawlPage.keyboard.press("ControlOrMeta+k");
-      const input = crawlPage.locator('[data-testid="search-input"]');
-      await expect(input).toBeVisible();
-      await input.fill(target.query);
+        recorder.reset();
+        // Close any overlay left open by the previous target, then reopen.
+        await crawlPage.keyboard.press("Escape").catch(() => {});
+        await crawlPage.keyboard.press("ControlOrMeta+k");
+        const input = crawlPage.locator('[data-testid="search-input"]');
+        await expect(input).toBeVisible();
+        await input.fill(target.query);
 
-      // The index is fetched in shards and enriches results as it arrives, so
-      // the row for an exact name may appear a beat after the first render.
-      const row = crawlPage.locator(
-        `[data-testid="search-result"][data-result-kind="${target.kind}"]`,
-      );
-      try {
-        await expect(row.first()).toBeVisible({ timeout: 15_000 });
-      } catch {
-        noResults.push(`${target.kind} "${target.query}" returns no ${target.kind} row`);
-        continue;
-      }
+        // The index is fetched in shards and enriches results as it arrives, so
+        // the row for an exact name may appear a beat after the first render.
+        const row = crawlPage.locator(
+          `[data-testid="search-result"][data-result-kind="${target.kind}"]`,
+        );
+        try {
+          await expect(row.first()).toBeVisible({ timeout: 15_000 });
+        } catch {
+          noResults.push(`${target.kind} "${target.query}" returns no ${target.kind} row`);
+          continue;
+        }
 
-      // Prefer the row that names our exact target; fall back to the first of
-      // its kind, since landing correctly is the claim, not ranking position.
-      const exact = crawlPage.locator(
-        `[data-testid="search-result"][data-result-id="${target.id.replace(/["\\]/g, "\\$&")}"]`,
-      );
-      const chosen = (await exact.count()) > 0 ? exact.first() : row.first();
-      await chosen.click();
+        // Prefer the row that names our exact target; fall back to the first of
+        // its kind, since landing correctly is the claim, not ranking position.
+        const exact = crawlPage.locator(
+          `[data-testid="search-result"][data-result-id="${target.id.replace(/["\\]/g, "\\$&")}"]`,
+        );
+        const chosen = (await exact.count()) > 0 ? exact.first() : row.first();
+        await chosen.click();
 
-      await expect(crawlPage.locator('[data-testid="search-overlay"]')).toHaveCount(0);
+        await expect(crawlPage.locator('[data-testid="search-overlay"]')).toHaveCount(0);
 
-      // Each kind lands on its OWN detail view, and asserting the component
-      // panel for all three was simply wrong: a symbol result correctly opens
-      // the symbol view, which is a different component with no
-      // data-component-id. That mistake reported 15 false failures on VS Code
-      // and briefly went on the record as a product defect. The lesson is that
-      // a selector contract covering one of three detail kinds will be misused.
-      const landedOn = async (): Promise<string> => {
-        const symbol = crawlPage.locator('[data-testid="symbol-detail"]');
-        if (await symbol.count()) return `symbol:${await symbol.first().getAttribute("data-symbol-id")}`;
-        const file = crawlPage.locator('[data-testid="file-detail"]');
-        if (await file.count()) return `file:${await file.first().getAttribute("data-file-path")}`;
-        const comp = crawlPage.locator('[data-testid="detail-panel"]');
-        if (await comp.count()) return `component:${await comp.first().getAttribute("data-component-id")}`;
-        return "nothing";
-      };
+        // Each kind lands on its OWN detail view, and asserting the component
+        // panel for all three was simply wrong: a symbol result correctly opens
+        // the symbol view, which is a different component with no
+        // data-component-id. That mistake reported 15 false failures on VS Code
+        // and briefly went on the record as a product defect. The lesson is that
+        // a selector contract covering one of three detail kinds will be misused.
+        const landedOn = async (): Promise<string> => {
+          const symbol = crawlPage.locator('[data-testid="symbol-detail"]');
+          if (await symbol.count()) return `symbol:${await symbol.first().getAttribute("data-symbol-id")}`;
+          const file = crawlPage.locator('[data-testid="file-detail"]');
+          if (await file.count()) return `file:${await file.first().getAttribute("data-file-path")}`;
+          const comp = crawlPage.locator('[data-testid="detail-panel"]');
+          if (await comp.count()) return `component:${await comp.first().getAttribute("data-component-id")}`;
+          return "nothing";
+        };
 
-      const landed = await landedOn();
-      if (landed === "nothing") {
-        wrongLanding.push(`${target.kind} "${target.query}" opened no detail view at all`);
-        continue;
-      }
+        const landed = await landedOn();
+        if (landed === "nothing") {
+          wrongLanding.push(`${target.kind} "${target.query}" opened no detail view at all`);
+          continue;
+        }
 
-      // What "landing correctly" MEANS differs by kind, and it is defined by
-      // the product's own design rather than by what a test author assumes.
-      //
-      // A file result deliberately drills to the OWNING COMPONENT and marks the
-      // file in its Files tab: see openFileDeepLink, written to fix
-      // comprehension-study S7, where landing elsewhere left "the file nowhere
-      // in sight". Asserting that a file result opens a file view contradicted
-      // the fix and produced 14 false failures. Read the intent before
-      // asserting it.
-      let acceptable: boolean;
-      if (target.kind === "component") {
-        acceptable = landed === `component:${target.componentId}`;
-      } else if (target.kind === "symbol") {
-        // Either the symbol itself, or its owning component while the shard
-        // resolves (the two-step path documented in handleSelect).
-        acceptable =
-          landed === `symbol:${target.id}` || landed === `component:${target.componentId}`;
-      } else {
-        // A file lands on its owning component by design. The claim worth
-        // checking is the second half of that promise: the file is actually
-        // marked where the reader can see it.
-        acceptable = landed === `file:${target.id}` || landed.startsWith("component:");
-        if (acceptable && landed.startsWith("component:")) {
-          const marked = await crawlPage
-            .locator('[data-testid="detail-tabpanel"][data-tab="files"]')
-            .innerText()
-            .catch(() => "");
-          const leaf = target.id.split("/").pop() ?? target.id;
-          if (marked && !marked.includes(leaf)) {
-            wrongLanding.push(
-              `file "${target.query}" drilled to ${landed} but the Files tab does not show ${leaf}`,
-            );
+        // What "landing correctly" MEANS differs by kind, and it is defined by
+        // the product's own design rather than by what a test author assumes.
+        //
+        // A file result deliberately drills to the OWNING COMPONENT and marks the
+        // file in its Files tab: see openFileDeepLink, written to fix
+        // comprehension-study S7, where landing elsewhere left "the file nowhere
+        // in sight". Asserting that a file result opens a file view contradicted
+        // the fix and produced 14 false failures. Read the intent before
+        // asserting it.
+        let acceptable: boolean;
+        if (target.kind === "component") {
+          acceptable = landed === `component:${target.componentId}`;
+        } else if (target.kind === "symbol") {
+          // Either the symbol itself, or its owning component while the shard
+          // resolves (the two-step path documented in handleSelect).
+          acceptable =
+            landed === `symbol:${target.id}` || landed === `component:${target.componentId}`;
+        } else {
+          // A file lands on its owning component by design. The claim worth
+          // checking is the second half of that promise: the file is actually
+          // marked where the reader can see it.
+          acceptable = landed === `file:${target.id}` || landed.startsWith("component:");
+          if (acceptable && landed.startsWith("component:")) {
+            const marked = await crawlPage
+              .locator('[data-testid="detail-tabpanel"][data-tab="files"]')
+              .innerText()
+              .catch(() => "");
+            const leaf = target.id.split("/").pop() ?? target.id;
+            if (marked && !marked.includes(leaf)) {
+              wrongLanding.push(
+                `file "${target.query}" drilled to ${landed} but the Files tab does not show ${leaf}`,
+              );
+            }
           }
         }
-      }
-      if (!acceptable) {
-        wrongLanding.push(`${target.kind} "${target.query}" landed on ${landed}`);
-      }
-      await expectNoErrorBoundary(crawlPage);
-      const problems = recorder.problems();
-      if (problems.length) noisy.push(`${target.kind} "${target.query}": ${problems[0]}`);
+        if (!acceptable) {
+          wrongLanding.push(`${target.kind} "${target.query}" landed on ${landed}`);
+        }
+        await expectNoErrorBoundary(crawlPage);
+        const problems = recorder.problems();
+        if (problems.length) noisy.push(`${target.kind} "${target.query}": ${problems[0]}`);
       } catch (err) {
         // The UI would not cooperate for this target. Recorded and moved past,
         // so the sweep still covers everything after it.

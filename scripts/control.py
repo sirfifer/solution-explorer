@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -128,6 +129,15 @@ class Job:
             "claude_gated": self.name in CLAUDE_GATED,
             "gate_reason": CLAUDE_GATED.get(self.name),
         }
+
+
+# A slug names one entry in demos/registry/, and every job that takes one
+# interpolates it into a filesystem path. The API accepts jobs over HTTP, so the
+# value can arrive from outside this process: "../../.." would walk out of the
+# corpus directory and a slug carrying a separator would quietly land the work
+# somewhere nobody looks for it. An allowlist rather than a blocklist, because
+# the character nobody thought to ban is the one that turns up.
+_SLUG_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
 
 def _arch_dir_for(slug: str) -> Path:
@@ -289,8 +299,19 @@ class JobRunner:
                 "status": 409,
                 "run_it_yourself": command,
             }
-        if job.needs_slug and not params.get("slug"):
-            return {"error": f"job '{name}' needs a slug", "status": 400}
+        if job.needs_slug:
+            slug = params.get("slug")
+            if not slug:
+                return {"error": f"job '{name}' needs a slug", "status": 400}
+            if not _SLUG_RE.fullmatch(slug):
+                return {
+                    "error": (
+                        f"'{slug}' is not a usable slug. A slug names a registry "
+                        "entry, so it may hold letters, digits, dots, dashes and "
+                        "underscores and nothing else."
+                    ),
+                    "status": 400,
+                }
 
         with self._lock:
             self._reap()
