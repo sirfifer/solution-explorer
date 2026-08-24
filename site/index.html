@@ -157,7 +157,9 @@
   .langdot { width: 7px; height: 7px; border-radius: 50%; }
   .term { font-family: var(--mono); font-size: 11px; margin-left: 8px; }
   .edge-label { position: absolute; pointer-events: none; }
-  .el-http { left: 40%; top: 56%; }
+  /* Sits one gutter right of node-a, which is left:8% and 240px wide. Written
+     as the sum rather than 252px so the two numbers it depends on are named. */
+  .el-http { left: calc(8% + 240px + 12px); top: 24%; }
   .el-ws { left: 28%; top: 72%; }
   .lens-chip { font-size: 11.5px; padding: 4px 12px; border-radius: 999px; }
   .spanel { padding: 18px 18px 16px; }
@@ -450,7 +452,7 @@
                 <path class="arrw" d="M 0 1 L 9 5 L 0 9" fill="none" stroke-width="1.6"/>
               </marker>
             </defs>
-            <path class="edge-http" d="M 300 130 C 380 130, 380 235, 404 252" stroke-width="2" fill="none" marker-end="url(#arr-h)"/>
+            <path class="edge-http" d="M 300 130 C 400 130, 450 130, 450 212" stroke-width="2" fill="none" marker-end="url(#arr-h)"/>
             <path class="edge-ws edge-live" d="M 210 190 C 240 300, 320 330, 402 330" stroke-width="1.8" fill="none" stroke-dasharray="4 6" marker-end="url(#arr-w)"/>
           </svg>
           <span class="edge-label el-http">HTTP :8443</span>
