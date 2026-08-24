@@ -11,6 +11,15 @@ export default defineConfig({
     __EXPERIMENTAL_BUILD__: "false",
   },
   test: {
+    // Unit tests only, and every one of them lives under src/.
+    //
+    // Scoped deliberately. The default include is repo-wide, which swept in the
+    // Playwright crawl specs under tests/crawl/. Those import @playwright/test,
+    // which does nothing useful outside a Playwright runner and never returns,
+    // so `npm test` collected them and hung with no output at all: no failure,
+    // no test names, nothing to read. Two runners in one package need two
+    // non-overlapping file sets, stated rather than assumed.
+    include: ["src/**/*.{test,spec}.?(c|m)[jt]s?(x)"],
     environment: "jsdom",
     globals: true,
     setupFiles: [],

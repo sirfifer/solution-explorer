@@ -1,0 +1,4 @@
+# Crawl run output: the JSON report, failure screenshots and traces. Regenerable
+# by rerunning the suite, and large, so never tracked. Mirrors the convention in
+# viewer/tests/gui/.gitignore.
+results/
