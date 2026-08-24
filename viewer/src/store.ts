@@ -835,6 +835,93 @@ const MAX_NODE_BUDGET = 40;
 // READABLE_ZOOM.
 const LAYOUT_SPREAD = 1.75;
 
+/**
+ * The hard ceiling on nodes handed to graph layout, whatever a lens returns.
+ *
+ * Layout cost is superlinear in node and edge count, and elk will happily
+ * accept a graph it can never finish. Measured on the VS Code projection: the
+ * Rules lens fed 194 owner components and 2,892 edges into layout, which pinned
+ * the browser at 100% CPU indefinitely. The app never painted at all, not the
+ * panel and not even the tree beside it. Every other lens entered in under
+ * 600 ms.
+ *
+ * The correlation was exact. 7 nodes rendered in 328 ms, 31 nodes in 2.6 s, and
+ * 132 nodes never finished. So the bound is on nodes, it is central rather than
+ * per lens (a lens author should not have to remember this), and it is a
+ * ceiling rather than a suggestion.
+ *
+ * Higher than the readability budget deliberately: this is not about what fits
+ * on screen, it is the point past which layout stops terminating.
+ */
+const LENS_GRAPH_MAX_NODES = 40;
+
+/**
+ * The edge ceiling, which turned out to matter more than the node one.
+ *
+ * Bounding nodes alone was not enough: 60 nodes still hung, because the kept
+ * nodes were the best connected ones and carried most of the edges with them.
+ * The measurements point at edges as the real driver, 31 nodes with 183 edges
+ * already took 2.6 seconds, so density is what layout cannot absorb.
+ *
+ * Matching the node budget's spirit: this is not about what looks good, it is
+ * the point past which layered layout stops terminating.
+ */
+const LENS_GRAPH_MAX_EDGES = 100;
+
+/**
+ * Bound a lens graph to something layout can actually finish.
+ *
+ * Keeps the best-connected nodes, since an unconnected node contributes nothing
+ * to the picture the graph is for, and always keeps the focused node so the
+ * reader's selection never silently vanishes. Edges to dropped nodes go with
+ * them, otherwise layout gets edges pointing at nothing.
+ *
+ * Returns what it dropped, so the UI can say so. A silently truncated graph is
+ * a graph that lies, and "showing 60 of 194" is the honest version.
+ */
+export function boundLensGraph(
+  graph: LensGraph,
+  focusId: string | null,
+  max: number = LENS_GRAPH_MAX_NODES,
+  maxEdges: number = LENS_GRAPH_MAX_EDGES,
+): LensGraph & { droppedNodes: number; droppedEdges: number } {
+  if (graph.nodes.length <= max && graph.edges.length <= maxEdges) {
+    return { ...graph, droppedNodes: 0, droppedEdges: 0 };
+  }
+
+  const degree = new Map<string, number>();
+  for (const edge of graph.edges) {
+    degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+    degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+  }
+  const ranked = [...graph.nodes].sort((a, b) => {
+    if (a.id === focusId) return -1;
+    if (b.id === focusId) return 1;
+    return (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0);
+  });
+  const kept = ranked.slice(0, max);
+  const keptIds = new Set(kept.map((n) => n.id));
+  const withinKept = graph.edges.filter(
+    (e) => keptIds.has(e.source) && keptIds.has(e.target),
+  );
+  // Edges touching the focused node come first, because they are the ones the
+  // reader is actually asking about; the rest fill the remaining budget.
+  const rankedEdges = focusId
+    ? [
+        ...withinKept.filter((e) => e.source === focusId || e.target === focusId),
+        ...withinKept.filter((e) => e.source !== focusId && e.target !== focusId),
+      ]
+    : withinKept;
+  const keptEdges = rankedEdges.slice(0, maxEdges);
+  return {
+    nodes: kept,
+    aggregates: graph.aggregates,
+    edges: keptEdges,
+    droppedNodes: graph.nodes.length - kept.length,
+    droppedEdges: graph.edges.length - keptEdges.length,
+  };
+}
+
 export function nodeBudgetForCanvas(width: number, height: number): number {
   if (!(width > 0) || !(height > 0)) return DEFAULT_NODE_BUDGET;
   const cellW = NODE_W * READABLE_ZOOM * LAYOUT_SPREAD + NODE_GAP;
@@ -1166,7 +1253,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     } = get();
     if (!architecture) return { nodes: [], aggregates: [], edges: [] };
     const def = getLens(lens) ?? getLens(DEFAULT_LENS_ID)!;
-    return def.getGraph({
+    const graph = def.getGraph({
       architecture,
       drillLevel,
       getVisibleComponents: get().getVisibleComponents,
@@ -1177,6 +1264,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       selectedRuleId,
       selectedDesignFindingId,
     });
+    // Bounded centrally, so no lens can hand layout a graph it cannot finish.
+    // The Structure lens already limits itself through getVisibleComponents;
+    // the later lenses build their own node sets and had no ceiling at all.
+    return boundLensGraph(graph, get().selectedComponentId);
   },
 
   // The ranked entry flows for the Flow lens landing (I11). Empty when the

@@ -45,6 +45,8 @@ export function LensSwitcher() {
             lens reachable on a phone, GUI run finding V8.4). */}
         <span className="hidden sm:inline text-[10px] uppercase tracking-wider">Lens</span>
         <select
+          data-testid="lens-select"
+          data-lens={lens}
           value={lens}
           onChange={(e) => setLens(e.target.value)}
           className={`bg-transparent outline-none text-xs font-medium ${darkMode ? "text-zinc-200" : "text-zinc-700"}`}

@@ -47,7 +47,32 @@ const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggl
 
   return (
     <div>
+      {/*
+        The identity attributes are the crawler's contract with this tree
+        (viewer/tests/crawl/). A scripted walk cannot discover what the data
+        says should be here from tailwind classes, so the node publishes its
+        own id, depth, and expandability.
+
+        Identity attributes only, and deliberately no role="tree"/"treeitem".
+        An earlier revision of this file added them, which was the exact mistake
+        DetailPanel refuses a few files away: the ARIA tree pattern is a
+        contract, not a label. It obliges roving tabindex, Up/Down between
+        visible items, Right to expand, Left to collapse and move to the parent,
+        and Home/End. This tree implements none of that. Announcing "tree" and
+        then ignoring every key it teaches the reader to press leaves a
+        screen-reader user worse off than plain buttons, which at least tab
+        predictably. aria-expanded stays, because a disclosure button really
+        does expand and that claim is kept.
+      */}
       <button
+        aria-expanded={hasChildren ? expanded : undefined}
+        data-testid="tree-node"
+        data-component-id={component.id}
+        data-component-type={component.type}
+        data-depth={depth}
+        data-has-children={hasChildren}
+        data-expanded={hasChildren ? expanded : undefined}
+        data-selected={isSelected}
         className={`
           w-full text-left flex items-center gap-2 px-3 py-1.5 text-sm
           transition-colors rounded-lg mx-1
@@ -67,6 +92,7 @@ const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggl
         {/* Expand/collapse */}
         {hasChildren ? (
           <span
+            data-testid="tree-node-toggle"
             className={`w-4 h-4 flex items-center justify-center text-[10px] shrink-0 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}
             onClick={(e) => {
               e.stopPropagation();
@@ -114,7 +140,7 @@ const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggl
       </button>
 
       {expanded && hasChildren && (
-        <div>
+        <div data-testid="tree-children" data-parent-id={component.id}>
           {component.children.map((child) => (
             <TreeNode
               key={child.id}
@@ -211,6 +237,11 @@ const FolderNode = memo(function FolderNode({
   return (
     <div>
       <button
+        aria-expanded={expanded}
+        data-testid="tree-folder"
+        data-folder-name={name}
+        data-expanded={expanded}
+        data-child-count={children.length}
         className={`w-full text-left flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg mx-1 ${darkMode ? "hover:bg-zinc-800/50 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"}`}
         onClick={() => onToggleFolderExpand(name)}
       >
@@ -224,7 +255,7 @@ const FolderNode = memo(function FolderNode({
         </span>
       </button>
       {expanded && (
-        <div>
+        <div data-testid="tree-children" data-folder-name={name}>
           {children.map((child) => (
             <TreeNode
               key={child.id}
@@ -240,8 +271,37 @@ const FolderNode = memo(function FolderNode({
   );
 });
 
+/**
+ * The chain of ancestor ids above `targetId`, outermost first.
+ *
+ * Needed because the tree's expansion state is a flat set of ids: revealing a
+ * node five levels down means opening every one of its parents, and only the
+ * architecture knows who those are.
+ */
+function ancestorPath(components: Component[], targetId: string): string[] {
+  let found: string[] = [];
+  const walk = (nodes: Component[], trail: string[]): boolean => {
+    for (const node of nodes) {
+      if (node.id === targetId) {
+        found = trail;
+        return true;
+      }
+      if (node.children?.length && walk(node.children, [...trail, node.id])) return true;
+    }
+    return false;
+  };
+  walk(components, []);
+  return found;
+}
+
+/** Escape a component id for use inside a quoted CSS attribute selector. */
+function attrSelectorValue(value: string): string {
+  return value.replace(/["\\]/g, "\\$&");
+}
+
 export function TreeNavigator() {
   const { architecture, darkMode } = useArchStore();
+  const selectedComponentId = useArchStore((s) => s.selectedComponentId);
 
   // Tree expansion state - starts collapsed (empty set), restored from session
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => getExpandedFromSession());
@@ -290,6 +350,66 @@ export function TreeNavigator() {
     return { topLevel, otherGroups };
   }, [architecture]);
 
+  // Reveal the selected component in the tree, wherever the selection came
+  // from: a deep link, the graph, search, a breadcrumb.
+  //
+  // Before this, arriving at a nested component rendered the right detail panel
+  // beside a tree that showed no row for it. The reader had a page with no
+  // sense of place: no siblings, no parent, and no way further down without
+  // starting the walk again from the top. A shared link is the worst case,
+  // because the recipient has none of the context the sender had. Found by the
+  // deterministic crawl (viewer/tests/crawl/), which reported every one of 20
+  // sampled nested components as unreachable in the navigator.
+  //
+  // Deliberately one-directional: this opens ancestors on selection, and never
+  // closes anything. Collapsing a parent by hand sticks, because expandedIds is
+  // not a dependency here, so the reader's own tidying is not undone.
+  useEffect(() => {
+    if (!architecture || !selectedComponentId) return;
+
+    const ancestors = ancestorPath(architecture.components, selectedComponentId);
+    if (ancestors.length > 0) {
+      setExpandedIds((prev) => {
+        const missing = ancestors.filter((id) => !prev.has(id));
+        if (missing.length === 0) return prev;
+        const next = new Set(prev);
+        for (const id of missing) next.add(id);
+        return next;
+      });
+    }
+
+    // A component can also live under an "Internal Components" folder, which is
+    // a separate collapsed container keyed by parent NAME rather than by id.
+    //
+    // The folder may hold an ANCESTOR rather than the component itself.
+    // collectOtherComponents adds a component to a group and deliberately does
+    // not recurse into its children, so a node five levels down is reached by
+    // expanding the grouped ancestor and then walking down inside it. Matching
+    // only the selected id left every deep component under extensions/ with no
+    // row at all, which is what the crawl caught on VS Code after this fix
+    // looked correct on a smaller subject.
+    const chain = [...ancestors, selectedComponentId];
+    const group = otherGroups.find((g) =>
+      g.components.some((c) => chain.includes(c.id)),
+    );
+    if (group) {
+      setFolderExpandedIds((prev) =>
+        prev.has(group.parentName) ? prev : new Set(prev).add(group.parentName),
+      );
+    }
+  }, [architecture, selectedComponentId, otherGroups]);
+
+  // Bring the revealed row into view. Separate from the expansion effect so it
+  // runs after the newly opened rows have rendered; `block: "nearest"` scrolls
+  // the tree's own scroll container and leaves the rest of the page alone.
+  useEffect(() => {
+    if (!selectedComponentId) return;
+    const node = document.querySelector(
+      `[data-testid="tree-node"][data-component-id="${attrSelectorValue(selectedComponentId)}"]`,
+    );
+    node?.scrollIntoView?.({ block: "nearest" });
+  }, [selectedComponentId, expandedIds, folderExpandedIds]);
+
   if (!architecture) return null;
 
   return (
@@ -299,7 +419,10 @@ export function TreeNavigator() {
           Architecture
         </h2>
       </div>
-      <div className="flex-1 overflow-y-auto py-2">
+      <div
+        data-testid="tree-navigator"
+        className="flex-1 overflow-y-auto py-2"
+      >
         {/* Changelog / What's New notifications */}
         <ChangelogPanel />
 

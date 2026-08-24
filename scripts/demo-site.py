@@ -92,6 +92,7 @@ docstring rather than left implicit.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import html
 import importlib.util
@@ -1781,7 +1782,45 @@ def assemble_bundle(
     if pub.is_file():
         shutil.copy2(pub, bundle / "publication.json")
 
+    # 7. scrub the generating machine's path out of the bundled manifest.
+    #
+    # manifest.root_path is genuinely useful locally: it says which working copy
+    # produced the map. In a published bundle it is an information leak, and one
+    # we introduce rather than inherit from the subject. The projection on disk
+    # keeps it; only the copy that goes out loses it, so nothing local is
+    # weakened and the deployed artifact carries nothing about this machine.
+    scrub_bundle_root_path(bundled_arch)
+
     return bundle
+
+
+def scrub_bundle_root_path(bundled_arch: Path) -> Optional[str]:
+    """Remove the generating machine's absolute path from a bundle's manifest.
+
+    Returns what was removed, so a caller can report it. Rewrites the manifest
+    in place with `root_path` blanked and a note saying why, rather than
+    deleting the key: a consumer that reads it should find an explanation, not
+    an absence it has to guess about.
+    """
+    manifest_path = bundled_arch / "manifest.json"
+    if not manifest_path.is_file():
+        return None
+    try:
+        doc = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    original = doc.get("root_path")
+    if not isinstance(original, str) or not original:
+        return None
+    doc["root_path"] = ""
+    doc["root_path_note"] = (
+        "Removed when this bundle was assembled for publication. The analyzed "
+        "tree's absolute path on the generating machine is not part of the map."
+    )
+    manifest_path.write_text(
+        json.dumps(doc, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return original
 
 
 def bundle_safety_errors(bundle: Path) -> list:
@@ -1916,23 +1955,77 @@ def _cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+# Publishing a pipeline stage to the testboard is best effort and never load
+# bearing: if the emitter is missing or cannot write, the stage runs exactly as
+# it did before. A board that can break a build is worse than no board.
+try:
+    from testboard_emit import ProcessingRun
+except ImportError:  # pragma: no cover - depends on how the script was invoked
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        from testboard_emit import ProcessingRun
+    except ImportError:
+        ProcessingRun = None  # type: ignore[assignment]
+
+
+@contextlib.contextmanager
+def _published(kind: str, slug: str, total: int, note: str = ""):
+    """Run a pipeline stage under a testboard record, or plainly if it cannot."""
+    if ProcessingRun is None:
+        yield None
+        return
+    try:
+        run = ProcessingRun(kind, slug=slug, total=total, note=note)
+    except Exception:
+        yield None
+        return
+    with run:
+        yield run
+
+
 def _cmd_fetch(args: argparse.Namespace) -> int:
     corpus = load_registry(args.slug)
-    src, sha = fetch_corpus(corpus, force=args.force)
+    with _published("fetch", args.slug, total=1, note=f"follow: {corpus['policy'].get('follow')}") as run:
+        if run:
+            run.step("clone or fetch", "resolving the ref against the remote")
+        src, sha = fetch_corpus(corpus, force=args.force)
+        if run:
+            run.finish_step(detail=f"resolved {sha[:12]}")
     print(f"fetched {args.slug} @ {sha} ({corpus['policy'].get('follow')}) -> {src}")
     return 0
 
 
 def _cmd_analyze(args: argparse.Namespace) -> int:
     corpus = load_registry(args.slug)
-    wall_s = run_analyze(corpus)
-    print(f"analyzed {args.slug} -> {_arch_dir(args.slug)} ({wall_s:.1f}s)")
+    arch_dir = _arch_dir(args.slug)
+    with _published("analyze", args.slug, total=1, note="v2 split projection") as run:
+        if run:
+            run.step("analyze", "extract, derive and project the whole subject")
+        wall_s = run_analyze(corpus)
+        if run:
+            run.finish_step(detail=f"{wall_s:.1f}s wall")
+            # The dataset's identity is what makes the run answerable later:
+            # which commit, which analyzer, how big the result was.
+            run.stamp_dataset(arch_dir)
+            dataset = (run.record.get("versions") or {}).get("dataset") or {}
+            if dataset.get("components"):
+                run.note(f"{dataset['components']} components projected")
+    print(f"analyzed {args.slug} -> {arch_dir} ({wall_s:.1f}s)")
     return 0
 
 
 def _cmd_enhance(args: argparse.Namespace) -> int:
     corpus = load_registry(args.slug)
-    rc = run_enhance(corpus, max_partitions=args.max_partitions, dry_run=args.dry_run)
+    mode = "dry run" if args.dry_run else "live, spends real usage"
+    with _published("enhance", args.slug, total=1, note=mode) as run:
+        if run:
+            run.step("ladder", f"enrichment ladder ({mode})")
+        rc = run_enhance(corpus, max_partitions=args.max_partitions, dry_run=args.dry_run)
+        if run:
+            run.finish_step(
+                status="passed" if rc == 0 else "failed",
+                detail=f"exit {rc}",
+            )
     return rc
 
 

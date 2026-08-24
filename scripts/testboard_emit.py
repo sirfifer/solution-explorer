@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+"""Publish a PROCESSING run to the testboard, live, as it executes.
+
+The test harnesses already publish themselves. This is the other half: the
+pipeline that actually builds a demo, fetch through deploy. They are genuinely
+different activities and the board keeps them apart, because a failing test and
+a failed analyze demand completely different responses. A red test says the
+product is wrong. A failed analyze says the product did not get built at all.
+
+Processing runs are the ones most worth watching, because they are the long
+ones. An analyze of VS Code is minutes of silence; an enhance is longer and
+costs real money. Before this, the only way to know how either was going was to
+watch the terminal you started it in, which is exactly the blindness the board
+exists to remove.
+
+The record shape is deliberately identical to the crawl reporter's, so the
+dashboard has one thing to render and neither side needs to know the other
+exists. Same two files, same fields, same meanings:
+
+    run.json      rewritten on every step, so a reader always sees current truth
+    events.jsonl  append-only, so a crashed run leaves its history behind
+
+Used as a context manager, so a step that raises still closes its record out
+honestly instead of leaving a phantom "running" row on the board forever:
+
+    with ProcessingRun("analyze", slug="vscode", data_dir=arch_dir) as run:
+        run.step("scan", "walking the source tree")
+        ...
+        run.finish_step(detail="15,366 files")
+
+Stdlib only, and every write is best effort. Observability must never be able
+to fail the work it is watching: a board that breaks a build is worse than no
+board.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _runs_root() -> Path:
+    return Path(
+        os.environ.get("TESTBOARD_DIR") or (REPO_ROOT / ".testboard" / "runs")
+    )
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+class ProcessingRun:
+    """One pipeline stage, published as it happens.
+
+    `total` is the number of steps expected. It may be unknown up front, in
+    which case the board shows progress as a count rather than a percentage,
+    which is honest: a fake denominator would produce a progress bar that lies.
+    """
+
+    def __init__(
+        self,
+        kind: str,
+        slug: str,
+        total: Optional[int] = None,
+        data_dir: Optional[Path] = None,
+        subject: Optional[str] = None,
+        note: Optional[str] = None,
+    ) -> None:
+        self.kind = kind
+        self.slug = slug
+        self.subject = subject or slug
+        self.started = time.time()
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%fZ")
+        self.run_dir = _runs_root() / f"{stamp}-{kind}-{slug}"
+        self._current_started: Optional[float] = None
+
+        self.record: dict[str, Any] = {
+            "testboard_version": 1,
+            "id": self.run_dir.name,
+            "kind": kind,
+            "category": "processing",
+            "subject": self.subject,
+            "slug": slug,
+            "status": "running",
+            "started_at": _now(),
+            "ended_at": None,
+            "duration_ms": None,
+            "data_dir": str(data_dir) if data_dir else None,
+            "base_url": None,
+            "budget": note or "",
+            "versions": {"viewer_version": None, "analyzer_version": None, "dataset": None},
+            "total": total or 0,
+            "completed": 0,
+            "passed": 0,
+            "warned": 0,
+            "failed": 0,
+            "skipped": 0,
+            "current": None,
+            "cases": [],
+            "coverage": [],
+        }
+
+    # ------------------------------------------------------------- lifecycle
+
+    def __enter__(self) -> ProcessingRun:
+        try:
+            self.run_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        self._emit({"type": "run_start", "subject": self.subject, "total": self.record["total"]})
+        self._flush()
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        # An exception closes the record as failed with the reason attached.
+        # The alternative, a record stuck on "running" forever, is the worst
+        # outcome: the board would show it as stalled and nobody could tell
+        # whether it died or was killed on purpose.
+        if exc is not None:
+            if self._current_started is not None:
+                self.finish_step(status="failed", detail=f"{type(exc).__name__}: {exc}")
+            self.close(status="failed", reason=f"{type(exc).__name__}: {exc}")
+        elif self.record["status"] == "running":
+            self.close(status="failed" if self.record["failed"] else "passed")
+        return False  # never swallow the exception
+
+    def close(self, status: str = "passed", reason: Optional[str] = None) -> None:
+        self.record["status"] = status
+        self.record["ended_at"] = _now()
+        self.record["duration_ms"] = round((time.time() - self.started) * 1000)
+        self.record["current"] = None
+        if reason:
+            self.record["exit_reason"] = reason
+        self._emit({
+            "type": "run_end", "status": status,
+            "passed": self.record["passed"], "failed": self.record["failed"],
+            **({"reason": reason} if reason else {}),
+        })
+        self._flush()
+
+    # ----------------------------------------------------------------- steps
+
+    def step(self, title: str, detail: Optional[str] = None) -> None:
+        """Begin a step. Closes the previous one as passed if still open."""
+        if self._current_started is not None:
+            self.finish_step()
+        self._current_started = time.time()
+        self.record["current"] = title
+        self._emit({"type": "case_start", "title": title, **({"detail": detail} if detail else {})})
+        self._flush()
+
+    def finish_step(
+        self, status: str = "passed", detail: Optional[str] = None, title: Optional[str] = None
+    ) -> None:
+        if self._current_started is None:
+            return
+        duration = round((time.time() - self._current_started) * 1000)
+        entry = {
+            "title": title or self.record["current"] or "step",
+            "status": status,
+            "duration_ms": duration,
+            "coverage": [],
+            "message": detail if status != "passed" else None,
+        }
+        self.record["cases"].append(entry)
+        self.record["completed"] += 1
+        if status == "passed":
+            self.record["passed"] += 1
+        elif status == "warned":
+            self.record["warned"] += 1
+        elif status == "skipped":
+            self.record["skipped"] += 1
+        else:
+            self.record["failed"] += 1
+        if detail and status == "passed":
+            self.record["coverage"].append(f"{entry['title']}: {detail}")
+        self.record["current"] = None
+        self._current_started = None
+        self._emit({"type": "case_end", **entry, **({"detail": detail} if detail else {})})
+        self._flush()
+
+    def note(self, message: str) -> None:
+        """A measurement worth surfacing, e.g. '15,366 files walked'."""
+        self.record["coverage"].append(message)
+        self._emit({"type": "note", "message": message})
+        self._flush()
+
+    def stamp_dataset(self, arch_dir: Path) -> None:
+        """Attach the produced dataset's identity once it exists."""
+        try:
+            manifest = json.loads((arch_dir / "manifest.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        provenance = (manifest.get("activity") or {}).get("provenance") or {}
+        self.record["versions"]["dataset"] = {
+            "name": manifest.get("name"),
+            "generated_at": manifest.get("generated_at"),
+            "analyzer_version": manifest.get("analyzer_version"),
+            "subject_sha": provenance.get("head"),
+            "components": len(manifest.get("component_detail_index") or {}) or None,
+        }
+        self.record["versions"]["analyzer_version"] = manifest.get("analyzer_version")
+        self._flush()
+
+    # ------------------------------------------------------------------ io
+
+    def _emit(self, event: dict) -> None:
+        try:
+            with open(self.run_dir / "events.jsonl", "a", encoding="utf-8") as fh:
+                fh.write(json.dumps({"ts": _now(), **event}) + "\n")
+        except OSError:
+            pass  # never let the board break the build
+
+    def _flush(self) -> None:
+        try:
+            (self.run_dir / "run.json").write_text(
+                json.dumps(self.record, indent=2) + "\n", encoding="utf-8"
+            )
+        except OSError:
+            pass

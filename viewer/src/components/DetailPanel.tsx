@@ -58,6 +58,28 @@ function DetailLoadingState({ label }: { label: string }) {
   );
 }
 
+/**
+ * The honest-empty state: a surface with nothing behind it says so.
+ *
+ * A blank panel and a broken panel look identical, and the reader has no way to
+ * tell which one they are looking at. That ambiguity is worse than either fact
+ * on its own, because it teaches people to distrust every empty surface in the
+ * product. Found by the deterministic crawl, which reported the Files tab
+ * rendering literally nothing for components that legitimately hold no files.
+ */
+function DetailEmptyState({ label, detail }: { label: string; detail?: string }) {
+  const { darkMode } = useArchStore();
+  return (
+    <div
+      data-testid="detail-empty-state"
+      className={`p-6 flex flex-col items-center justify-center gap-2 text-center ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}
+    >
+      <p className="text-sm">{label}</p>
+      {detail && <p className="text-xs">{detail}</p>}
+    </div>
+  );
+}
+
 function DetailErrorState({ label, detail, onRetry }: { label: string; detail?: string; onRetry: () => void }) {
   const { darkMode } = useArchStore();
   return (
@@ -275,12 +297,19 @@ function ComponentDetail({
   ];
 
   return (
-    <div className="h-full flex flex-col">
+    <div
+      className="h-full flex flex-col"
+      data-testid="detail-panel"
+      data-component-id={component.id}
+    >
       {/* Header */}
       <div className={`px-4 pt-4 pb-3 border-b ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
         <div className="flex items-start justify-between">
           <div>
-            <h2 className={`font-bold text-lg ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
+            <h2
+              data-testid="detail-title"
+              className={`font-bold text-lg ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}
+            >
               {component.name}
             </h2>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -442,10 +471,27 @@ function ComponentDetail({
       )}
 
       {/* Tabs */}
-      <div className={`flex border-b ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
+      {/*
+        Identity attributes only, deliberately no role="tablist"/"tab". The
+        ARIA tabs pattern is a contract, not a label: it obliges arrow-key
+        navigation between tabs and aria-controls pairing, neither of which
+        these buttons implement, and claiming the role without the behavior
+        leaves a screen-reader user worse off than a plain button does. It also
+        changes the accessible role every existing test queries by. The crawl
+        needs the data-* attributes, so it takes those and nothing else.
+      */}
+      <div
+        data-testid="detail-tabs"
+        className={`flex border-b ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}
+      >
         {tabs.map((tab) => (
           <button
             key={tab.key}
+            aria-current={activeTab === tab.key ? "true" : undefined}
+            data-testid="detail-tab"
+            data-tab={tab.key}
+            data-tab-count={tab.count}
+            data-active={activeTab === tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`
               flex-1 px-3 py-2 text-xs font-medium transition-colors
@@ -470,7 +516,11 @@ function ComponentDetail({
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        data-testid="detail-tabpanel"
+        data-tab={activeTab}
+        className="flex-1 overflow-y-auto"
+      >
         {activeTab === "overview" && (
           <OverviewTab component={component} symbols={symbols} />
         )}
@@ -914,6 +964,16 @@ function FilesTab({ files, componentId, loading, error, onRetry }: { files: File
   if (loading && files.length === 0) {
     return <DetailLoadingState label="Loading files..." />;
   }
+  // Nothing loading, nothing failed, and nothing to show: the component really
+  // holds no files. Say so rather than rendering a filter box over emptiness.
+  if (files.length === 0) {
+    return (
+      <DetailEmptyState
+        label="No files in this component."
+        detail="It groups other components rather than holding source of its own."
+      />
+    );
+  }
 
   return (
     <div className="p-3">
@@ -931,6 +991,12 @@ function FilesTab({ files, componentId, loading, error, onRetry }: { files: File
         `}
       />
       <div className="space-y-3">
+        {grouped.length === 0 && (
+          <DetailEmptyState
+            label={`No files match "${filter}".`}
+            detail={`${files.length} file${files.length === 1 ? "" : "s"} in this component.`}
+          />
+        )}
         {grouped.map(([dir, dirFiles]) => (
           <div key={dir}>
             <div className={`text-[10px] font-mono px-2 py-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
@@ -2316,6 +2382,11 @@ function RelationshipsTab({
   );
 }
 
+// The file and symbol views carry their own identity, parallel to the component
+// view's data-testid="detail-panel". Without them the crawl had no way to assert
+// "a symbol result opened its symbol", so it asserted the component panel
+// instead and reported 15 false failures on VS Code. A selector contract that
+// only covers one of three detail kinds invites exactly that mistake.
 function FileDetail({ file }: { file: FileInfo }) {
   const { darkMode, closeDetail, architecture } = useArchStore();
   const symbols = useMemo(
@@ -2324,7 +2395,7 @@ function FileDetail({ file }: { file: FileInfo }) {
   );
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col" data-testid="file-detail" data-file-path={file.path}>
       <div className={`px-4 pt-4 pb-3 border-b ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
         <div className="flex items-start justify-between">
           <div>
@@ -2438,7 +2509,12 @@ function SymbolDetail({ symbol }: { symbol: ArchSymbol }) {
   const { darkMode, closeDetail } = useArchStore();
 
   return (
-    <div className="h-full flex flex-col">
+    <div
+      className="h-full flex flex-col"
+      data-testid="symbol-detail"
+      data-symbol-id={symbol.id}
+      data-symbol-file={symbol.file}
+    >
       <div className={`px-4 pt-4 pb-3 border-b ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
         <div className="flex items-start justify-between">
           <div>
