@@ -1,0 +1,158 @@
+{
+  "identity": {
+    "subject": "vscode",
+    "root": "/Volumes/Studio/dev/.demo-corpus/vscode",
+    "commit": "1be3e73551765e9168e13f4cc690c622606f3a31",
+    "snapshot_date": "2026-08-22T17:52:30.551654+00:00",
+    "analyzer_version": "",
+    "engine_version": "1",
+    "policy": {
+      "models": {
+        "p1_orientation": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true
+        },
+        "p2a_bulk": {
+          "source": "anthropic-claude-cli",
+          "model": "sonnet",
+          "pinned": true
+        },
+        "p2b_escalated": {
+          "source": "anthropic-claude-cli",
+          "model": "opus",
+          "pinned": true
+        },
+        "p2c_residue": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true
+        },
+        "p3_adjudication": {
+          "source": "anthropic-claude-cli",
+          "model": "opus",
+          "pinned": true
+        },
+        "p4_synthesis": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true
+        },
+        "p5_determination": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true
+        },
+        "workorder": {
+          "source": "anthropic-claude-cli",
+          "model": "sonnet",
+          "pinned": true
+        }
+      },
+      "iteration": {
+        "min_rounds": 1,
+        "max_rounds": 2
+      },
+      "max_cost_usd": 45.0,
+      "spot_check_fraction": 0.1,
+      "max_work_orders": 3
+    },
+    "totals": {
+      "invocations": 0,
+      "cost_usd": 0.0,
+      "ceiling_hit": false,
+      "failed_phases": []
+    },
+    "dry_run": true
+  },
+  "ledger": [],
+  "census": {
+    "by_state": {},
+    "items": [],
+    "total": 0,
+    "grounded": 0,
+    "grounded_fraction": 0.0,
+    "trigger_counts": {},
+    "unresolved": []
+  },
+  "escalations": [],
+  "work_orders": [],
+  "iterations": [],
+  "parser_findings": [],
+  "criteria": [],
+  "determination": {
+    "verdict": "unknown",
+    "reasoning": "",
+    "rounds_run": 0,
+    "rounds_recorded": 0,
+    "criteria_met": 0,
+    "criteria_unmet": 0,
+    "criteria_unknown": 0,
+    "notes": [
+      "dry run: 3 criteria would be answered, 1 forced round(s) would run"
+    ]
+  },
+  "lessons": [],
+  "phases": [
+    {
+      "name": "p1_orientation",
+      "status": "ok",
+      "notes": [
+        "dry run: orientation prompt is ~5734 tokens"
+      ]
+    },
+    {
+      "name": "p2_ladder",
+      "status": "ok",
+      "notes": [
+        "rung 2a: capped to the 1 most important partition(s) of 57 planned (max_partitions); items in the other partitions were not attempted and appear in no census state",
+        "dry run: 1 partition(s) planned for rung 2a, nothing invoked. Rungs 2b and 2c depend on 2a's outcome and cannot be planned without it."
+      ]
+    },
+    {
+      "name": "p3_adjudication",
+      "status": "ok",
+      "notes": [
+        "dry run: 112 grounded item(s), 11 would be spot-checked; the verify passes would run in full. Nothing invoked."
+      ]
+    },
+    {
+      "name": "p4_synthesis",
+      "status": "ok",
+      "notes": [
+        "dry run: synthesis prompt is ~87879 tokens"
+      ]
+    },
+    {
+      "name": "p5_determination",
+      "status": "ok",
+      "notes": [
+        "dry run: 3 criteria would be answered, 1 forced round(s) would run"
+      ]
+    }
+  ],
+  "adjudication": {
+    "identity": {},
+    "edges": {},
+    "findings": {},
+    "spot_checks": [],
+    "substitution_checks": [],
+    "checked": 0,
+    "unsupported": 0,
+    "disagreement_rate": null,
+    "substitution_failure_rate": null,
+    "notes": [
+      "dry run: 112 grounded item(s), 11 would be spot-checked; the verify passes would run in full. Nothing invoked."
+    ]
+  },
+  "synthesis": {
+    "tours": [],
+    "lenses": [],
+    "work_orders": [],
+    "rejected_orders": [],
+    "rejected_tours": [],
+    "narrative_written": false,
+    "notes": []
+  },
+  "cost_note": "Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent."
+}
