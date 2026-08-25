@@ -273,3 +273,68 @@ def test_max_attempts_one_means_no_retry():
     assert not result.ok
     assert base.calls == 1
     assert clock.sleeps == []
+
+
+# ---------------------------------------------------- systemic-failure circuit
+
+
+class TestSystemicFailureCircuit:
+    """The run-level breaker, born from a real incident.
+
+    The claude CLI's OAuth session expired mid-run; every later call failed
+    identically in ~0.6s at $0.00, and the run dispatched 10,387 doomed
+    subprocesses over 1.7 hours. The cost ceiling never tripped (failures are
+    free) and the wall ceiling was hours away, so the meter needed a third
+    ceiling: the shape of the failures themselves.
+    """
+
+    def _meter(self):
+        from analyzer.enrich.pipeline import BudgetMeter
+
+        return BudgetMeter(ceiling=None)
+
+    def test_identical_failures_open_the_circuit(self):
+        m = self._meter()
+        for _ in range(5):
+            assert m.under()
+            m.note_result(False, "claude exited 1: Failed to authenticate: OAuth session expired")
+        assert not m.under()
+        assert "systemic failure circuit open" in m.stop_reason()
+        assert "authenticate" in m.stop_reason()
+
+    def test_distinct_failures_never_trip_it(self):
+        """Interleaved different errors are a flaky transport, not a dead one."""
+        m = self._meter()
+        for i in range(50):
+            m.note_result(False, f"claude exited 1: partition {i} returned invalid JSON")
+        assert m.under(), "distinct error texts must not open the circuit"
+
+    def test_one_success_resets_the_count(self):
+        m = self._meter()
+        for _ in range(4):
+            m.note_result(False, "Failed to authenticate: OAuth session expired")
+        m.note_result(True, None)
+        for _ in range(4):
+            m.note_result(False, "Failed to authenticate: OAuth session expired")
+        assert m.under(), "a success between failures proves the transport is alive"
+
+    def test_systemic_outranks_the_other_ceilings_in_the_reason(self):
+        """The systemic reason carries the FIX, because it is the only ceiling
+        whose remedy is outside the run."""
+        m = self._meter()
+        for _ in range(5):
+            m.note_result(False, "Failed to authenticate: x")
+        reason = m.stop_reason()
+        assert "rerun" in reason and "--update" in reason
+
+    def test_whitespace_and_case_variants_still_count_as_identical(self):
+        m = self._meter()
+        for variant in (
+            "Failed to  authenticate: OAuth expired",
+            "failed to authenticate:   oauth EXPIRED",
+            "FAILED TO AUTHENTICATE: OAUTH EXPIRED",
+            "failed to authenticate: oauth expired",
+            "Failed To Authenticate: OAuth Expired",
+        ):
+            m.note_result(False, variant)
+        assert not m.under(), "normalization must not let formatting reset the run"

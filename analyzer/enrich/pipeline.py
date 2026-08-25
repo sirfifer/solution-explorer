@@ -177,14 +177,70 @@ class BudgetMeter:
         elapsed = self.wall_elapsed_s()
         return elapsed is not None and elapsed >= self.wall_ceiling_s
 
+    # ---- systemic-failure circuit ------------------------------------------
+    #
+    # The third ceiling, added after a real incident: the claude CLI's OAuth
+    # session expired mid-run, every subsequent call failed identically in
+    # ~0.6s at $0.00, and the run spent 1.7 HOURS dispatching 10,387 doomed
+    # subprocesses. The cost ceiling never tripped because the failures were
+    # free, and the wall ceiling was hours away. What should have stopped the
+    # run is the run's own shape: thousands of consecutive, byte-identical
+    # failures across DIFFERENT prompts is an environment problem, not a work
+    # problem, and no amount of continuing can fix an environment problem.
+    #
+    # The rule is deliberately narrow: only an unbroken run of IDENTICAL
+    # normalized error text trips it. Interleaved distinct failures never do,
+    # and one success resets the count, so flaky-but-alive transports are
+    # untouched. Recovery is cheap by design: enrichment reruns with --update
+    # skip everything already banked, so failing fast costs a rerun command,
+    # while failing slow costs hours and tells nobody.
+    systemic_threshold: int = 5
+    _consecutive_identical: int = 0
+    _last_error_shape: Optional[str] = None
+    _systemic_error: Optional[str] = None
+
+    def note_result(self, ok: bool, error: Optional[str] = None) -> None:
+        """Feed every invocation outcome to the circuit. Thread-safe."""
+        with self._lock:
+            if ok or not error:
+                self._consecutive_identical = 0
+                self._last_error_shape = None
+                return
+            shape = " ".join(str(error).lower().split())[:300]
+            if shape == self._last_error_shape:
+                self._consecutive_identical += 1
+            else:
+                self._last_error_shape = shape
+                self._consecutive_identical = 1
+            if (
+                self._systemic_error is None
+                and self._consecutive_identical >= self.systemic_threshold
+            ):
+                self._systemic_error = str(error)[:300]
+
+    @property
+    def systemic_failure(self) -> Optional[str]:
+        return self._systemic_error
+
     def under(self) -> bool:
-        """True while new work may be launched (both ceilings clear)."""
+        """True while new work may be launched (all three ceilings clear)."""
+        if self._systemic_error is not None:
+            return False
         if self.ceiling is not None and self.spent >= self.ceiling:
             return False
         return not self._over_wall()
 
     def stop_reason(self) -> str:
-        """Which ceiling stopped the run, for honest notes. Cost wins ties."""
+        """Which ceiling stopped the run, for honest notes. Systemic wins ties:
+        it is the only one of the three where the fix is outside this run."""
+        if self._systemic_error is not None:
+            return (
+                f"systemic failure circuit open: {self.systemic_threshold} "
+                f"consecutive identical failures ({self._systemic_error}). "
+                f"The environment is broken, not the work; fix it (for auth: "
+                f"run `claude` interactively once) and rerun. --update resumes, "
+                f"skipping everything already enriched."
+            )
         if self.ceiling is not None and self.spent >= self.ceiling:
             return f"run cost ceiling reached (${self.ceiling:.2f} API-equivalent)"
         if self._over_wall():
@@ -320,6 +376,11 @@ class MeteredInvoker:
         wall = max(0.0, self._ctx.timer() - started)
         tokens_in, tokens_cached, tokens_out = _usage_tokens(result.usage)
         self._ctx.budget.charge(result.cost_usd)
+        # Every outcome feeds the systemic-failure circuit: one success resets
+        # it, a run of identical failures opens it, and the pre-launch
+        # budget.under() gate above then refuses all further work with the
+        # reason attached, instead of dispatching doomed subprocesses for hours.
+        self._ctx.budget.note_result(result.ok, result.error)
         # RetryingInvoker exposes the attempt count it used for the last logical
         # invoke; a plain invoker does not, so absence reads as no retries.
         retries = int(getattr(self._inner, "last_attempts", 1) or 1) - 1
