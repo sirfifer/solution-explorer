@@ -224,3 +224,156 @@ class ProcessingRun:
             )
         except OSError:
             pass
+
+
+class LedgerWatch:
+    """Live telemetry for a long child process, from its own artifacts.
+
+    Exists because a two-hour enrichment ran as one silent board step, the
+    board's staleness inference called the run stalled while it was healthy,
+    and the owner rightly refused to run anything for hours blind again.
+
+    Every number published is a fact from outside the watcher:
+
+      the ledger    the child appends one JSON row per completed model call;
+                    the watcher tails it and aggregates what actually landed
+      the process   the child's live `claude` subprocesses, with their real
+                    ages, read from the process table
+
+    Pace: one tick every ``interval`` seconds, and AT MOST one event per tick,
+    summarizing however many real calls completed since the last one. During a
+    burst of thousands of small calls that is four aggregate events a minute,
+    not thousands; during a nine-minute bulk call it is a live in-flight line
+    and no event at all, because nothing completed and saying otherwise would
+    be the fake heartbeat this deliberately is not. run.json is rewritten each
+    tick with the updated truth, which also keeps the board's staleness
+    inference honest as a side effect of real reporting rather than instead
+    of it.
+
+    Same rule as everything else in this module: observability must never be
+    able to fail the work it watches. Every tick is fenced; a watcher error
+    costs a tick, not the run.
+    """
+
+    def __init__(
+        self,
+        run: ProcessingRun,
+        ledger_path: Path,
+        child_pid: int,
+        interval: float = 15.0,
+        ps_fn=None,
+    ) -> None:
+        import threading
+
+        self._run = run
+        self._ledger = Path(ledger_path)
+        self._pid = child_pid
+        self._interval = interval
+        self._ps_fn = ps_fn or self._ps_children
+        self._offset = 0
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        # Aggregates across the whole watch: real completed work only.
+        self.calls_ok = 0
+        self.calls_failed = 0
+        self.spent_usd = 0.0
+        self.last_phase = ""
+
+    # ------------------------------------------------------------- lifecycle
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=5.0)
+
+    def _loop(self) -> None:
+        while not self._stop.wait(self._interval):
+            try:
+                self.tick()
+            except Exception:
+                pass  # a watcher error costs a tick, never the run
+
+    # ----------------------------------------------------------------- ticks
+
+    def tick(self) -> None:
+        new_rows = self._read_new_rows()
+        for row in new_rows:
+            if row.get("ok"):
+                self.calls_ok += 1
+            else:
+                self.calls_failed += 1
+            self.spent_usd += float(row.get("cost_usd") or 0.0)
+            phase = str(row.get("phase") or "")
+            rung = row.get("rung")
+            self.last_phase = f"{phase}/{rung}" if rung else phase
+
+        in_flight = self._ps_fn()
+
+        if new_rows:
+            self._run._emit({
+                "type": "progress",
+                "phase": self.last_phase,
+                "new_calls": len(new_rows),
+                "calls_ok": self.calls_ok,
+                "calls_failed": self.calls_failed,
+                "spent_usd": round(self.spent_usd, 4),
+            })
+
+        parts = []
+        if self.last_phase:
+            parts.append(self.last_phase)
+        parts.append(
+            f"{self.calls_ok} call(s) done"
+            + (f", {self.calls_failed} failed" if self.calls_failed else "")
+            + f", ${self.spent_usd:.2f}"
+        )
+        if in_flight:
+            ages = ", ".join(in_flight[:4])
+            parts.append(f"in flight: {len(in_flight)} ({ages})")
+        elif not new_rows:
+            # True and worth saying: nothing completed this tick and nothing is
+            # running. Either the run is between phases or something is wrong,
+            # and the reader deserves the fact rather than a reassuring line.
+            parts.append("no model call in flight")
+        self._run.record["current"] = " · ".join(parts)
+        self._run._flush()
+
+    def _read_new_rows(self) -> list:
+        rows = []
+        try:
+            with open(self._ledger, encoding="utf-8") as fh:
+                fh.seek(self._offset)
+                for line in fh:
+                    if not line.endswith("\n"):
+                        break  # partial write; reread next tick
+                    self._offset += len(line.encode("utf-8"))
+                    try:
+                        rows.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        except OSError:
+            pass  # ledger not created yet
+        return rows
+
+    def _ps_children(self) -> list:
+        """Ages of the child's live claude subprocesses, oldest first."""
+        import subprocess
+
+        try:
+            out = subprocess.run(
+                ["ps", "-axo", "pid=,ppid=,etime=,command="],
+                capture_output=True, text=True, timeout=5,
+            ).stdout
+        except Exception:
+            return []
+        ages = []
+        for line in out.splitlines():
+            fields = line.split(None, 3)
+            if len(fields) < 4:
+                continue
+            _pid, ppid, etime, command = fields
+            if ppid == str(self._pid) and "claude" in command:
+                ages.append(etime)
+        return ages

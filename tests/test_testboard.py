@@ -519,3 +519,95 @@ def test_a_missing_dashboard_file_is_reported_as_a_server_error(
     with pytest.raises(urllib.error.HTTPError) as excinfo:
         urllib.request.urlopen(f"{server}/", timeout=10)
     assert excinfo.value.code == 500
+
+
+# --------------------------------------------------------------- LedgerWatch
+
+
+class TestLedgerWatch:
+    """Live telemetry from real artifacts only.
+
+    Born from an owner directive after a two-hour enrichment ran as one silent
+    board step and the staleness inference called a healthy run stalled. Every
+    assertion here is about the honesty rules: numbers come from the ledger and
+    the process table, at most one event per tick, and a quiet tick says what
+    is actually true instead of emitting a reassuring pulse.
+    """
+
+    @staticmethod
+    def _emit_module():
+        spec = importlib.util.spec_from_file_location(
+            "testboard_emit", REPO_ROOT / "scripts" / "testboard_emit.py"
+        )
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        return mod
+
+    def _watch(self, tmp_path, monkeypatch, ps=lambda: []):
+        monkeypatch.setenv("TESTBOARD_DIR", str(tmp_path / "runs"))
+        te = self._emit_module()
+
+        run = te.ProcessingRun("enhance", slug="subj").__enter__()
+        ledger = tmp_path / "ledger.jsonl"
+        watch = te.LedgerWatch(run, ledger, child_pid=99999, ps_fn=ps)
+        return run, ledger, watch
+
+    def _events(self, run):
+        import json as _json
+
+        path = run.run_dir / "events.jsonl"
+        return [_json.loads(line) for line in path.read_text().splitlines()]
+
+    def test_a_tick_aggregates_real_rows_into_one_event(self, tmp_path, monkeypatch):
+        run, ledger, watch = self._watch(tmp_path, monkeypatch)
+        ledger.write_text(
+            '{"phase": "p2_ladder", "rung": "2a", "ok": true, "cost_usd": 1.5}\n'
+            '{"phase": "p2_ladder", "rung": "2a", "ok": true, "cost_usd": 0.5}\n'
+            '{"phase": "p2_ladder", "rung": "2a", "ok": false, "cost_usd": 0.0}\n'
+        )
+        watch.tick()
+        progress = [e for e in self._events(run) if e["type"] == "progress"]
+        assert len(progress) == 1, "three rows must aggregate into ONE event"
+        assert progress[0]["new_calls"] == 3
+        assert progress[0]["calls_ok"] == 2
+        assert progress[0]["calls_failed"] == 1
+        assert progress[0]["spent_usd"] == 2.0
+        assert "p2_ladder/2a" in run.record["current"]
+        assert "$2.00" in run.record["current"]
+
+    def test_a_quiet_tick_with_calls_in_flight_shows_their_real_ages(
+        self, tmp_path, monkeypatch
+    ):
+        run, ledger, watch = self._watch(
+            tmp_path, monkeypatch, ps=lambda: ["04:33", "02:10"]
+        )
+        watch.tick()  # ledger does not even exist yet
+        progress = [e for e in self._events(run) if e["type"] == "progress"]
+        assert not progress, "nothing completed, so no event: a pulse would be fake"
+        assert "in flight: 2 (04:33, 02:10)" in run.record["current"]
+
+    def test_a_dead_quiet_tick_says_so_instead_of_reassuring(
+        self, tmp_path, monkeypatch
+    ):
+        run, ledger, watch = self._watch(tmp_path, monkeypatch)
+        watch.tick()
+        assert "no model call in flight" in run.record["current"]
+
+    def test_a_partial_line_waits_and_a_malformed_line_is_skipped(
+        self, tmp_path, monkeypatch
+    ):
+        run, ledger, watch = self._watch(tmp_path, monkeypatch)
+        ledger.write_text(
+            'not json at all\n'
+            '{"phase": "p1", "ok": true, "cost_usd": 0.7}\n'
+            '{"phase": "p2_ladder", "rung": "2a", "ok": true, "cost_'  # torn write
+        )
+        watch.tick()
+        assert watch.calls_ok == 1, "the torn tail must not be consumed"
+        ledger.write_text(
+            ledger.read_text() + 'usd": 0.3}\n'
+        )
+        watch.tick()
+        assert watch.calls_ok == 2, "the completed line lands on the next tick"
+        assert watch.spent_usd == 1.0

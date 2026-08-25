@@ -631,6 +631,7 @@ def run_enhance(
     *,
     max_partitions: Optional[int] = None,
     dry_run: bool = False,
+    watch: Optional[object] = None,
 ) -> int:
     """`analyze.py enhance --update` with the registry's cost ceiling and
     quality threshold. Returns the subprocess exit code (0 success/dry-run, 1 a
@@ -699,6 +700,34 @@ def run_enhance(
     # instead of arriving in one block when the run ends. The streaming ledger
     # is the primary observability channel; this keeps the fallback honest too.
     env = dict(os.environ, PYTHONUNBUFFERED="1")
+
+    # Live telemetry (owner directive after a run spent hours as one silent
+    # board step): a LedgerWatch tails the child's ledger and the process table
+    # while this call blocks, publishing real completed-call aggregates and
+    # real in-flight ages to the testboard record. Only for a live ladder run:
+    # a dry run finishes in seconds, and without a ProcessingRun to publish to
+    # there is nowhere to watch from.
+    ledger_watch = None
+    if (
+        watch is not None
+        and not dry_run
+        and enrichment.get("pipeline") == "ladder"
+        and ProcessingRun is not None
+    ):
+        proc = subprocess.Popen(cmd, env=env)
+        try:
+            from testboard_emit import LedgerWatch
+
+            ledger_watch = LedgerWatch(watch, run_dir / "ledger.jsonl", proc.pid)
+            ledger_watch.start()
+        except Exception:
+            ledger_watch = None  # the board must never fail the work
+        try:
+            return proc.wait()
+        finally:
+            if ledger_watch is not None:
+                ledger_watch.stop()
+
     result = subprocess.run(cmd, env=env)
     return result.returncode
 
@@ -2052,7 +2081,10 @@ def _cmd_enhance(args: argparse.Namespace) -> int:
     with _published("enhance", args.slug, total=1, note=mode) as run:
         if run:
             run.step("ladder", f"enrichment ladder ({mode})")
-        rc = run_enhance(corpus, max_partitions=args.max_partitions, dry_run=args.dry_run)
+        rc = run_enhance(
+            corpus, max_partitions=args.max_partitions, dry_run=args.dry_run,
+            watch=run,
+        )
         if run:
             run.finish_step(
                 status="passed" if rc == 0 else "failed",
