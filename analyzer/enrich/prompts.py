@@ -146,6 +146,12 @@ class StoreFacts:
         self.arch = arch
         self.component_index = _index_components(arch.get("components", []))
         self.caps_by_comp = _group_by(capabilities, "component_id")
+        # The AI surface rides on the arch itself (projected after the SBOM), so
+        # no new constructor parameter: components that talk to, route, or run
+        # models get those facts in their block, and the enhancement can say so
+        # instead of never learning it. Grounded like everything else here: the
+        # rows carry detector evidence, not inference.
+        self.ai_by_comp = _group_by(arch.get("ai_surface") or [], "component_id")
         self.entities_by_comp = _group_by(data_entities, "component_id")
         self.rules_by_comp = _group_by(rules, "component_id")
         self._rel_by_key = {
@@ -202,6 +208,17 @@ class StoreFacts:
             facts["data_entities"] = [
                 {"name": e.get("name"), "kind": e.get("kind")} for e in entities[:12]
             ]
+        ai_rows = self.ai_by_comp.get(comp_id)
+        if ai_rows:
+            facts["ai_surface"] = [
+                {
+                    "kind": a.get("kind"),
+                    "name": a.get("name"),
+                    "confidence": a.get("confidence"),
+                    "instances": a.get("instance_count"),
+                }
+                for a in ai_rows[:12]
+            ]
         rules = self.rules_by_comp.get(comp_id)
         if rules:
             facts["rules"] = [
@@ -237,6 +254,12 @@ def build_partition_prompt(partition: Partition, facts: StoreFacts) -> str:
         _SCHEMA_CONTRACT,
         "",
         "ROLE VOCABULARY (use exact values): " + ", ".join(ROLE_VOCABULARY),
+        "",
+        "Where a component's facts include ai_surface entries (model provider "
+        "SDKs, gateways, MCP, agent frameworks, local inference, model ids), "
+        "its AI role is part of what the component IS: say what it talks to or "
+        "routes and through which mechanism, grounded in those entries. Never "
+        "invent AI involvement for components without ai_surface facts.",
         "",
         _CRITICALITY_GUIDANCE,
         "",

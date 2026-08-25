@@ -270,6 +270,7 @@ def build_orientation_prompt(
     top_components: list[dict],
     ranking_note: str,
     design: Optional[dict] = None,
+    ai_surface_summary: Optional[dict] = None,
 ) -> str:
     parts = [
         "You are orienting an automated enrichment pipeline before it maps a "
@@ -300,6 +301,23 @@ def build_orientation_prompt(
             json.dumps(design, indent=2, default=str),
             "",
         ]
+    # The AI surface digest: a hint, not a briefing. The detector's full rows
+    # travel with each partition's facts; orientation only needs the model to
+    # EXPECT an AI surface in this subject, so its judgements about what to call
+    # out are framed before the first partition arrives rather than improvised
+    # when ai_surface facts appear from left field. Absent entirely when the
+    # subject has no detectable AI surface, so a prompt for a plain codebase
+    # carries no empty section and invites no invention.
+    if ai_surface_summary:
+        parts += [
+            "AI SURFACE (mechanical detection, no inference). This subject "
+            "contains the following AI-related machinery; expect ai_surface "
+            "facts on the components involved and weigh what deserves calling "
+            "out. Do not report AI involvement anywhere these facts do not "
+            "support.",
+            json.dumps(ai_surface_summary, indent=2, default=str),
+            "",
+        ]
     parts += [
         "README AND DOCUMENTATION (truncated):",
         readme[:12000] if readme else "(no readme found)",
@@ -310,6 +328,27 @@ def build_orientation_prompt(
 
 
 # --- inputs -------------------------------------------------------------------
+
+
+def _ai_surface_summary(arch: dict) -> Optional[dict]:
+    """A compact digest of the detector's findings, or None when there are none.
+
+    Counts by kind plus the distinct names per kind, capped: enough for the
+    orientation to expect the surface and shape its criteria, without spending
+    partition-level token budget on rows the partitions will carry anyway.
+    """
+    items = arch.get("ai_surface") or []
+    if not items:
+        return None
+    by_kind: dict[str, dict] = {}
+    for item in items:
+        kind = item.get("kind") or "unknown"
+        bucket = by_kind.setdefault(kind, {"items": 0, "names": []})
+        bucket["items"] += 1
+        name = item.get("name")
+        if name and name not in bucket["names"] and len(bucket["names"]) < 8:
+            bucket["names"].append(name)
+    return {"total_items": len(items), "by_kind": by_kind}
 
 
 def _collect_readme(arch: dict, root: Path) -> str:
@@ -392,6 +431,7 @@ class OrientationPhase:
             top_components=_top_components(ctx.arch, ranking, TOP_COMPONENTS_SHOWN),
             ranking_note=ranking_note,
             design=ctx.design_digest(),
+            ai_surface_summary=_ai_surface_summary(ctx.arch),
         )
 
         if ctx.dry_run:
