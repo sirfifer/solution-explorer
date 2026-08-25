@@ -1,6 +1,6 @@
 # Enrichment Run Report: polyglot
 
-Commit `96a48220045db6dcb14051e8e34377937eab1b0b`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
+Commit `4f6ef44ff277534ceb2d8007d92f57fc123fa8d1`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
 
 **Determination: DONE**
 
@@ -29,6 +29,30 @@ The census shows the map supports a reader orienting and finding the service bou
 The dollar column above is an API-equivalent price. No card was charged: this work was metered against a Claude subscription, and a subscription is an allowance that refills weekly, not a balance. On Max plans Sonnet and Opus draw from **separate** weekly buckets, so the split above matters more than the total.
 
 _This run has not been measured against the account._ To turn this into a share of the weekly allowance: take a /usage reading immediately before the run, keep hands off the account for its duration, take a second reading immediately after, and record the difference with scripts/usage-budget.py calibrate. Nothing else measures a subscription; the dollar figures here are API-equivalent prices for work that was never billed at API rates.
+
+## What the climbing cost
+
+1 item(s) climbed past the bulk rung, consuming 3,000 tokens and $0.02 API-equivalent above it, roughly $0.020 per climb.
+
+On a Max plan Sonnet and Opus draw from **separate** weekly buckets, so an escalation avoided is worth more than its price: it stops consuming the scarcer of the two.
+
+### Questions the parser should have answered
+
+The best kind of finding here. These are not model problems: the tier itself declared that a deterministic fact would have settled the question. Moving one of these costs no model call at all, and it improves the input to every later stage rather than only this one.
+
+| Question a parser could settle | Items |
+|---|---|
+| libs/core's language was inferable from its manifest | 1 |
+
+### Why the rest climbed
+
+For each trigger, the question worth asking before the next run is not "was the harder model right" but **what would the cheaper rung have needed to get this right**. That is a context question far more often than it is a capability question.
+
+| Trigger | Meaning | Suspect | Items | Most frequent question |
+|---|---|---|---|---|
+| E1 | no-answer: a required question the tier could not answer at all | reasoning | 1 | mechanism |
+
+`context` means the tier had the facts and still could not ground, cite or reconcile them, so the prompt is the suspect before the model is. `reasoning` means the difficulty looks real and escalation did its job.
 
 ## Item census
 

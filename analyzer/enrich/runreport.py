@@ -24,6 +24,8 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
+from .contract import TRIGGERS
+
 __all__ = [
     "REQUIRED_SECTIONS",
     "build_report",
@@ -89,12 +91,103 @@ def build_report(ctx, result, *, engine_version: str = "1") -> dict:
         "adjudication": adjudication.to_dict() if adjudication is not None else None,
         "synthesis": synthesis.to_dict() if synthesis is not None else None,
         "accounting": _accounting(ctx, result),
+        "escalation_economics": _escalation_economics(ctx, result),
         "cost_note": COST_NOTE,
     }
     missing = [key for key in REQUIRED_SECTIONS if key not in report]
     if missing:  # pragma: no cover - guards a future edit, not a runtime path
         raise AssertionError(f"Run Report is missing required sections: {missing}")
     return report
+
+
+def _escalation_economics(ctx, result) -> dict:
+    """What the ladder spent climbing, and what would stop it climbing next time.
+
+    An escalation tree is only worth having if every climb teaches something. The
+    tree's value is not that a harder model eventually answers; it is that the
+    CHEAPEST rung is handed context good enough to succeed, and each escalation
+    is evidence that some particular context was missing.
+
+    So this section asks, per trigger, the question the owner wants asked every
+    time: how could sonnet have succeeded here? It does not try to answer it
+    mid-run. It records the shape of the failure and what it cost, so the answer
+    can be worked out deliberately afterwards.
+
+    Three classes of opportunity, because they have completely different fixes:
+
+      deterministic  the tier declared the question was one the PARSER should
+                     have answered (parser_first). This is the best kind of
+                     finding: moving it costs a model call nothing and makes the
+                     input better for everything downstream, so the enrichment
+                     has more to work with rather than less.
+      context        the tier had the facts and still could not ground, cite or
+                     reconcile them. The prompt, not the model, is the suspect.
+      reasoning      genuine difficulty. Escalation is doing its job.
+
+    The cost side matters more than a flat count because Sonnet and Opus draw
+    from SEPARATE weekly buckets on a Max plan. Work moved down the ladder does
+    not just cost less, it stops consuming the scarcer bucket, so an escalation
+    avoided is worth more than its dollar figure suggests.
+    """
+    ladder = _phase_data(ctx, "p2_ladder", "ladder")
+    if ladder is None:
+        return {"climbed": 0, "by_trigger": [], "deterministic_opportunities": [], "note":
+                "the ladder did not run, so there is nothing to learn from it"}
+
+    climbed_states = [
+        st for st in ladder.states.values()
+        if any(":escalate" in entry for entry in st.history) or st.state == "honest_gap"
+    ]
+
+    by_trigger: dict[str, dict] = {}
+    parser_first: dict[str, int] = {}
+    for st in climbed_states:
+        for failed in st.failed:
+            trig = failed.trigger or "unknown"
+            bucket = by_trigger.setdefault(trig, {
+                "trigger": trig,
+                "meaning": TRIGGERS.get(trig, "unrecorded trigger"),
+                "items": 0,
+                "questions": {},
+            })
+            bucket["items"] += 1
+            bucket["questions"][failed.question] = (
+                bucket["questions"].get(failed.question, 0) + 1
+            )
+        for question in st.parser_first or []:
+            parser_first[question] = parser_first.get(question, 0) + 1
+
+    # What the climbing itself consumed. Ledger rows carry their rung, so the
+    # rungs above the bulk tier are exactly the cost of escalation.
+    bulk_rung = "2a"
+    escalated_cost = 0.0
+    escalated_tokens = 0
+    for row in (result.ledger or []):
+        if row.rung and row.rung != bulk_rung and row.phase == "p2_ladder":
+            escalated_cost += float(row.cost_usd or 0.0)
+            escalated_tokens += (row.tokens_in or 0) + (row.tokens_out or 0)
+
+    triggers = sorted(by_trigger.values(), key=lambda b: b["items"], reverse=True)
+    for bucket in triggers:
+        bucket["questions"] = sorted(
+            ({"question": q, "items": n} for q, n in bucket["questions"].items()),
+            key=lambda r: r["items"], reverse=True,
+        )
+        bucket["class"] = "context" if bucket["trigger"] in ("E2", "E3", "E4") else "reasoning"
+
+    return {
+        "climbed": len(climbed_states),
+        "escalated_cost_usd": round(escalated_cost, 6),
+        "escalated_tokens": escalated_tokens,
+        "cost_per_climb_usd": (
+            round(escalated_cost / len(climbed_states), 6) if climbed_states else 0.0
+        ),
+        "by_trigger": triggers,
+        "deterministic_opportunities": sorted(
+            ({"question": q, "items": n} for q, n in parser_first.items()),
+            key=lambda r: r["items"], reverse=True,
+        ),
+    }
 
 
 def _accounting(ctx, result) -> dict:
@@ -422,6 +515,89 @@ def _table(rows: list[list[str]], headers: list[str]) -> list[str]:
     return out
 
 
+def _escalation_economics_section(report: dict) -> list:
+    """The improvement section: every climb is a question about the rung below.
+
+    Written to be acted on rather than admired, so it leads with the cheapest
+    class of fix (something the parser could have answered outright) and ends
+    with the one that is nobody's fault.
+    """
+    econ = report.get("escalation_economics") or {}
+    if econ.get("note"):
+        return ["## What the climbing cost", "", f"_{econ['note']}._", ""]
+    climbed = econ.get("climbed", 0)
+    if not climbed:
+        return [
+            "## What the climbing cost",
+            "",
+            "Nothing escalated. The bulk rung answered everything it was asked, "
+            "which is the cheapest possible outcome and worth noticing.",
+            "",
+        ]
+
+    lines = [
+        "## What the climbing cost",
+        "",
+        f"{climbed} item(s) climbed past the bulk rung, consuming "
+        f"{econ.get('escalated_tokens', 0):,} tokens and "
+        f"${econ.get('escalated_cost_usd', 0.0):.2f} API-equivalent above it, "
+        f"roughly ${econ.get('cost_per_climb_usd', 0.0):.3f} per climb.",
+        "",
+        "On a Max plan Sonnet and Opus draw from **separate** weekly buckets, so "
+        "an escalation avoided is worth more than its price: it stops consuming "
+        "the scarcer of the two.",
+        "",
+    ]
+
+    deterministic = econ.get("deterministic_opportunities") or []
+    if deterministic:
+        lines += [
+            "### Questions the parser should have answered",
+            "",
+            "The best kind of finding here. These are not model problems: the tier "
+            "itself declared that a deterministic fact would have settled the "
+            "question. Moving one of these costs no model call at all, and it "
+            "improves the input to every later stage rather than only this one.",
+            "",
+        ]
+        lines += _table(
+            [[row["question"], str(row["items"])] for row in deterministic[:15]],
+            ["Question a parser could settle", "Items"],
+        )
+        lines += [""]
+
+    lines += [
+        "### Why the rest climbed",
+        "",
+        "For each trigger, the question worth asking before the next run is not "
+        "\"was the harder model right\" but **what would the cheaper rung have "
+        "needed to get this right**. That is a context question far more often "
+        "than it is a capability question.",
+        "",
+    ]
+    lines += _table(
+        [
+            [
+                b["trigger"],
+                b["meaning"],
+                b["class"],
+                str(b["items"]),
+                (b["questions"][0]["question"] if b.get("questions") else ""),
+            ]
+            for b in (econ.get("by_trigger") or [])
+        ],
+        ["Trigger", "Meaning", "Suspect", "Items", "Most frequent question"],
+    )
+    lines += [
+        "",
+        "`context` means the tier had the facts and still could not ground, cite "
+        "or reconcile them, so the prompt is the suspect before the model is. "
+        "`reasoning` means the difficulty looks real and escalation did its job.",
+        "",
+    ]
+    return lines
+
+
 def _accounting_section(report: dict) -> list:
     """Who did the work, in the terms a subscription is actually spent in.
 
@@ -559,6 +735,7 @@ def render_markdown(report: dict) -> str:
         ]
 
     lines += _accounting_section(report)
+    lines += _escalation_economics_section(report)
 
     # Item census, the backbone of the determination.
     lines += ["## Item census", ""]
