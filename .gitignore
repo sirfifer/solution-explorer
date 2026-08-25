@@ -61,3 +61,10 @@ infrastructure/cloudflare/worker/.wrangler/
 # Usage calibration (scripts/usage-budget.py). Written from an observation on
 # one machine and one subscription, so it is local truth rather than repo truth.
 demos/usage-calibration.json
+
+# Enrichment run records (demos/runs/). Committed DELIBERATELY when a run is a
+# keeper (git add -f), never swept in by a broad add: two interrupted runs'
+# debris, megabytes of ledger and report, reached commits that way on
+# 2026-08-25 and had to be rewritten out. The 2026-08-22 dry-run record stays
+# tracked; ignoring a path does not untrack it.
+demos/runs/
