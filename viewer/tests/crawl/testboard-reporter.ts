@@ -113,9 +113,29 @@ export default class TestboardReporter implements Reporter {
   private record: any;
   private startedAt = 0;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
+  /** Set once the first test actually starts, which a listing never does. */
+  private published = false;
+
+  /** Create the run directory the first time real work begins. */
+  private publish(): void {
+    if (this.published) return;
+    this.published = true;
+    fs.mkdirSync(this.runDir, { recursive: true });
+  }
   private currentStarted: number | null = null;
 
   onBegin(config: FullConfig, suite: Suite): void {
+    // A listing is not a run, and nothing in onBegin can tell the difference:
+    // `playwright test --list` instantiates reporters AND builds the full suite,
+    // so counting tests here says 13 either way. The one signal that separates
+    // them is that a listing never starts a test.
+    //
+    // So the record is prepared here and published on the first test that
+    // actually begins. Three listings had already reached the board as runs
+    // reporting 0 passed, 0 failed and a status of "passed", under the subject
+    // "unknown" because a listing sets no serve directory either. A green row
+    // for work that never happened is worse than a missing row: it is the board
+    // asserting something it has no evidence for.
     this.startedAt = Date.now();
     const stamp = new Date(this.startedAt).toISOString().replace(/[:.]/g, "-");
     const dataDir =
@@ -136,7 +156,6 @@ export default class TestboardReporter implements Reporter {
     // board cannot find it. A leading ".." would climb out of .testboard
     // entirely, and ":" is simply not a legal filename character on Windows.
     this.runDir = path.join(root, `${stamp}-crawl-${pathSafe(subject)}`);
-    fs.mkdirSync(this.runDir, { recursive: true });
     this.eventsPath = path.join(this.runDir, "events.jsonl");
 
     this.record = {
@@ -185,6 +204,7 @@ export default class TestboardReporter implements Reporter {
   }
 
   onTestBegin(test: TestCase): void {
+    this.publish();
     this.currentStarted = Date.now();
     this.record.current = test.titlePath().slice(-2).join(" › ");
     this.emit({ type: "case_start", title: this.record.current });
@@ -192,6 +212,7 @@ export default class TestboardReporter implements Reporter {
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
+    if (!this.published) return;
     const title = test.titlePath().slice(-2).join(" › ");
     this.record.completed += 1;
     if (result.status === "passed") this.record.passed += 1;
@@ -263,6 +284,8 @@ export default class TestboardReporter implements Reporter {
   }
 
   onEnd(result: FullResult): void {
+    // Nothing ever started, so this was a listing and there is nothing to say.
+    if (!this.published) return;
     if (this.heartbeat) clearInterval(this.heartbeat);
     const all = this.record.findings as any[];
     this.record.finding_totals = {

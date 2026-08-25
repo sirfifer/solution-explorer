@@ -564,6 +564,37 @@ def _snapshot_history(slug: str, out_dir: Path, corpus_dir: Optional[Path] = Non
     shutil.copyfile(manifest, dest_dir / "manifest.json")
 
 
+def _refuse_degraded_parsers() -> None:
+    """Stop before the work starts if this interpreter cannot read code properly.
+
+    The failure is already fatal deeper in, at the first file of a degraded
+    language. This is the same refusal moved to the front, because finding out
+    three minutes into a fifteen-minute analysis is a bad way to learn that the
+    wrong python was used, and on a large subject the wasted time is real.
+
+    Named the missing package deliberately: the fix is one command, and a preflight
+    that says "something is wrong" without saying what is a preflight people learn
+    to ignore.
+    """
+    try:
+        from analyzer.parsers import DEGRADED_LANGUAGES
+    except ImportError:  # pragma: no cover - the package is a hard dependency
+        return
+    if not DEGRADED_LANGUAGES:
+        return
+    lines = "\n".join(
+        f"    {lang}: {why}" for lang, why in sorted(DEGRADED_LANGUAGES.items())
+    )
+    raise RuntimeError(
+        "refusing to analyse: this interpreter cannot read "
+        f"{len(DEGRADED_LANGUAGES)} language(s) properly.\n{lines}\n"
+        "  There is no fallback tier by design, because a weaker parser produces "
+        "a projection that looks complete and is not.\n"
+        f"  Fix: pip install -e '.[all,dev]' into the environment running "
+        f"{sys.executable}, or run this from one that already has it."
+    )
+
+
 def run_analyze(corpus: dict, corpus_dir: Optional[Path] = None) -> float:
     """`analyze.py <src> -o <out> --split --engine v2 --store <per-demo store>`.
 
@@ -577,6 +608,7 @@ def run_analyze(corpus: dict, corpus_dir: Optional[Path] = None) -> float:
     src = _src_dir(slug, corpus_dir)
     if not (src / ".git").exists():
         raise FileNotFoundError(f"no fetched corpus for '{slug}' at {src}; run: fetch {slug}")
+    _refuse_degraded_parsers()
     out_dir = _arch_dir(slug, corpus_dir)
     store_path = _store_path(slug, corpus_dir)
     minutes = corpus.get("budget", {}).get("max_wall_minutes")

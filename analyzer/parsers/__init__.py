@@ -63,6 +63,23 @@ def _register(languages: list[str], module: str, symbol: str, package: str) -> N
         for language in languages:
             DEGRADED_LANGUAGES[language] = f"{package} is not installed ({exc})"
         return
+
+    # A module that imports is not a parser that works. Each _ts module guards
+    # its own grammar import and sets _ts_available, so the module loads
+    # perfectly well with no grammar behind it. Asking the parser whether it
+    # actually holds its grammar is the only honest test, and without it
+    # DEGRADED_LANGUAGES stays empty on exactly the machine that has the
+    # problem. Any preflight built on it would then give a false all-clear,
+    # which is the same shape as the incident this file exists to prevent: the
+    # failure was real and nothing on the way in could see it.
+    if not getattr(parser, "_ts_available", False):
+        for language in languages:
+            DEGRADED_LANGUAGES[language] = (
+                f"{package} imported but its grammar did not load, so this "
+                f"parser cannot read anything"
+            )
+        return
+
     for language in languages:
         PARSERS[language] = parser
 

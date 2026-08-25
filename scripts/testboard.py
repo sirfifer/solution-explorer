@@ -225,7 +225,12 @@ GLOSSARY: dict[str, dict[str, str]] = {
             "has not been touched for over three minutes, so the process has "
             "probably died. It is not marked failed because nothing ever "
             "reported a failure. The board infers this from file timestamps, "
-            "since a dead process cannot update its own status."
+            "since a dead process cannot update its own status. Shown last, "
+            "because a stall is not a verdict: while the system is still being "
+            "changed most stalls are runs somebody interrupted on purpose. Each "
+            "one still deserves a root cause, and once that cause is understood "
+            "and fixed the record is an artifact of a flaw rather than evidence "
+            "about the subject, so archive it."
         ),
     },
     "category": {
@@ -502,13 +507,27 @@ def load_runs() -> list[dict]:
         record["percent"] = round(100 * completed / total) if total else 0
         runs.append(record)
 
-    # Stalled runs ride with the live ones, never with the truncated history.
-    # "Your run died quietly" is the signal this board exists to deliver, so it
-    # is the last thing that should be allowed to fall off the end of a list.
+    # Live first, then finished work, and stalled runs last.
+    #
+    # Stalled used to sit at the top, next to the live runs, on the reasoning
+    # that "your run died quietly" is the signal this board exists to deliver.
+    # In practice it put the least informative rows in the most valuable space:
+    # during a week of iteration every killed run became a stalled row, and the
+    # top of the board filled with the debris of work that was interrupted on
+    # purpose while the results someone actually wanted scrolled below it.
+    #
+    # A stall is not a verdict. Nothing reported a failure; the board inferred a
+    # dead process from file timestamps. Once the system is stable a stall should
+    # be rare and should mean something outside our control broke, at which point
+    # it deserves attention. Until then it is usually an artifact of iteration,
+    # and artifacts belong at the bottom.
+    #
+    # They are still never truncated: a stall that gets dropped off the end is a
+    # stall nobody investigates.
     live = [r for r in runs if r.get("live")]
     stalled = [r for r in runs if not r.get("live") and r.get("status") == "stalled"]
     done = [r for r in runs if not r.get("live") and r.get("status") != "stalled"]
-    return live + stalled + done[:RECENT_RUNS]
+    return live + done[:RECENT_RUNS] + stalled
 
 
 def tail_events(run_dir: Path, limit: int = 40) -> list[dict]:
