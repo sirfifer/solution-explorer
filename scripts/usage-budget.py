@@ -87,6 +87,48 @@ DEFAULT_CALIBRATED = False
 TOKENS_PER_HOUR_SUSTAINED = 2_000_000
 
 
+# Claude View, the local usage service the ecosystem project runs on this
+# machine. It indexes the session transcripts under ~/.claude/projects and
+# reports what the account has actually consumed, which is the one thing this
+# tool cannot derive from a run's own report.
+#
+# It matters because headless `claude -p` invocations, which is how the
+# enrichment ladder calls models, write session transcripts exactly like
+# interactive ones. So the ladder's own consumption lands here automatically and
+# the weekly denominator needs no one to remember to read a number off a screen.
+CLAUDE_VIEW_URL = "http://127.0.0.1:47892"
+ECOSYSTEM_OPS_URL = "http://127.0.0.1:8787"
+
+
+def account_week(timeout: float = 8.0) -> Optional[dict]:
+    """What the account has spent this week, or None if the service is not up.
+
+    Never fatal. A missing usage service costs this tool its denominator, not
+    its numbers: the per-model account of a run is measured from the run itself
+    and stands on its own.
+    """
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(
+            f"{ECOSYSTEM_OPS_URL}/api/claudeview", timeout=timeout
+        ) as resp:
+            doc = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, json.JSONDecodeError, ValueError):
+        return None
+    summary = ((doc.get("service") or {}).get("summary")) or {}
+    week = summary.get("week") or {}
+    if not week:
+        return None
+    return {
+        "sessions": week.get("sessions"),
+        "cost_usd": week.get("cost"),
+        "cost_basis": summary.get("cost_basis"),
+        "collected_at": (doc.get("service") or {}).get("collected_at"),
+    }
+
+
 def _load_config() -> dict:
     if CONFIG_PATH.is_file():
         try:
@@ -252,6 +294,44 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"runs per week        {1 / share:.1f}")
     print(f"weekly allowance     ${allowance:.2f} api-equivalent"
           f"  [{'calibrated' if calibrated else 'UNCALIBRATED PLACEHOLDER'}]")
+
+    observed = account_week()
+    if observed and observed.get("cost_usd") is not None:
+        spent = float(observed["cost_usd"])
+        print()
+        print(f"account this week    ${spent:.2f} across "
+              f"{observed.get('sessions', '?')} session(s)"
+              f"   [{observed.get('cost_basis', 'unknown basis')}]")
+        if allowance:
+            print(f"                     {spent / allowance * 100:.0f}% of the "
+                  f"allowance above, everything included")
+        # Free calibration, and the honest kind. If the account has already spent
+        # more than the assumed allowance and is still working, the assumption is
+        # provably too low: an allowance is at minimum whatever has been spent
+        # against it without exhausting it. This raises a floor from observation
+        # every time the tool runs, so the placeholder converges toward the truth
+        # without anyone remembering to do anything.
+        if not calibrated and spent > allowance:
+            cfg["weekly_allowance_api_equivalent_usd"] = round(spent, 2)
+            cfg["basis"] = (
+                f"floor observed {observed.get('collected_at') or 'recently'}: "
+                f"${spent:.2f} was spent this week without exhausting the "
+                f"allowance, so the allowance is at least that. Still a floor, "
+                f"not a measurement."
+            )
+            _save_config(cfg)
+            print()
+            print(f"  ^ raised the working figure to ${spent:.2f}. That much has been")
+            print("    spent this week WITHOUT hitting a limit, so the allowance is at")
+            print("    least that. It is still a floor: the real ceiling is higher by")
+            print("    an unknown amount until a run measures it.")
+        if total > 0:
+            print(f"this run would be    {total / max(spent, 1e-9) * 100:.1f}% "
+                  f"of what the account has already spent this week")
+    else:
+        print()
+        print("account this week    Claude View not reachable; the per-run numbers")
+        print("                     above stand on their own, only the denominator is missing")
     if not calibrated:
         print()
         print("The percentage above is arithmetic on an assumption, not a measurement.")

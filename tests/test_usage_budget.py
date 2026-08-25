@@ -128,3 +128,56 @@ def test_an_uncalibrated_allowance_is_declared_not_hidden():
     assert "weekly_allowance_api_equivalent_usd" in cfg
     if not cfg.get("calibrated"):
         assert "placeholder" in cfg.get("basis", "").lower()
+
+
+def test_the_cli_breakdown_beats_our_binding():
+    """What billed is not always what was bound, and the measurement wins.
+
+    A call pinned to sonnet was observed billing claude-haiku-4-5 alongside
+    claude-sonnet-5. Attributing the whole invocation to its binding would put
+    those tokens in the wrong weekly bucket, and on a Max plan the Sonnet and
+    Opus buckets are separate, so that error changes the pacing answer rather
+    than just the tidiness of a table.
+    """
+    from analyzer.enrich.engine import InvokeResult, _accumulate_usage
+
+    into = {}
+    _accumulate_usage(into, InvokeResult(
+        ok=True, text="", cost_usd=0.094, model="anthropic-claude-cli:sonnet",
+        model_usage={
+            "claude-sonnet-5": {
+                "inputTokens": 2, "outputTokens": 4,
+                "cacheReadInputTokens": 27653, "cacheCreationInputTokens": 14184,
+                "costUSD": 0.0934659, "canonicalModel": "claude-sonnet-5",
+            },
+            "claude-haiku-4-5-20251001": {
+                "inputTokens": 521, "outputTokens": 12,
+                "cacheReadInputTokens": 0, "cacheCreationInputTokens": 0,
+                "costUSD": 0.000581, "canonicalModel": "claude-haiku-4-5",
+            },
+        },
+    ))
+    assert set(into) == {"claude-sonnet-5", "claude-haiku-4-5"}, (
+        "the binding must not swallow a model that actually billed"
+    )
+    assert into["claude-haiku-4-5"]["input_tokens"] == 521
+    assert into["claude-sonnet-5"]["cache_read_input_tokens"] == 27653
+
+
+def test_without_a_breakdown_the_binding_is_still_used():
+    """Older envelopes carry no modelUsage; they must still be accounted for."""
+    from analyzer.enrich.engine import InvokeResult, _accumulate_usage
+
+    into = {}
+    _accumulate_usage(into, InvokeResult(
+        ok=True, text="", cost_usd=1.5, model="anthropic-claude-cli:opus",
+        usage={"input_tokens": 100, "output_tokens": 20},
+    ))
+    assert into["anthropic-claude-cli:opus"]["input_tokens"] == 100
+    assert into["anthropic-claude-cli:opus"]["cost_usd"] == pytest.approx(1.5)
+
+
+def test_a_missing_usage_service_is_not_fatal(monkeypatch):
+    """The denominator is optional; the run's own numbers are not."""
+    monkeypatch.setattr(ub, "ECOSYSTEM_OPS_URL", "http://127.0.0.1:1")
+    assert ub.account_week(timeout=0.3) is None

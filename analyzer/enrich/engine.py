@@ -118,11 +118,16 @@ class InvokeResult:
     usage: dict = field(default_factory=dict)
     error: Optional[str] = None
     status_code: Optional[int] = None
-    # Which model actually answered. Carried because the ladder binds a
-    # different model to every rung, and a run's cost is meaningless as one
-    # number: the same token count against opus and against fable are different
-    # amounts of a weekly subscription allowance.
+    # Which model the rung BOUND. Not the same thing as what answered.
     model: Optional[str] = None
+    # What actually answered, from the CLI's own `modelUsage` map: canonical
+    # model name -> tokens and cost. Load bearing, because the bound model is not
+    # the whole story. A call pinned to sonnet was measured billing
+    # claude-haiku-4-5 alongside claude-sonnet-5, so attributing a whole
+    # invocation to its binding puts tokens in the wrong weekly bucket, and on a
+    # Max plan the Sonnet and Opus buckets are separate. This is ground truth
+    # from the process that did the metering; the binding is only our intent.
+    model_usage: dict = field(default_factory=dict)
 
 
 # An invoker takes a prompt and returns an InvokeResult. Injectable so tests can
@@ -226,6 +231,7 @@ class ClaudeCliInvoker:
                 error="model reported error",
                 status_code=_coerce_status(envelope.get("api_error_status")),
                 model=self.model,
+                model_usage=envelope.get("modelUsage", {}) or {},
             )
         return InvokeResult(
             ok=True,
@@ -233,6 +239,7 @@ class ClaudeCliInvoker:
             cost_usd=float(envelope.get("total_cost_usd", 0.0) or 0.0),
             usage=envelope.get("usage", {}) or {},
             model=self.model,
+            model_usage=envelope.get("modelUsage", {}) or {},
         )
 
 
@@ -251,6 +258,26 @@ def _accumulate_usage(into: dict, result: InvokeResult) -> None:
     the price of the same tokens read fresh, and folding them together would
     overstate a cache-heavy run by an order of magnitude.
     """
+    # The CLI's modelUsage map is the truth when present: it names every model
+    # that actually billed on this call, which a single binding cannot.
+    if result.model_usage:
+        for name, measured in result.model_usage.items():
+            canonical = measured.get("canonicalModel") or name
+            bucket = into.setdefault(canonical, {
+                "calls": 0, "input_tokens": 0, "output_tokens": 0,
+                "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+                "cost_usd": 0.0,
+            })
+            bucket["calls"] += 1
+            bucket["cost_usd"] += float(measured.get("costUSD", 0.0) or 0.0)
+            bucket["input_tokens"] += int(measured.get("inputTokens", 0) or 0)
+            bucket["output_tokens"] += int(measured.get("outputTokens", 0) or 0)
+            bucket["cache_read_input_tokens"] += int(measured.get("cacheReadInputTokens", 0) or 0)
+            bucket["cache_creation_input_tokens"] += int(
+                measured.get("cacheCreationInputTokens", 0) or 0
+            )
+        return
+
     model = result.model or "unknown"
     usage = result.usage or {}
     bucket = into.setdefault(model, {
