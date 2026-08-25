@@ -1,6 +1,6 @@
 # Enrichment Run Report: polyglot
 
-Commit `24cc01aaf1dee039e4bffd98c7061897d91cebed`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
+Commit `96a48220045db6dcb14051e8e34377937eab1b0b`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
 
 **Determination: DONE**
 
@@ -11,6 +11,24 @@ The census shows the map supports a reader orienting and finding the service bou
 26 model invocation(s), $0.2600 API-equivalent.
 
 > Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent.
+
+## Who did the work
+
+| Model | Calls | Targets | Fresh in | Cached in | Out | Share | Wall | API-equiv |
+|---|---|---|---|---|---|---|---|---|
+| anthropic-claude-cli:opus | 18 | 1 | 21,600 | 0 | 5,400 | 69% | 0.0m | $0.18 |
+| anthropic-claude-cli:fable | 6 | 5 | 7,200 | 0 | 1,800 | 23% | 0.0m | $0.06 |
+| anthropic-claude-cli:sonnet | 2 | 10 | 2,400 | 0 | 600 | 8% | 0.0m | $0.02 |
+
+26 invocation(s) moved 39,000 tokens in 0.0 minutes of model time.
+
+**anthropic-claude-cli:opus** did the most of it, 69% of all tokens across p2_ladder:opus, p3_adjudication:grounding-spot-check, p3_adjudication:substitution-check, p3_adjudication:verify-edges, p3_adjudication:verify-findings, p3_adjudication:verify-identity.
+
+### What this costs the account
+
+The dollar column above is an API-equivalent price. No card was charged: this work was metered against a Claude subscription, and a subscription is an allowance that refills weekly, not a balance. On Max plans Sonnet and Opus draw from **separate** weekly buckets, so the split above matters more than the total.
+
+_This run has not been measured against the account._ To turn this into a share of the weekly allowance: take a /usage reading immediately before the run, keep hands off the account for its duration, take a second reading immediately after, and record the difference with scripts/usage-budget.py calibrate. Nothing else measures a subscription; the dollar figures here are API-equivalent prices for work that was never billed at API rates.
 
 ## Item census
 

@@ -88,12 +88,112 @@ def build_report(ctx, result, *, engine_version: str = "1") -> dict:
         "phases": [p.to_dict() for p in (result.phases or [])],
         "adjudication": adjudication.to_dict() if adjudication is not None else None,
         "synthesis": synthesis.to_dict() if synthesis is not None else None,
+        "accounting": _accounting(ctx, result),
         "cost_note": COST_NOTE,
     }
     missing = [key for key in REQUIRED_SECTIONS if key not in report]
     if missing:  # pragma: no cover - guards a future edit, not a runtime path
         raise AssertionError(f"Run Report is missing required sections: {missing}")
     return report
+
+
+def _accounting(ctx, result) -> dict:
+    """Who did how much of the work, and what that costs the account.
+
+    The Run Report already said what the run PRODUCED. It never said what the run
+    CONSUMED, beyond one API-equivalent dollar figure that is not what a Claude
+    subscription is actually metered in. That number cannot answer the question
+    that governs a week: if this runs four times, is Tuesday gone or is the week
+    gone.
+
+    So this section splits the work by model. It matters because the rungs bind
+    different models and their rates differ tenfold, and because on Max plans
+    Sonnet and Opus draw from SEPARATE weekly buckets: a run that is heavy on
+    Opus and a run that is heavy on Sonnet exhaust different things, and a single
+    total hides which.
+
+    Everything here is measured from the ledger, which records one row per
+    logical invocation with its model, targets, tokens and wall time. Nothing is
+    estimated.
+    """
+    rows = list(result.ledger or [])
+    by_model: dict[str, dict] = {}
+    for row in rows:
+        bucket = by_model.setdefault(row.model or "unknown", {
+            "model": row.model or "unknown",
+            "invocations": 0,
+            "targets": 0,
+            "tokens_in": 0,
+            "tokens_cached": 0,
+            "tokens_out": 0,
+            "cost_usd": 0.0,
+            "wall_seconds": 0.0,
+            "retries": 0,
+            "failures": 0,
+            "phases": set(),
+        })
+        bucket["invocations"] += 1
+        bucket["targets"] += row.targets or 0
+        bucket["tokens_in"] += row.tokens_in or 0
+        bucket["tokens_cached"] += row.tokens_cached or 0
+        bucket["tokens_out"] += row.tokens_out or 0
+        bucket["cost_usd"] += float(row.cost_usd or 0.0)
+        bucket["wall_seconds"] += float(row.wall_seconds or 0.0)
+        bucket["retries"] += row.retries or 0
+        if not row.ok:
+            bucket["failures"] += 1
+        if row.rung:
+            bucket["phases"].add(f"{row.phase}:{row.rung}")
+        else:
+            bucket["phases"].add(row.phase)
+
+    models = []
+    for bucket in by_model.values():
+        bucket["phases"] = sorted(bucket["phases"])
+        bucket["tokens_total"] = (
+            bucket["tokens_in"] + bucket["tokens_cached"] + bucket["tokens_out"]
+        )
+        bucket["cost_usd"] = round(bucket["cost_usd"], 6)
+        bucket["wall_seconds"] = round(bucket["wall_seconds"], 1)
+        models.append(bucket)
+    models.sort(key=lambda b: b["tokens_total"], reverse=True)
+
+    grand_tokens = sum(b["tokens_total"] for b in models)
+    grand_cost = sum(b["cost_usd"] for b in models)
+    for bucket in models:
+        bucket["token_share"] = (
+            round(bucket["tokens_total"] / grand_tokens, 4) if grand_tokens else 0.0
+        )
+        bucket["cost_share"] = (
+            round(bucket["cost_usd"] / grand_cost, 4) if grand_cost else 0.0
+        )
+
+    return {
+        "by_model": models,
+        "totals": {
+            "invocations": len(rows),
+            "tokens_total": grand_tokens,
+            "tokens_in": sum(b["tokens_in"] for b in models),
+            "tokens_cached": sum(b["tokens_cached"] for b in models),
+            "tokens_out": sum(b["tokens_out"] for b in models),
+            "cost_usd": round(grand_cost, 6),
+            "wall_seconds": round(sum(b["wall_seconds"] for b in models), 1),
+        },
+        # Filled in by hand after an isolated run. There is no API that reports
+        # Claude subscription usage (Claude Code exposes it only through /usage
+        # and /status in a live session), so the only hard measurement available
+        # is the difference between two readings taken either side of a run that
+        # had the account to itself.
+        "account_delta": None,
+        "calibration_note": (
+            "To turn this into a share of the weekly allowance: take a /usage "
+            "reading immediately before the run, keep hands off the account for "
+            "its duration, take a second reading immediately after, and record "
+            "the difference with scripts/usage-budget.py calibrate. Nothing else "
+            "measures a subscription; the dollar figures here are API-equivalent "
+            "prices for work that was never billed at API rates."
+        ),
+    }
 
 
 def _identity(ctx, result, engine_version: str) -> dict:
@@ -322,6 +422,103 @@ def _table(rows: list[list[str]], headers: list[str]) -> list[str]:
     return out
 
 
+def _accounting_section(report: dict) -> list:
+    """Who did the work, in the terms a subscription is actually spent in.
+
+    Written to be read by a person deciding whether to run this again this week,
+    so it leads with the split by model rather than with a total. The total is
+    the least useful number on the page: Sonnet and Opus come out of different
+    weekly buckets on a Max plan, so two runs with identical totals can leave the
+    account in very different states.
+    """
+    acct = report.get("accounting") or {}
+    models = acct.get("by_model") or []
+    totals = acct.get("totals") or {}
+    if not models:
+        return [
+            "## Who did the work",
+            "",
+            "_No invocations were recorded, so there is nothing to account for._",
+            "",
+        ]
+
+    lines = ["## Who did the work", ""]
+    lines += _table(
+        [
+            [
+                m["model"],
+                str(m["invocations"]),
+                f"{m['targets']:,}",
+                f"{m['tokens_in']:,}",
+                f"{m['tokens_cached']:,}",
+                f"{m['tokens_out']:,}",
+                f"{m['token_share']:.0%}",
+                f"{m['wall_seconds'] / 60:.1f}m",
+                f"${m['cost_usd']:.2f}",
+            ]
+            for m in models
+        ],
+        ["Model", "Calls", "Targets", "Fresh in", "Cached in", "Out",
+         "Share", "Wall", "API-equiv"],
+    )
+    lines += [
+        "",
+        f"{totals.get('invocations', 0)} invocation(s) moved "
+        f"{totals.get('tokens_total', 0):,} tokens in "
+        f"{totals.get('wall_seconds', 0.0) / 60:.1f} minutes of model time.",
+        "",
+    ]
+
+    heaviest = models[0]
+    lines += [
+        f"**{heaviest['model']}** did the most of it, "
+        f"{heaviest['token_share']:.0%} of all tokens across "
+        f"{', '.join(heaviest['phases'])}.",
+        "",
+    ]
+
+    failed = [m for m in models if m.get("failures")]
+    if failed:
+        lines += [
+            "Failed invocations by model: "
+            + ", ".join(f"{m['model']} ({m['failures']})" for m in failed)
+            + ". These consumed allowance and produced nothing.",
+            "",
+        ]
+    retried = [m for m in models if m.get("retries")]
+    if retried:
+        lines += [
+            "Transport retries: "
+            + ", ".join(f"{m['model']} ({m['retries']})" for m in retried)
+            + ". Retries are paid for twice and are worth watching if the count grows.",
+            "",
+        ]
+
+    lines += [
+        "### What this costs the account",
+        "",
+        "The dollar column above is an API-equivalent price. No card was charged: "
+        "this work was metered against a Claude subscription, and a subscription "
+        "is an allowance that refills weekly, not a balance. On Max plans Sonnet "
+        "and Opus draw from **separate** weekly buckets, so the split above "
+        "matters more than the total.",
+        "",
+    ]
+    delta = acct.get("account_delta")
+    if delta:
+        lines += [
+            f"Measured against the account: {delta}",
+            "",
+        ]
+    else:
+        lines += [
+            "_This run has not been measured against the account._ "
+            + str(acct.get("calibration_note") or ""),
+            "",
+        ]
+    return lines
+
+
 def render_markdown(report: dict) -> str:
     """Render the Run Report for a human. Same content, different audience."""
     identity = report.get("identity") or {}
@@ -360,6 +557,8 @@ def render_markdown(report: dict) -> str:
             "This report is written on partial output.",
             "",
         ]
+
+    lines += _accounting_section(report)
 
     # Item census, the backbone of the determination.
     lines += ["## Item census", ""]

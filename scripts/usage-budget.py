@@ -161,6 +161,23 @@ def api_equivalent_usd(usage_by_model: dict) -> tuple[float, list[dict], list[st
 def _read_usage(report_path: Path) -> tuple[dict, float]:
     """Pull the per-model account out of an enrichment report."""
     doc = json.loads(report_path.read_text(encoding="utf-8"))
+
+    # The Run Report's accounting section is the canonical account: one row per
+    # model, measured from the ledger rather than estimated.
+    acct = doc.get("accounting") or {}
+    if acct.get("by_model"):
+        usage = {}
+        for bucket in acct["by_model"]:
+            usage[bucket["model"]] = {
+                "calls": bucket.get("invocations", 0),
+                "input_tokens": bucket.get("tokens_in", 0),
+                "output_tokens": bucket.get("tokens_out", 0),
+                "cache_read_input_tokens": bucket.get("tokens_cached", 0),
+                "cache_creation_input_tokens": 0,
+                "cost_usd": bucket.get("cost_usd", 0.0),
+            }
+        return usage, float((acct.get("totals") or {}).get("cost_usd", 0.0) or 0.0)
+
     usage = doc.get("usage_by_model")
     if isinstance(usage, dict) and usage:
         return usage, float(doc.get("total_cost_usd", 0.0) or 0.0)
@@ -212,6 +229,22 @@ def cmd_report(args: argparse.Namespace) -> int:
     print(f"tokens moved         {tokens:,}")
     print(f"api-equivalent       ${total:.2f}"
           + (f"   (CLI reported ${reported_cost:.2f})" if reported_cost else ""))
+
+    # Two independent numbers for the same run: one modelled from the published
+    # rate table, one reported by the CLI that actually did the metering. They
+    # should agree. When they stop agreeing, the rate table has gone stale, and
+    # that is worth saying out loud rather than discovering months later through
+    # a forecast that was quietly wrong the whole time. Pricing changes; a tool
+    # that assumes it does not is a tool that lies with increasing confidence.
+    if reported_cost > 0 and total > 0:
+        drift = abs(total - reported_cost) / reported_cost
+        if drift > 0.20:
+            higher = "above" if total > reported_cost else "below"
+            print()
+            print(f"  ! modelled price is {drift:.0%} {higher} what the CLI reported.")
+            print("    MODEL_RATES in this file may be out of date, or this run used a")
+            print("    rung whose binding does not match its rate key. Trust the CLI")
+            print("    figure and reconcile the table.")
     print(f"sustained-hours      {tokens / TOKENS_PER_HOUR_SUSTAINED:.1f}h  (derived, see module docstring)")
     print()
     print(f"share of one week    {share * 100:.1f}%")
@@ -252,6 +285,84 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_measure(args: argparse.Namespace) -> int:
+    """Calibrate from an isolated run: two /usage readings and the run between them.
+
+    This is the only hard measurement available. Claude Code exposes subscription
+    usage through /usage and /status in a live session and nowhere else: there is
+    no CLI subcommand and no endpoint for it, and the open feature requests for
+    one are still open. So the allowance cannot be looked up, only observed.
+
+    The observation is only valid if the account was idle apart from the run.
+    Anything else running in parallel lands in the same bucket and inflates the
+    delta, which would make every later forecast quietly optimistic.
+
+    On Max plans Sonnet and Opus draw from separate weekly buckets, so both are
+    calibrated separately when the Opus readings are supplied. A single blended
+    number would be wrong in the direction that matters: an Opus-heavy run can
+    exhaust its own bucket while the all-models bar still looks comfortable.
+    """
+    path = Path(args.report).expanduser().resolve()
+    if not path.is_file():
+        print(f"error: no such report: {path}", file=sys.stderr)
+        return 2
+    usage, _ = _read_usage(path)
+    if not usage:
+        print("error: that report carries no usage account", file=sys.stderr)
+        return 2
+
+    total, rows, _ = api_equivalent_usd(usage)
+    delta_all = args.after_all - args.before_all
+    if delta_all <= 0:
+        print("error: the all-models reading did not increase; either the run was "
+              "too small to register or the readings are the wrong way round",
+              file=sys.stderr)
+        return 2
+
+    cfg = _load_config()
+    weekly_all = total / (delta_all / 100.0)
+    cfg["weekly_allowance_api_equivalent_usd"] = round(weekly_all, 2)
+    cfg["calibrated"] = True
+    cfg["basis"] = (
+        f"measured on an isolated run: {total:.2f} api-equivalent moved the "
+        f"all-models weekly bar {args.before_all:.1f}% -> {args.after_all:.1f}% "
+        f"({delta_all:.1f}% of the week)"
+    )
+    if args.plan:
+        cfg["plan"] = args.plan
+
+    print(f"run consumed          ${total:.2f} api-equivalent")
+    print(f"all-models bar        {args.before_all:.1f}% -> {args.after_all:.1f}%  "
+          f"(+{delta_all:.1f}% of the week)")
+    print(f"=> weekly allowance   ${weekly_all:.2f} api-equivalent")
+    print(f"=> runs per week      {100.0 / delta_all:.1f}")
+
+    if args.before_opus is not None and args.after_opus is not None:
+        delta_opus = args.after_opus - args.before_opus
+        opus_cost = sum(
+            r["api_equivalent_usd"] for r in rows if "opus" in r["model"].lower()
+        )
+        print()
+        if delta_opus > 0 and opus_cost > 0:
+            weekly_opus = opus_cost / (delta_opus / 100.0)
+            cfg["weekly_opus_allowance_api_equivalent_usd"] = round(weekly_opus, 2)
+            print(f"opus work in this run ${opus_cost:.2f} api-equivalent")
+            print(f"opus bar              {args.before_opus:.1f}% -> {args.after_opus:.1f}%  "
+                  f"(+{delta_opus:.1f}% of the opus week)")
+            print(f"=> opus allowance     ${weekly_opus:.2f} api-equivalent")
+            print(f"=> opus-bound runs    {100.0 / delta_opus:.1f} per week")
+            binding = "opus" if delta_opus > delta_all else "all-models"
+            print()
+            print(f"The {binding} bucket is what limits this run's cadence.")
+        else:
+            print("opus bucket: no measurable movement, so nothing calibrated for it")
+
+    _save_config(cfg)
+    print()
+    print(f"written to {CONFIG_PATH}")
+    return 0
+
+
 def cmd_forecast(args: argparse.Namespace) -> int:
     """Answer the pacing question before spending anything.
 
@@ -287,6 +398,21 @@ def main(argv=None) -> int:
     p_cal.add_argument("--plan", default=None, help="e.g. 'Max 20x'")
     p_cal.add_argument("--basis", default=None, help="how this was observed")
     p_cal.set_defaults(func=cmd_calibrate)
+
+    p_m = sub.add_parser(
+        "measure",
+        help="calibrate from an isolated run plus two /usage readings",
+    )
+    p_m.add_argument("--report", required=True, help="the run's report.json")
+    p_m.add_argument("--before-all", required=True, type=float,
+                     help="all-models weekly %% from /usage BEFORE the run")
+    p_m.add_argument("--after-all", required=True, type=float,
+                     help="all-models weekly %% from /usage AFTER the run")
+    p_m.add_argument("--before-opus", type=float, default=None,
+                     help="opus weekly %% before, if your plan shows one")
+    p_m.add_argument("--after-opus", type=float, default=None)
+    p_m.add_argument("--plan", default=None, help="e.g. 'Max 20x'")
+    p_m.set_defaults(func=cmd_measure)
 
     p_fc = sub.add_parser("forecast", help="does this plan fit in a week")
     p_fc.add_argument("--per-run-usd", required=True, type=float)

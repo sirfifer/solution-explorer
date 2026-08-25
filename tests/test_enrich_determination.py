@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 
 import pytest
 
@@ -763,10 +764,32 @@ def test_the_committed_reference_report_matches_what_the_engine_produces(world):
     produced["identity"]["root"] = reference["identity"]["root"]
     produced["identity"]["commit"] = reference["identity"]["commit"]
 
-    # Wall-clock seconds are the one genuinely non-deterministic field.
+    # Deliberate regeneration, which is what the assertion message asks for. An
+    # env-gated path rather than a hand-edit, so the fixture can only ever be
+    # replaced by something this pipeline actually produced.
+    #     REGENERATE_REFERENCE_REPORT=1 pytest tests/test_enrich_determination.py -k reference
+    if os.environ.get("REGENERATE_REFERENCE_REPORT") == "1":
+        shutil.copy(
+            world["run_dir"] / "report.json",
+            os.path.join(reference_dir, "report.json"),
+        )
+        shutil.copy(
+            world["run_dir"] / "REPORT.md",
+            os.path.join(reference_dir, "REPORT.md"),
+        )
+        pytest.skip("reference report regenerated from this run")
+
+    # Wall-clock seconds are the one genuinely non-deterministic field, and it
+    # now appears twice: once per ledger row, and once per model in the
+    # accounting section, which is derived from those same rows.
     for report in (reference, produced):
         for row in report["ledger"]:
             row["wall_seconds"] = 0.0
+        accounting = report.get("accounting") or {}
+        for bucket in accounting.get("by_model") or []:
+            bucket["wall_seconds"] = 0.0
+        if accounting.get("totals"):
+            accounting["totals"]["wall_seconds"] = 0.0
 
     assert produced == reference, (
         "the committed reference report no longer matches what the engine "

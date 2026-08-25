@@ -1,937 +1,776 @@
 {
-  "adjudication": {
-    "checked": 8,
-    "disagreement_rate": 0.0,
-    "edges": {
-      "done": 0,
-      "dry_run": false,
-      "extra": {},
-      "failed": [
-        "services/web/src|services/api|http"
-      ],
-      "mode": "full",
-      "notes": [
-        "1 inferred edge(s); 1 to verify"
-      ],
-      "outcomes": [
-        {
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be a non-empty sentence"
-          ],
-          "id": "services/web/src|services/api|http",
-          "status": "failed",
-          "verdict": null
+  "identity": {
+    "subject": "polyglot",
+    "root": "/Volumes/Studio/dev/solution-explorer/tests/fixtures/polyglot",
+    "commit": "96a48220045db6dcb14051e8e34377937eab1b0b",
+    "snapshot_date": "2026-08-21T00:00:00+00:00",
+    "analyzer_version": "",
+    "engine_version": "1",
+    "policy": {
+      "models": {
+        "p1_orientation": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true
+        },
+        "p2a_bulk": {
+          "source": "anthropic-claude-cli",
+          "model": "sonnet",
+          "pinned": true
+        },
+        "p2b_escalated": {
+          "source": "anthropic-claude-cli",
+          "model": "opus",
+          "pinned": true
+        },
+        "p2c_residue": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true
+        },
+        "p3_adjudication": {
+          "source": "anthropic-claude-cli",
+          "model": "opus",
+          "pinned": true
+        },
+        "p4_synthesis": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true
+        },
+        "p5_determination": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true
+        },
+        "workorder": {
+          "source": "anthropic-claude-cli",
+          "model": "sonnet",
+          "pinned": true
         }
-      ],
-      "pass": "verify-edges",
-      "plan_preview": [],
-      "target_count": 1,
-      "total_cost_usd": 0.02,
-      "verdicts": {}
+      },
+      "iteration": {
+        "min_rounds": 1,
+        "max_rounds": 2
+      },
+      "max_cost_usd": null,
+      "spot_check_fraction": 0.1,
+      "max_work_orders": 3
     },
-    "findings": {
-      "done": 0,
-      "dry_run": false,
-      "extra": {},
-      "failed": [
-        "finding:unreferenced:apps/ios",
-        "finding:unreferenced:libs/core",
-        "finding:unreferenced:libs/rubylib",
-        "finding:unreferenced:services/web/src",
-        "finding:unreferenced:services/worker"
-      ],
-      "mode": "full",
-      "notes": [
-        "5 finding(s); 5 to verify"
-      ],
-      "outcomes": [
-        {
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be non-empty"
-          ],
-          "id": "finding:unreferenced:apps/ios",
-          "status": "failed",
-          "verdict": null
-        },
-        {
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be non-empty"
-          ],
-          "id": "finding:unreferenced:libs/core",
-          "status": "failed",
-          "verdict": null
-        },
-        {
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be non-empty"
-          ],
-          "id": "finding:unreferenced:libs/rubylib",
-          "status": "failed",
-          "verdict": null
-        },
-        {
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be non-empty"
-          ],
-          "id": "finding:unreferenced:services/web/src",
-          "status": "failed",
-          "verdict": null
-        },
-        {
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be non-empty"
-          ],
-          "id": "finding:unreferenced:services/worker",
-          "status": "failed",
-          "verdict": null
-        }
-      ],
-      "pass": "verify-findings",
-      "plan_preview": [],
-      "target_count": 5,
-      "total_cost_usd": 0.1,
-      "verdicts": {}
+    "totals": {
+      "invocations": 26,
+      "cost_usd": 0.26,
+      "ceiling_hit": false,
+      "failed_phases": []
     },
-    "identity": {
-      "done": 3,
-      "dry_run": false,
-      "extra": {},
-      "failed": [],
-      "mode": "full",
-      "notes": [
-        "3 identity-bearing component(s); 3 to verify"
-      ],
-      "outcomes": [
-        {
-          "cost_usd": 0.01,
-          "errors": [],
-          "id": "apps/ios",
-          "status": "done",
-          "verdict": "confirmed"
-        },
-        {
-          "cost_usd": 0.01,
-          "errors": [],
-          "id": "root",
-          "status": "done",
-          "verdict": "confirmed"
-        },
-        {
-          "cost_usd": 0.01,
-          "errors": [],
-          "id": "services/api",
-          "status": "done",
-          "verdict": "confirmed"
-        }
-      ],
-      "pass": "verify-identity",
-      "plan_preview": [],
-      "target_count": 3,
-      "total_cost_usd": 0.03,
-      "verdicts": {
-        "confirmed": 3
-      }
-    },
-    "notes": [
-      "verify identity: 3 verified, confirmed=3",
-      "verify edges: 0 verified, no verdicts",
-      "verify findings: 0 verified, no verdicts",
-      "grounding spot-checks: 0 of 8 claims not supported by their own evidence (disagreement rate 0.0%)",
-      "substitution checks: 1 of 1 descriptions did not identify their own subject (100.0%)"
-    ],
-    "spot_checks": [
-      {
-        "claim": "services/api: a specific answer for identity.framework",
-        "confidence": "high",
-        "question": "identity.framework",
-        "reason": "",
-        "supported": true,
-        "target_id": "services/api",
-        "target_kind": "component"
-      },
-      {
-        "claim": "services/api: a specific answer for identity.language",
-        "confidence": "high",
-        "question": "identity.language",
-        "reason": "",
-        "supported": true,
-        "target_id": "services/api",
-        "target_kind": "component"
-      },
-      {
-        "claim": "services/api: a specific answer for identity.port",
-        "confidence": "high",
-        "question": "identity.port",
-        "reason": "",
-        "supported": true,
-        "target_id": "services/api",
-        "target_kind": "component"
-      },
-      {
-        "claim": "services/api: a specific answer for identity.type",
-        "confidence": "high",
-        "question": "identity.type",
-        "reason": "",
-        "supported": true,
-        "target_id": "services/api",
-        "target_kind": "component"
-      },
-      {
-        "claim": "services/api: a specific answer for mechanism",
-        "confidence": "high",
-        "question": "mechanism",
-        "reason": "",
-        "supported": true,
-        "target_id": "services/api",
-        "target_kind": "component"
-      },
-      {
-        "claim": "services/api: a specific answer for next_step",
-        "confidence": "high",
-        "question": "next_step",
-        "reason": "",
-        "supported": true,
-        "target_id": "services/api",
-        "target_kind": "component"
-      },
-      {
-        "claim": "services/api: a specific answer for place",
-        "confidence": "high",
-        "question": "place",
-        "reason": "",
-        "supported": true,
-        "target_id": "services/api",
-        "target_kind": "component"
-      },
-      {
-        "claim": "services/api: a specific answer for purpose",
-        "confidence": "high",
-        "question": "purpose",
-        "reason": "",
-        "supported": true,
-        "target_id": "services/api",
-        "target_kind": "component"
-      }
-    ],
-    "substitution_checks": [
-      {
-        "chose": "apps/ios",
-        "confirmed_failure": true,
-        "distinctive": true,
-        "reason": "it names its own files",
-        "target_id": "services/api"
-      }
-    ],
-    "substitution_failure_rate": 1.0,
-    "unsupported": 0
+    "dry_run": false
   },
+  "ledger": [
+    {
+      "phase": "p1_orientation",
+      "rung": null,
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "2a",
+      "model": "anthropic-claude-cli:sonnet",
+      "targets": 8,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "opus",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "fable",
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-identity",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-identity",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-identity",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-edges",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-edges",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p4_synthesis",
+      "rung": "narrative",
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p4_synthesis",
+      "rung": "spine",
+      "model": "anthropic-claude-cli:fable",
+      "targets": 0,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p5_determination",
+      "rung": null,
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "work_order",
+      "rung": "P5",
+      "model": "anthropic-claude-cli:sonnet",
+      "targets": 2,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p5_determination",
+      "rung": null,
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    }
+  ],
   "census": {
     "by_state": {
       "grounded@sonnet": 8,
       "honest-gap": 1
     },
-    "grounded": 8,
-    "grounded_fraction": 0.8889,
     "items": [
       {
-        "attempt_ref": null,
-        "declared_confusion": null,
-        "failed": [],
-        "history": [],
-        "parser_first": [],
-        "rung": "sonnet",
-        "self_declared": "grounded",
         "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
         "target_id": "apps/ios",
-        "target_kind": "component"
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": []
       },
       {
-        "attempt_ref": null,
-        "declared_confusion": null,
+        "state": "honest_gap",
+        "rung": "fable",
         "failed": [
           {
-            "note": "the dispatch table is generated at build time and no source file in the repository contains it",
             "question": "mechanism",
-            "trigger": "E1"
+            "trigger": "E1",
+            "note": "the dispatch table is generated at build time and no source file in the repository contains it"
           }
+        ],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "libs/core",
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [
+          "libs/core's language was inferable from its manifest"
         ],
         "history": [
           "sonnet:escalate",
           "opus:escalate"
-        ],
-        "parser_first": [
-          "libs/core's language was inferable from its manifest"
-        ],
-        "rung": "fable",
-        "self_declared": "grounded",
-        "state": "honest_gap",
-        "target_id": "libs/core",
-        "target_kind": "component"
+        ]
       },
       {
-        "attempt_ref": null,
-        "declared_confusion": null,
-        "failed": [],
-        "history": [],
-        "parser_first": [],
-        "rung": "sonnet",
-        "self_declared": "grounded",
         "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
         "target_id": "libs/rubylib",
-        "target_kind": "component"
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": []
       },
       {
-        "attempt_ref": null,
-        "declared_confusion": null,
-        "failed": [],
-        "history": [],
-        "parser_first": [],
-        "rung": "sonnet",
-        "self_declared": "grounded",
         "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
         "target_id": "root",
-        "target_kind": "component"
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": []
       },
       {
-        "attempt_ref": null,
-        "declared_confusion": null,
-        "failed": [],
-        "history": [],
-        "parser_first": [],
-        "rung": "sonnet",
-        "self_declared": "grounded",
         "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
         "target_id": "services/api",
-        "target_kind": "component"
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": []
       },
       {
-        "attempt_ref": null,
-        "declared_confusion": null,
-        "failed": [],
-        "history": [],
-        "parser_first": [],
-        "rung": "sonnet",
-        "self_declared": "grounded",
         "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
         "target_id": "services/web",
-        "target_kind": "component"
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": []
       },
       {
-        "attempt_ref": null,
-        "declared_confusion": null,
-        "failed": [],
-        "history": [],
-        "parser_first": [],
-        "rung": "sonnet",
-        "self_declared": "grounded",
         "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
         "target_id": "services/web/src",
-        "target_kind": "component"
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": []
       },
       {
-        "attempt_ref": null,
-        "declared_confusion": null,
-        "failed": [],
-        "history": [],
-        "parser_first": [],
-        "rung": "sonnet",
-        "self_declared": "grounded",
         "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
         "target_id": "services/worker",
-        "target_kind": "component"
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": []
       },
       {
-        "attempt_ref": null,
-        "declared_confusion": null,
-        "failed": [],
-        "history": [],
-        "parser_first": [],
-        "rung": "sonnet",
-        "self_declared": "grounded",
         "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "relationship",
         "target_id": "services/web/src|services/api|http",
-        "target_kind": "relationship"
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": []
       }
     ],
     "total": 9,
+    "grounded": 8,
+    "grounded_fraction": 0.8889,
     "trigger_counts": {
       "E1": 1
     },
     "unresolved": []
   },
-  "cost_note": "Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent.",
-  "criteria": [
-    {
-      "criterion_id": "s1",
-      "evidence": [
-        "every component carries a language claim"
-      ],
-      "reasoning": "the census grounded identity.language throughout",
-      "statement": "Every language present is named on the component that carries it.",
-      "verdict": "met"
-    },
-    {
-      "criterion_id": "u1",
-      "evidence": [
-        "0 item(s) still in the escalate state"
-      ],
-      "reasoning": "every enrichment target reached a terminal contract state",
-      "statement": "Every enrichment target reached a terminal contract state.",
-      "verdict": "met"
-    },
-    {
-      "criterion_id": "u2",
-      "evidence": [
-        "grounded fraction 88.9%",
-        "adjudication disagreement rate 0.0%"
-      ],
-      "reasoning": "88.9% of items grounded; adjudication would not stand behind 0.0% of the claims it sampled",
-      "statement": "Claims are grounded in evidence that checks out.",
-      "verdict": "met"
-    },
-    {
-      "criterion_id": "u3",
-      "evidence": [
-        "1 honest gap(s)"
-      ],
-      "reasoning": "all 1 honest gap(s) carry a reason a reader can act on",
-      "statement": "What could not be established is visible as an honest gap, with a reason a reader can act on.",
-      "verdict": "met"
-    }
-  ],
-  "determination": {
-    "criteria_met": 4,
-    "criteria_unknown": 0,
-    "criteria_unmet": 0,
-    "notes": [
-      "round 1 produced no measurable change to the census"
-    ],
-    "reasoning": "The census shows the map supports a reader orienting and finding the service boundary. It does not yet support reasoning about failure modes.",
-    "rounds_recorded": 1,
-    "rounds_run": 1,
-    "verdict": "done"
-  },
   "escalations": [
     {
+      "target_kind": "component",
+      "target_id": "libs/core",
       "climbed_from": [
         "sonnet:escalate",
         "opus:escalate"
       ],
-      "failed_questions": [
-        {
-          "note": "the dispatch table is generated at build time and no source file in the repository contains it",
-          "question": "mechanism",
-          "trigger": "E1"
-        }
-      ],
       "resolved_at": "fable",
-      "target_id": "libs/core",
-      "target_kind": "component",
       "terminal": "honest-gap",
       "triggers": [
         "E1"
+      ],
+      "failed_questions": [
+        {
+          "question": "mechanism",
+          "trigger": "E1",
+          "note": "the dispatch table is generated at build time and no source file in the repository contains it"
+        }
       ]
     }
   ],
-  "identity": {
-    "analyzer_version": "",
-    "commit": "24cc01aaf1dee039e4bffd98c7061897d91cebed",
-    "dry_run": false,
-    "engine_version": "1",
-    "policy": {
-      "iteration": {
-        "max_rounds": 2,
-        "min_rounds": 1
+  "work_orders": [
+    {
+      "scope": [
+        "root",
+        "apps/ios"
+      ],
+      "lens": "framework detection on the quiet packages",
+      "criteria": "each package either names a framework or says it has none",
+      "expected_effect": "truth: framework identity verdicts",
+      "budget": {
+        "max_cost_usd": 0.5,
+        "max_targets": 4
       },
-      "max_cost_usd": null,
-      "max_work_orders": 3,
-      "models": {
-        "p1_orientation": {
-          "model": "fable",
-          "pinned": true,
-          "source": "anthropic-claude-cli"
-        },
-        "p2a_bulk": {
-          "model": "sonnet",
-          "pinned": true,
-          "source": "anthropic-claude-cli"
-        },
-        "p2b_escalated": {
-          "model": "opus",
-          "pinned": true,
-          "source": "anthropic-claude-cli"
-        },
-        "p2c_residue": {
-          "model": "fable",
-          "pinned": true,
-          "source": "anthropic-claude-cli"
-        },
-        "p3_adjudication": {
-          "model": "opus",
-          "pinned": true,
-          "source": "anthropic-claude-cli"
-        },
-        "p4_synthesis": {
-          "model": "fable",
-          "pinned": true,
-          "source": "anthropic-claude-cli"
-        },
-        "p5_determination": {
-          "model": "fable",
-          "pinned": true,
-          "source": "anthropic-claude-cli"
-        },
-        "workorder": {
-          "model": "sonnet",
-          "pinned": true,
-          "source": "anthropic-claude-cli"
-        }
-      },
-      "spot_check_fraction": 0.1
+      "issued_by": "P4",
+      "outcome": null,
+      "executed": false
     },
-    "root": "/Volumes/Studio/dev/.worktrees/solution-explorer--enrichment-ops/tests/fixtures/polyglot",
-    "snapshot_date": "2026-08-21T00:00:00+00:00",
-    "subject": "polyglot",
-    "totals": {
-      "ceiling_hit": false,
-      "cost_usd": 0.26,
-      "failed_phases": [],
-      "invocations": 26
+    {
+      "scope": [
+        "root",
+        "apps/ios"
+      ],
+      "lens": "the outward-facing boundary",
+      "criteria": "each boundary component names its inbound protocol",
+      "expected_effect": "truth: the grounded fraction should rise",
+      "budget": {
+        "max_cost_usd": 1.0,
+        "max_targets": 4
+      },
+      "issued_by": "P5",
+      "outcome": {
+        "executed": true,
+        "targets_attempted": 2,
+        "state_changes": {},
+        "cost_usd": 0.01,
+        "changed_anything": false,
+        "notes": [
+          "executed and changed no contract state; the order cost budget and moved nothing"
+        ]
+      },
+      "executed": true
+    },
+    {
+      "scope": [
+        "root",
+        "apps/ios"
+      ],
+      "lens": "the outward-facing boundary",
+      "criteria": "each boundary component names its inbound protocol",
+      "expected_effect": "truth: the grounded fraction should rise",
+      "budget": {
+        "max_cost_usd": 1.0,
+        "max_targets": 4
+      },
+      "issued_by": "P5",
+      "outcome": null,
+      "executed": false
     }
-  },
+  ],
   "iterations": [
     {
-      "forced": true,
-      "gained": false,
-      "measured_delta": {
-        "changed": 0,
-        "cost_usd": 0.01,
-        "grounded_after": 8,
-        "grounded_before": 8,
-        "rung_moves": [],
-        "state_changes": {},
-        "targets": []
-      },
-      "notes": [
-        "This round produced no measurable gain. Recorded as exactly that: it is the finding that earns dialling the forced-iteration policy back, not a failure to hide."
-      ],
       "number": 1,
-      "perceived_delta": "deepen the boundary descriptions on the two services that face outward",
-      "perceived_delta_is_judgment": true,
-      "ran": true,
+      "forced": true,
       "target": "deepen the boundary descriptions on the two services that face outward",
+      "ran": true,
       "work_orders": [
         {
+          "scope": [
+            "root",
+            "apps/ios"
+          ],
+          "lens": "the outward-facing boundary",
+          "criteria": "each boundary component names its inbound protocol",
+          "expected_effect": "truth: the grounded fraction should rise",
           "budget": {
             "max_cost_usd": 1.0,
             "max_targets": 4
           },
-          "criteria": "each boundary component names its inbound protocol",
-          "expected_effect": "truth: the grounded fraction should rise",
           "issued_by": "P5",
-          "lens": "the outward-facing boundary",
           "outcome": {
-            "changed_anything": false,
-            "cost_usd": 0.01,
             "executed": true,
+            "targets_attempted": 2,
+            "state_changes": {},
+            "cost_usd": 0.01,
+            "changed_anything": false,
             "notes": [
               "executed and changed no contract state; the order cost budget and moved nothing"
-            ],
-            "state_changes": {},
-            "targets_attempted": 2
-          },
-          "scope": [
-            "root",
-            "apps/ios"
-          ]
+            ]
+          }
         }
+      ],
+      "measured_delta": {
+        "changed": 0,
+        "targets": [],
+        "state_changes": {},
+        "rung_moves": [],
+        "grounded_before": 8,
+        "grounded_after": 8,
+        "cost_usd": 0.01
+      },
+      "perceived_delta": "deepen the boundary descriptions on the two services that face outward",
+      "perceived_delta_is_judgment": true,
+      "gained": false,
+      "notes": [
+        "This round produced no measurable gain. Recorded as exactly that: it is the finding that earns dialling the forced-iteration policy back, not a failure to hide."
       ]
     }
   ],
-  "ledger": [
+  "parser_findings": [
     {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:fable",
-      "ok": true,
-      "phase": "p1_orientation",
-      "retries": 0,
-      "rung": null,
-      "targets": 1,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:sonnet",
-      "ok": true,
-      "phase": "p2_ladder",
-      "retries": 0,
-      "rung": "2a",
-      "targets": 8,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p2_ladder",
-      "retries": 0,
-      "rung": "opus",
-      "targets": 1,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:fable",
-      "ok": true,
-      "phase": "p2_ladder",
-      "retries": 0,
-      "rung": "fable",
-      "targets": 1,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-identity",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-identity",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-identity",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-edges",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-edges",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-findings",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-findings",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-findings",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-findings",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-findings",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-findings",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-findings",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-findings",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-findings",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "verify-findings",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "grounding-spot-check",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:opus",
-      "ok": true,
-      "phase": "p3_adjudication",
-      "retries": 0,
-      "rung": "substitution-check",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:fable",
-      "ok": true,
-      "phase": "p4_synthesis",
-      "retries": 0,
-      "rung": "narrative",
-      "targets": 1,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:fable",
-      "ok": true,
-      "phase": "p4_synthesis",
-      "retries": 0,
-      "rung": "spine",
-      "targets": 0,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:fable",
-      "ok": true,
-      "phase": "p5_determination",
-      "retries": 0,
-      "rung": null,
-      "targets": 1,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:sonnet",
-      "ok": true,
-      "phase": "work_order",
-      "retries": 0,
-      "rung": "P5",
-      "targets": 2,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
-    },
-    {
-      "cost_usd": 0.01,
-      "error": null,
-      "model": "anthropic-claude-cli:fable",
-      "ok": true,
-      "phase": "p5_determination",
-      "retries": 0,
-      "rung": null,
-      "targets": 1,
-      "tokens_cached": 0,
-      "tokens_in": 1200,
-      "tokens_out": 300,
-      "wall_seconds": 0.0
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "finding": "libs/core's language was inferable from its manifest",
+      "raised_at_rungs": [
+        "sonnet",
+        "opus",
+        "fable"
+      ],
+      "card": "how could deterministic processing have gotten this right?"
     }
   ],
-  "lessons": [
+  "criteria": [
     {
-      "count": 1,
-      "kind": "escalation-trigger",
-      "of_total": 9,
-      "pattern": "E1"
+      "criterion_id": "s1",
+      "statement": "Every language present is named on the component that carries it.",
+      "verdict": "met",
+      "evidence": [
+        "every component carries a language claim"
+      ],
+      "reasoning": "the census grounded identity.language throughout"
     },
     {
-      "count": 3,
+      "criterion_id": "u1",
+      "statement": "Every enrichment target reached a terminal contract state.",
+      "verdict": "met",
+      "evidence": [
+        "0 item(s) still in the escalate state"
+      ],
+      "reasoning": "every enrichment target reached a terminal contract state"
+    },
+    {
+      "criterion_id": "u2",
+      "statement": "Claims are grounded in evidence that checks out.",
+      "verdict": "met",
+      "evidence": [
+        "grounded fraction 88.9%",
+        "adjudication disagreement rate 0.0%"
+      ],
+      "reasoning": "88.9% of items grounded; adjudication would not stand behind 0.0% of the claims it sampled"
+    },
+    {
+      "criterion_id": "u3",
+      "statement": "What could not be established is visible as an honest gap, with a reason a reader can act on.",
+      "verdict": "met",
+      "evidence": [
+        "1 honest gap(s)"
+      ],
+      "reasoning": "all 1 honest gap(s) carry a reason a reader can act on"
+    }
+  ],
+  "determination": {
+    "verdict": "done",
+    "reasoning": "The census shows the map supports a reader orienting and finding the service boundary. It does not yet support reasoning about failure modes.",
+    "rounds_run": 1,
+    "rounds_recorded": 1,
+    "criteria_met": 4,
+    "criteria_unmet": 0,
+    "criteria_unknown": 0,
+    "notes": [
+      "round 1 produced no measurable change to the census"
+    ]
+  },
+  "lessons": [
+    {
+      "kind": "escalation-trigger",
+      "pattern": "E1",
+      "count": 1,
+      "of_total": 9
+    },
+    {
       "kind": "parser-first",
-      "of_total": 9,
-      "pattern": "deterministic processing could have answered this"
+      "pattern": "deterministic processing could have answered this",
+      "count": 3,
+      "of_total": 9
     },
     {
       "kind": "inter-tier-disagreement",
@@ -945,200 +784,440 @@
       "round": 1
     }
   ],
-  "parser_findings": [
-    {
-      "card": "how could deterministic processing have gotten this right?",
-      "finding": "libs/core's language was inferable from its manifest",
-      "raised_at_rungs": [
-        "sonnet",
-        "opus",
-        "fable"
-      ],
-      "target_id": "libs/core",
-      "target_kind": "component"
-    }
-  ],
   "phases": [
     {
       "name": "p1_orientation",
+      "status": "ok",
       "notes": [
         "subject brief written: 1 subject criteria plus 3 universal gates",
         "1 idiom warning(s) declared up front, so confusion on them is expected rather than shameful"
-      ],
-      "status": "ok"
+      ]
     },
     {
       "name": "p2_ladder",
+      "status": "ok",
       "notes": [
         "census: grounded@sonnet=8, honest-gap=1"
-      ],
-      "status": "ok"
+      ]
     },
     {
       "name": "p3_adjudication",
+      "status": "ok",
       "notes": [
         "verify identity: 3 verified, confirmed=3",
         "verify edges: 0 verified, no verdicts",
         "verify findings: 0 verified, no verdicts",
         "grounding spot-checks: 0 of 8 claims not supported by their own evidence (disagreement rate 0.0%)",
         "substitution checks: 1 of 1 descriptions did not identify their own subject (100.0%)"
-      ],
-      "status": "ok"
+      ]
     },
     {
       "name": "p4_synthesis",
+      "status": "ok",
       "notes": [
         "1 tour(s) written, 1 lens(es) discovered, 1 work order(s) issued"
-      ],
-      "status": "ok"
+      ]
     },
     {
       "name": "p5_determination",
+      "status": "ok",
       "notes": [
         "round 1 produced no measurable change to the census"
-      ],
-      "status": "ok"
+      ]
     }
   ],
+  "adjudication": {
+    "identity": {
+      "pass": "verify-identity",
+      "mode": "full",
+      "dry_run": false,
+      "target_count": 3,
+      "done": 3,
+      "failed": [],
+      "verdicts": {
+        "confirmed": 3
+      },
+      "total_cost_usd": 0.03,
+      "notes": [
+        "3 identity-bearing component(s); 3 to verify"
+      ],
+      "plan_preview": [],
+      "extra": {},
+      "outcomes": [
+        {
+          "id": "apps/ios",
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.01,
+          "errors": []
+        },
+        {
+          "id": "root",
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.01,
+          "errors": []
+        },
+        {
+          "id": "services/api",
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.01,
+          "errors": []
+        }
+      ]
+    },
+    "edges": {
+      "pass": "verify-edges",
+      "mode": "full",
+      "dry_run": false,
+      "target_count": 1,
+      "done": 0,
+      "failed": [
+        "services/web/src|services/api|http"
+      ],
+      "verdicts": {},
+      "total_cost_usd": 0.02,
+      "notes": [
+        "1 inferred edge(s); 1 to verify"
+      ],
+      "plan_preview": [],
+      "extra": {},
+      "outcomes": [
+        {
+          "id": "services/web/src|services/api|http",
+          "status": "failed",
+          "verdict": null,
+          "cost_usd": 0.02,
+          "errors": [
+            "reason must be a non-empty sentence"
+          ]
+        }
+      ]
+    },
+    "findings": {
+      "pass": "verify-findings",
+      "mode": "full",
+      "dry_run": false,
+      "target_count": 5,
+      "done": 0,
+      "failed": [
+        "finding:unreferenced:apps/ios",
+        "finding:unreferenced:libs/core",
+        "finding:unreferenced:libs/rubylib",
+        "finding:unreferenced:services/web/src",
+        "finding:unreferenced:services/worker"
+      ],
+      "verdicts": {},
+      "total_cost_usd": 0.1,
+      "notes": [
+        "5 finding(s); 5 to verify"
+      ],
+      "plan_preview": [],
+      "extra": {},
+      "outcomes": [
+        {
+          "id": "finding:unreferenced:apps/ios",
+          "status": "failed",
+          "verdict": null,
+          "cost_usd": 0.02,
+          "errors": [
+            "reason must be non-empty"
+          ]
+        },
+        {
+          "id": "finding:unreferenced:libs/core",
+          "status": "failed",
+          "verdict": null,
+          "cost_usd": 0.02,
+          "errors": [
+            "reason must be non-empty"
+          ]
+        },
+        {
+          "id": "finding:unreferenced:libs/rubylib",
+          "status": "failed",
+          "verdict": null,
+          "cost_usd": 0.02,
+          "errors": [
+            "reason must be non-empty"
+          ]
+        },
+        {
+          "id": "finding:unreferenced:services/web/src",
+          "status": "failed",
+          "verdict": null,
+          "cost_usd": 0.02,
+          "errors": [
+            "reason must be non-empty"
+          ]
+        },
+        {
+          "id": "finding:unreferenced:services/worker",
+          "status": "failed",
+          "verdict": null,
+          "cost_usd": 0.02,
+          "errors": [
+            "reason must be non-empty"
+          ]
+        }
+      ]
+    },
+    "spot_checks": [
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "identity.framework",
+        "claim": "services/api: a specific answer for identity.framework",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "identity.language",
+        "claim": "services/api: a specific answer for identity.language",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "identity.port",
+        "claim": "services/api: a specific answer for identity.port",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "identity.type",
+        "claim": "services/api: a specific answer for identity.type",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "mechanism",
+        "claim": "services/api: a specific answer for mechanism",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "next_step",
+        "claim": "services/api: a specific answer for next_step",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "place",
+        "claim": "services/api: a specific answer for place",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "purpose",
+        "claim": "services/api: a specific answer for purpose",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      }
+    ],
+    "substitution_checks": [
+      {
+        "target_id": "services/api",
+        "distinctive": true,
+        "chose": "apps/ios",
+        "confirmed_failure": true,
+        "reason": "it names its own files"
+      }
+    ],
+    "checked": 8,
+    "unsupported": 0,
+    "disagreement_rate": 0.0,
+    "substitution_failure_rate": 1.0,
+    "notes": [
+      "verify identity: 3 verified, confirmed=3",
+      "verify edges: 0 verified, no verdicts",
+      "verify findings: 0 verified, no verdicts",
+      "grounding spot-checks: 0 of 8 claims not supported by their own evidence (disagreement rate 0.0%)",
+      "substitution checks: 1 of 1 descriptions did not identify their own subject (100.0%)"
+    ]
+  },
   "synthesis": {
+    "tours": [
+      {
+        "id": "the-request-path",
+        "title": "The request path",
+        "description": "How a request crosses the service boundary.",
+        "steps": [
+          {
+            "target": "root",
+            "title": "Stop at root",
+            "narration": "What root contributes to the request path.",
+            "evidence": {
+              "file": "README.md",
+              "line": 1
+            }
+          },
+          {
+            "target": "apps/ios",
+            "title": "Stop at apps/ios",
+            "narration": "What apps/ios contributes to the request path.",
+            "evidence": {
+              "file": "README.md",
+              "line": 1
+            }
+          },
+          {
+            "target": "libs/core",
+            "title": "Stop at libs/core",
+            "narration": "What libs/core contributes to the request path.",
+            "evidence": {
+              "file": "README.md",
+              "line": 1
+            }
+          }
+        ]
+      }
+    ],
     "lenses": [
       {
-        "confidence": "medium",
         "name": "language coverage as a claim",
         "observation": "every package asserts a language but only two assert a framework",
         "why_it_matters": "the reader is evaluating stack coverage",
+        "confidence": "medium",
         "work_order": {
-          "budget": {
-            "max_cost_usd": 0.5,
-            "max_targets": 4
-          },
-          "criteria": "each package either names a framework or says it has none",
-          "expected_effect": "truth: framework identity verdicts",
-          "lens": "framework detection on the quiet packages",
           "scope": [
             "root",
             "apps/ios"
-          ]
-        }
-      }
-    ],
-    "narrative_written": true,
-    "notes": [
-      "1 tour(s) written, 1 lens(es) discovered, 1 work order(s) issued"
-    ],
-    "rejected_orders": [],
-    "rejected_tours": [],
-    "tours": [
-      {
-        "description": "How a request crosses the service boundary.",
-        "id": "the-request-path",
-        "steps": [
-          {
-            "evidence": {
-              "file": "README.md",
-              "line": 1
-            },
-            "narration": "What root contributes to the request path.",
-            "target": "root",
-            "title": "Stop at root"
-          },
-          {
-            "evidence": {
-              "file": "README.md",
-              "line": 1
-            },
-            "narration": "What apps/ios contributes to the request path.",
-            "target": "apps/ios",
-            "title": "Stop at apps/ios"
-          },
-          {
-            "evidence": {
-              "file": "README.md",
-              "line": 1
-            },
-            "narration": "What libs/core contributes to the request path.",
-            "target": "libs/core",
-            "title": "Stop at libs/core"
+          ],
+          "lens": "framework detection on the quiet packages",
+          "criteria": "each package either names a framework or says it has none",
+          "expected_effect": "truth: framework identity verdicts",
+          "budget": {
+            "max_cost_usd": 0.5,
+            "max_targets": 4
           }
-        ],
-        "title": "The request path"
+        }
       }
     ],
     "work_orders": [
       {
+        "scope": [
+          "root",
+          "apps/ios"
+        ],
+        "lens": "framework detection on the quiet packages",
+        "criteria": "each package either names a framework or says it has none",
+        "expected_effect": "truth: framework identity verdicts",
         "budget": {
           "max_cost_usd": 0.5,
           "max_targets": 4
         },
-        "criteria": "each package either names a framework or says it has none",
-        "expected_effect": "truth: framework identity verdicts",
         "issued_by": "P4",
-        "lens": "framework detection on the quiet packages",
-        "outcome": null,
-        "scope": [
-          "root",
-          "apps/ios"
-        ]
+        "outcome": null
       }
+    ],
+    "rejected_orders": [],
+    "rejected_tours": [],
+    "narrative_written": true,
+    "notes": [
+      "1 tour(s) written, 1 lens(es) discovered, 1 work order(s) issued"
     ]
   },
-  "work_orders": [
-    {
-      "budget": {
-        "max_cost_usd": 0.5,
-        "max_targets": 4
-      },
-      "criteria": "each package either names a framework or says it has none",
-      "executed": false,
-      "expected_effect": "truth: framework identity verdicts",
-      "issued_by": "P4",
-      "lens": "framework detection on the quiet packages",
-      "outcome": null,
-      "scope": [
-        "root",
-        "apps/ios"
-      ]
-    },
-    {
-      "budget": {
-        "max_cost_usd": 1.0,
-        "max_targets": 4
-      },
-      "criteria": "each boundary component names its inbound protocol",
-      "executed": true,
-      "expected_effect": "truth: the grounded fraction should rise",
-      "issued_by": "P5",
-      "lens": "the outward-facing boundary",
-      "outcome": {
-        "changed_anything": false,
-        "cost_usd": 0.01,
-        "executed": true,
-        "notes": [
-          "executed and changed no contract state; the order cost budget and moved nothing"
+  "accounting": {
+    "by_model": [
+      {
+        "model": "anthropic-claude-cli:opus",
+        "invocations": 18,
+        "targets": 1,
+        "tokens_in": 21600,
+        "tokens_cached": 0,
+        "tokens_out": 5400,
+        "cost_usd": 0.18,
+        "wall_seconds": 0.0,
+        "retries": 0,
+        "failures": 0,
+        "phases": [
+          "p2_ladder:opus",
+          "p3_adjudication:grounding-spot-check",
+          "p3_adjudication:substitution-check",
+          "p3_adjudication:verify-edges",
+          "p3_adjudication:verify-findings",
+          "p3_adjudication:verify-identity"
         ],
-        "state_changes": {},
-        "targets_attempted": 2
+        "tokens_total": 27000,
+        "token_share": 0.6923,
+        "cost_share": 0.6923
       },
-      "scope": [
-        "root",
-        "apps/ios"
-      ]
+      {
+        "model": "anthropic-claude-cli:fable",
+        "invocations": 6,
+        "targets": 5,
+        "tokens_in": 7200,
+        "tokens_cached": 0,
+        "tokens_out": 1800,
+        "cost_usd": 0.06,
+        "wall_seconds": 0.0,
+        "retries": 0,
+        "failures": 0,
+        "phases": [
+          "p1_orientation",
+          "p2_ladder:fable",
+          "p4_synthesis:narrative",
+          "p4_synthesis:spine",
+          "p5_determination"
+        ],
+        "tokens_total": 9000,
+        "token_share": 0.2308,
+        "cost_share": 0.2308
+      },
+      {
+        "model": "anthropic-claude-cli:sonnet",
+        "invocations": 2,
+        "targets": 10,
+        "tokens_in": 2400,
+        "tokens_cached": 0,
+        "tokens_out": 600,
+        "cost_usd": 0.02,
+        "wall_seconds": 0.0,
+        "retries": 0,
+        "failures": 0,
+        "phases": [
+          "p2_ladder:2a",
+          "work_order:P5"
+        ],
+        "tokens_total": 3000,
+        "token_share": 0.0769,
+        "cost_share": 0.0769
+      }
+    ],
+    "totals": {
+      "invocations": 26,
+      "tokens_total": 39000,
+      "tokens_in": 31200,
+      "tokens_cached": 0,
+      "tokens_out": 7800,
+      "cost_usd": 0.26,
+      "wall_seconds": 0.0
     },
-    {
-      "budget": {
-        "max_cost_usd": 1.0,
-        "max_targets": 4
-      },
-      "criteria": "each boundary component names its inbound protocol",
-      "executed": false,
-      "expected_effect": "truth: the grounded fraction should rise",
-      "issued_by": "P5",
-      "lens": "the outward-facing boundary",
-      "outcome": null,
-      "scope": [
-        "root",
-        "apps/ios"
-      ]
-    }
-  ]
+    "account_delta": null,
+    "calibration_note": "To turn this into a share of the weekly allowance: take a /usage reading immediately before the run, keep hands off the account for its duration, take a second reading immediately after, and record the difference with scripts/usage-budget.py calibrate. Nothing else measures a subscription; the dollar figures here are API-equivalent prices for work that was never billed at API rates."
+  },
+  "cost_note": "Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent."
 }
