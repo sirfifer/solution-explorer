@@ -19,9 +19,9 @@
   },
   "cadence": "weekly",
   "budget": {
-    "max_cost_usd": 45.0,
-    "max_wall_minutes": 45,
-    "_note": "45.0 not the plan's 5.0: the 2026-08-20 five-partition calibration measured $5.04 for 15.1% of the partition tokens plus a fixed $4.15 narrative pass, projecting a $38-79 bracket for a full VS Code run. A 5.0 ceiling would truncate every refresh after roughly five partitions. Dollars are API-equivalent units reported by the claude CLI, metered against the owner's Claude Max subscription (no API key is billed; standing decision until deliberately changed). See docs/publication/ENRICHMENT-ENGINE.md section 2."
+    "max_cost_usd": 200.0,
+    "max_wall_minutes": 240,
+    "_note": "200.0 is a runaway stop, not a budget. Owner decision 2026-08-24: a subject is analysed and enriched to the best this system can do, or not at all, so there is no spending target to hit and a ceiling that truncates a run is worse than no ceiling. The previous 45.0 sat INSIDE the run's own projected $38-79 bracket and would have stopped the ladder partway, leaving the partial enrichment posture that --profile enriched rejects. Dollars here are API-equivalent units reported by the claude CLI and metered against the owner's Claude Max subscription; no card is charged, which is why the figure is a tripwire rather than a budget. What actually needs watching is the share of the weekly subscription allowance one run consumes: see scripts/usage-budget.py. max_wall_minutes raised to 240 for the same reason, so a slow run finishes rather than being killed mid-ladder."
   },
   "enrichment": {
     "pipeline": "ladder",

@@ -118,6 +118,11 @@ class InvokeResult:
     usage: dict = field(default_factory=dict)
     error: Optional[str] = None
     status_code: Optional[int] = None
+    # Which model actually answered. Carried because the ladder binds a
+    # different model to every rung, and a run's cost is meaningless as one
+    # number: the same token count against opus and against fable are different
+    # amounts of a weekly subscription allowance.
+    model: Optional[str] = None
 
 
 # An invoker takes a prompt and returns an InvokeResult. Injectable so tests can
@@ -220,13 +225,63 @@ class ClaudeCliInvoker:
                 ),
                 error="model reported error",
                 status_code=_coerce_status(envelope.get("api_error_status")),
+                model=self.model,
             )
         return InvokeResult(
             ok=True,
             text=str(envelope.get("result", "")),
             cost_usd=float(envelope.get("total_cost_usd", 0.0) or 0.0),
             usage=envelope.get("usage", {}) or {},
+            model=self.model,
         )
+
+
+def _accumulate_usage(into: dict, result: InvokeResult) -> None:
+    """Fold one call's token usage into a per-model tally.
+
+    Kept separate from cost because they answer different questions. The CLI's
+    dollar figure is an API-EQUIVALENT price for work that was actually metered
+    against a Claude subscription, so it is useful for comparing runs and
+    useless for answering "how much of this week did that just spend". Tokens
+    per model are the measurement that survives a pricing change and can be
+    weighed against a subscription allowance.
+
+    Field names follow the CLI envelope, which reports cache reads and writes
+    separately; they are kept apart because a cache read is roughly a tenth of
+    the price of the same tokens read fresh, and folding them together would
+    overstate a cache-heavy run by an order of magnitude.
+    """
+    model = result.model or "unknown"
+    usage = result.usage or {}
+    bucket = into.setdefault(model, {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cost_usd": 0.0,
+    })
+    bucket["calls"] += 1
+    bucket["cost_usd"] += float(result.cost_usd or 0.0)
+    for field_name in (
+        "input_tokens", "output_tokens",
+        "cache_read_input_tokens", "cache_creation_input_tokens",
+    ):
+        value = usage.get(field_name)
+        if isinstance(value, (int, float)):
+            bucket[field_name] += int(value)
+
+
+def _merge_usage(into: dict, other: dict) -> None:
+    """Fold one per-model tally into another, for run-level totals."""
+    for model, bucket in (other or {}).items():
+        target = into.setdefault(model, {
+            "calls": 0, "input_tokens": 0, "output_tokens": 0,
+            "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+            "cost_usd": 0.0,
+        })
+        for key, value in bucket.items():
+            target[key] = target.get(key, 0) + value
 
 
 def _coerce_status(value: Any) -> Optional[int]:
@@ -311,6 +366,11 @@ class PartitionOutcome:
     attempts: int = 0
     cost_usd: float = 0.0
     errors: list[str] = field(default_factory=list)
+    # model -> {"input_tokens": n, "output_tokens": n, "calls": n, ...}. The
+    # dollar figure the CLI reports is an API-equivalent price, and this account
+    # is metered against a Claude subscription rather than an API bill, so the
+    # tokens are the durable measurement and the dollars are a derived one.
+    usage_by_model: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -323,6 +383,9 @@ class EnhanceReport:
     relationships_enriched: int = 0
     architecture_enriched: bool = False
     total_cost_usd: float = 0.0
+    # The run's whole token account, by model. This is what a usage budget is
+    # actually spent in; see scripts/usage-budget.py.
+    usage_by_model: dict = field(default_factory=dict)
     scorer_pass: Optional[bool] = None
     scorer_summary: Optional[str] = None
     plan_preview: list[dict] = field(default_factory=list)
@@ -350,6 +413,7 @@ class EnhanceReport:
             "relationships_enriched": self.relationships_enriched,
             "architecture_enriched": self.architecture_enriched,
             "total_cost_usd": round(self.total_cost_usd, 6),
+            "usage_by_model": self.usage_by_model,
             "scorer_pass": self.scorer_pass,
             "scorer_summary": self.scorer_summary,
             "failed_partitions": self.failed_partitions,
@@ -362,6 +426,7 @@ class EnhanceReport:
                     "components": p.component_ids,
                     "relationships": p.relationship_keys,
                     "cost_usd": round(p.cost_usd, 6),
+                    "usage_by_model": p.usage_by_model,
                     "errors": p.errors,
                 }
                 for p in self.partitions
@@ -508,6 +573,7 @@ def _enhance_partition(
         outcome.attempts = attempt
         result = invoker(prompt + feedback)
         outcome.cost_usd += result.cost_usd
+        _accumulate_usage(outcome.usage_by_model, result)
         if not result.ok:
             outcome.errors = [result.error or "invocation failed"]
             feedback = f"\n\nPREVIOUS ATTEMPT FAILED: {result.error}. Return valid JSON."
@@ -738,6 +804,8 @@ def run_enhance(
         outcomes.sort(key=lambda o: o.id)
         report.partitions = outcomes
         report.total_cost_usd = sum(o.cost_usd for o in outcomes)
+        for outcome in outcomes:
+            _merge_usage(report.usage_by_model, outcome.usage_by_model)
 
         # Architecture-level narrative (its own validation unit). It is a peer
         # producer to the partitions, so an UNEXPECTED exception here must degrade
