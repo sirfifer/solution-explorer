@@ -42,6 +42,7 @@ from ..contracts import Isolator, finalize_gaps
 from ..enrich import apply_enrichment_overlay, apply_verdict_overlay
 from ..features import DEFAULT_CHANNEL, gate_provenance
 from .activity import activity_manifest_summary, build_activity
+from .ai_surface import emit_ai_surface
 from .changelog import apply_changelog
 from .coverage import build_coverage, coverage_manifest_summary
 from .cra_emit import emit_cra_readiness
@@ -438,6 +439,18 @@ def project_split(
     )
     if cra_result is not None:
         _merge_cra_findings(prepared, cra_result.findings)
+    # AI surface (P10-5): what in this codebase talks to, routes, or is AI.
+    # Deterministic: catalog-matched dependencies (reusing the SBOM's parsed
+    # rows), imports, bounded content signatures, and artifact filenames, all
+    # from the store. After the SBOM because it reuses that parse; before the
+    # changelog so a changed AI surface is a recorded change, matching the
+    # SBOM's placement and rationale.
+    ai_items = iso.run(
+        "project.ai-surface", emit_ai_surface, prepared, store,
+        supply_chain=sbom_section, root=root, default=None,
+    )
+    if ai_items is not None:
+        prepared["ai_surface"] = ai_items
     # Design signals (D3): per-component metrics and architecture-level findings,
     # opt-in via --design-signals and a strict no-op when off, so both golden
     # corpora stay still. Before the changelog so a newly appeared dependency

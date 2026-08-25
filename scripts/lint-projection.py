@@ -109,6 +109,7 @@ ABSOLUTE_PATH_RE = re.compile(r"(?:/Users/|/home/|/Volumes/|[A-Za-z]:\\\\Users\\
 # ref band then covers it automatically.
 LENS_COMPONENT_FIELDS = {
     "capabilities": ("component_id",),
+    "ai_surface": ("component_id",),
     "rules": ("component_id",),
     "data_entities": ("component_id",),
     "entity_access": ("accessor_id",),
@@ -1062,7 +1063,7 @@ class Linter:
         lens_counts = {}
         for key in (
             "capabilities", "rules", "findings", "concerns", "data_entities",
-            "entity_access", "changelog", "repositories",
+            "entity_access", "changelog", "repositories", "ai_surface",
         ):
             value = self.manifest.get(key)
             if isinstance(value, list):

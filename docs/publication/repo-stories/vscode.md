@@ -71,6 +71,28 @@ code, so a broken build would not necessarily produce a bad map. The health
 argument here is about the demo's credibility and reproducibility, not about
 whether the analyser would cope.
 
+## Proof, executed 2026-08-25
+
+The skill's four checks, run rather than reasoned about.
+
+    resolve_ref(pinned, 1.134.0)  ->  ('1.134.0', 'pinned:1.134.0')
+
+    git ls-remote --tags | grep 1.134.0
+    474a349ad5b745e512ef86b864d1c74f7264dd7a  refs/tags/1.134.0
+      one line, no ^{}: a LIGHTWEIGHT tag pointing straight at the commit, so
+      there is no tag-object-versus-commit trap here.
+
+    git clone --depth 1 --branch 1.134.0  ->  HEAD 474a349a, describe 1.134.0, ok
+
+    merge-base --is-ancestor 474a349a origin/main  ->  yes, on the main line
+    tag date        2026-08-19
+    main HEAD date  2026-08-25
+    main ahead by   341 commits
+
+**Recency verdict: excellent.** Six days old and the newest release tag in the
+repo, with the next release branch (`release/1.135`) already cut. This is not a
+choice between current and healthy; it is both.
+
 ## Expected signature of a healthy fetch
 
 - resolved ref matches `^1\.[0-9]+\.[0-9]+$`
@@ -90,4 +112,5 @@ whether the analyser would cope.
 
 | Date | Round | Outcome |
 |---|---|---|
-| 2026-08-25 | 1 | First application of the skill. Found the `latest-tag` sort defect, which the procedure's step 4 surfaced by asking what the tags actually are rather than trusting the mode name. |
+| 2026-08-25 | 1 | First application. Found the `latest-tag` sort defect, which step 4 surfaced by asking what the tags actually are rather than trusting the mode name. |
+| 2026-08-25 | 2 | The verdict was right and the PROCEDURE was not: it produced a recommendation with no mechanical proof, and the checks that confirmed it were done by hand and would not have happened for the next subject. Added "Prove it before recording it" (resolve, exists, clones, ancestry, recency) and a step 0 saying a wrong answer here is silent. Re-run against this repo with the improved procedure: same verdict, now with evidence attached, plus two facts the first pass never established, that the tag is lightweight and that it is six days old. |

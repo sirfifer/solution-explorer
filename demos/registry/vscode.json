@@ -8,10 +8,11 @@
   },
   "track": "published",
   "policy": {
-    "follow": "default-branch",
-    "pin": null,
+    "follow": "pinned",
+    "pin": "1.134.0",
     "exclude": [],
-    "history": "full"
+    "history": "full",
+    "_note": "Decided by /repo-story on 2026-08-25 and proven, not inferred: the tag resolves, is lightweight (no tag-object trap), clones cleanly at 474a349a, is an ancestor of main, and is 6 days old with main 341 commits ahead. Pinned rather than default-branch so the map, the screenshots and the enrichment all describe a commit that still exists later, which matters because a full enrichment is a real amount of the weekly allowance and a moving target cannot be compared against a later run. NOT latest-tag: version-sort on this repo returns vsda-v1.39.1, which is not a VS Code release. See docs/publication/repo-stories/vscode.md."
   },
   "hosting": {
     "cf_project": "syscorpus-vscode",

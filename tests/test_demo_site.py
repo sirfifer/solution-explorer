@@ -185,7 +185,13 @@ def test_real_vscode_registry_entry_loads_and_validates():
     """The committed demos/registry/vscode.json must itself be a valid entry."""
     doc = ds.load_registry("vscode", REPO_ROOT / "demos" / "registry")
     assert doc["slug"] == "vscode"
-    assert doc["policy"]["follow"] == "default-branch"
+    # Pinned to a release tag by /repo-story on 2026-08-25 (see
+    # docs/publication/repo-stories/vscode.md): the demo, its screenshots and
+    # its enrichment should describe a commit that still exists later. The pin
+    # value moves release to release; its SHAPE is the contract.
+    assert doc["policy"]["follow"] == "pinned"
+    import re
+    assert re.fullmatch(r"1\.\d+\.\d+", doc["policy"]["pin"] or "")
     assert doc["policy"]["history"] == "full"
     assert doc["gates"]["min_enrichment_score"] == 85
     assert doc["consent"]["required"] is False

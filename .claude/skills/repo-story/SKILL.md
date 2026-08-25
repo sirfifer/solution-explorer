@@ -53,6 +53,11 @@ Plus `docs/publication/repo-stories/<slug>.md` recording:
 
 Work down this list. Stop when the answer is decisive; record what settled it.
 
+**0. Note that a wrong answer here is silent.** Every step below produces a ref
+that will clone successfully and analyse cleanly whether or not it is the right
+one. Nothing downstream will complain. That is why the proof step exists and why
+this is worth doing carefully rather than quickly.
+
 **1. Ask the project directly.** README, CONTRIBUTING, RELEASE, and any
 `docs/` build instructions. Search for `stable`, `release`, `do not build`,
 `unstable`, `nightly`, `development branch`. An explicit instruction outranks
@@ -98,6 +103,37 @@ When two options are defensible, prefer the one that is **more recent** as long
 as its health evidence is real. Showing a stale codebase is its own failure: it
 invites "this is not what our repo looks like", which is the same credibility
 loss by a different route.
+
+## Prove it before recording it
+
+A verdict that has not been executed is a hypothesis. Run these four checks and
+paste the output into the story file. They cost seconds and they are the
+difference between "this looks right" and "this works".
+
+    # 1. our own resolver returns what you expect
+    python3 -c "...resolve_ref(repo, {'follow': ..., 'pin': ...})"
+
+    # 2. the ref exists, and note whether the tag is lightweight or annotated.
+    #    An annotated tag has a second ^{} line; the commit is the ^{} one, and
+    #    tooling that grabs the first line gets a tag object instead of a commit.
+    git ls-remote --tags <repo> | grep -E "refs/tags/<ref>(\^\{\})?$"
+
+    # 3. it actually clones at that ref
+    git clone --depth 1 --branch <ref> <repo> /tmp/pinprobe
+
+    # 4. ancestry and recency, which decide whether the choice is still current
+    git merge-base --is-ancestor <sha> origin/main   # is it on the main line?
+    git log -1 --format=%ci <sha>                    # how old is it?
+    git rev-list --count <sha>..origin/main          # how far behind?
+
+**Recency is part of the verdict, not a footnote.** A release tag six days old
+with the default branch 341 commits ahead is an excellent choice. The same tag
+six months old is a different decision entirely, and the only way to tell is to
+ask. If the chosen ref is more than a release cycle behind, say so explicitly and
+justify it, or choose again.
+
+**If a check fails, the verdict is wrong, not the check.** Go back to the
+investigation with what the failure taught you.
 
 ## Tuning, which is the point of writing it down
 
