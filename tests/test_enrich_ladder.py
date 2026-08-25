@@ -498,11 +498,18 @@ def test_the_ceiling_stops_a_later_rung_and_records_it_honestly(world):
     _, outcome, invoker, _ = _run(world, plan, ceiling=0.015)
 
     assert any("cost ceiling reached" in n for n in outcome.notes)
-    # The item that needed the last rung is recorded as an honest gap, not as
-    # grounded and not as silently missing.
+    # The item that needed the last rung stays in the escalate state: the
+    # ceiling refused its call, so no model examined it, and an honest gap is a
+    # claim of examination. This assertion used to expect honest-gap, and that
+    # expectation was itself the poisoning defect in miniature: promoting the
+    # never-launched item to a declared gap emptied census.unresolved, which
+    # made a truncated run's census read as fully concluded. Partial reported
+    # as partial means the item shows up as UNRESOLVED.
     state = outcome.states[("component", target)]
-    assert state.terminal == "honest-gap"
-    assert outcome.census.unresolved == []
+    assert state.state == "escalate"
+    assert ("component", target) in {
+        (u.target_kind, u.target_id) for u in outcome.census.unresolved
+    }, "the unresolved item must be visible in the census"
 
 
 # --- 5. the product never sees the scaffolding --------------------------------
@@ -628,3 +635,92 @@ def test_max_partitions_actually_bounds_the_ladder(world):
     notes = " ".join(result.notes)
     assert "capped to the 1 most important partition(s)" in notes
     assert "not attempted" in notes
+
+
+# --- the honest_gap poisoning regression (2026-08-25 incident) ----------------
+
+
+class _AuthDiesAtTerminal:
+    """Delegates to the scripted ladder until the LAST rung, then fails every
+    call the way the real incident did: instantly, identically, at $0.00."""
+
+    def __init__(self, inner):
+        self._inner = inner
+        self.prompts = inner.prompts
+
+    def __call__(self, prompt: str) -> InvokeResult:
+        if "LAST rung" in prompt:
+            return InvokeResult(
+                ok=False, text="",
+                error="claude exited 1: Failed to authenticate: OAuth session "
+                      "expired and could not be refreshed",
+            )
+        return self._inner(prompt)
+
+
+def test_a_failed_terminal_call_never_becomes_an_honest_gap(world, tmp_path):
+    """The poisoning defect, pinned.
+
+    In the first real enrichment run an OAuth expiry killed every terminal-rung
+    call, and 106 items no model ever examined were stamped honest_gap: "we
+    looked and could not establish this" about items nobody looked at. An
+    honest gap is a claim about the CODE; a failed call is a claim about the
+    RUN. An item whose terminal call fails must stay in the escalate state,
+    which the census reports as unresolved and a rerun re-targets.
+    """
+    stubborn = world["components"][0]
+    plan = {cid: ("ground",) for cid in world["components"]}
+    plan[stubborn] = ("gap", "gap", "gap")  # climbs all the way to terminal
+
+    scripted = ScriptedLadder(
+        plan, world["real_file"], world["components"], world["relationships"],
+        world["facts_by_id"],
+    )
+    invoker = _AuthDiesAtTerminal(scripted)
+    config = LadderConfig(
+        store_path=world["db"], root=POLYGLOT, run_dir=tmp_path / "run",
+        policy=LadderPolicy(),
+    )
+    ctx = build_run_context(
+        config, invoker_factory=lambda spec: invoker, clock=FIXED_CLOCK
+    )
+    ctx.budget = BudgetMeter(ceiling=None)
+    try:
+        run_pipeline(ctx, [LadderPhase()])
+        outcome = ctx.results["p2_ladder"].data["ladder"]
+
+        state = outcome.states[("component", stubborn)]
+        assert state.state == "escalate", (
+            "a terminal call that never returned must leave the item "
+            "unresolved, not declared"
+        )
+        assert not any(
+            s.target_id == stubborn for s in outcome.honest_gaps
+        ), "no model examined it, so no gap may be declared for it"
+        assert any(
+            "terminal call failed or was never launched" in n
+            for n in outcome.notes
+        ), "the run must say out loud why the item was left unresolved"
+
+        # And nothing wrote a gap payload to the store for it.
+        rows = [
+            r for r in ctx.store.enrichment()
+            if r["target_kind"] == "component" and r["target_id"] == stubborn
+            and "honest_gaps" in (r.get("payload") or {})
+        ]
+        assert not rows
+    finally:
+        ctx.store.close()
+
+
+def test_an_examined_item_the_terminal_model_leaves_ungapped_still_gaps(world):
+    """The healthy half must survive the fix: when the terminal CALL returns
+    and the model omits an item, the item is an honest gap exactly as before.
+    (This is the existing ignores-test's semantics, restated beside the
+    regression so the two halves of the rule live together.)"""
+    stubborn = world["components"][0]
+    plan = {cid: ("ground",) for cid in world["components"]}
+    plan[stubborn] = ("gap", "silent", "silent")
+
+    _, outcome, _, _ = _run(world, plan)
+    assert outcome.states[("component", stubborn)].state == "honest_gap"

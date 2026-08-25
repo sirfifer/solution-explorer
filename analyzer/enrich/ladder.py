@@ -570,6 +570,15 @@ class LadderPhase:
         payloads, errors, skipped_batches = self._invoke_parallel(
             ctx, jobs, invoker_key=key, rung=rung
         )
+        # Which items a model actually SAW: their batch call returned a payload.
+        # Load-bearing for the terminal stamping below, and born from a real
+        # incident: an OAuth expiry killed every terminal-rung call, no batch
+        # returned, and 106 never-examined items were stamped honest_gap, which
+        # reads as "we looked and could not establish this" when the truth was
+        # "the call never happened". An honest gap is a claim about the CODE;
+        # a failed call is a claim about the RUN, and they must never share a
+        # label.
+        examined: set[tuple[str, str]] = set()
         for index, batch in enumerate(batches):
             if index not in payloads:
                 continue
@@ -578,6 +587,7 @@ class LadderPhase:
             obj = payloads[index]
             if obj is None:
                 continue
+            examined.update((s.target_kind, s.target_id) for s in batch)
             self._absorb(
                 ctx, obj, validator, facts_by_id, outcome,
                 rung=rung,
@@ -595,14 +605,35 @@ class LadderPhase:
             )
 
         if terminal:
-            # Anything still asking to climb after the last rung is an honest gap
-            # by construction: there is nowhere left to send it, and the design
+            # An item still asking to climb after the last rung becomes an
+            # honest gap ONLY if the terminal model actually saw it: it was in a
+            # batch whose call returned, and the model either failed to ground
+            # it or omitted it. There is nowhere left to send it, and the design
             # forbids both a fake answer and an infinite loop.
+            #
+            # An item whose terminal call FAILED or was never launched stays in
+            # the escalate state instead. That is already an honest terminal
+            # census state meaning "unresolved", the determination already
+            # refuses completeness while any item holds it, and a rerun with
+            # --update re-targets it. Stamping it honest_gap would convert a
+            # transport failure into a confident claim about the code.
+            unexamined = 0
             for state in outcome.states.values():
-                if state.state == "escalate":
+                if state.state != "escalate":
+                    continue
+                if (state.target_kind, state.target_id) in examined:
                     state.state = "honest_gap"
                     state.rung = "fable"
                     self._write_honest_gaps(ctx, state, outcome)
+                else:
+                    unexamined += 1
+            if unexamined:
+                outcome.notes.append(
+                    f"rung {rung}: {unexamined} item(s) left in the escalate "
+                    f"state because their terminal call failed or was never "
+                    f"launched; NOT recorded as honest gaps, because no model "
+                    f"examined them. They will be re-targeted by a rerun."
+                )
 
     def _escalation_item(
         self, ctx: RunContext, state: ContractState, facts_by_id: dict,
