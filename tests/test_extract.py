@@ -162,20 +162,24 @@ def test_parser_tier_is_encoded_in_parser_version():
     assert ":ts" in ts_v and ":regex" in rx_v
 
 
-def test_regex_fallback_marks_symbols_and_keeps_top_level(tmp_path):
-    # Force the regex tier for python and confirm facts are marked via_regex
-    # and carry no parent references (the pre-P4-2 top-level-only behavior).
+def test_no_grammar_stops_the_run_rather_than_dropping_a_tier(tmp_path):
+    """There is no regex tier to fall to any more.
+
+    The old behaviour marked such symbols ``via_regex`` and carried no parent
+    references, which is exactly the shape that made a degraded VS Code
+    projection look plausible: fewer facts, all of them structurally valid.
+    """
+    from analyzer.parsers import DegradedParserError
+
     p = PARSERS["python"]
     content = "class Foo:\n    def bar(self):\n        pass\n"
     orig = p._ts_available
     try:
         p._ts_available = False
-        syms = p.extract_nested_symbols(content, "m.py")
+        with pytest.raises(DegradedParserError):
+            p.extract_nested_symbols(content, "m.py")
     finally:
         p._ts_available = orig
-    assert syms, "regex fallback produced no symbols"
-    assert all(s.via_regex for s in syms)
-    assert all(s.parent_index is None for s in syms)
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,20 @@ import { test,
   reportFinding, expect, gotoState, expectNoErrorBoundary } from "./fixtures";
 import { componentBudget, type Contract } from "./contract";
 
+/**
+ * How long the search box may stay unresponsive before it is a finding, and how
+ * long before it is a failure.
+ *
+ * Both numbers come from a measurement rather than taste. The one target that
+ * failed three runs running did so at 15s, immediately after a target that took
+ * 19.5s to land inside a 983-file component; the box was never broken, it was
+ * behind a render. A reader who lands somewhere heavy and reaches for Cmd+K does
+ * wait, and that wait is worth reporting, but it is a different defect from a
+ * search box that does not work.
+ */
+const SLOW_INPUT_MS = 3_000;
+const SLOW_INPUT_BUDGET_MS = 45_000;
+
 /** How many of each kind to route end to end. */
 function perKindBudget(): number {
   const budget = componentBudget();
@@ -139,6 +153,7 @@ test.describe("search", () => {
     // That happened on the first full sweep, which reported "1 failed" with
     // zero findings attached and therefore said nothing about what was wrong.
     const broke: string[] = [];
+    const slowInput: string[] = [];
     // What the reader was looking at when the NEXT target is attempted. The one
     // recurring failure in this sweep is a target where the search box never
     // became editable, and the two candidate explanations, a race against the
@@ -153,28 +168,35 @@ test.describe("search", () => {
         // Close any overlay left open by the previous target, then reopen.
         await crawlPage.keyboard.press("Escape").catch(() => {});
 
-        // Wait for the previous navigation to stop occupying the main thread
-        // before typing into it. A bounded wait enforced from Node, never
-        // page.evaluate: evaluate takes an argument rather than options, so it
-        // carries no timeout, and on a thread pinned at 100% it never returns.
-        const settleStart = Date.now();
-        await crawlPage
-          .waitForFunction(() => document.readyState === "complete", undefined, {
-            timeout: 10_000,
-          })
-          .catch(() => {});
-        const settleMs = Date.now() - settleStart;
-
+        // Deliberately no readyState wait here. The previous revision waited for
+        // document.readyState === "complete" and it returned in 6ms while the
+        // box was still unusable for the next 15 seconds: readyState describes
+        // the DOCUMENT, and everything expensive in this app happens in React
+        // long after the document is complete. A wait that always passes is
+        // worse than no wait, because it looks like due diligence.
         await crawlPage.keyboard.press("ControlOrMeta+k");
         const input = crawlPage.locator('[data-testid="search-input"]');
         await expect(input).toBeVisible();
+
+        // Broken and slow are different claims and were being reported as one.
+        // A generous budget separates them: if the box never becomes editable
+        // the search really is unusable, and if it takes eleven seconds it is
+        // usable and too slow, which is a finding about landing cost rather than
+        // about search. Reported apart because they have different fixes.
+        const fillStart = Date.now();
         try {
-          await input.fill(target.query);
+          await input.fill(target.query, { timeout: SLOW_INPUT_BUDGET_MS });
         } catch (fillErr) {
-          // Re-thrown with the context that identifies WHICH explanation it is.
           throw new Error(
             `${(fillErr as Error).message.split("\n")[0]} ` +
-              `[after ${previous}; settle wait ${settleMs}ms]`,
+              `[after ${previous}]`,
+          );
+        }
+        const fillMs = Date.now() - fillStart;
+        if (fillMs > SLOW_INPUT_MS) {
+          slowInput.push(
+            `${target.kind} "${target.query}": search box took ${(fillMs / 1000).toFixed(1)}s ` +
+              `to accept typing [after ${previous}]`,
           );
         }
 
@@ -280,6 +302,10 @@ test.describe("search", () => {
 
     reportFinding("search.unusable", broke, {
       title: "targets where the search UI could not be driven at all",
+    });
+    reportFinding("search.slow_input", slowInput, {
+      title: "targets where the search box was still blocked by the previous landing",
+      severity: "warn",
     });
     reportFinding("search.no_results", noResults, {
       title: "exact names present in the search index that search does not find",

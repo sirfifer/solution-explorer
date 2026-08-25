@@ -1,4 +1,18 @@
-"""Base class for tree-sitter-based parsers with regex fallback."""
+"""Base class for tree-sitter parsers. There is no regex fallback.
+
+This class used to answer every question twice: with tree-sitter if it could,
+and with a regex parser if it could not. Both answers looked identical to
+everything downstream, which is what made it dangerous. On 2026-08-24 a VS Code
+regeneration ran without tree-sitter installed and produced 355,617 symbols
+instead of 153,231, with 55 methods where there should have been 28,501, while
+the analyzer reported 100% coverage and zero gaps throughout.
+
+Now a missing grammar stops the run, and a file tree-sitter cannot read is
+recorded as an unread file rather than answered badly. The regex modules survive
+only as helpers each parser delegates to for framework and import sniffing,
+which tree-sitter is not doing here; they are never a substitute for symbol
+extraction again.
+"""
 
 import logging
 from typing import Optional
@@ -31,59 +45,93 @@ class TreeSitterParser(BaseParser):
     _regex_parser: BaseParser
     _ts_available: bool = False
 
+    # Files tree-sitter could not read, across every parser in this process.
+    # Module-level on purpose: the question "is this one odd file or a broken
+    # parser" can only be answered by the total, not by any single failure.
+    UNREADABLE: list[tuple[str, str, str]] = []
+
+    # Past this many unread files, the explanation stopped being "the subject
+    # contains something strange" and became "this parser does not work". A
+    # handful of exotic files in a large repository is ordinary; fifty is a bug,
+    # and continuing would quietly ship a projection missing whole regions.
+    UNREADABLE_LIMIT = 50
+
+    def _record_unreadable(self, file_path: str, exc: Exception) -> None:
+        """Record a file that could not be read, and stop if there are too many.
+
+        Never substitutes a weaker answer. The file contributes nothing rather
+        than contributing something wrong, because a plausible wrong answer is
+        indistinguishable downstream from a right one, which is the whole reason
+        the fallback tier was removed.
+        """
+        from . import DegradedParserError
+
+        entry = (type(self).__name__, file_path, f"{type(exc).__name__}: {exc}")
+        TreeSitterParser.UNREADABLE.append(entry)
+        logger.warning(
+            "tree-sitter could not read %s with %s (%s); recorded as unread, "
+            "not approximated", file_path, entry[0], entry[2],
+        )
+        if len(TreeSitterParser.UNREADABLE) > self.UNREADABLE_LIMIT:
+            sample = "; ".join(f"{f} ({e})" for _, f, e in TreeSitterParser.UNREADABLE[:5])
+            raise DegradedParserError(
+                f"{len(TreeSitterParser.UNREADABLE)} files could not be read by "
+                f"tree-sitter, which is past the point where this is a property of "
+                f"the subject rather than of the parser. Stopping rather than "
+                f"publishing a map with holes in it. First failures: {sample}"
+            )
+
+    def _refuse_without_grammar(self) -> None:
+        """Stop the run rather than answer with a weaker parser."""
+        if not self._ts_available:
+            from . import DegradedParserError
+
+            raise DegradedParserError(
+                f"{type(self).__name__} has no tree-sitter grammar loaded, so this "
+                f"file cannot be read properly. The run is stopping instead of "
+                f"falling back to regex extraction, which would produce a "
+                f"projection that looks complete and is not. Install the grammars "
+                f"(pip install -e '.[treesitter]') and run again."
+            )
+
     def extract_symbols(self, content: str, file_path: str) -> list[Symbol]:
-        if self._ts_available:
-            try:
-                return self._extract_symbols_ts(content, file_path)
-            except Exception as exc:
-                # Fall back to regex extraction, but leave a trail so
-                # tree-sitter/regex parity drift is diagnosable (F-AN-7).
-                logger.debug(
-                    "tree-sitter symbol extraction failed for %s (%s: %s); "
-                    "falling back to regex parser %s",
-                    file_path, type(exc).__name__, exc,
-                    type(self._regex_parser).__name__,
-                )
-        return self._regex_parser.extract_symbols(content, file_path)
+        self._refuse_without_grammar()
+        try:
+            return self._extract_symbols_ts(content, file_path)
+        except Exception as exc:
+            # One file tree-sitter cannot read is reported as an unread file, and
+            # never as a regex approximation of one. The count is what decides
+            # whether this is a strange file in the subject or a broken parser,
+            # and _record_unreadable makes that call.
+            self._record_unreadable(file_path, exc)
+            return []
 
     def extract_imports(self, content: str) -> list[str]:
-        if self._ts_available:
-            try:
-                return self._extract_imports_ts(content)
-            except Exception as exc:
-                logger.debug(
-                    "tree-sitter import extraction failed (%s: %s); "
-                    "falling back to regex parser %s",
-                    type(exc).__name__, exc,
-                    type(self._regex_parser).__name__,
-                )
-        return self._regex_parser.extract_imports(content)
+        self._refuse_without_grammar()
+        try:
+            return self._extract_imports_ts(content)
+        except Exception as exc:
+            self._record_unreadable("<imports>", exc)
+            return []
 
     def extract_nested_symbols(self, content: str, file_path: str) -> list[NestedSymbol]:
         """Emit nested symbols (methods, inner types) with parent references.
 
         Tree-sitter gives exact node ranges, so the 500-line block-end bound of
-        the regex path is dropped here (TARGET-ARCHITECTURE.md 4.1). When
-        tree-sitter is unavailable or errors, fall back to the regex tier's
-        top-level symbols, marked ``via_regex`` so the runner records the
-        confidence tier and keeps tier-tagged cache entries separate.
+        the regex path is dropped here (TARGET-ARCHITECTURE.md 4.1). A file that
+        cannot be read is reported as unread, never approximated.
         """
-        if self._ts_available:
-            try:
-                out: list[NestedSymbol] = []
-                root = self._parse(content)
-                self._extract_nested_ts(
-                    root, content, file_path, out, parent_index=None, path=()
-                )
-                return out
-            except Exception as exc:
-                logger.debug(
-                    "tree-sitter nested extraction failed for %s (%s: %s); "
-                    "falling back to regex parser %s",
-                    file_path, type(exc).__name__, exc,
-                    type(self._regex_parser).__name__,
-                )
-        return self._regex_parser.extract_nested_symbols(content, file_path)
+        self._refuse_without_grammar()
+        try:
+            out: list[NestedSymbol] = []
+            root = self._parse(content)
+            self._extract_nested_ts(
+                root, content, file_path, out, parent_index=None, path=()
+            )
+            return out
+        except Exception as exc:
+            self._record_unreadable(file_path, exc)
+            return []
 
     # --- Token stream for clone fingerprinting (P5-6, additive) ----------
 

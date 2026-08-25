@@ -303,21 +303,24 @@ class TestCppTreeSitter:
 # Fallback behavior
 # ===================================================================
 
-def test_cpp_fallback_to_regex():
+def test_cpp_without_a_grammar_refuses_instead_of_falling_back():
+    """No grammar means no answer, not a worse answer.
+
+    This test asserted the opposite until 2026-08-24, when a VS Code run without
+    tree-sitter installed produced a projection with 355,617 symbols instead of
+    153,231 and 55 methods instead of 28,501, while reporting 100% coverage. A
+    degraded answer is indistinguishable downstream from a good one, so there is
+    no longer a tier that produces it.
+    """
     pytest.importorskip("tree_sitter")
     pytest.importorskip("tree_sitter_cpp")
+    from analyzer.parsers import DegradedParserError
     from analyzer.parsers.cpp_ts import CppTreeSitterParser
     parser = CppTreeSitterParser()
     parser._ts_available = False
-    code = (
-        "namespace n {\n"
-        "class Foo {\n"
-        "    void m() {}\n"
-        "};\n"
-        "}\n"
-    )
-    symbols = parser.extract_symbols(code, "t.cpp")
-    assert any(s.name == "Foo" for s in symbols)
+    code = "namespace n {\nclass Foo {\n    void m() {}\n};\n}\n"
+    with pytest.raises(DegradedParserError):
+        parser.extract_symbols(code, "t.cpp")
 
 
 # ===================================================================

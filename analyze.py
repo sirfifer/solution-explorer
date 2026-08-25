@@ -31,12 +31,8 @@ from analyzer.multi_repo import MultiRepoOrchestrator  # noqa: F401
 from analyzer.parsers import (  # noqa: F401
     PARSERS,
     BaseParser,
-    GoParser,
-    PythonParser,
-    RubyParser,
-    RustParser,
-    SwiftParser,
-    TypeScriptParser,
+    DegradedParserError,
+    get_parser,
 )
 from analyzer.scanner import ArchitectureScanner  # noqa: F401
 from analyzer.swiftui_flow import SwiftUIFlowDetector  # noqa: F401

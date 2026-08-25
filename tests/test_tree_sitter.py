@@ -489,53 +489,50 @@ class TestRubyTreeSitter:
 # Fallback Tests
 # ===================================================================
 
-class TestFallback:
-    """Verify that parsers degrade gracefully when tree-sitter is disabled."""
+class TestNoFallback:
+    """A parser without its grammar refuses. It does not answer worse.
 
-    def test_swift_fallback(self):
+    These four tests asserted the exact opposite until 2026-08-24. A VS Code
+    regeneration ran under an interpreter with no tree-sitter installed, every
+    TypeScript file was read by the regex tier, and the analyzer reported
+    "Coverage: 100% of source analyzed, 0 gaps" while producing 355,617 symbols
+    instead of 153,231 and 55 methods instead of 28,501. The tests passed
+    throughout, because they were testing that the trapdoor worked.
+
+    A graceful degradation is only graceful when someone downstream can tell it
+    happened. Nobody could.
+    """
+
+    def _refuses(self, parser, code, path):
+        from analyzer.parsers import DegradedParserError
+
+        parser._ts_available = False
+        with pytest.raises(DegradedParserError):
+            parser.extract_symbols(code, path)
+
+    def test_swift_refuses_without_grammar(self):
         pytest.importorskip("tree_sitter")
         pytest.importorskip("tree_sitter_swift")
         from analyzer.parsers.swift_ts import SwiftTreeSitterParser
-        parser = SwiftTreeSitterParser()
-        parser._ts_available = False
-        code = "public class Foo {}\n"
-        symbols = parser.extract_symbols(code, "test.swift")
-        assert any(s.name == "Foo" for s in symbols)
+        self._refuses(SwiftTreeSitterParser(), "public class Foo {}\n", "test.swift")
 
-    def test_typescript_fallback(self):
+    def test_typescript_refuses_without_grammar(self):
         pytest.importorskip("tree_sitter")
         pytest.importorskip("tree_sitter_typescript")
         from analyzer.parsers.typescript_ts import TypeScriptTreeSitterParser
-        parser = TypeScriptTreeSitterParser()
-        parser._ts_available = False
-        code = "export class Bar {}\n"
-        symbols = parser.extract_symbols(code, "test.ts")
-        assert any(s.name == "Bar" for s in symbols)
+        self._refuses(TypeScriptTreeSitterParser(), "export class Bar {}\n", "test.ts")
 
-    def test_rust_fallback(self):
+    def test_rust_refuses_without_grammar(self):
         pytest.importorskip("tree_sitter")
         pytest.importorskip("tree_sitter_rust")
         from analyzer.parsers.rust_ts import RustTreeSitterParser
-        parser = RustTreeSitterParser()
-        parser._ts_available = False
-        code = "pub struct Baz {}\n"
-        symbols = parser.extract_symbols(code, "lib.rs")
-        assert any(s.name == "Baz" for s in symbols)
+        self._refuses(RustTreeSitterParser(), "pub struct Baz {}\n", "lib.rs")
 
-    def test_python_fallback(self):
+    def test_python_refuses_without_grammar(self):
         pytest.importorskip("tree_sitter")
         pytest.importorskip("tree_sitter_python")
         from analyzer.parsers.python_ts import PythonTreeSitterParser
-        parser = PythonTreeSitterParser()
-        parser._ts_available = False
-        code = "class Qux:\n    pass\n"
-        symbols = parser.extract_symbols(code, "test.py")
-        assert any(s.name == "Qux" for s in symbols)
-
-
-# ===================================================================
-# Registry Tests
-# ===================================================================
+        self._refuses(PythonTreeSitterParser(), "class Foo:\n    pass\n", "m.py")
 
 class TestRegistry:
     """Test that the parser registry loads correctly."""
@@ -590,28 +587,47 @@ def _boom_symbol_parser():
     return _BoomParser()
 
 
-def test_ts_symbol_fallback_logs_file_and_exception(caplog):
-    """A failed tree-sitter symbol extraction logs the file and exception type."""
+def test_a_file_tree_sitter_cannot_read_is_recorded_not_approximated(caplog):
+    """A parse failure yields nothing, and says so, rather than yielding fiction.
+
+    Returning the regex parser's guess here is how a projection ends up with
+    plausible symbols that do not match the code. The file contributes no
+    symbols, the failure is logged with its path and exception type, and the
+    tally decides whether this is one strange file or a broken parser.
+    """
     import logging
 
+    from analyzer.parsers.tree_sitter_base import TreeSitterParser
+
+    TreeSitterParser.UNREADABLE.clear()
     parser = _boom_symbol_parser()
-    with caplog.at_level(logging.DEBUG, logger="analyzer.parsers.tree_sitter_base"):
+    with caplog.at_level(logging.WARNING, logger="analyzer.parsers.tree_sitter_base"):
         result = parser.extract_symbols("def f():\n    pass\n", "mymodule.py")
 
-    # Fell back to the regex parser (which finds the function).
-    assert any(getattr(s, "name", None) == "f" for s in result)
-    messages = [r.getMessage() for r in caplog.records]
-    assert any("mymodule.py" in m and "ValueError" in m for m in messages)
+    assert result == [], "a file that could not be read must not be guessed at"
+    assert any("mymodule.py" in r.getMessage() and "ValueError" in r.getMessage()
+               for r in caplog.records)
+    assert TreeSitterParser.UNREADABLE, "the failure must be counted, not only logged"
+    TreeSitterParser.UNREADABLE.clear()
 
 
-def test_ts_import_fallback_logs_exception(caplog):
-    """A failed tree-sitter import extraction logs the exception type."""
-    import logging
+def test_enough_unreadable_files_stops_the_run(caplog):
+    """One odd file is the subject's problem; fifty is ours.
 
+    Without this, a parser broken for a whole language would quietly emit a map
+    with entire regions missing and every per-file failure buried in a log
+    nobody reads.
+    """
+    from analyzer.parsers import DegradedParserError
+    from analyzer.parsers.tree_sitter_base import TreeSitterParser
+
+    TreeSitterParser.UNREADABLE.clear()
     parser = _boom_symbol_parser()
-    with caplog.at_level(logging.DEBUG, logger="analyzer.parsers.tree_sitter_base"):
-        result = parser.extract_imports("import os\n")
+    try:
+        with pytest.raises(DegradedParserError):
+            for i in range(TreeSitterParser.UNREADABLE_LIMIT + 5):
+                parser.extract_symbols("def f(): pass\n", f"file{i}.py")
+    finally:
+        TreeSitterParser.UNREADABLE.clear()
 
-    assert "os" in result  # regex fallback still worked
-    messages = [r.getMessage() for r in caplog.records]
-    assert any("RuntimeError" in m for m in messages)
+
