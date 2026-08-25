@@ -1,0 +1,167 @@
+{
+ "old": {
+  "help_text": "This module supplies Node.js-specific helper functions for the Copilot extension: crypto.ts wraps cryptographic operations, jsonFile.ts implements JSON file persistence built on the shared TaskQueue from util/common, and ports.ts probes for available network ports using a CancellationToken from util/vs. It sits in the Node runtime tier, parallel to util/common and util/vs, giving Copilot access to Node-only APIs unavailable in the browwser/common tiers. It depends on util/common (async primitives like Debouncer and Lock) and util/vs (base types) through 4 outbound edges, and is itself called from 6 other places in the extension. Its test suite covers debounce, lock, glob, markdown and anomaly-detection behavior with 58 unit tests running in CI.",
+  "description": "Node.js-only helper utilities (crypto, JSON files, port scanning) for the Copilot extension.",
+  "data_handled": "Cryptographic hash/key material, JSON file contents persisted to disk, OS-level TCP port availability state",
+  "criticality": "important",
+  "architectural_role": null,
+  "tech_context": "TypeScript compiled for Node.js execution, giving the Copilot extension host access to Node-only APIs (crypto, filesystem-backed JSON I/O, network port probing) that the common/ and vs/ tiers deliberately avoid.",
+  "testing_assessment": "58 unit tests across 7 spec files exercise debounce, lock, glob, markdown and anomaly-detection helpers, all wired into CI, giving this small module solid direct coverage.",
+  "testing_maturity": "adequate",
+  "contract": {
+   "parser_first": [
+    "The path 'extensions/copilot/src/util/node' follows the same runtime-tier folder convention documented for src/vs (common/browser/node/electron-*): the 'node' suffix already tells a reader this code is Node-API-only without needing model inference from the import graph."
+   ],
+   "answers": {
+    "purpose": {
+     "claim": "Supplies Node.js-only utility functions (crypto, JSON file persistence, port scanning) that other Copilot components call when they need capabilities unavailable in the browser/common tiers.",
+     "status": "answered",
+     "evidence": [
+      {
+       "kind": "file",
+       "path": "extensions/copilot/src/util/node/crypto.ts"
+      },
+      {
+       "kind": "file",
+       "path": "extensions/copilot/src/util/node/jsonFile.ts"
+      },
+      {
+       "kind": "file",
+       "path": "extensions/copilot/src/util/node/ports.ts"
+      }
+     ]
+    },
+    "mechanism": {
+     "claim": "jsonFile.ts layers JSON read/write on top of util/common's TaskQueue to serialize file access; ports.ts uses a CancellationToken (from util/vs) to make port scans abortable.",
+     "status": "answered",
+     "evidence": [
+      {
+       "kind": "symbol",
+       "path": "extensions/copilot/src/util/node/jsonFile.ts",
+       "symbol": "TaskQueue",
+       "line": 36
+      },
+      {
+       "kind": "symbol",
+       "path": "extensions/copilot/src/util/node/ports.ts",
+       "symbol": "CancellationToken",
+       "line": 21
+      }
+     ]
+    },
+    "place": {
+     "claim": "6 inbound edges show other Copilot components calling into this module for Node-only work; its 4 outbound edges go to util/common (async primitives) and util/vs (base types), matching its position as a leaf utility tier built on the two lower utility layers.",
+     "status": "answered",
+     "evidence": [
+      {
+       "kind": "edge",
+       "source": "extensions/copilot/src/util/node",
+       "target": "extensions/copilot/src/util/common",
+       "edge_type": "import"
+      },
+      {
+       "kind": "edge",
+       "source": "extensions/copilot/src/util/node",
+       "target": "extensions/copilot/src/util/vs",
+       "edge_type": "import"
+      }
+     ]
+    },
+    "identity.type": {
+     "claim": "A utility module (library code), not an application or service.",
+     "status": "answered",
+     "evidence": [
+      {
+       "kind": "file",
+       "path": "extensions/copilot/src/util/node/crypto.ts"
+      }
+     ]
+    },
+    "identity.language": {
+     "claim": "TypeScript.",
+     "status": "answered",
+     "evidence": [
+      {
+       "kind": "file",
+       "path": "extensions/copilot/src/util/node/ports.ts"
+      }
+     ]
+    },
+    "next_step": {
+     "claim": "Read extensions/copilot/src/util/common next: it's the cross-platform layer this Node tier builds on (TaskQueue, Debouncer, Lock) and clarifies what stays common versus what needs the Node tier.",
+     "status": "answered",
+     "evidence": [
+      {
+       "kind": "edge",
+       "source": "extensions/copilot/src/util/node",
+       "target": "extensions/copilot/src/util/common",
+       "edge_type": "uses"
+      }
+     ]
+    }
+   },
+   "self_state": "grounded",
+   "confusion": null,
+   "substitution_check": "This module wraps Node's crypto and OS-level TCP-port APIs directly — no sibling component in this batch touches cryptography or network ports."
+  }
+ },
+ "new": {
+  "help_text": "This module supplies Node.js-specific helper functions for the Copilot extension: crypto.ts wraps cryptographic operations, jsonFile.ts implements JSON file persistence built on the shared TaskQueue from util/common, and ports.ts probes for available network ports using a CancellationToken from util/vs. It sits in the Node runtime tier, parallel to util/common and util/vs, giving Copilot access to Node-only APIs unavailable in the browwser/common tiers. It depends on util/common (async primitives like Debouncer and Lock) and util/vs (base types) through 4 outbound edges, and is itself called from 6 other places in the extension. Its test suite covers debounce, lock, glob, markdown and anomaly-detection behavior with 58 unit tests running in CI.",
+  "description": "Node.js-only helper utilities (crypto, JSON files, port scanning) for the Copilot extension.",
+  "data_handled": "Cryptographic hash/key material, JSON file contents persisted to disk, OS-level TCP port availability state",
+  "criticality": "important",
+  "tech_context": "TypeScript compiled for Node.js execution, giving the Copilot extension host access to Node-only APIs (crypto, filesystem-backed JSON I/O, network port probing) that the common/ and vs/ tiers deliberately avoid.",
+  "testing_assessment": "58 unit tests across 7 spec files exercise debounce, lock, glob, markdown and anomaly-detection helpers, all wired into CI, giving this small module solid direct coverage.",
+  "testing_maturity": "adequate",
+  "q": {
+   "purpose": {
+    "t": "Supplies Node.js-only utility functions (crypto, JSON file persistence, port scanning) that other Copilot components call when they need capabilities unavailable in the browser/common tiers.",
+    "e": [
+     0,
+     1
+    ]
+   },
+   "mechanism": {
+    "t": "jsonFile.ts layers JSON read/write on top of util/common's TaskQueue to serialize file access; ports.ts uses a CancellationToken (from util/vs) to make port scans abortable.",
+    "e": [
+     [
+      1,
+      "TaskQueue"
+     ],
+     [
+      2,
+      "CancellationToken"
+     ]
+    ]
+   },
+   "place": {
+    "t": "6 inbound edges show other Copilot components calling into this module for Node-only work; its 4 outbound edges go to util/common (async primitives) and util/vs (base types), matching its position as a leaf utility tier built on the two lower utility layers.",
+    "e": [
+     {
+      "kind": "edge",
+      "source": "extensions/copilot/src/util/node",
+      "target": "extensions/copilot/src/util/common"
+     },
+     {
+      "kind": "edge",
+      "source": "extensions/copilot/src/util/node",
+      "target": "extensions/copilot/src/util/vs"
+     }
+    ]
+   },
+   "next_step": {
+    "t": "Read extensions/copilot/src/util/common next: it's the cross-platform layer this Node tier builds on (TaskQueue, Debouncer, Lock) and clarifies what stays common versus what needs the Node tier.",
+    "e": [
+     {
+      "kind": "edge",
+      "source": "extensions/copilot/src/util/node",
+      "target": "extensions/copilot/src/util/common"
+     }
+    ]
+   }
+  },
+  "pf": [
+   "The path 'extensions/copilot/src/util/node' follows the same runtime-tier folder convention documented for src/vs (common/browser/node/electron-*): the 'node' suffix already tells a reader this code is Node-API-only without needing model inference from the import graph."
+  ]
+ }
+}

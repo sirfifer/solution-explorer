@@ -1,0 +1,476 @@
+{
+ "components": [
+  {
+   "i": "extensions/copilot/src/util/node",
+   "help_text": "This module supplies Node.js-specific helper functions for the Copilot extension: crypto.ts wraps cryptographic operations, jsonFile.ts implements JSON file persistence built on the shared TaskQueue from util/common, and ports.ts probes for available network ports using a CancellationToken from util/vs. It sits in the Node runtime tier, parallel to util/common and util/vs, giving Copilot access to Node-only APIs unavailable in the browwser/common tiers. It depends on util/common (async primitives like Debouncer and Lock) and util/vs (base types) through 4 outbound edges, and is itself called from 6 other places in the extension. Its test suite covers debounce, lock, glob, markdown and anomaly-detection behavior with 58 unit tests running in CI.",
+   "description": "Node.js-only helper utilities (crypto, JSON files, port scanning) for the Copilot extension.",
+   "data_handled": "Cryptographic hash/key material, JSON file contents persisted to disk, OS-level TCP port availability state",
+   "criticality": "important",
+   "tech_context": "TypeScript compiled for Node.js execution, giving the Copilot extension host access to Node-only APIs (crypto, filesystem-backed JSON I/O, network port probing) that the common/ and vs/ tiers deliberately avoid.",
+   "testing_assessment": "58 unit tests across 7 spec files exercise debounce, lock, glob, markdown and anomaly-detection helpers, all wired into CI, giving this small module solid direct coverage.",
+   "testing_maturity": "adequate",
+   "q": {
+    "purpose": {
+     "t": "Supplies Node.js-only utility functions (crypto, JSON file persistence, port scanning) that other Copilot components call when they need capabilities unavailable in the browser/common tiers.",
+     "e": [
+      0,
+      1
+     ]
+    },
+    "mechanism": {
+     "t": "jsonFile.ts layers JSON read/write on top of util/common's TaskQueue to serialize file access; ports.ts uses a CancellationToken (from util/vs) to make port scans abortable.",
+     "e": [
+      [
+       1,
+       "TaskQueue"
+      ],
+      [
+       2,
+       "CancellationToken"
+      ]
+     ]
+    },
+    "place": {
+     "t": "6 inbound edges show other Copilot components calling into this module for Node-only work; its 4 outbound edges go to util/common (async primitives) and util/vs (base types), matching its position as a leaf utility tier built on the two lower utility layers.",
+     "e": [
+      "E0",
+      "E1"
+     ]
+    },
+    "next_step": {
+     "t": "Read extensions/copilot/src/util/common next: it's the cross-platform layer this Node tier builds on (TaskQueue, Debouncer, Lock) and clarifies what stays common versus what needs the Node tier.",
+     "e": [
+      "E0"
+     ]
+    }
+   },
+   "pf": [
+    "The path 'extensions/copilot/src/util/node' follows the same runtime-tier folder convention documented for src/vs (common/browser/node/electron-*): the 'node' suffix already tells a reader this code is Node-API-only without needing model inference from the import graph."
+   ]
+  },
+  {
+   "i": "extensions/copilot/src/util/vs",
+   "help_text": "This is a large (43,650-line, 147-file) vendored fork of core VS Code's src/vs/base and src/vs/editor/common utilities, bundled inside the Copilot extension so it never has to link against core internals directly. It implements foundational primitives (arrays, async helpers, cancellation, buffers, caching) plus a full text-diffing stack — a Myers algorithm, dynamic-programming diffing, and heuristic sequence optimizations — used to compute and represent edits. With 38 inbound edges it is the most heavily depended-on component in this batch, consumed by util/node and the simulation-language and slash-test harnesses. Many of its 13 outbound 'uses' edges to src/vs packages are inferred purely from matching symbol names (BugIndicatingError, LineRange, URI) rather than confirmed imports, consistent with this being an independent duplicate of core rather than a live dependency on it. It carries no colocated test files of its own, though CI is marked as covering it, presumably via the parent extension's suite.",
+   "description": "Vendored, framework-free fork of core VS Code base/editor utilities bundled into the Copilot extension.",
+   "data_handled": "In-memory diff computations and edits, text ranges/positions, cancellation tokens, cached values, array and buffer manipulations — no persisted or network data",
+   "criticality": "critical",
+   "tech_context": "TypeScript throughout; despite the mechanical 'React' label attached to this component, none of the sampled files use JSX or import React — the code is a vendored, dependency-free port of src/vs/base and src/vs/editor/common so the extension can reuse core's diffing/range/observable primitives without linking against core internals.",
+   "testing_assessment": "No test files are colocated with this component despite its 43,650-line footprint; has_ci_tests is marked true, implying it is exercised transitively through the parent extension's own test suite rather than direct unit tests here.",
+   "testing_maturity": "untested",
+   "complexity_assessment": "43,650 lines across 147 files make this the largest component in the batch by a wide margin, with zero colocated tests despite CI coverage being reported at the extension level.",
+   "q": {
+    "purpose": {
+     "t": "Gives the Copilot extension its own copy of VS Code's base and editor-core primitives (arrays, async, cancellation, diffing, text ranges) so it can use the same data structures and algorithms as the editor without importing core internals.",
+     "e": [
+      1,
+      4
+     ]
+    },
+    "mechanism": {
+     "t": "Implements base data-structure and algorithm primitives — arrays, array search (arraysFind), assertions, async control flow, buffers, an LRU-style cache, and cancellation tokens — that the fork's editor/diff code builds on.",
+     "e": [
+      2,
+      6
+     ]
+    },
+    "place": {
+     "t": "38 inbound edges make this the most-depended-upon component in the batch (consumers include util/node and the simulation-language/slash-test harnesses); its 13 outbound edges target src/vs/* packages, but those are symbol-name-inferred 'uses' edges rather than confirmed imports, consistent with util/vs being an independent vendored copy rather than a real dependency on core.",
+     "e": [
+      {
+       "kind": "edge",
+       "source": "extensions/copilot/src/util/node",
+       "target": "extensions/copilot/src/util/vs"
+      },
+      "E2"
+     ]
+    },
+    "next_step": {
+     "t": "Read src/vs/base/common (the canonical, non-vendored source this fork mirrors) to see the original implementations, or extensions/copilot/src/util/node for a concrete consumer of these primitives.",
+     "e": [
+      {
+       "kind": "edge",
+       "source": "extensions/copilot/src/util/node",
+       "target": "extensions/copilot/src/util/vs"
+      }
+     ]
+    }
+   },
+   "pf": [
+    "Many 'uses' edges from this component to src/vs/base/common, src/vs/editor/common/core, src/vs/editor/common/diff and others are inferred purely from matching symbol names (e.g. BugIndicatingError, LineRange, URI) that plausibly exist independently in both trees; since util/vs is documented as a self-contained fork that must not import from src/vs, a parser that required a resolved import statement (as it already does for edges typed 'import' elsewhere in this graph) rather than a bare symbol-name match would avoid manufacturing these edges.",
+    "The directory structure under this component (base/common/*.ts, editor/common/*) already mirrors src/vs/base and src/vs/editor/common file-for-file; a parser comparing the two directory trees could flag this as a vendored copy automatically, without a model, once file-name overlap crosses a threshold."
+   ],
+   "confusion": "The component's type is labeled 'web-client' and framework 'React', but every visible file is a plain TypeScript utility module (arrays, async, cache, cancellation) with no UI or React code — the labels appear to be inherited/mechanical defaults rather than derived from this directory's actual content."
+  },
+  {
+   "i": "extensions/copilot/test/simulation/language",
+   "help_text": "This module supplies language-intelligence services to Copilot's simulation/eval harness: tsServerClient.ts speaks the real tsserver protocol (dispatching messages by type across event/request/response), simulationLanguageFeatureService.ts implements the extension's ILanguageFeaturesService contract for JavaScript/TypeScript and their React variants against that client, and lsifLanguageFeatureService.ts offers an LSIF-index-backed alternative. It stands in for the live editor's language features during offline simulation runs, letting tests exercise real type/diagnostic information without a running VS Code instance. It fans out to 11 other components — the production languageFeaturesService interface, util/vs, test/base's caching fetcher, the diagnosticproviders/tsc module — while only 2 inbound edges point back into it. Despite living under test/, it holds service implementations rather than test specs, so it records 0 unit tests of its own.",
+   "description": "Simulation-only language-feature services backing TS/JS intelligence in Copilot's eval harness.",
+   "data_handled": "TypeScript/JavaScript language-server request/response messages, hover/definition/diagnostic results, LSIF index lookups, source file URIs",
+   "criticality": "supporting",
+   "tech_context": "Plain TypeScript service classes implementing the same ILanguageFeaturesService contract the production extension uses, letting simulation tests exercise TS-server- or LSIF-backed language intelligence without a running VS Code instance.",
+   "testing_assessment": "The 3 files here are simulation-harness service implementations rather than test specs; 0 unit tests are declared directly in this directory, though the services it provides are exercised indirectly by consumers like the slash-test suite.",
+   "testing_maturity": "untested",
+   "q": {
+    "purpose": {
+     "t": "Supplies language-intelligence services (hover/definitions/diagnostics) to the Copilot simulation/eval harness by wrapping a real TS server process or an LSIF index, standing in for the live IDE's language features during offline test runs.",
+     "e": [
+      1,
+      2
+     ]
+    },
+    "mechanism": {
+     "t": "tsServerClient.ts dispatches incoming messages on a msg.type union of event/request/response; simulationLanguageFeatureService.ts implements the language-features contract for javascript/javascriptreact/typescript/typescriptreact against that client; lsifLanguageFeatureService.ts offers an LSIF-backed alternative.",
+     "e": [
+      2,
+      1
+     ]
+    },
+    "place": {
+     "t": "Only 2 inbound edges show this being consumed narrowly within the simulation harness, while 11 outbound edges reach into extensions/copilot core, util/vs, test/base, test/simulation and the tsc diagnostic provider — a thin adapter wiring many pieces together for tests rather than a widely-reused library.",
+     "e": [
+      "E0",
+      "E3"
+     ]
+    },
+    "next_step": {
+     "t": "Read extensions/copilot's languageFeaturesService (the interface this component implements) to see the production contract these simulation services stand in for.",
+     "e": [
+      "E0"
+     ]
+    }
+   },
+   "pf": [
+    "The file name tsServerClient.ts plus the msg.type discriminant ('event'|'request'|'response') already identify this as a TS Server (tsserver) protocol client; deterministic tooling could label the protocol directly from the filename plus that literal union without a model call."
+   ]
+  },
+  {
+   "i": "extensions/copilot/test/simulation/slash-test",
+   "help_text": "This component holds six simulation test files — one per target language (C++, C#, Java, JavaScript, Python, TypeScript) — that validate the Copilot chat '/tests' slash-command's TestsIntent handler. Each *.stest.ts file drives TestsIntent, imported directly from extensions/copilot/src/extension, against a language-specific sample file, routed through the shared SimulationWorkspace, inline-chat simulator, and end-to-end scenario-test runner. With only 1 inbound edge it is a leaf test suite, but its 10 outbound edges reach into most of the simulation harness at once. It matters as the primary correctness check that Copilot's test-generation feature works consistently across languages, not as infrastructure other code depends on.",
+   "description": "Per-language simulation tests for the Copilot '/tests' test-generation slash command.",
+   "data_handled": "Sample source files per language, simulated chat/test-generation requests, generated test code output for comparison",
+   "criticality": "supporting",
+   "tech_context": "TypeScript simulation-test (.stest.ts) files exercising the shared TestsIntent handler across six target languages through the same simulation workspace and scenario/e2e runner used elsewhere in the harness.",
+   "testing_assessment": "6 simulation test files (one per target language) exercise the /tests slash-command intent; the analyzer recorded 4 unit tests, though the .stest.ts format is a custom simulation-test harness rather than a conventional unit-test framework, so this figure likely undercounts real scenario coverage.",
+   "testing_maturity": "minimal",
+   "q": {
+    "purpose": {
+     "t": "Simulation tests that validate the Copilot chat '/tests' slash-command's TestsIntent generates plausible test code for six languages: C++, C#, Java, JavaScript, Python and TypeScript.",
+     "e": [
+      0,
+      5
+     ]
+    },
+    "mechanism": {
+     "t": "Each *.stest.ts file drives the shared TestsIntent handler against a language-specific sample file, routed through the simulation workspace and the e2e scenario test runner.",
+     "e": [
+      [
+       5,
+       "TestsIntent"
+      ]
+     ]
+    },
+    "place": {
+     "t": "Only 1 inbound edge (a leaf, invoked by the simulation runner rather than depended on by other code); 10 outbound edges fan out to extension/common, extension (TestsIntent), util/vs, test/base, test/e2e, test/simulation and the shared simulationWorkspace, showing it as an integration point exercising most of the harness at once.",
+     "e": [
+      "E5",
+      "E6"
+     ]
+    },
+    "next_step": {
+     "t": "Read extensions/copilot/src/extension's TestsIntent implementation (imported here as ../../../src/extension/intents/node/testIntent/testIntent) to see the production code these six specs validate.",
+     "e": [
+      "E5"
+     ]
+    }
+   },
+   "pf": [
+    "The six file names (testGen.cpp/csharp/java/js/py/ts.stest.ts) already enumerate every language the /tests slash-command intent covers; deterministic tooling can derive that language-support list from the filenames alone, without reading file contents."
+   ]
+  },
+  {
+   "i": "extensions/html",
+   "help_text": "This component is the top-level package manifest for VS Code's built-in HTML language extension: package.json declares its identity and contributions, language-configuration.json defines editor behaviors like auto-closing tags and comment tokens for HTML files, and cgmanifest.json records third-party component provenance. It has 0 inbound and 0 outbound edges because it holds only declarative JSON configuration, not code that participates in the import graph. Its existing_description field literally contains the unresolved localization placeholder '%description%' rather than the resolved string from package.nls.json. The actual HTML tokenization grammar lives in the sibling extensions/html/syntaxes component, which this manifest's contribution points reference by name.",
+   "description": "Package manifest and language configuration for the built-in HTML language extension.",
+   "data_handled": "Extension metadata (name, version, contributions), HTML language-configuration rules (bracket/tag/comment behavior), third-party notice entries",
+   "criticality": "supporting",
+   "tech_context": "The component's language field says TypeScript, but every file present (package.json, package.nls.json, language-configuration.json, cgmanifest.json) is JSON configuration; no TypeScript source appears in this file set.",
+   "testing_assessment": "No test files are associated with this manifest/config-only component; has_ci_tests true likely reflects the parent extension's overall CI status rather than dedicated coverage here.",
+   "testing_maturity": "untested",
+   "q": {
+    "purpose": {
+     "t": "Package manifest and language-configuration for the built-in HTML language extension: declares the extension's identity/contributions and defines editor behaviors (bracket/tag matching, comment tokens) for HTML files.",
+     "e": [
+      2,
+      1
+     ]
+    },
+    "mechanism": {
+     "t": "package.json registers the extension's contribution points and metadata; language-configuration.json is a declarative JSON config consumed by the editor to drive auto-closing tags/brackets and comment behavior; cgmanifest.json records third-party component provenance for compliance.",
+     "e": [
+      2,
+      0
+     ]
+    },
+    "place": {
+     "t": "0 inbound and 0 outbound edges: this component is pure declarative configuration, not code that imports or is imported, so the import graph has nothing to trace here.",
+     "e": [
+      2
+     ]
+    },
+    "next_step": {
+     "t": "Read extensions/html/syntaxes next for the TextMate grammar (html.tmLanguage.json) that actually defines HTML tokenization/highlighting, which this manifest declares but doesn't itself contain.",
+     "e": [
+      2
+     ]
+    }
+   },
+   "pf": [
+    "existing_description is the literal unresolved localization placeholder '%description%' rather than a real string; deterministic tooling could resolve it by reading the 'description' key out of the sibling package.nls.json instead of leaving the raw NLS key.",
+    "The component's language field says 'typescript' but every file listed (package.json, package.nls.json, language-configuration.json, cgmanifest.json) is JSON; a parser computing language purely from this component's own file extensions would say JSON/config, not TypeScript."
+   ],
+   "confusion": "The component is labeled language=typescript, but every file present (package.json, package.nls.json, language-configuration.json, cgmanifest.json) is JSON; no TypeScript source appears in this file set. Also, existing_description is the literal unresolved NLS placeholder '%description%' rather than a resolved string."
+  },
+  {
+   "i": "extensions/html/syntaxes",
+   "help_text": "This component holds two TextMate grammar files — html.tmLanguage.json and html-derivative.tmLanguage.json — that define syntax highlighting and tokenization rules for HTML, with the derivative grammar providing a reduced form for embedding HTML inside other language grammars. Together they total 2,692 lines of declarative regex-based scope rules consumed directly by the editor's tokenizer/colorizer. Like extensions/html, this component has 0 inbound and 0 outbound edges, because grammars are wired into the editor by scope-name reference from package.json's contribution points rather than by import statement. It matters for correct syntax coloring of every HTML file opened in the editor, even though the import graph can't see that connection.",
+   "description": "TextMate grammar files defining HTML syntax highlighting and tokenization.",
+   "data_handled": "TextMate grammar scope/regex rule definitions for HTML tokenization",
+   "criticality": "supporting",
+   "tech_context": "Declared as JSON: these are TextMate grammar files (.tmLanguage.json), a JSON-based DSL the editor's tokenizer consumes directly, not general-purpose configuration data.",
+   "testing_assessment": "No test files target these grammar definitions; has_ci_tests true likely reflects repository-wide CI rather than grammar-specific coverage.",
+   "testing_maturity": "untested",
+   "q": {
+    "purpose": {
+     "t": "TextMate grammar definitions driving syntax highlighting/tokenization for HTML and an HTML-derivative dialect for embedding HTML inside other language grammars.",
+     "e": [
+      1,
+      0
+     ]
+    },
+    "mechanism": {
+     "t": "Each file is a declarative, regex-scope-based TextMate grammar (2,692 lines combined) consumed by the editor's tokenizer/colorizer to assign syntax scopes to HTML source text.",
+     "e": [
+      1
+     ]
+    },
+    "place": {
+     "t": "0 inbound and 0 outbound edges: grammar files are referenced by scope-name string from package.json's grammar contribution, not imported as code, so they sit outside the import graph entirely.",
+     "e": [
+      1
+     ]
+    },
+    "next_step": {
+     "t": "Read extensions/html/package.json (the sibling extensions/html component) to see how these grammar files are registered into the HTML language contribution.",
+     "e": [
+      1
+     ]
+    }
+   },
+   "pf": [
+    "Zero inbound/outbound edges for these grammar files is the expected reading, not a gap: TextMate grammars are wired into the editor via package.json's 'contributes.grammars' scope-name reference, not via import statements, so an import-graph parser will never produce an edge here; reading contributes.grammars entries in the sibling extensions/html/package.json would let a parser link grammar file to owning extension deterministically."
+   ]
+  },
+  {
+   "i": "extensions/vscode-colorize-perf-tests",
+   "help_text": "This component is the npm package definition for a standalone performance-test harness that measures VS Code's syntax colorizer (tokenizer) speed on real files, as its existing description states. package.json and package-lock.json declare its dependencies and scripts, while tsconfig.json configures TypeScript compilation for the actual driver code, which lives in the sibling extensions/vscode-colorize-perf-tests/src component. It has 0 inbound and 0 outbound edges because it holds only manifest/build configuration, not source; the one real dependency, on the shared Electron integration test runner, is recorded against the sibling src/ component instead. The reported test_lines figure of 148,798 across only 3 test files is implausible for a package this size and most likely reflects package-lock.json being swept into the test-line count rather than genuine test volume.",
+   "description": "npm package definition for the standalone colorizer (syntax tokenizer) performance-test harness.",
+   "data_handled": "npm dependency manifest entries, TypeScript build configuration",
+   "criticality": "supporting",
+   "tech_context": "TypeScript is configured via tsconfig.json for the sibling src/ test driver; this component itself holds only npm package metadata (package.json, package-lock.json) and build configuration, no source.",
+   "testing_assessment": "The recorded 7 unit tests and 3 test files belong to the sibling src/ component; this manifest-only directory has no test source of its own, and the reported test_lines (148,798) is implausible for a project this size — most likely an artifact of package-lock.json being included in the count.",
+   "testing_maturity": "untested",
+   "q": {
+    "purpose": {
+     "t": "npm package definition for a standalone perf-test harness that measures the editor's syntax colorizer (tokenizer) speed on real files.",
+     "e": [
+      1
+     ]
+    },
+    "mechanism": {
+     "t": "package.json/package-lock.json declare the harness's dependencies and run scripts; tsconfig.json configures TypeScript compilation for the driver code that lives in the sibling src/ directory.",
+     "e": [
+      1,
+      2
+     ]
+    },
+    "place": {
+     "t": "0 inbound/0 outbound edges on this manifest-only component; its actual outbound dependency (on the shared Electron test runner) is recorded on the sibling src/ component instead.",
+     "e": [
+      1
+     ]
+    },
+    "next_step": {
+     "t": "Read extensions/vscode-colorize-perf-tests/src for the actual colorizer perf-test driver (colorizerTestMain.ts, colorizer.test.ts).",
+     "e": [
+      1
+     ]
+    }
+   },
+   "pf": [
+    "test_lines is recorded as 148,798 across 3 test files, implausible for a small perf-test package; the likely cause is package-lock.json (a dependency lockfile, not test code) being swept into the test-line count. Deterministic tooling should exclude lockfiles from source/test line totals.",
+    "The real test-driver source (colorizer.test.ts, colorizerTestMain.ts) lives in the sibling extensions/vscode-colorize-perf-tests/src component, correctly separated from this parent's manifest-only file set by directory nesting — that split needed no model help."
+   ]
+  },
+  {
+   "i": "extensions/vscode-colorize-perf-tests/src",
+   "help_text": "This component implements the actual colorizer performance test: index.ts is the suite entry point wired to VS Code's shared Electron integration test runner, colorizerTestMain.ts drives the colorization pass over sample files, and colorizer.test.ts holds the timing assertions. It has a single outbound edge, to test/integration/electron's testrunner, the shared harness every Electron-based integration test in the repo plugs into. With 0 inbound edges, nothing else in the analyzed graph depends on this leaf test suite — it exists to be run, not to be imported. It matters as the only place in this batch that actually measures tokenizer performance, complementing the manifest-only parent component.",
+   "description": "Test driver implementing the colorizer performance benchmark itself.",
+   "data_handled": "Sample source files for colorization, tokenizer timing/performance measurements",
+   "criticality": "supporting",
+   "tech_context": "TypeScript test-driver code that plugs into VS Code's shared Electron integration-test runner to benchmark the syntax colorizer.",
+   "testing_assessment": "One test file (colorizer.test.ts, 147 lines) implements the perf test itself, wired into the shared Electron integration runner; the analyzer recorded 0 conventional unit tests, consistent with this being an integration/perf harness rather than unit-test-style specs.",
+   "testing_maturity": "minimal",
+   "q": {
+    "purpose": {
+     "t": "Implements the actual colorizer performance test: loads files and measures/asserts the editor's tokenizer (colorizer) throughput.",
+     "e": [
+      0,
+      1
+     ]
+    },
+    "mechanism": {
+     "t": "index.ts is the suite entry point wired to VS Code's shared Electron integration test runner; colorizerTestMain.ts drives the colorization pass; colorizer.test.ts holds the assertions.",
+     "e": [
+      "E0",
+      2
+     ]
+    },
+    "place": {
+     "t": "1 outbound edge to test/integration/electron (the shared Electron test runner) is this component's only graph connection; 0 inbound edges mean nothing else in the analyzed graph depends on this leaf test suite.",
+     "e": [
+      "E0"
+     ]
+    },
+    "next_step": {
+     "t": "Follow the import to test/integration/electron/testrunner to see the shared Electron test harness this suite plugs into.",
+     "e": [
+      "E0"
+     ]
+    }
+   },
+   "pf": [
+    "colorizerTestMain.ts and index.ts carry no .test/.spec suffix yet function as the perf-test driver; deterministic tooling could learn that files under the src/ of a *-perf-tests package are test-harness code by package-name convention, rather than relying solely on filename suffix matching to classify test code."
+   ]
+  },
+  {
+   "i": "resources/server/bin",
+   "help_text": "This component holds the two entry-point shell scripts, code-server-darwin.sh and code-server-linux.sh, that launch the VS Code Server (the headless remote/web server) on macOS and Linux hosts respectively. Each script resolves the Node runtime for its platform and starts the server process. It has 0 inbound and 0 outbound edges because these are externally-invoked entry points — started by an operator, an install step, or a remote SSH session — rather than imported by other analyzed source. It matters as the literal starting point for running code-server at all, even though the import graph shows no connections to it; the sibling resources/server/bin/helpers scripts are called from here as subprocesses.",
+   "description": "OS-specific launcher scripts that start the VS Code Server on macOS and Linux.",
+   "data_handled": "Command-line arguments and environment variables controlling the code-server startup process",
+   "criticality": "supporting",
+   "tech_context": "POSIX shell, chosen because these are OS-level process launchers (code-server-darwin.sh / code-server-linux.sh) that must run before any Node.js runtime is available.",
+   "testing_assessment": "No automated tests target these shell launcher scripts; has_ci_tests true likely reflects repository-wide CI rather than script-specific coverage.",
+   "testing_maturity": "untested",
+   "q": {
+    "purpose": {
+     "t": "Platform-specific launcher scripts that start the VS Code Server (headless remote/web server) on macOS and Linux hosts.",
+     "e": [
+      0,
+      1
+     ]
+    },
+    "mechanism": {
+     "t": "Each script is the OS-specific entry point that resolves the Node runtime and launches the code-server process for its platform.",
+     "e": [
+      0
+     ]
+    },
+    "place": {
+     "t": "0 inbound/0 outbound edges: these scripts are invoked externally (operator, install step, SSH session) rather than imported by other analyzed source.",
+     "e": [
+      1
+     ]
+    },
+    "next_step": {
+     "t": "Read resources/server/bin/helpers, the OS-specific helper scripts (browser-opening, requirement checks) these launchers call into.",
+     "e": [
+      0
+     ]
+    }
+   },
+   "pf": [
+    "These are externally-invoked entry-point shell scripts (started by an operator, install step, or remote-CLI hop), never imported by other analyzed source, so zero inbound/outbound edges is the correct deterministic reading here — not a gap needing a model to fill."
+   ]
+  },
+  {
+   "i": "resources/server/bin/helpers",
+   "help_text": "This component holds three helper scripts used by the server launchers: browser-darwin.sh and browser-linux.sh open the running code-server's web UI in a browser using each OS's native URL-opening mechanism, and check-requirements-linux.sh validates the Linux host environment before code-server is allowed to start. It has 0 inbound and 0 outbound edges because these scripts are invoked as subprocesses by the sibling resources/server/bin launcher scripts rather than through statically-traceable imports. It matters for giving users a working browser session and catching unsupported Linux environments early, even though none of that shows up in the import graph.",
+   "description": "OS-specific helper scripts for browser-launching and Linux requirement checks.",
+   "data_handled": "OS platform detection results, Linux host requirement-check results (library/version presence)",
+   "criticality": "supporting",
+   "tech_context": "POSIX shell helper scripts invoked as subprocesses by the launcher scripts, handling OS-specific browser-opening and Linux host requirement checks.",
+   "testing_assessment": "No automated tests target these helper scripts; has_ci_tests true likely reflects repository-wide CI rather than script-specific coverage.",
+   "testing_maturity": "untested",
+   "q": {
+    "purpose": {
+     "t": "OS-specific helper scripts: browser-darwin.sh/browser-linux.sh open the code-server web UI in a browser, and check-requirements-linux.sh validates the Linux host before code-server starts.",
+     "e": [
+      0,
+      2
+     ]
+    },
+    "mechanism": {
+     "t": "browser-*.sh scripts invoke the OS-native URL-opening command per platform; check-requirements-linux.sh runs environment checks (e.g. required libraries) before allowing the server to start.",
+     "e": [
+      1
+     ]
+    },
+    "place": {
+     "t": "0 inbound/0 outbound edges: called as subprocesses by the sibling resources/server/bin launcher scripts, not through statically-traceable imports.",
+     "e": [
+      0
+     ]
+    },
+    "next_step": {
+     "t": "Read resources/server/bin, the launcher scripts that invoke these helpers.",
+     "e": [
+      1
+     ]
+    }
+   },
+   "pf": [
+    "Shell scripts invoked as subprocesses rather than sourced/imported are invisible to an import-graph parser by construction; the zero-edge result here confirms the parser worked as designed, not that these files are unused."
+   ]
+  },
+  {
+   "i": "resources/server/bin/remote-cli",
+   "help_text": "This component holds code-darwin.sh and code-linux.sh, the per-OS wrapper scripts that implement the `code` CLI command when run from a remote or SSH session connected to a code-server instance, letting a user open files/folders in their local editor from a remote shell. Each script forwards CLI invocations to the running server process via its remote-CLI channel, differing by OS in how it locates the server's socket/pipe. It has 0 inbound and 0 outbound edges because these are external CLI entry points invoked directly from a user's shell rather than statically imported by other analyzed source. It matters as the user-facing bridge between a remote terminal session and the local editor, complementing the server-launcher scripts in the sibling resources/server/bin component.",
+   "description": "Per-OS wrapper scripts implementing the `code` CLI command for remote sessions.",
+   "data_handled": "CLI arguments (file/folder paths, flags) forwarded to the code-server process",
+   "criticality": "supporting",
+   "tech_context": "POSIX shell wrapper scripts implementing the `code` CLI entry point for remote/SSH sessions, per OS (darwin/linux).",
+   "testing_assessment": "No automated tests target these CLI wrapper scripts; has_ci_tests true likely reflects repository-wide CI rather than script-specific coverage.",
+   "testing_maturity": "untested",
+   "q": {
+    "purpose": {
+     "t": "Per-OS wrapper scripts implementing the `code` CLI command for remote/SSH sessions connected to a code-server instance, letting a user open files/folders in their local editor from a remote shell.",
+     "e": [
+      0,
+      1
+     ]
+    },
+    "mechanism": {
+     "t": "Each script forwards CLI invocations (e.g. `code myFile.txt`) to the running server process via its remote-CLI channel, OS-specific in how it locates the server's socket/pipe.",
+     "e": [
+      0
+     ]
+    },
+    "place": {
+     "t": "0 inbound/0 outbound edges: external CLI entry points invoked directly from a user's remote shell, not statically imported by other analyzed source.",
+     "e": [
+      1
+     ]
+    },
+    "next_step": {
+     "t": "Read resources/server/bin, the server-side counterpart these remote-CLI scripts communicate with.",
+     "e": [
+      0
+     ]
+    }
+   },
+   "pf": [
+    "As externally-invoked CLI entry points (typically exposed on PATH as `code` during a remote/SSH session), zero recorded edges is the expected, correct reading rather than evidence of missing analysis."
+   ]
+  }
+ ]
+}

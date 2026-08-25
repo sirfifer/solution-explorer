@@ -1,0 +1,696 @@
+{
+ "generated": "2026-08-25",
+ "method_note": "All measurements offline from the reconciled corpus (docs/quality/rearchitecture/data/replay-corpus.json), the 16 located replay probe transcripts, the ledger, and the real VS Code store. Zero live calls.",
+ "dispute_1_chars_per_billed_token": {
+  "verdict": "Prompt Engineer sustained, with refinement",
+  "marginal_fit": {
+   "slope_tokens_per_char": 0.34652,
+   "chars_per_token_slope": 2.886,
+   "intercept_tokens": 12546,
+   "max_residual_pct": 6.32,
+   "n": 35,
+   "note": "y = input+cache_creation+cache_read of first turn; intercept is the CLI fixed prompt-side overhead"
+  },
+  "spot_c95c2999": {
+   "chars": 106558,
+   "marginal_tokens": 39243,
+   "ratio": 2.72
+  },
+  "architect_1_71_reproduced_as": "mean of chars/(input+cc+cache_read) per session = 1.711 (median 1.670)",
+  "discrepancy_source": "1.71 folds the ~10-12.5k fixed CLI prompt-side overhead and cache reads into the per-char rate; it is an average total ratio, not a marginal rate",
+  "adjudicated_constant": {
+   "chars_per_billed_token_marginal": 2.85,
+   "fixed_prompt_side_overhead_tokens": "10000-12500 per call, mostly cache read after warm"
+  }
+ },
+ "dispute_2_fixed_output_at_low": {
+  "verdict": "Prompt Engineer sustained on the decomposition; Architect's per-item coefficients roughly confirmed",
+  "exact_3point_solve": {
+   "per_comp": 841,
+   "per_rel": -2581,
+   "fixed": 120510,
+   "note": "rels in the 3-point set are 39,40,40: the rel coefficient and intercept are unidentifiable; negative coefficient confirmed"
+  },
+  "lsq_4point": {
+   "per_comp": 1050,
+   "per_rel": 382,
+   "fixed": 1369,
+   "max_err_pct": 5.7,
+   "points": [
+    [
+     11,
+     39,
+     29115
+    ],
+    [
+     2,
+     40,
+     18963
+    ],
+    [
+     10,
+     40,
+     25693
+    ],
+    [
+     2,
+     16,
+     9527
+    ]
+   ]
+  },
+  "architect_model_on_heldout_point": {
+   "model": "1100c+320r+4400",
+   "point": [
+    2,
+    16,
+    9527
+   ],
+   "pred": 11720,
+   "err_pct": 23.0
+  },
+  "thinking_at_low_chars_method": {
+   "per_probe_estimate_tokens": [
+    335,
+    455,
+    32,
+    0
+   ],
+   "reference_chars_per_output_token": 2.69,
+   "note": "pure-JSON probes cluster at 2.63-2.75 chars/output token; thinking-heavy probes drop to 1.48-1.58"
+  },
+  "adjudicated_constants": {
+   "per_comp_out_low_tierB": 1050,
+   "per_rel_out_low_tierB": 382,
+   "fixed_out_low": 1369,
+   "fixed_out_bounds": [
+    500,
+    2800
+   ]
+  }
+ },
+ "dispute_3_prices_found_in_pass": {
+  "verdict": "Architect's Opus/Fable rates falsified by their own cited basis",
+  "fable_p1_ledger_row_fit": {
+   "tokens_in": 19916,
+   "tokens_out": 6688,
+   "cost_usd": 0.745226,
+   "at_10_50_with_1h_write": "predicted $0.732, residual 1.8%",
+   "at_15_75_with_1h_write": "predicted $1.099, residual 47%"
+  },
+  "sonnet_row2_fit": {
+   "at_3_15": "predicted $1.0123 vs $1.0288, residual 1.6%"
+  },
+  "opus": "no opus ledger row exists anywhere; $5/$25 vs $15/$75 is unresolvable offline; first pilot opus row arbitrates"
+ },
+ "corrected_architect_model": {
+  "constants": {
+   "chars_per_token": 2.85,
+   "fixed_out": 1369,
+   "per_comp_out": 1050,
+   "per_rel_out": 382,
+   "prices": "sonnet 3/15, opus 5/25 (flagged), fable 10/50 (ledger-fit)",
+   "input_priced_as": "1h cache write (2x) per observed CLI behavior"
+  },
+  "ladder": {
+   "lo": 55,
+   "mid": 64,
+   "hi": 96,
+   "hi_at_batch5": 102
+  },
+  "sensitivity_fixed_out": {
+   "500": 59,
+   "2800": 72
+  },
+  "rung_detail": {
+   "2a_tierB": 52.8,
+   "2a_tierC": 30.2,
+   "2b_batch15": [
+    16.2,
+    16.8,
+    17.5
+   ],
+   "2b_batch5": [
+    19.7,
+    21.6,
+    23.6
+   ],
+   "2c_10_20_30pct": [
+    8.6,
+    17.0,
+    25.5
+   ]
+  },
+  "batch15_vs_5_saving_usd": "4-6 (was claimed 44-56)"
+ },
+ "verification_requests": {
+  "V1": "cost-model.py reruns and reproduces its table; structural [S] figures independently re-derived and exact: 569 components, 5453 relationships, 173 partitions, 2003 component slots, 55 groups, 3.52x; ledger figures 119352/72982 and mean cached 22960 exact; three constants falsified (see disputes)",
+  "V2": "RESOLVED: store signals kind='symbol_reference' (157,508 rows, {name,count} with file_id+line) covers 1162 of 1162 wrongly rejected citations (100.0%); the referenced-at index exists in the store; no filesystem read needed",
+  "V3": "PARTIAL: framework and port have citable signal rows (file_id+line); language and type lack per-attribute signal rows and need a derived-evidence convention (extension census / manifest)",
+  "V6": "RESOLVED at the API layer: usage carries cache_creation.ephemeral_1h_input_tokens and ephemeral_5m_input_tokens (killed run: 100% 1h class); whether the CLI stdout envelope forwards the breakdown is an L1 capture item",
+  "V7": "both calibrations adjudicated; see disputes 1 and 2"
+ },
+ "replay_probe_inventory": [
+  {
+   "probe": "17cfbc59",
+   "dir": "ea2b1e5c8-scratchpad",
+   "prompt_of": "594044a3",
+   "comps": 10,
+   "rels": 40,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 33620,
+   "text_chars": 76707,
+   "think_chars": 0
+  },
+  {
+   "probe": "240df900",
+   "dir": "ea2b1e5c8-scratchpad",
+   "prompt_of": "0a15a8b0",
+   "comps": 1,
+   "rels": 23,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 4518,
+   "text_chars": 12124,
+   "think_chars": 0
+  },
+  {
+   "probe": "4b150c1b",
+   "dir": "ea2b1e5c8-scratchpad",
+   "prompt_of": "18d33ea2",
+   "comps": 11,
+   "rels": 39,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 53748,
+   "text_chars": 84752,
+   "think_chars": 0
+  },
+  {
+   "probe": "6609dcc3",
+   "dir": "ea2b1e5c8-scratchpad",
+   "prompt_of": "ad7b77ab",
+   "comps": 2,
+   "rels": 40,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 18963,
+   "text_chars": 49788,
+   "think_chars": 0
+  },
+  {
+   "probe": "6d1d6c07",
+   "dir": "ea2b1e5c8-scratchpad",
+   "prompt_of": "c95c2999",
+   "comps": 2,
+   "rels": 16,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 9527,
+   "text_chars": 26245,
+   "think_chars": 0
+  },
+  {
+   "probe": "732afe59",
+   "dir": "ea2b1e5c8-scratchpad",
+   "prompt_of": "0a15a8b0",
+   "comps": 1,
+   "rels": 23,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 11484,
+   "text_chars": 29597,
+   "think_chars": 0
+  },
+  {
+   "probe": "891c81e3",
+   "dir": "ea2b1e5c8-scratchpad",
+   "prompt_of": "594044a3",
+   "comps": 10,
+   "rels": 40,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 25693,
+   "text_chars": 69030,
+   "think_chars": 0
+  },
+  {
+   "probe": "c2e3e443",
+   "dir": "ea2b1e5c8-scratchpad",
+   "prompt_of": "18d33ea2",
+   "comps": 11,
+   "rels": 39,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 29115,
+   "text_chars": 77418,
+   "think_chars": 0
+  },
+  {
+   "probe": "fbfd6934",
+   "dir": "ea2b1e5c8-scratchpad",
+   "prompt_of": "c95c2999",
+   "comps": 2,
+   "rels": 16,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 23948,
+   "text_chars": 36038,
+   "think_chars": 0
+  },
+  {
+   "probe": "006c2669",
+   "dir": "-private-tmp",
+   "prompt_of": "?",
+   "comps": null,
+   "rels": null,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 828,
+   "text_chars": 2253,
+   "think_chars": 0
+  },
+  {
+   "probe": "4a0a762b",
+   "dir": "-private-tmp",
+   "prompt_of": "?",
+   "comps": null,
+   "rels": null,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 1732,
+   "text_chars": 2036,
+   "think_chars": 0
+  },
+  {
+   "probe": "4db971b2",
+   "dir": "-private-tmp",
+   "prompt_of": "0a15a8b0",
+   "comps": 1,
+   "rels": 23,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 22979,
+   "text_chars": 34092,
+   "think_chars": 0
+  },
+  {
+   "probe": "55ef159e",
+   "dir": "-private-tmp",
+   "prompt_of": "?",
+   "comps": null,
+   "rels": null,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 2374,
+   "text_chars": 2371,
+   "think_chars": 0
+  },
+  {
+   "probe": "86cb7b11",
+   "dir": "-private-tmp",
+   "prompt_of": "?",
+   "comps": null,
+   "rels": null,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 2313,
+   "text_chars": 3050,
+   "think_chars": 0
+  },
+  {
+   "probe": "b9151f92",
+   "dir": "-private-tmp",
+   "prompt_of": "0a15a8b0",
+   "comps": 1,
+   "rels": 23,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 10820,
+   "text_chars": 29316,
+   "think_chars": 0
+  },
+  {
+   "probe": "e5ec4ce2",
+   "dir": "-private-tmp",
+   "prompt_of": "0a15a8b0",
+   "comps": 1,
+   "rels": 23,
+   "turns": 1,
+   "stops": [
+    "end_turn"
+   ],
+   "out_tokens": 10895,
+   "text_chars": 28988,
+   "think_chars": 0
+  }
+ ],
+ "dispute1_rows": [
+  {
+   "sid": "a39bbcbf",
+   "chars": 50585,
+   "inp": 2,
+   "cc": 27029,
+   "cr": 3289,
+   "marginal": 27031,
+   "all": 30320
+  },
+  {
+   "sid": "6275d385",
+   "chars": 53064,
+   "inp": 2,
+   "cc": 22736,
+   "cr": 8849,
+   "marginal": 22738,
+   "all": 31587
+  },
+  {
+   "sid": "f4a48464",
+   "chars": 51314,
+   "inp": 2,
+   "cc": 21855,
+   "cr": 8849,
+   "marginal": 21857,
+   "all": 30706
+  },
+  {
+   "sid": "8435d63f",
+   "chars": 54064,
+   "inp": 2,
+   "cc": 22833,
+   "cr": 8849,
+   "marginal": 22835,
+   "all": 31684
+  },
+  {
+   "sid": "d922d170",
+   "chars": 50540,
+   "inp": 2,
+   "cc": 21537,
+   "cr": 8849,
+   "marginal": 21539,
+   "all": 30388
+  },
+  {
+   "sid": "60241d75",
+   "chars": 53267,
+   "inp": 2,
+   "cc": 22541,
+   "cr": 8849,
+   "marginal": 22543,
+   "all": 31392
+  },
+  {
+   "sid": "d887072a",
+   "chars": 52625,
+   "inp": 2,
+   "cc": 22482,
+   "cr": 8849,
+   "marginal": 22484,
+   "all": 31333
+  },
+  {
+   "sid": "d502db78",
+   "chars": 52337,
+   "inp": 2,
+   "cc": 22454,
+   "cr": 8849,
+   "marginal": 22456,
+   "all": 31305
+  },
+  {
+   "sid": "388ec26a",
+   "chars": 33309,
+   "inp": 2,
+   "cc": 14063,
+   "cr": 8849,
+   "marginal": 14065,
+   "all": 22914
+  },
+  {
+   "sid": "4d94e8dd",
+   "chars": 122769,
+   "inp": 2,
+   "cc": 45989,
+   "cr": 8849,
+   "marginal": 45991,
+   "all": 54840
+  },
+  {
+   "sid": "c95c2999",
+   "chars": 106558,
+   "inp": 2,
+   "cc": 39241,
+   "cr": 8849,
+   "marginal": 39243,
+   "all": 48092
+  },
+  {
+   "sid": "ad7b77ab",
+   "chars": 46015,
+   "inp": 2,
+   "cc": 19398,
+   "cr": 8849,
+   "marginal": 19400,
+   "all": 28249
+  },
+  {
+   "sid": "e75f142e",
+   "chars": 32012,
+   "inp": 2,
+   "cc": 13383,
+   "cr": 8849,
+   "marginal": 13385,
+   "all": 22234
+  },
+  {
+   "sid": "594044a3",
+   "chars": 149408,
+   "inp": 2,
+   "cc": 55284,
+   "cr": 8849,
+   "marginal": 55286,
+   "all": 64135
+  },
+  {
+   "sid": "74b59d9d",
+   "chars": 127564,
+   "inp": 2,
+   "cc": 46421,
+   "cr": 8849,
+   "marginal": 46423,
+   "all": 55272
+  },
+  {
+   "sid": "9e00d6a7",
+   "chars": 45624,
+   "inp": 2,
+   "cc": 19476,
+   "cr": 8849,
+   "marginal": 19478,
+   "all": 28327
+  },
+  {
+   "sid": "0a5f6512",
+   "chars": 50252,
+   "inp": 2,
+   "cc": 21203,
+   "cr": 8849,
+   "marginal": 21205,
+   "all": 30054
+  },
+  {
+   "sid": "c8a5a7b7",
+   "chars": 48848,
+   "inp": 2,
+   "cc": 20704,
+   "cr": 8849,
+   "marginal": 20706,
+   "all": 29555
+  },
+  {
+   "sid": "09b55654",
+   "chars": 49765,
+   "inp": 2,
+   "cc": 21136,
+   "cr": 8849,
+   "marginal": 21138,
+   "all": 29987
+  },
+  {
+   "sid": "065f94f1",
+   "chars": 48424,
+   "inp": 2,
+   "cc": 20654,
+   "cr": 8849,
+   "marginal": 20656,
+   "all": 29505
+  },
+  {
+   "sid": "639f4bb6",
+   "chars": 33174,
+   "inp": 2,
+   "cc": 14030,
+   "cr": 8849,
+   "marginal": 14032,
+   "all": 22881
+  },
+  {
+   "sid": "18d33ea2",
+   "chars": 54516,
+   "inp": 2,
+   "cc": 23045,
+   "cr": 8849,
+   "marginal": 23047,
+   "all": 31896
+  },
+  {
+   "sid": "e65748d4",
+   "chars": 51102,
+   "inp": 2,
+   "cc": 21756,
+   "cr": 8849,
+   "marginal": 21758,
+   "all": 30607
+  },
+  {
+   "sid": "6cd83301",
+   "chars": 50763,
+   "inp": 2,
+   "cc": 21605,
+   "cr": 8849,
+   "marginal": 21607,
+   "all": 30456
+  },
+  {
+   "sid": "d873c6c5",
+   "chars": 52066,
+   "inp": 2,
+   "cc": 21841,
+   "cr": 8849,
+   "marginal": 21843,
+   "all": 30692
+  },
+  {
+   "sid": "987acbb0",
+   "chars": 30560,
+   "inp": 2,
+   "cc": 12918,
+   "cr": 8849,
+   "marginal": 12920,
+   "all": 21769
+  },
+  {
+   "sid": "3924b324",
+   "chars": 44316,
+   "inp": 2,
+   "cc": 18799,
+   "cr": 8849,
+   "marginal": 18801,
+   "all": 27650
+  },
+  {
+   "sid": "c43619cb",
+   "chars": 51102,
+   "inp": 2,
+   "cc": 0,
+   "cr": 30605,
+   "marginal": 2,
+   "all": 30607
+  },
+  {
+   "sid": "0a15a8b0",
+   "chars": 33555,
+   "inp": 2,
+   "cc": 14253,
+   "cr": 8849,
+   "marginal": 14255,
+   "all": 23104
+  },
+  {
+   "sid": "d91cd6b5",
+   "chars": 48425,
+   "inp": 2,
+   "cc": 20254,
+   "cr": 8849,
+   "marginal": 20256,
+   "all": 29105
+  },
+  {
+   "sid": "7a7f25fe",
+   "chars": 37982,
+   "inp": 2,
+   "cc": 16052,
+   "cr": 8849,
+   "marginal": 16054,
+   "all": 24903
+  },
+  {
+   "sid": "4e180793",
+   "chars": 49494,
+   "inp": 2,
+   "cc": 21056,
+   "cr": 8849,
+   "marginal": 21058,
+   "all": 29907
+  },
+  {
+   "sid": "a50d2144",
+   "chars": 69092,
+   "inp": 2,
+   "cc": 29606,
+   "cr": 8849,
+   "marginal": 29608,
+   "all": 38457
+  },
+  {
+   "sid": "42811c61",
+   "chars": 69305,
+   "inp": 2,
+   "cc": 29472,
+   "cr": 8849,
+   "marginal": 29474,
+   "all": 38323
+  },
+  {
+   "sid": "dc582b63",
+   "chars": 68311,
+   "inp": 2,
+   "cc": 28707,
+   "cr": 8849,
+   "marginal": 28709,
+   "all": 37558
+  }
+ ]
+}

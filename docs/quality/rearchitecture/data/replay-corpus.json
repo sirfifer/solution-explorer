@@ -1,0 +1,1609 @@
+{
+ "generated": "2026-08-25",
+ "method": "Sessions identified by content correlation: a run partition call has exactly one real user message whose text begins with the contract partition prompt head, and its summed per-turn usage matches exactly one ledger row on the (tokens_in, tokens_cached, tokens_out) triple. Never identified by phrase matching. Killed-in-flight sessions carry a second synthetic user record ('[Request interrupted by user]').",
+ "window": "2026-08-25 08:05 to 10:00 local (15:05 to 17:00 UTC)",
+ "counts": {
+  "window_files": 38,
+  "run_partition_calls": 32,
+  "killed_in_flight": 4,
+  "orientation_calls": 1,
+  "operator_sessions": 1,
+  "ledger_rows": 32,
+  "ledger_2a_rows": 31,
+  "ledger_2a_rows_matched_to_session": 31,
+  "failure_files": 10,
+  "failure_files_matched_to_session": 10,
+  "salvage_recovered": 31,
+  "salvage_unrecoverable": 5
+ },
+ "notes": [
+  "The one run-partition-call with no ledger row is e65748d4, the 1200s subprocess timeout: billed but never ledgered; its retry is c43619cb.",
+  "The four killed-in-flight sessions contain zero answer text (thinking only) and are unrecoverable by construction; they are excluded from the 10-of-10 salvage claim, which covers exactly the files in failures/.",
+  "Salvage requires seam-aware fence stripping (fence plus its newline). A line-based fence strip leaves a control character inside a JSON string and recovers only 7 of 10."
+ ],
+ "sessions": [
+  {
+   "session_id": "8ff72055-87d1-4f92-a8e0-c40745f77e8f",
+   "role": "operator-interactive",
+   "start": "2026-08-24T14:56:39.316Z",
+   "end": "2026-08-25T15:16:22.360Z",
+   "api_turns": 591,
+   "stop_reasons": [
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "end_turn",
+    "end_turn",
+    "end_turn",
+    "end_turn",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "end_turn",
+    "end_turn",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "end_turn",
+    "end_turn",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "end_turn",
+    "end_turn",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "stop_sequence",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "end_turn",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "tool_use",
+    "end_turn",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 1180,
+    "cache_creation_input_tokens": 2077201,
+    "cache_read_input_tokens": 219423228,
+    "output_tokens": 439508
+   },
+   "ledger_row": null,
+   "failure_file": null,
+   "requested_targets": null,
+   "salvage": null,
+   "models": [
+    "<synthetic>",
+    "claude-fable-5",
+    "claude-opus-5"
+   ]
+  },
+  {
+   "session_id": "804013c8-3f05-445e-954d-16934d5350ee",
+   "role": "run-orientation-call",
+   "start": "2026-08-25T15:14:51.848Z",
+   "end": "2026-08-25T15:16:29.893Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 19914,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 6688
+   },
+   "ledger_row": null,
+   "failure_file": null,
+   "requested_targets": null,
+   "salvage": null,
+   "models": [
+    "claude-fable-5"
+   ]
+  },
+  {
+   "session_id": "a39bbcbf-3dba-48f0-bc84-c02e8f70706b",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:16:31.807Z",
+   "end": "2026-08-25T15:24:16.852Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 27029,
+    "cache_read_input_tokens": 3289,
+    "output_tokens": 56605
+   },
+   "ledger_row": 1,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "6275d385-f04a-4740-a327-714aa27151c1",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:24:17.812Z",
+   "end": "2026-08-25T15:33:54.464Z",
+   "api_turns": 2,
+   "stop_reasons": [
+    "max_tokens",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 86800,
+    "cache_read_input_tokens": 40434,
+    "output_tokens": 69398
+   },
+   "ledger_row": 5,
+   "failure_file": "2a-job-161.txt",
+   "requested_targets": {
+    "components": 2,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "f4a48464-a836-471d-b951-85651fbf97c9",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:24:17.835Z",
+   "end": "2026-08-25T15:32:48.991Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 21855,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 62148
+   },
+   "ledger_row": 4,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "8435d63f-9bbd-4d83-9aa4-b3ae047c987c",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:24:17.836Z",
+   "end": "2026-08-25T15:31:27.544Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 22833,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 54403
+   },
+   "ledger_row": 2,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "d922d170-7e25-46a7-9fcf-e227298b4b82",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:24:17.891Z",
+   "end": "2026-08-25T15:32:23.685Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 21537,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 58055
+   },
+   "ledger_row": 3,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "60241d75-88e1-4a7e-a9e6-00f1e5c341ee",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:31:28.394Z",
+   "end": "2026-08-25T15:39:20.242Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 22541,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 56544
+   },
+   "ledger_row": 6,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "d887072a-1a66-4aba-a020-ee00afcebd90",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:32:24.702Z",
+   "end": "2026-08-25T15:41:00.944Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 22482,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 61208
+   },
+   "ledger_row": 8,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "d502db78-52bd-4e64-b74d-5dfb3d3554b5",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:32:49.845Z",
+   "end": "2026-08-25T15:40:42.186Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 22454,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 59193
+   },
+   "ledger_row": 7,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "388ec26a-0df9-4be9-97ff-28bd26884efe",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:33:55.209Z",
+   "end": "2026-08-25T15:41:18.016Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 14063,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 49180
+   },
+   "ledger_row": 9,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 11
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "4d94e8dd-07d8-450b-87d8-1436e1584b8a",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:39:21.195Z",
+   "end": "2026-08-25T15:50:14.790Z",
+   "api_turns": 2,
+   "stop_reasons": [
+    "max_tokens",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 110053,
+    "cache_read_input_tokens": 63687,
+    "output_tokens": 76541
+   },
+   "ledger_row": 12,
+   "failure_file": "2a-job-7.txt",
+   "requested_targets": {
+    "components": 2,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "c95c2999-6a10-43d5-b6ee-c7a7198f9fff",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:40:42.949Z",
+   "end": "2026-08-25T15:46:49.937Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 39241,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 40463
+   },
+   "ledger_row": 10,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 16
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "ad7b77ab-e6f3-4c28-84cc-52c50f9eaacb",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:41:01.857Z",
+   "end": "2026-08-25T15:51:22.271Z",
+   "api_turns": 2,
+   "stop_reasons": [
+    "max_tokens",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 83463,
+    "cache_read_input_tokens": 37096,
+    "output_tokens": 75587
+   },
+   "ledger_row": 13,
+   "failure_file": "2a-job-3.txt",
+   "requested_targets": {
+    "components": 2,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "e75f142e-f0d9-4d00-a17c-376047fc98ee",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:41:18.851Z",
+   "end": "2026-08-25T15:47:21.694Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 13383,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 41156
+   },
+   "ledger_row": 11,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 16
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "594044a3-36ab-425f-938c-42a6e9c922a9",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:46:50.843Z",
+   "end": "2026-08-25T15:59:36.647Z",
+   "api_turns": 2,
+   "stop_reasons": [
+    "max_tokens",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 119348,
+    "cache_read_input_tokens": 72982,
+    "output_tokens": 88145
+   },
+   "ledger_row": 15,
+   "failure_file": "2a-job-35.txt",
+   "requested_targets": {
+    "components": 10,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "74b59d9d-70ec-43f2-a22a-7f575f2aaa1c",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:47:22.500Z",
+   "end": "2026-08-25T15:56:50.785Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 46421,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 62206
+   },
+   "ledger_row": 14,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 10,
+    "relationships": 3
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "9e00d6a7-1bc3-4d2d-8fcf-61b3b34b1795",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:50:15.573Z",
+   "end": "2026-08-25T16:07:32.215Z",
+   "api_turns": 2,
+   "stop_reasons": [
+    "max_tokens",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 19538,
+    "cache_read_input_tokens": 37174,
+    "output_tokens": 112817
+   },
+   "ledger_row": 19,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 3,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "0a5f6512-14c7-4f53-98c5-66ac94e2c65a",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:51:23.037Z",
+   "end": "2026-08-25T16:01:17.627Z",
+   "api_turns": 2,
+   "stop_reasons": [
+    "max_tokens",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 85268,
+    "cache_read_input_tokens": 38901,
+    "output_tokens": 69731
+   },
+   "ledger_row": 16,
+   "failure_file": "2a-job-58.txt",
+   "requested_targets": {
+    "components": 3,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "c8a5a7b7-5508-421a-ae1d-d84d1ad25ad9",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:56:51.883Z",
+   "end": "2026-08-25T16:05:55.157Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 20704,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 61018
+   },
+   "ledger_row": 17,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 3,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "09b55654-d8df-4ee1-a800-5e94f6e8da96",
+   "role": "run-partition-call",
+   "start": "2026-08-25T15:59:37.474Z",
+   "end": "2026-08-25T16:06:44.087Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 21136,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 53207
+   },
+   "ledger_row": 18,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 3,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "065f94f1-c091-4e69-88af-76125aa0c5ad",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:01:18.504Z",
+   "end": "2026-08-25T16:09:56.648Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 20654,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 60443
+   },
+   "ledger_row": 20,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 3,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "639f4bb6-4138-45b9-9151-55085a8021a8",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:05:56.023Z",
+   "end": "2026-08-25T16:14:22.300Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 14030,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 53822
+   },
+   "ledger_row": 21,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 3,
+    "relationships": 13
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "18d33ea2-6ff5-4ed1-a5b0-3af6b1804d65",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:06:44.886Z",
+   "end": "2026-08-25T16:20:24.371Z",
+   "api_turns": 2,
+   "stop_reasons": [
+    "max_tokens",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 87110,
+    "cache_read_input_tokens": 40743,
+    "output_tokens": 102177
+   },
+   "ledger_row": 22,
+   "failure_file": "2a-job-18.txt",
+   "requested_targets": {
+    "components": 11,
+    "relationships": 39
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "e65748d4-9c8f-4881-9b07-72c902c42232",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:07:33.125Z",
+   "end": "2026-08-25T16:27:08.471Z",
+   "api_turns": 2,
+   "stop_reasons": [
+    "max_tokens",
+    "max_tokens"
+   ],
+   "usage_totals": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 21818,
+    "cache_read_input_tokens": 39454,
+    "output_tokens": 128000
+   },
+   "ledger_row": null,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 10,
+    "relationships": 40
+   },
+   "salvage": "unrecoverable",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "6cd83301-b7ec-453f-ab56-e67b2fe9bdb1",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:09:57.500Z",
+   "end": "2026-08-25T16:29:46.993Z",
+   "api_turns": 3,
+   "stop_reasons": [
+    "max_tokens",
+    "max_tokens",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 6,
+    "cache_creation_input_tokens": 85732,
+    "cache_read_input_tokens": 69819,
+    "output_tokens": 135049
+   },
+   "ledger_row": 25,
+   "failure_file": "2a-job-24.txt",
+   "requested_targets": {
+    "components": 10,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "d873c6c5-410f-41e0-bb6b-8fb3616ceee2",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:14:23.183Z",
+   "end": "2026-08-25T16:26:30.572Z",
+   "api_turns": 2,
+   "stop_reasons": [
+    "max_tokens",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 85906,
+    "cache_read_input_tokens": 39539,
+    "output_tokens": 86605
+   },
+   "ledger_row": 23,
+   "failure_file": "2a-job-25.txt",
+   "requested_targets": {
+    "components": 10,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "987acbb0-1fde-478a-b559-460725a1b458",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:20:25.273Z",
+   "end": "2026-08-25T16:29:12.146Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 12918,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 59838
+   },
+   "ledger_row": 24,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 10,
+    "relationships": 1
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "3924b324-9592-40d0-8df0-f547ebcbae8f",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:26:31.395Z",
+   "end": "2026-08-25T16:32:48.624Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 18799,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 46705
+   },
+   "ledger_row": 26,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 1,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "c43619cb-99c8-4902-8289-5835a3f95083",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:27:33.862Z",
+   "end": "2026-08-25T16:39:14.259Z",
+   "api_turns": 2,
+   "stop_reasons": [
+    "max_tokens",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 64065,
+    "cache_read_input_tokens": 61210,
+    "output_tokens": 82067
+   },
+   "ledger_row": 29,
+   "failure_file": "2a-job-23.txt",
+   "requested_targets": {
+    "components": 10,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "0a15a8b0-ff6b-46de-93d7-d121a5e87dcf",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:29:13.069Z",
+   "end": "2026-08-25T16:33:25.460Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 14253,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 31817
+   },
+   "ledger_row": 27,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 1,
+    "relationships": 23
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "d91cd6b5-9c45-4382-9ca4-bcdd583f96f2",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:29:47.718Z",
+   "end": "2026-08-25T16:37:29.026Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 20254,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 55584
+   },
+   "ledger_row": 28,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 40
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "7a7f25fe-c5bf-4612-b4f9-5f9be7cb1ade",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:32:49.639Z",
+   "end": "2026-08-25T16:39:34.998Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 16052,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 46999
+   },
+   "ledger_row": 30,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 2,
+    "relationships": 20
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "4e180793-71e8-4885-9375-e17662efc4c3",
+   "role": "run-partition-call",
+   "start": "2026-08-25T16:33:26.656Z",
+   "end": "2026-08-25T16:46:08.192Z",
+   "api_turns": 2,
+   "stop_reasons": [
+    "max_tokens",
+    "end_turn"
+   ],
+   "usage_totals": {
+    "input_tokens": 4,
+    "cache_creation_input_tokens": 85121,
+    "cache_read_input_tokens": 38754,
+    "output_tokens": 87538
+   },
+   "ledger_row": 31,
+   "failure_file": "2a-job-33.txt",
+   "requested_targets": {
+    "components": 17,
+    "relationships": 23
+   },
+   "salvage": "recovered",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "a50d2144-0638-42e1-995b-ef5fb1da1cd6",
+   "role": "run-partition-killed-in-flight",
+   "start": "2026-08-25T16:37:29.971Z",
+   "end": "2026-08-25T16:54:43.694Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "max_tokens"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 29606,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 64000
+   },
+   "ledger_row": null,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 19,
+    "relationships": 40
+   },
+   "salvage": "unrecoverable",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "42811c61-3e95-4fb1-b4e8-895e78dd64e8",
+   "role": "run-partition-killed-in-flight",
+   "start": "2026-08-25T16:39:15.110Z",
+   "end": "2026-08-25T16:54:43.695Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "max_tokens"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 29472,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 64000
+   },
+   "ledger_row": null,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 19,
+    "relationships": 40
+   },
+   "salvage": "unrecoverable",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "dc582b63-c9da-4014-a0c5-29dd8319f3a4",
+   "role": "run-partition-killed-in-flight",
+   "start": "2026-08-25T16:39:35.987Z",
+   "end": "2026-08-25T16:54:43.693Z",
+   "api_turns": 1,
+   "stop_reasons": [
+    "max_tokens"
+   ],
+   "usage_totals": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 28707,
+    "cache_read_input_tokens": 8849,
+    "output_tokens": 64000
+   },
+   "ledger_row": null,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 19,
+    "relationships": 40
+   },
+   "salvage": "unrecoverable",
+   "models": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "session_id": "5d5bb368-f9a4-4da6-adc2-900546861856",
+   "role": "run-partition-killed-in-flight",
+   "start": "2026-08-25T16:46:09.125Z",
+   "end": "2026-08-25T16:54:43.694Z",
+   "api_turns": 0,
+   "stop_reasons": [],
+   "usage_totals": {
+    "input_tokens": 0,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 0
+   },
+   "ledger_row": null,
+   "failure_file": null,
+   "requested_targets": {
+    "components": 19,
+    "relationships": 40
+   },
+   "salvage": "unrecoverable",
+   "models": []
+  }
+ ]
+}

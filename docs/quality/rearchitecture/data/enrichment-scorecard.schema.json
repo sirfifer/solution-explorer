@@ -1,0 +1,296 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Enrichment run scorecard",
+  "description": "One enrichment run's scored outcome. Design authority: docs/quality/rearchitecture/VALIDATION-PLAN.md section 6. A run without a scorecard did not happen.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "charter_version",
+    "subject",
+    "run_date",
+    "run_id",
+    "architecture",
+    "gauntlet_level",
+    "projection",
+    "actuals",
+    "overflows",
+    "discards",
+    "escalation",
+    "census",
+    "grounding",
+    "tripwires",
+    "quality",
+    "verdict"
+  ],
+  "properties": {
+    "charter_version": {
+      "type": "string",
+      "pattern": "^enrichment-run/v[0-9]+$",
+      "description": "Scores are comparable only within a charter version."
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The run directory relative to the repo root, for example demos/runs/vscode/2026-08-25/enrichment. The ledger inside it is the evidence."
+    },
+    "architecture": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Which pipeline design produced this run, for example ladder/2026-08-25 or rearchitecture/v1. Load bearing for blind quality comparison."
+    },
+    "gauntlet_level": {
+      "enum": [0, 1, 2, 3],
+      "description": "Which gauntlet level this run sat, per VALIDATION-PLAN section 8."
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cost_usd", "calls", "output_tokens", "basis"],
+      "properties": {
+        "cost_usd": { "type": "number", "minimum": 0 },
+        "calls": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 },
+        "basis": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What calibration produced the projection. A projection with no basis is a guess."
+        }
+      }
+    },
+    "actuals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cost_usd", "calls", "wall_minutes", "tokens", "by_rung"],
+      "properties": {
+        "cost_usd": { "type": "number", "minimum": 0 },
+        "calls": { "type": "integer", "minimum": 0 },
+        "wall_minutes": { "type": "number", "minimum": 0 },
+        "tokens": { "$ref": "#/definitions/token_classes" },
+        "by_rung": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["calls", "cost_usd", "tokens"],
+            "properties": {
+              "calls": { "type": "integer", "minimum": 0 },
+              "cost_usd": { "type": "number", "minimum": 0 },
+              "tokens": { "$ref": "#/definitions/token_classes" }
+            }
+          }
+        }
+      }
+    },
+    "cost_vs_projection": {
+      "type": "number",
+      "minimum": 0,
+      "description": "actuals.cost_usd / projection.cost_usd, recorded explicitly so the tolerance check is a field read."
+    },
+    "overflows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "output_ceiling_tokens", "rows"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "output_ceiling_tokens": { "type": "integer", "minimum": 1 },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["call", "tokens_out", "stop_reason"],
+            "properties": {
+              "call": { "type": "string" },
+              "tokens_out": { "type": "integer" },
+              "stop_reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "discards": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "salvaged", "unrecovered", "discarded_cost_usd"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "salvaged": { "type": "integer", "minimum": 0 },
+        "unrecovered": { "type": "integer", "minimum": 0 },
+        "discarded_cost_usd": { "type": "number", "minimum": 0 }
+      }
+    },
+    "escalation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items_escalated", "rate", "by_cause"],
+      "properties": {
+        "items_escalated": { "type": "integer", "minimum": 0 },
+        "rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "by_cause": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "evidence_rejected_referenced_elsewhere",
+            "evidence_rejected_fabricated",
+            "self_declared",
+            "omitted_by_model",
+            "parse_failure",
+            "other"
+          ],
+          "properties": {
+            "evidence_rejected_referenced_elsewhere": { "type": "integer", "minimum": 0 },
+            "evidence_rejected_fabricated": { "type": "integer", "minimum": 0 },
+            "self_declared": { "type": "integer", "minimum": 0 },
+            "omitted_by_model": { "type": "integer", "minimum": 0 },
+            "parse_failure": { "type": "integer", "minimum": 0 },
+            "other": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "census": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_targets", "by_state", "accounted", "vanished"],
+      "properties": {
+        "total_targets": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Components plus relationships planned for the run, counted from the plan, not from responses."
+        },
+        "by_state": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 },
+          "description": "answered, escalated, honest_gap, unresolved, skipped, not_attempted. States are the ladder's census vocabulary."
+        },
+        "accounted": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sum over by_state. Must equal total_targets; the scorecard writer must refuse to emit otherwise."
+        },
+        "vanished": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 0,
+          "description": "total_targets minus accounted. Structurally pinned to zero: a scorecard with vanished targets cannot validate."
+        }
+      }
+    },
+    "grounding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["citations_checked", "valid", "invalid_fabricated", "invalid_other", "validator_version"],
+      "properties": {
+        "citations_checked": { "type": "integer", "minimum": 0 },
+        "valid": { "type": "integer", "minimum": 0 },
+        "invalid_fabricated": { "type": "integer", "minimum": 0 },
+        "invalid_other": { "type": "integer", "minimum": 0 },
+        "validator_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Grounding rates are comparable only under the same validator. The 2026-08-25 run's rates are not comparable to fixed-validator rates."
+        }
+      }
+    },
+    "tripwires": {
+      "type": "array",
+      "description": "Every armed tripwire appears whether or not it fired; absence of a tripwire from this list means it was not armed, which is itself a finding.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "armed", "fired"],
+        "properties": {
+          "name": {
+            "enum": [
+              "output_ceiling_warn",
+              "output_ceiling_abort",
+              "agentic_drift",
+              "cost_deviation",
+              "systemic_failure",
+              "wall_ceiling",
+              "timeout_double_bill"
+            ]
+          },
+          "armed": { "type": "boolean" },
+          "fired": { "type": "boolean" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline_ref", "spot_checks", "disagreement_rate"],
+      "properties": {
+        "baseline_ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Which captured baseline this run is compared against, per VALIDATION-PLAN section 9."
+        },
+        "spot_checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["target_kind", "target_id", "verdict", "blind", "evidence"],
+            "properties": {
+              "target_kind": { "enum": ["component", "relationship"] },
+              "target_id": { "type": "string", "minLength": 1 },
+              "verdict": { "enum": ["correct", "partial", "wrong", "unscoreable"] },
+              "blind": {
+                "type": "boolean",
+                "description": "True when the scorer did not know which architecture produced the item. Non-blind verdicts are recorded but never used for the architecture comparison."
+              },
+              "evidence": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "disagreement_rate": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Adjudication disagreement with the producing rung, when adjudication ran; null otherwise."
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pass", "blocking"],
+      "properties": {
+        "pass": { "type": "boolean" },
+        "blocking": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Every reason the run fails its level's sign-off criteria. Empty exactly when pass is true."
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "definitions": {
+    "token_classes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "output", "cache_creation", "cache_read"],
+      "description": "All four billing classes, always separate. Conflating cache creation into input hid the continuation re-billing in the 2026-08-25 run.",
+      "properties": {
+        "input": { "type": "integer", "minimum": 0 },
+        "output": { "type": "integer", "minimum": 0 },
+        "cache_creation": { "type": "integer", "minimum": 0 },
+        "cache_read": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
