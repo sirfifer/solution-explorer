@@ -544,3 +544,83 @@ def test_exit_codes(projection: Path, tmp_path: Path, capsys) -> None:
     _edit_manifest(projection, lambda d: d["relationships"][0].__setitem__("target", "ghost"))
     assert lp.main([str(projection), "--quiet"]) == 1
     assert lp.main([str(tmp_path / "does-not-exist"), "--quiet"]) == 3
+
+
+# ------------------------------------------------------- census.parser_degraded
+
+
+def _stock_projection_with(proj: Path, languages: dict, symbols: list) -> None:
+    """Give the fixture a language mix and a symbol population to judge.
+
+    The stock fixture is a toy: three Python files and a handful of symbols. This
+    band only speaks when a subject is big enough for the absence of methods to
+    mean something, so a test of it has to supply that scale explicitly rather
+    than mutate one field and hope.
+    """
+    _edit_manifest(proj, lambda d: (d.setdefault("stats", {}).update({"languages": languages})))
+    shard = proj / "data" / "detail-alpha.json"
+    doc = json.loads(shard.read_text(encoding="utf-8"))
+    doc["symbols"] = symbols
+    shard.write_text(json.dumps(doc, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _symbol_population(methods: int, functions: int, classes: int) -> list:
+    out = []
+    for kind, count in (("method", methods), ("function", functions), ("class", classes)):
+        for i in range(count):
+            out.append({
+                "id": f"{kind}:{i}", "name": f"{kind}{i}", "kind": kind,
+                "file": "alpha/one.py", "line": 1,
+            })
+    return out
+
+
+def test_classes_without_methods_are_a_degraded_parser(projection: Path) -> None:
+    """The regression test for a real incident.
+
+    A VS Code run was launched with an interpreter that had no tree-sitter, so
+    every TypeScript file fell back to the regex parser. The analyzer reported
+    100% coverage and 0 gaps throughout, because every file genuinely WAS parsed.
+    What no check noticed was that none of them was parsed well: 55 methods
+    survived against 14,744 classes.
+    """
+    _stock_projection_with(
+        projection,
+        {"typescript": 3_000_000, "json": 100_000},
+        _symbol_population(methods=55, functions=90_000, classes=14_744),
+    )
+    report = _run(projection)
+    assert "census.parser_degraded" in _rules(report, "error")
+
+
+def test_a_healthy_method_share_is_not_flagged(projection: Path) -> None:
+    """The other half of the calibration: the good run must stay quiet.
+
+    Measured on the same commit parsed properly: 28,501 methods over 4,292
+    classes. A band that cannot tell that from the degraded shape would be
+    reporting noise on every healthy projection, which is worse than not
+    existing.
+    """
+    _stock_projection_with(
+        projection,
+        {"typescript": 3_000_000, "json": 100_000},
+        _symbol_population(methods=28_501, functions=9_794, classes=4_292),
+    )
+    report = _run(projection)
+    assert "census.parser_degraded" not in _rules(report, "error")
+
+
+def test_a_small_or_method_free_subject_says_nothing(projection: Path) -> None:
+    """No opinion where there is no evidence.
+
+    A subject with few classes, or one written in languages whose parser emits no
+    method kind at all, must not be accused. Silence here is the correct answer,
+    not a missed defect.
+    """
+    _stock_projection_with(
+        projection,
+        {"python": 400_000},
+        _symbol_population(methods=0, functions=5_000, classes=800),
+    )
+    report = _run(projection)
+    assert "census.parser_degraded" not in _rules(report, "error")

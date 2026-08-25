@@ -64,7 +64,9 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
+import zlib
 from collections import Counter, defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -147,13 +149,26 @@ DEFAULT_POLICY: dict[str, Any] = {
     "max_component_files": 1500,
     "max_component_symbols": 20000,
     "max_shard_bytes": 20_000_000,
+    # The number that decides the verdict. max_shard_bytes above is only a cheap
+    # prefilter that says "measure this one properly"; this is the budget for
+    # what a reader actually waits for. 8 MB compressed is roughly a
+    # photograph-heavy page, and VS Code's heaviest component lands at 4.4 MB.
+    "max_shard_transfer_bytes": 8_000_000,
+}
+
+# Languages whose real parser emits a "method" kind (analyzer/parsers/*_ts.py and
+# friends). A projection dominated by these and carrying no methods at all did
+# not meet the parser it was supposed to meet.
+METHOD_BEARING_LANGUAGES = {
+    "cpp", "csharp", "go", "java", "ruby", "rust", "swift", "typescript",
+    "javascript", "kotlin", "scala", "php",
 }
 
 
 @dataclass
 class Finding:
     rule: str
-    severity: str  # "error" | "warn"
+    severity: str  # "error" | "warn" | "info"
     message: str
     where: str = ""
 
@@ -174,6 +189,19 @@ class Report:
     def warn(self, rule: str, message: str, where: str = "") -> None:
         self.findings.append(Finding(rule, "warn", message, where))
 
+    def info(self, rule: str, message: str, where: str = "") -> None:
+        """Record something true and worth stating that nobody should act on.
+
+        The third severity exists because of the absolute-path bands. A path the
+        SUBJECT wrote into its own README is a real observation, and it is also
+        something we will never fix, because fixing it would mean rewriting the
+        subject's documentation so our copy no longer matches the real file. A
+        finding that reappears on every run and is correctly ignored every time
+        teaches people to ignore the whole report, which costs more than the
+        finding is worth. So it is stated, and it is not a warning.
+        """
+        self.findings.append(Finding(rule, "info", message, where))
+
     def skip(self, rule_prefix: str, reason: str) -> None:
         """Record a band that could not run. A skipped check is never silent."""
         self.skipped.append((rule_prefix, reason))
@@ -185,6 +213,10 @@ class Report:
     @property
     def warnings(self) -> list[Finding]:
         return [f for f in self.findings if f.severity == "warn"]
+
+    @property
+    def infos(self) -> list[Finding]:
+        return [f for f in self.findings if f.severity == "info"]
 
 
 class Linter:
@@ -202,6 +234,7 @@ class Linter:
         self.policy = policy
         self.content_sample = content_sample
         self.report = Report()
+        self._subject_string_cache: dict[str, bool] = {}
 
         self.manifest: dict = {}
         self.ai_json: Optional[dict] = None
@@ -1099,9 +1132,12 @@ class Linter:
         max_files = self.policy.get("max_component_files")
         max_symbols = self.policy.get("max_component_symbols")
         max_bytes = self.policy.get("max_shard_bytes")
+        max_wire = self.policy.get("max_shard_transfer_bytes")
 
         heaviest: list[tuple[int, str, int, int, int]] = []
         offenders: list[str] = []
+        bulky: list[str] = []
+        noted: list[str] = []
         for cid, counts in index.items():
             if not isinstance(counts, dict):
                 continue
@@ -1117,12 +1153,41 @@ class Linter:
             heaviest.append((symbols, cid, files, symbols, size))
 
             reasons = []
+            shape: list[str] = []
+            # Bulk is a SHAPE signal, not a usability verdict. These two limits
+            # were written when src/vs/workbench looked unopenable, and that
+            # diagnosis was wrong: the lock-up was the Rules lens handing an
+            # unbounded graph to layout, and with graphs bounded the same
+            # component opens in 1.9s with all 47,339 symbols usable. What the
+            # counts still say truthfully is that the deriver put 24% of this
+            # subject's files under one node, which is worth knowing about the map
+            # and is not a reason to refuse it.
             if max_files and files > max_files:
-                reasons.append(f"{files} files (limit {max_files})")
+                shape.append(f"{files} files (soft limit {max_files})")
             if max_symbols and symbols > max_symbols:
-                reasons.append(f"{symbols} symbols (limit {max_symbols})")
+                shape.append(f"{symbols} symbols (soft limit {max_symbols})")
+            if shape:
+                bulky.append(f"{cid}: {', '.join(shape)}")
             if max_bytes and size > max_bytes:
-                reasons.append(f"a {size / 1e6:.1f} MB shard (limit {max_bytes / 1e6:.0f} MB)")
+                # Raw bytes are a prefilter, not the finding. What a reader pays
+                # is the COMPRESSED transfer, and JSON compresses about tenfold:
+                # VS Code's src/vs/workbench shard is 48 MB on disk and 4.4 MB on
+                # the wire, which is an ordinary web payload rather than a defect.
+                # Measuring the raw number and calling it the cost overstated the
+                # problem by an order of magnitude, so the expensive measurement
+                # is taken only for the shards that trip the cheap one.
+                wire = self._transfer_bytes(shard)
+                if wire is not None and max_wire and wire <= max_wire:
+                    noted.append(
+                        f"{cid}: a {size / 1e6:.1f} MB shard, but {wire / 1e6:.1f} MB "
+                        f"compressed, which is what a reader downloads"
+                    )
+                else:
+                    shown = f"{wire / 1e6:.1f} MB compressed" if wire is not None else f"{size / 1e6:.1f} MB raw"
+                    reasons.append(
+                        f"a {size / 1e6:.1f} MB shard ({shown}, limit "
+                        f"{(max_wire or max_bytes) / 1e6:.0f} MB over the wire)"
+                    )
             if reasons:
                 offenders.append(f"{cid}: {', '.join(reasons)}")
 
@@ -1132,10 +1197,25 @@ class Linter:
             for _, cid, files, symbols, size in heaviest[:5]
         ]
 
+        for note in noted[:EXAMPLE_CAP]:
+            self.report.info("census.component_weight_transfer", note)
+
+        for heavy in bulky[:EXAMPLE_CAP]:
+            self.report.warn(
+                "census.component_shape",
+                f"one component carries an outsized share of the subject: {heavy}",
+            )
+
         for offender in offenders[:EXAMPLE_CAP]:
+            # Deliberately not "too heavy to open in a browser" any more. That
+            # sentence was written when src/vs/workbench appeared unopenable, and
+            # it was wrong: the lock-up was the Rules lens handing an unbounded
+            # graph to layout, and with graphs bounded the same component opens in
+            # 1.9s with all 47,339 symbols usable. A rule that keeps asserting a
+            # disproven cause teaches the reader to discount the rule.
             self.report.error(
                 "census.component_weight",
-                f"component is too heavy to open in a browser: {offender}",
+                f"component exceeds the weight budget: {offender}",
             )
         if len(offenders) > EXAMPLE_CAP:
             self.report.error(
@@ -1143,7 +1223,161 @@ class Linter:
                 f"...and {len(offenders) - EXAMPLE_CAP} more components over the weight limits",
             )
 
+    def check_parser_plausibility(self) -> None:
+        """Did the projection meet the parser it was supposed to meet?
+
+        This band exists because of a real incident and would have caught it in
+        one line. A VS Code run was launched with an interpreter that had no
+        tree-sitter installed, so every TypeScript file silently fell back to the
+        regex parser. The result: 355,617 symbols instead of 153,231, all 28,501
+        methods reclassified as plain functions, the detail directory doubled to
+        310 MB, and the heaviest shard grown from 48 MB to 97 MB.
+
+        The analyzer reported "Coverage: 100% of source analyzed, 0 gaps"
+        throughout, and it was telling the truth as it understood it: every file
+        WAS parsed. Nothing measured whether it was parsed WELL. That is the same
+        shape as the two deepest defects this project has found, every surface
+        passing its own check while the artifact as a whole is wrong.
+
+        The signature is unmistakable and needs no parser identity recorded in the
+        artifact, which is what makes it usable on projections that already exist:
+        an object-oriented codebase that reports not one single method did not
+        read its own classes.
+        """
+        stats = self.manifest.get("stats") or {}
+        languages = stats.get("languages")
+        if not isinstance(languages, dict):
+            return
+
+        oo_lines = sum(
+            lines for lang, lines in languages.items()
+            if lang in METHOD_BEARING_LANGUAGES and isinstance(lines, (int, float))
+        )
+        total_lines = sum(v for v in languages.values() if isinstance(v, (int, float)))
+        if oo_lines < 20_000 or not total_lines:
+            return  # too little of the subject is method-bearing to conclude anything
+
+        kinds = Counter()
+        for shard in self.shards.values():
+            for sym in (shard.get("symbols") or []):
+                kinds[sym.get("kind")] += 1
+        callables = kinds["method"] + kinds["function"]
+        classes = kinds["class"] + kinds["interface"] + kinds["struct"]
+        if callables < 500 or classes < 200:
+            return  # too little read to conclude anything
+
+        # Methods PER CLASS, not methods outright. The first version of this band
+        # tested for zero methods and missed the very incident it was written for:
+        # the degraded VS Code run still produced 55 of them, from the handful of
+        # files whose parser needs no tree-sitter. 55 methods against 14,744
+        # classes is the real tell. A class with no members is a data holder, and
+        # thousands in a row means nothing read the insides of a class.
+        #
+        # Calibrated against both projections of the same commit:
+        #   tree-sitter    28,501 methods / 4,292 classes   = 6.6 per class
+        #   regex fallback     55 methods / 14,744 classes  = 0.004 per class
+        # The gap is three orders of magnitude, so the threshold does not need to
+        # be delicate and a genuinely method-light codebase stays well clear.
+        per_class = kinds["method"] / classes
+        if per_class < 0.25:
+            share = oo_lines / total_lines
+            self.report.error(
+                "census.parser_degraded",
+                f"{kinds['method']} method symbols against {classes} classes "
+                f"({per_class:.3f} per class) across {callables} callables, while "
+                f"{share:.0%} of the subject ({oo_lines:,} lines) is in languages whose "
+                f"parser emits methods. Classes whose bodies were never read look "
+                f"exactly like this: check that tree-sitter is importable from the "
+                f"interpreter that ran the analysis",
+            )
+
+    def _transfer_bytes(self, shard: Optional[Path]) -> Optional[int]:
+        """What this shard actually costs to download, compressed.
+
+        Every static host worth deploying to serves JSON compressed, so the size
+        on disk is not the size a reader waits for. Measured rather than
+        estimated, because compression ratio depends on the content: a shard full
+        of repeated symbol scaffolding compresses far better than one full of
+        prose, and guessing a ratio would put the whole judgement on a constant
+        nobody checked.
+
+        Returns None when it cannot be measured, and the caller then falls back
+        to the raw size rather than assuming the generous answer.
+        """
+        if shard is None or not shard.is_file():
+            return None
+        try:
+            total = 0
+            compressor = zlib.compressobj(6, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
+            with shard.open("rb") as fh:
+                while chunk := fh.read(1 << 20):
+                    total += len(compressor.compress(chunk))
+            total += len(compressor.flush())
+            return total
+        except (OSError, zlib.error):
+            return None
+
     # -------------------------------------------------------------- hygiene
+
+    def _written_by_the_subject(self, needle: str) -> bool:
+        """True when this exact string also occurs in the subject's own source.
+
+        The whole question in the absolute-path band is WHOSE path it is. A path
+        under the generating machine's root is ours and is a real leak. A path
+        that VS Code committed into its own test/unit/README.md is the subject's
+        content, already public wherever the subject is public, and republishing
+        it verbatim is what a faithful map does. Rewriting it would make our copy
+        of a file disagree with the file.
+
+        Provenance is settled by asking the source rather than by keeping a list
+        of fields that are "allowed" to contain paths. A field allowlist rots the
+        moment the deriver embeds subject text somewhere new; this cannot, because
+        it tests the actual claim: does the subject say this too?
+
+        `git grep` over a checkout is fast enough to run once per distinct
+        finding. Without a source tree the answer is unknown, and unknown is
+        reported as a leak, because assuming our own innocence is the wrong
+        default.
+        """
+        if self.src is None or not self.src.is_dir():
+            return False
+        cached = self._subject_string_cache.get(needle)
+        if cached is not None:
+            return cached
+
+        # A query string or trailing punctuation belongs to the surrounding
+        # document, not to the path, and would defeat a fixed-string search.
+        candidates = [needle]
+        # The band scans the artifact as TEXT, so a Windows path arrives with its
+        # JSON escaping intact: the file holds C:\\Users\\..., the string means
+        # C:\Users\.... Searching the escaped form finds nothing and the
+        # subject's own README gets reported as our leak, which is precisely the
+        # misattribution this check exists to prevent.
+        if "\\\\" in needle:
+            candidates.append(needle.replace("\\\\", "\\"))
+        for base in list(candidates):
+            for cut in ("?", "#", "`"):
+                if cut in base:
+                    candidates.append(base.split(cut, 1)[0])
+        candidates.extend(c[:40] for c in list(candidates))
+
+        found = False
+        for candidate in candidates:
+            if len(candidate) < 12:
+                continue
+            try:
+                proc = subprocess.run(
+                    ["git", "-C", str(self.src), "grep", "-qFI", "--", candidate],
+                    capture_output=True,
+                    timeout=30,
+                )
+            except (OSError, subprocess.SubprocessError):
+                break
+            if proc.returncode == 0:
+                found = True
+                break
+        self._subject_string_cache[needle] = found
+        return found
 
     def check_hygiene(self) -> None:
         """Absolute paths leaking into a bundle that may be published."""
@@ -1175,7 +1409,18 @@ class Linter:
                 if extra > 0:
                     leaks.append(f"{rel}: the generating root path appears {extra} more time(s)")
         for leak in leaks[:EXAMPLE_CAP]:
-            self.report.warn("hygiene.absolute_path", f"absolute filesystem path in the artifact: {leak}")
+            rel, _, found = leak.partition(": ")
+            if self._written_by_the_subject(found):
+                self.report.info(
+                    "hygiene.subject_absolute_path",
+                    f"the subject's own source carries this path, and the map "
+                    f"republishes it verbatim: {leak}",
+                )
+            else:
+                self.report.warn(
+                    "hygiene.absolute_path",
+                    f"absolute filesystem path in the artifact: {leak}",
+                )
         if isinstance(root_path, str) and (
             root_path.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", root_path)
         ):
@@ -1194,6 +1439,7 @@ class Linter:
         self.check_references()
         self.check_counts()
         self.check_census()
+        self.check_parser_plausibility()
         self.check_source()
         self.check_hygiene()
         return self.report
@@ -1303,7 +1549,15 @@ def publish_run(
     all_findings = []
     for rule in sorted(by_rule):
         hits = by_rule[rule]
-        worst = "failed" if any(f.severity == "error" for f in hits) else "warned"
+        # A rule that only ever produced noted items is a passing case. It ran,
+        # it found something true, and there is nothing to do about it; calling
+        # that "warned" would keep a permanently-clean run looking dirty.
+        if any(f.severity == "error" for f in hits):
+            worst = "failed"
+        elif all(f.severity == "info" for f in hits):
+            worst = "passed"
+        else:
+            worst = "warned"
         groups = group_findings(rule, hits)
         cases.append({
             "title": rule,
@@ -1408,7 +1662,7 @@ def render_text(report: Report, proj_dir: Path) -> str:
     for f in report.findings:
         by_rule[f.rule].append(f)
 
-    for severity, label in (("error", "ERRORS"), ("warn", "WARNINGS")):
+    for severity, label in (("error", "ERRORS"), ("warn", "WARNINGS"), ("info", "NOTED")):
         rules = sorted(r for r, fs in by_rule.items() if any(f.severity == severity for f in fs))
         if not rules:
             continue
@@ -1434,7 +1688,13 @@ def render_text(report: Report, proj_dir: Path) -> str:
     lines.append("")
 
     verdict = "FAIL" if report.errors else ("PASS with warnings" if report.warnings else "PASS")
-    lines.append(f"OVERALL: {verdict} ({len(report.errors)} error(s), {len(report.warnings)} warning(s))")
+    # Noted items are counted but never change the verdict: they are things that
+    # are true, stated, and correctly not acted on.
+    noted = f", {len(report.infos)} noted" if report.infos else ""
+    lines.append(
+        f"OVERALL: {verdict} ({len(report.errors)} error(s), "
+        f"{len(report.warnings)} warning(s){noted})"
+    )
     return "\n".join(lines)
 
 
@@ -1521,6 +1781,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             "census": report.census,
             "errors": len(report.errors),
             "warnings": len(report.warnings),
+            "noted": len(report.infos),
         }
         out = Path(args.json_out).expanduser()
         out.parent.mkdir(parents=True, exist_ok=True)

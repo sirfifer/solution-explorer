@@ -139,15 +139,44 @@ test.describe("search", () => {
     // That happened on the first full sweep, which reported "1 failed" with
     // zero findings attached and therefore said nothing about what was wrong.
     const broke: string[] = [];
+    // What the reader was looking at when the NEXT target is attempted. The one
+    // recurring failure in this sweep is a target where the search box never
+    // became editable, and the two candidate explanations, a race against the
+    // previous navigation or something specific to that entry, are told apart by
+    // knowing what came before. Reporting only the target that failed is what
+    // left it uncharacterised across three runs.
+    let previous = "the initial page load";
     for (const target of targets) {
+      const startedAt = Date.now();
       try {
         recorder.reset();
         // Close any overlay left open by the previous target, then reopen.
         await crawlPage.keyboard.press("Escape").catch(() => {});
+
+        // Wait for the previous navigation to stop occupying the main thread
+        // before typing into it. A bounded wait enforced from Node, never
+        // page.evaluate: evaluate takes an argument rather than options, so it
+        // carries no timeout, and on a thread pinned at 100% it never returns.
+        const settleStart = Date.now();
+        await crawlPage
+          .waitForFunction(() => document.readyState === "complete", undefined, {
+            timeout: 10_000,
+          })
+          .catch(() => {});
+        const settleMs = Date.now() - settleStart;
+
         await crawlPage.keyboard.press("ControlOrMeta+k");
         const input = crawlPage.locator('[data-testid="search-input"]');
         await expect(input).toBeVisible();
-        await input.fill(target.query);
+        try {
+          await input.fill(target.query);
+        } catch (fillErr) {
+          // Re-thrown with the context that identifies WHICH explanation it is.
+          throw new Error(
+            `${(fillErr as Error).message.split("\n")[0]} ` +
+              `[after ${previous}; settle wait ${settleMs}ms]`,
+          );
+        }
 
         // The index is fetched in shards and enriches results as it arrives, so
         // the row for an exact name may appear a beat after the first render.
@@ -234,6 +263,7 @@ test.describe("search", () => {
         await expectNoErrorBoundary(crawlPage);
         const problems = recorder.problems();
         if (problems.length) noisy.push(`${target.kind} "${target.query}": ${problems[0]}`);
+        previous = `${target.kind} "${target.query}" -> ${target.componentId} (${Date.now() - startedAt}ms)`;
       } catch (err) {
         // The UI would not cooperate for this target. Recorded and moved past,
         // so the sweep still covers everything after it.
@@ -244,6 +274,7 @@ test.describe("search", () => {
         await crawlPage
           .waitForSelector('[data-testid="tree-navigator"]', { timeout: 30_000 })
           .catch(() => {});
+        previous = `recovery reload after ${target.kind} "${target.query}"`;
       }
     }
 
