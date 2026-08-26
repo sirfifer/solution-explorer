@@ -460,3 +460,78 @@ def test_a_contract_state_round_trips_through_its_dict():
     state.failed.append(FailedQuestion("purpose", "E2", "no citation"))
     restored = ContractState.from_dict(state.to_dict())
     assert restored.to_dict() == state.to_dict()
+
+
+# --- deterministic-first: the parser's answers are not the model's to fail -----
+
+
+def test_a_parser_known_identity_attribute_cannot_escalate():
+    """identity.* the analyzer already detected never climbs the ladder.
+
+    The question exists only because the parser found the attribute, the prompt
+    hands the value over, and strict_identity is off by default so nothing
+    checks the model's restatement. On the 2026-08-25 unamentis-ios run this
+    path sent identity.framework to Opus twice, at ~17.5x the per-item cost of
+    the rung that already had the answer, to re-derive a fact and discard it.
+    """
+    from analyzer.enrich.contract import evaluate
+
+    facts = {"framework": "SwiftUI", "language": "swift", "type": "module"}
+    # The model says nothing useful about any of them.
+    state = evaluate(
+        target_kind="component",
+        target_id="c1",
+        rung="sonnet",
+        answers={
+            "purpose": {"claim": "does a thing", "status": "answered",
+                        "evidence": [{"kind": "file", "path": "a.swift"}]},
+            "mechanism": {"claim": "via a thing", "status": "answered",
+                          "evidence": [{"kind": "file", "path": "a.swift"}]},
+            "place": {"claim": "in the app", "status": "answered",
+                      "evidence": [{"kind": "file", "path": "a.swift"}]},
+            "next_step": {"claim": "read a.swift", "status": "answered",
+                          "evidence": [{"kind": "file", "path": "a.swift"}]},
+            "identity.framework": {"claim": "", "status": "uncertain"},
+            "identity.language": {"claim": "", "status": "uncertain"},
+            "identity.type": {"claim": "", "status": "uncertain"},
+        },
+        facts=facts,
+        validator=None,
+    )
+    climbed = {str(f) for f in state.failed_questions}
+    assert not any(q.startswith("identity.") for q in climbed), (
+        f"a parser-known identity attribute escalated: {climbed}"
+    )
+    assert state.state == "grounded"
+
+
+def test_a_real_question_still_escalates_when_the_parser_cannot_help():
+    """The exemption is narrow: only identity, only when the parser has it."""
+    from analyzer.enrich.contract import evaluate
+
+    state = evaluate(
+        target_kind="component",
+        target_id="c1",
+        rung="sonnet",
+        answers={"purpose": {"claim": "", "status": "uncertain"}},
+        facts={"framework": "SwiftUI"},
+        validator=None,
+    )
+    assert state.state == "escalate"
+    assert "purpose" in {str(f) for f in state.failed_questions}
+    # The narrowness matters: identity.framework is settled by the parser and
+    # must be absent, while identity.type is not in facts and must still climb.
+    climbed = {str(f) for f in state.failed_questions}
+    assert "identity.framework" not in climbed
+    assert "identity.type" in climbed
+
+
+def test_an_identity_attribute_the_parser_lacks_is_not_exempt():
+    from analyzer.enrich.contract import _parser_settles
+
+    assert _parser_settles("identity.framework", {"framework": "SwiftUI"}) is True
+    assert _parser_settles("identity.framework", {"framework": ""}) is False
+    assert _parser_settles("identity.framework", {"framework": "unknown"}) is False
+    assert _parser_settles("identity.framework", {}) is False
+    assert _parser_settles("purpose", {"purpose": "anything"}) is False
+    assert _parser_settles("mechanism", {"mechanism": "x"}) is False

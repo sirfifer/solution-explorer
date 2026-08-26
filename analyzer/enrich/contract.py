@@ -302,6 +302,25 @@ def _contradiction_notes(facts: Optional[dict], answers: dict[str, Answer]) -> l
     return out
 
 
+def _parser_settles(question: str, facts: Optional[dict]) -> bool:
+    """True when a required identity question is already answered by the parser.
+
+    Only identity attributes qualify, and only when the store actually carries a
+    concrete value. `purpose`, `mechanism`, `place` and `next_step` are never
+    settled this way: no deterministic pass produces them, so a model failing
+    one is a real gap and must still climb.
+    """
+    if not question.startswith("identity."):
+        return False
+    if not isinstance(facts, dict):
+        return False
+    attribute = question.split(".", 1)[1]
+    if attribute not in ("type", "framework", "port", "language"):
+        return False
+    value = facts.get(attribute)
+    return value is not None and str(value).strip() not in ("", "None", "unknown")
+
+
 def evaluate(
     *,
     target_kind: str,
@@ -333,6 +352,20 @@ def evaluate(
     failed: list[FailedQuestion] = []
 
     for question in required:
+        # An identity attribute the PARSER already determined is settled before
+        # a model is consulted. The question is only asked at all because the
+        # analyzer detected the attribute, the prompt hands the detected value
+        # over, and `strict_identity` is off by default so nothing ever checks
+        # the model's restatement of it. Letting such a question fail therefore
+        # escalates a fact we already hold to a more expensive tier to be
+        # re-derived and then discarded: on the 2026-08-25 unamentis-ios run,
+        # identity.framework climbed to Opus twice on exactly that path, at
+        # roughly 17.5x the cost per item of the rung that already knew.
+        #
+        # Deterministic-first: where the parser has the answer, the parser IS
+        # the answer, and the model's version cannot make it a gap.
+        if _parser_settles(question, facts):
+            continue
         answer = parsed.get(question)
         if answer is None or not answer.claim:
             failed.append(

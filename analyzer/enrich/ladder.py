@@ -74,6 +74,25 @@ CONTRACT_TARGET_KIND = "contract-state"
 # absorbing that would record a partition as answered while storing nothing.
 PARTITION_KEYS = ("components", "relationships")
 
+
+# The ladder's ``rung`` value is the TIER that answered ("sonnet", "opus",
+# "fable"), which is what a contract state and the determination's
+# "raised_at_rungs" mean by it. That is the wrong name to show a human watching
+# a run: "rung opus" says nothing about where in the ladder the work is, and it
+# would read "rung fable" for the residue rung, which sounds like a different
+# model tier rather than the last step. Progress events carry the ladder
+# POSITION instead, derived from the phase key that selected the tier.
+_RUNG_DISPLAY = {
+    "p2a_bulk": "2a",
+    "p2b_escalated": "2b",
+    "p2c_residue": "2c",
+}
+
+
+def _rung_label(key: str, fallback: str) -> str:
+    """The ladder position a reader recognises, e.g. 2b, not the model name."""
+    return _RUNG_DISPLAY.get(key, fallback)
+
 # How many escalated items share one higher-rung call. Escalations are few by
 # design, and a per-item call would pay the full context overhead for each. Five
 # amortizes that without diluting attention across a crowd of unrelated gaps.
@@ -417,6 +436,7 @@ class LadderPhase:
         invoker_key: str, rung: str,
         on_result: Optional[Callable[[int, Optional[dict], Optional[str]], None]] = None,
         describe: Optional[Callable[[int], dict]] = None,
+        rung_label: Optional[str] = None,
     ) -> tuple[dict[int, Optional[dict]], dict[int, str], int]:
         """Run independent prompts through a bounded pool, deterministically.
 
@@ -452,7 +472,9 @@ class LadderPhase:
             # true to say for the whole of that time.
             if describe is not None:
                 try:
-                    ctx.progress.unit_start(rung=rung, unit_id=job_id, **describe(job_id))
+                    ctx.progress.unit_start(
+                        rung=rung_label or rung, unit_id=job_id, **describe(job_id)
+                    )
                 except Exception:  # noqa: BLE001 - reporting never fails work
                     pass
             invoker = ctx.invoker(
@@ -600,7 +622,7 @@ class LadderPhase:
 
         payloads, errors, skipped = self._invoke_parallel(
             ctx, jobs, invoker_key="p2a_bulk", rung="2a",
-            on_result=_bank, describe=_describe,
+            on_result=_bank, describe=_describe, rung_label="2a",
         )
         # Notes are emitted in partition order even though the work was banked
         # in completion order, so the report reads the same whatever order the
@@ -655,8 +677,9 @@ class LadderPhase:
             jobs.append((index, prompt, len(batch)))
         # An escalated rung only learns its own size once the rung below has
         # decided what to escalate, so its denominator is published here.
+        display = _rung_label(key, rung)
         ctx.progress.plan(
-            rung=rung,
+            rung=display,
             partitions=len(batches),
             components=sum(1 for s in pending if s.target_kind == "component"),
             relationships=sum(1 for s in pending if s.target_kind != "component"),
@@ -682,13 +705,14 @@ class LadderPhase:
                     obj.get("relationships") or {}
                 )
             ctx.progress.unit_end(
-                rung=rung, unit_id=index, ok=obj is not None,
+                rung=display, unit_id=index, ok=obj is not None,
                 answered=answered, detail=err,
             )
 
         payloads, errors, skipped_batches = self._invoke_parallel(
             ctx, jobs, invoker_key=key, rung=rung,
             on_result=_report_batch, describe=_describe_batch,
+            rung_label=display,
         )
         # Which items a model actually SAW: their batch call returned a payload.
         # Load-bearing for the terminal stamping below, and born from a real
