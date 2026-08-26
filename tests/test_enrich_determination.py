@@ -256,6 +256,11 @@ class FullPipelineInvoker:
         # fake model has to speak that protocol or every item reads as
         # unanswered. Per-item calls were 99% of a real run's invocations.
         ids = re.findall(r'"id":\s*"([^"]+)"', prompt)
+        if "FINDINGS AND EVIDENCE:" in prompt:
+            return self._ok({"verdicts": {
+                i: {"verdict": "verified", "reason": "the evidence holds up"}
+                for i in ids
+            }})
         if "EDGES AND EVIDENCE:" in prompt:
             return self._ok({"verdicts": {
                 i: {"status": "confirmed", "reason": "the evidence shows it"}

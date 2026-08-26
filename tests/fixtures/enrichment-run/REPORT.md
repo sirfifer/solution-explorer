@@ -1,6 +1,6 @@
 # Enrichment Run Report: polyglot
 
-Commit `a23bc4e546e1f011663739370c22c8fb9770e2c7`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
+Commit `762a684eab7bc341da3a68afdd1033624de02516`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
 
 **Determination: DONE**
 
@@ -8,7 +8,7 @@ The census shows the map supports a reader orienting and finding the service bou
 
 ## What this run cost
 
-23 model invocation(s), $0.2300 API-equivalent.
+14 model invocation(s), $0.1400 API-equivalent.
 
 > Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent.
 
@@ -16,13 +16,13 @@ The census shows the map supports a reader orienting and finding the service bou
 
 | Model | Calls | Targets | Fresh in | Cached in | Out | Share | Wall | API-equiv |
 |---|---|---|---|---|---|---|---|---|
-| anthropic-claude-cli:opus | 15 | 1 | 18,000 | 0 | 4,500 | 65% | 0.0m | $0.15 |
-| anthropic-claude-cli:fable | 6 | 5 | 7,200 | 0 | 1,800 | 26% | 0.0m | $0.06 |
-| anthropic-claude-cli:sonnet | 2 | 11 | 2,400 | 0 | 600 | 9% | 0.0m | $0.02 |
+| anthropic-claude-cli:fable | 6 | 5 | 7,200 | 0 | 1,800 | 43% | 0.0m | $0.06 |
+| anthropic-claude-cli:opus | 6 | 1 | 7,200 | 0 | 1,800 | 43% | 0.0m | $0.06 |
+| anthropic-claude-cli:sonnet | 2 | 11 | 2,400 | 0 | 600 | 14% | 0.0m | $0.02 |
 
-23 invocation(s) moved 34,500 tokens in 0.0 minutes of model time.
+14 invocation(s) moved 21,000 tokens in 0.0 minutes of model time.
 
-**anthropic-claude-cli:opus** did the most of it, 65% of all tokens across p2_ladder:opus, p3_adjudication:grounding-spot-check, p3_adjudication:substitution-check, p3_adjudication:verify-edges, p3_adjudication:verify-findings, p3_adjudication:verify-identity.
+**anthropic-claude-cli:fable** did the most of it, 43% of all tokens across p1_orientation, p2_ladder:fable, p4_synthesis:narrative, p4_synthesis:spine, p5_determination.
 
 ### What this costs the account
 
@@ -115,15 +115,6 @@ This round produced **no measurable gain**. Recorded as such rather than as work
 | p2_ladder | fable | anthropic-claude-cli:fable | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p3_adjudication | verify-identity | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p3_adjudication | verify-edges | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-findings | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-findings | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-findings | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-findings | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-findings | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-findings | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-findings | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-findings | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-findings | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p3_adjudication | verify-findings | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p3_adjudication | grounding-spot-check | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p3_adjudication | substitution-check | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |

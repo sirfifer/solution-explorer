@@ -30,6 +30,7 @@ __all__ = [
     "build_intent_conformance_prompt",
     "build_intent_proposal_prompt",
     "build_finding_verify_prompt",
+    "build_finding_verify_batch_prompt",
     "build_identify_unknowns_prompt",
     "build_identity_verify_prompt",
     "build_identity_verify_batch_prompt",
@@ -995,6 +996,45 @@ def _context_only_components(partition: Partition, facts: StoreFacts) -> list[di
     if partition.answers_components:
         return []
     return [facts.component_facts(cid) for cid in partition.component_ids]
+
+
+def build_finding_verify_batch_prompt(findings: list[dict]) -> str:
+    """Adversarially verify SEVERAL findings in one call.
+
+    Same economics as the other verify passes: the answer is a verdict and one
+    sentence, so a per-item call spends nearly everything on the prompt. The
+    refutation stance is unchanged, and each finding is still judged only
+    against its own evidence.
+    """
+    contract = """\
+Return ONLY a single JSON object, no prose, no fences:
+
+{ "verdicts": {
+    "<finding id, exactly as given>": {
+      "verdict": "verified | refuted | uncertain",
+      "reason": "one sentence, grounded in that finding's own evidence" },
+    ...
+} }
+
+RULES:
+- TRY TO REFUTE each finding. Only those that survive the attempt are verified.
+- Judge every finding INDEPENDENTLY, against its own evidence alone. A verdict
+  on one finding is never evidence about another.
+- Return one entry for EVERY id below, using the id exactly as written.
+- uncertain when the evidence is too thin to decide either way.
+"""
+    return "\n".join([
+        "You are adversarially verifying findings in an architecture analysis. "
+        "Each was produced by a heuristic and may be a false positive. Try to "
+        "refute each one using ONLY its own evidence below.",
+        "",
+        contract,
+        "",
+        "FINDINGS AND EVIDENCE:",
+        json.dumps(findings, indent=2, default=str),
+        "",
+        "Return the JSON object now.",
+    ])
 
 
 def build_identity_verify_batch_prompt(items: list[dict]) -> str:

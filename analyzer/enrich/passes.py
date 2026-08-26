@@ -39,6 +39,7 @@ from .overlay import apply_enrichment_overlay
 from .partition import flatten_components
 from .prompts import (
     build_edge_verify_batch_prompt,
+    build_finding_verify_batch_prompt,
     build_identity_verify_batch_prompt,
     build_concern_name_prompt,
     build_edge_verify_prompt,
@@ -708,12 +709,35 @@ def verify_findings(
             return _finalize(report, config)
 
         status_map = {"verified": "verified", "refuted": "refuted", "uncertain": "unverified"}
-        for f in targets:
-            obj, cost, errs = _invoke_json(invoker, build_finding_verify_prompt(f), validate)
-            outcome = TargetOutcome(id=f["id"], status="failed", cost_usd=cost)
-            if obj is None:
-                outcome.errors = errs
-            else:
+
+        def validate_batch(obj: dict) -> list[str]:
+            verdicts = obj.get("verdicts")
+            if not isinstance(verdicts, dict) or not verdicts:
+                return ["verdicts must be a non-empty object keyed by finding id"]
+            return []
+
+        batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1))
+        for start in range(0, len(targets), batch_size):
+            chunk = targets[start : start + batch_size]
+            prompt = build_finding_verify_batch_prompt(chunk)
+            batch_obj, cost, errs = _invoke_json(invoker, prompt, validate_batch)
+            verdicts = (batch_obj or {}).get("verdicts") or {}
+            share = cost / max(1, len(chunk))
+            for f in chunk:
+                obj = verdicts.get(f["id"]) if isinstance(verdicts, dict) else None
+                outcome = TargetOutcome(id=f["id"], status="failed", cost_usd=share)
+                # A finding with no verdict stays unverified. It is never marked
+                # verified by omission: the whole point of this pass is that only
+                # findings which SURVIVE a refutation attempt pass it.
+                problems = (
+                    [errs and errs[0] or "no verdict returned for this finding in its batch"]
+                    if not isinstance(obj, dict)
+                    else validate(obj)
+                )
+                if problems:
+                    outcome.errors = problems
+                    report.outcomes.append(outcome)
+                    continue
                 verdict = obj["verdict"]
                 new_status = status_map[verdict]
                 payload = {"verification_status": new_status, "reason": obj["reason"].strip()}
@@ -727,7 +751,7 @@ def verify_findings(
                 store.set_finding_verification(f["id"], new_status)
                 outcome.status = "done"
                 outcome.verdict = verdict
-            report.outcomes.append(outcome)
+                report.outcomes.append(outcome)
         report.total_cost_usd = sum(o.cost_usd for o in report.outcomes)
         store.commit()
         return _finalize(report, config)
