@@ -274,3 +274,37 @@ def test_a_malformed_verdict_in_a_batch_fails_only_that_edge(tmp_path):
     bad = [o for o in report.outcomes if o.status == "failed"]
     assert len(bad) >= 1
     assert any("status must be one of" in e for o in bad for e in o.errors)
+
+
+def test_a_batch_is_bounded_by_bytes_not_only_by_count():
+    """One oversized member must not make the whole request impossible.
+
+    Capping a batch by item count alone is the same mistake the fact blocks
+    made. On the 2026-08-26 rebuild a batch of twelve identity payloads built a
+    request of ~1,041,000 tokens against a 1,000,000 limit; the pass failed,
+    retried, and failed again, losing those verdicts entirely.
+    """
+    from analyzer.enrich.passes import MAX_VERIFY_BATCH_CHARS, _batches
+
+    small = [{"id": f"s{i}", "body": "x" * 100} for i in range(50)]
+    assert len(_batches(small, 25)) == 2, "count still bounds a batch of small items"
+
+    huge = [{"id": f"h{i}", "body": "x" * (MAX_VERIFY_BATCH_CHARS // 3)} for i in range(6)]
+    batches = _batches(huge, 25)
+    assert len(batches) > 1, "size must split a batch the count would have allowed"
+    for b in batches:
+        assert len(json.dumps(b)) <= MAX_VERIFY_BATCH_CHARS * 1.5
+
+    # An item bigger than the whole budget still gets verified, alone.
+    giant = [{"id": "g", "body": "x" * (MAX_VERIFY_BATCH_CHARS * 2)}]
+    assert len(_batches(giant, 25)) == 1
+    assert _batches(giant, 25)[0][0]["id"] == "g"
+
+
+def test_every_target_survives_batching():
+    """Batching must partition the targets, never drop or duplicate one."""
+    from analyzer.enrich.passes import _batches
+
+    items = [{"id": f"t{i}", "body": "y" * (i * 37)} for i in range(120)]
+    flat = [x for b in _batches(items, 7) for x in b]
+    assert [x["id"] for x in flat] == [x["id"] for x in items]

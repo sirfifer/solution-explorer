@@ -154,6 +154,35 @@ class PassReport:
 # --- shared harness ----------------------------------------------------------
 
 
+# A verify batch is bounded by BYTES as well as by count. Counting items alone
+# is the same mistake the fact blocks made: one oversized member makes the whole
+# request impossible. A batch of twelve identity payloads exceeded the context
+# window on the 2026-08-26 rebuild and the pass failed twice before giving up.
+MAX_VERIFY_BATCH_CHARS = 200_000
+
+
+def _batches(items: list, size: int, sizer=None) -> list[list]:
+    """Split items into batches bounded by count AND serialized size.
+
+    An item larger than the whole budget still gets its own batch rather than
+    being dropped: a target that cannot be batched is still a target that must
+    be verified.
+    """
+    out: list[list] = []
+    current: list = []
+    used = 0
+    for item in items:
+        cost = len(json.dumps(sizer(item) if sizer else item, default=str))
+        if current and (len(current) >= size or used + cost > MAX_VERIFY_BATCH_CHARS):
+            out.append(current)
+            current, used = [], 0
+        current.append(item)
+        used += cost
+    if current:
+        out.append(current)
+    return out
+
+
 def _invoke_json(
     invoker: Invoker, prompt: str, validate: Callable[[dict], list[str]]
 ) -> tuple[Optional[dict], float, list[str]]:
@@ -317,8 +346,7 @@ def verify_edges(
             return []
 
         batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1))
-        for start in range(0, len(targets), batch_size):
-            chunk = targets[start : start + batch_size]
+        for chunk in _batches(targets, batch_size, sizer=lambda t: t[1]):
             prompt = build_edge_verify_batch_prompt([
                 {
                     "id": key,
@@ -717,8 +745,7 @@ def verify_findings(
             return []
 
         batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1))
-        for start in range(0, len(targets), batch_size):
-            chunk = targets[start : start + batch_size]
+        for chunk in _batches(targets, batch_size):
             prompt = build_finding_verify_batch_prompt(chunk)
             batch_obj, cost, errs = _invoke_json(invoker, prompt, validate_batch)
             verdicts = (batch_obj or {}).get("verdicts") or {}
@@ -912,8 +939,7 @@ def verify_identity(
         # they take a smaller batch. Still one call for a dozen components
         # instead of a dozen calls.
         batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1) // 2)
-        for start in range(0, len(targets), batch_size):
-            chunk = targets[start : start + batch_size]
+        for chunk in _batches(targets, batch_size, sizer=_identity_facts):
             prompt = build_identity_verify_batch_prompt([
                 {
                     "id": comp["id"],

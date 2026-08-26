@@ -1090,8 +1090,20 @@ RULES:
 - Do not invent evidence. Where a claim cannot be checked from the facts given,
   say uncertain.
 """
+    # Only the identity-bearing fields, exactly as the single-item prompt sends
+    # them. Passing the whole projected component dict here (files, docs,
+    # children and all) made a batch of twelve exceed the context window on the
+    # 2026-08-26 rebuild: a payload that is merely heavy per item becomes fatal
+    # when a batch multiplies it.
     payload = [
-        {"id": item["id"], "component": item.get("component"), "facts": item.get("facts")}
+        {
+            "id": item["id"],
+            "component": {
+                k: (item.get("component") or {}).get(k)
+                for k in ("id", "name", "type", "framework", "port", "language")
+            },
+            "facts": item.get("facts"),
+        }
         for item in items
     ]
     return "\n".join([
