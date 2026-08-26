@@ -21,10 +21,11 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -56,12 +57,21 @@ __all__ = [
     "run_enhance",
     "load_scorer",
     "DEFAULT_MODEL",
+    "DEFAULT_EFFORT",
+    "KNOWN_EFFORTS",
     "DEFAULT_MAX_PARALLEL",
     "DEFAULT_MAX_COST_USD",
 ]
 
 DEFAULT_MODEL = "sonnet"
 DEFAULT_MAX_PARALLEL = 4
+
+# Reasoning effort lives here, beside the model, because both are properties of
+# how a call is made rather than of what it asks. See ClaudeCliInvoker for why
+# the flag is never omitted. models.ModelSpec re-exports these as the tier-level
+# binding; the import runs that way round because models imports the invoker.
+DEFAULT_EFFORT = "low"
+KNOWN_EFFORTS = ("low", "medium", "high", "xhigh")
 
 
 # --- scorer wiring (single source of truth: the existing gate script) --------
@@ -118,6 +128,12 @@ class InvokeResult:
     usage: dict = field(default_factory=dict)
     error: Optional[str] = None
     status_code: Optional[int] = None
+    # The transport's own identifier for this call. Recorded so a ledger row can
+    # be joined to its transcript later without guessing from timestamps: the
+    # 2026-08-25 forensics had to match sessions on token triples because no row
+    # carried one, and a phrase-based match collided with the operator's own
+    # interactive session.
+    session_id: Optional[str] = None
     # Which model the rung BOUND. Not the same thing as what answered.
     model: Optional[str] = None
     # What actually answered, from the CLI's own `modelUsage` map: canonical
@@ -158,10 +174,12 @@ class ClaudeCliInvoker:
         *,
         claude_bin: str = "claude",
         timeout: int = 600,
+        effort: str = DEFAULT_EFFORT,
     ):
         self.model = model
         self.claude_bin = claude_bin
         self.timeout = timeout
+        self.effort = effort
 
     def __call__(self, prompt: str) -> InvokeResult:
         try:
@@ -179,9 +197,19 @@ class ClaudeCliInvoker:
             # --tools "" disables every tool; --setting-sources user keeps
             # the project's .claude settings out of a call that must not
             # depend on which directory launched it.
+            #
+            # --effort is passed ALWAYS and explicitly. --setting-sources user
+            # was keeping project settings out while still letting the user's
+            # own settings.json decide the reasoning budget: on 2026-08-25 that
+            # meant every call in a 173-partition run inherited "xhigh" from an
+            # interactive session, spent two thirds of each response on
+            # thinking, and truncated the answer at the shared output ceiling.
+            # An unstated effort is a decision nobody made, so there is no code
+            # path here that omits the flag.
             argv = [
                 self.claude_bin, "-p", "--output-format", "json",
                 "--tools", "", "--setting-sources", "user",
+                "--effort", self.effort,
             ]
             if self.model:
                 argv += ["--model", self.model]
@@ -233,13 +261,27 @@ class ClaudeCliInvoker:
                 model=self.model,
                 model_usage=envelope.get("modelUsage", {}) or {},
             )
+        # The success path carries the envelope's own account of HOW the answer
+        # was produced, not just the answer. num_turns feeds the agentic-drift
+        # alarm in MeteredInvoker, which was built, wired and then starved: it
+        # never fired across twelve multi-turn calls in the 2026-08-25 run
+        # because this branch returned the bare usage block while only the
+        # is_error branch folded the field in. stop_reason is how a truncated
+        # response announces itself; discarding it is what let 35% of that run's
+        # partitions overflow the output ceiling silently, get auto-continued,
+        # and bill the re-ingested text at the 2x cache-creation rate.
         return InvokeResult(
             ok=True,
             text=str(envelope.get("result", "")),
             cost_usd=float(envelope.get("total_cost_usd", 0.0) or 0.0),
-            usage=envelope.get("usage", {}) or {},
+            usage=dict(
+                envelope.get("usage", {}) or {},
+                num_turns=envelope.get("num_turns", 1),
+                stop_reason=envelope.get("stop_reason"),
+            ),
             model=self.model,
             model_usage=envelope.get("modelUsage", {}) or {},
+            session_id=envelope.get("session_id"),
         )
 
 
@@ -465,27 +507,148 @@ class EnhanceReport:
 # --- response parsing, cleaning, validation ----------------------------------
 
 
-def _parse_json_object(text: str) -> Optional[dict]:
-    """Parse a JSON object from model text, tolerating markdown fences."""
-    s = text.strip()
-    if s.startswith("```"):
-        # Strip a leading ```json / ``` fence and the trailing fence.
-        s = s.split("\n", 1)[1] if "\n" in s else s
-        if s.rstrip().endswith("```"):
-            s = s.rsplit("```", 1)[0]
-    s = s.strip()
-    # Fall back to the first {...} span if there is leading/trailing chatter.
-    if not s.startswith("{"):
-        start = s.find("{")
-        end = s.rfind("}")
-        if start == -1 or end == -1 or end <= start:
-            return None
-        s = s[start : end + 1]
+_FENCE_RE = re.compile(r"^[ \t]*```[A-Za-z0-9_+-]*[ \t]*\r?\n?", re.MULTILINE)
+
+
+def _strip_fences(text: str) -> str:
+    """Remove markdown fences ANYWHERE, taking each fence's own newline with it.
+
+    A fence is not always at the edges. When a response overflows the output
+    ceiling the transport continues it, and the continuation frequently reopens
+    a ```json fence in the middle of the object it was halfway through writing.
+    Stripping only a leading and trailing fence leaves those in place and the
+    parse fails on text that is otherwise complete.
+
+    Taking the trailing newline with the fence matters and is not cosmetic: a
+    line-based strip that leaves the blank line behind recovers 7 of the 10
+    discarded partitions from the 2026-08-25 run, while this recovers 10.
+    """
+    return _FENCE_RE.sub("", text)
+
+
+def _brace_span(text: str) -> Optional[str]:
+    """The outermost ``{...}`` span, ignoring leading and trailing chatter."""
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    return text[start : end + 1]
+
+
+def _repair_truncated(text: str) -> Optional[dict]:
+    """Salvage the complete entries out of an object that stops mid-write.
+
+    A response cut off at the output ceiling is not worthless: it is a valid
+    object followed by a partial one. Walking back to the last balanced point
+    and closing the structure there keeps the blocks that finished. On the
+    2026-08-25 run the alternative was throwing away whole partitions, which is
+    how $18.82 of $40.43 was paid for and then discarded.
+
+    Deliberately conservative: it only ever CLOSES open structures, never
+    invents a value, so a salvaged object contains nothing the model did not
+    actually write.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    # The last index at which the object can be closed WITHOUT keeping a
+    # half-written entry. Only a closer that returns to depth 2 or shallower
+    # qualifies, which for the response shape {"components": {...}} means the
+    # cut lands where a whole component block just ended. Allowing deeper cut
+    # points salvages a block that has a description but never got its
+    # contract, and a half-block absorbed as if whole is worse than a dropped
+    # one: it records an answer nobody gave.
+    safe_end: Optional[int] = None
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+            if depth <= 0:
+                break
+            if depth <= 2:
+                safe_end = i
+        elif ch == "," and 0 < depth <= 2:
+            safe_end = i - 1
+    if safe_end is None:
+        return None
+    candidate = text[start : safe_end + 1]
+    # Close whatever is still open, innermost first. Which closer to use is
+    # decided by the actual unclosed openers, not guessed.
+    openers: list[str] = []
+    in_string = False
+    escaped = False
+    for ch in candidate:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            openers.append(ch)
+        elif ch in "}]":
+            if openers:
+                openers.pop()
+    if in_string:
+        return None
+    closed = candidate + "".join("}" if c == "{" else "]" for c in reversed(openers))
     try:
-        obj = json.loads(s)
+        obj = json.loads(closed)
     except json.JSONDecodeError:
         return None
     return obj if isinstance(obj, dict) else None
+
+
+def _parse_json_object(
+    text: str, *, expect_keys: Sequence[str] = ()
+) -> Optional[dict]:
+    """Parse a JSON object from model text, tolerating fences and truncation.
+
+    Three escalating attempts, each strictly more forgiving than the last and
+    none of them inventing content: parse it, parse its brace span with fences
+    removed, then salvage the complete entries out of a truncated object.
+
+    ``expect_keys`` is a shape guard, and salvage without one is dangerous. A
+    response that begins mid-object, which is exactly what the transport
+    returns when it hands back only the final turn of a continued overflow,
+    has its first ``{`` somewhere deep inside a nested value. Repairing from
+    there yields a perfectly valid object that happens to be a single evidence
+    item, and absorbing it would record a partition as answered while storing
+    nothing. When ``expect_keys`` is given, a salvaged object must carry at
+    least one of them or it is treated as the failure it is.
+    """
+    s = _strip_fences(text).strip()
+    span = s if s.startswith("{") else _brace_span(s)
+    if span is None:
+        return None
+    try:
+        obj = json.loads(span)
+    except json.JSONDecodeError:
+        obj = _repair_truncated(span)
+    if not isinstance(obj, dict):
+        return None
+    if expect_keys and not any(key in obj for key in expect_keys):
+        return None
+    return obj
 
 
 def _clean_component_payload(scorer: Any, ai: dict, clock: Clock) -> dict:

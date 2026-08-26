@@ -61,15 +61,45 @@ def relationship_key(rel: dict) -> str:
 
 @dataclass(frozen=True)
 class Partition:
-    """One unit of enhancement work: a set of components and their relationships."""
+    """One unit of enhancement work: a set of components and their relationships.
+
+    ``component_ids`` is the group this partition belongs to, and is what the
+    prompt carries as facts. ``answers_components`` says whether this partition
+    is the one that ASKS for component contracts back.
+
+    The two are separate because a group with more relationships than one
+    response can hold is chunked across several calls, and every chunk needs
+    the same component facts as context to describe its relationships. Asking
+    each chunk to also re-answer the components produced 2,003 component slots
+    for 569 real components on the 2026-08-25 plan, a 3.52x duplication whose
+    only effect was to generate 3.52 independent answers per component and keep
+    whichever landed last. One chunk answers; the rest read.
+    """
 
     id: int
     component_ids: tuple[str, ...]
     relationship_keys: tuple[str, ...]
+    answers_components: bool = True
 
     @property
     def size(self) -> int:
         return len(self.component_ids)
+
+    @property
+    def answered_component_ids(self) -> tuple[str, ...]:
+        """The components this partition is actually responsible for answering."""
+        return self.component_ids if self.answers_components else ()
+
+    @property
+    def targets(self) -> int:
+        """How many contract targets this call answers for.
+
+        Components plus relationships, because both are contract targets. The
+        old ledger recorded ``len(component_ids)`` and so logged a call that
+        answered 43 targets as "2", understating rung 2a's work about fourfold
+        and making per-item economics across rungs incomparable.
+        """
+        return len(self.answered_component_ids) + len(self.relationship_keys)
 
 
 @dataclass(frozen=True)
@@ -247,25 +277,41 @@ def plan_partitions(
             rel_by_partition[owner].append(relationship_key(rel))
 
     # Chunk any partition whose relationship set exceeds the response bound.
-    # Each chunk repeats the group's components (their facts are the context
-    # the relationship contracts need, and absorbing a component twice is a
-    # deterministic overwrite), while the sorted relationship list is sliced
-    # across chunks. Ids are renumbered sequentially afterwards so they stay
-    # dense and deterministic.
-    assembled: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+    # Every chunk carries the group's component FACTS, because that is the
+    # context its relationship contracts are written against, but only the
+    # first chunk ASKS for the component contracts back. The rest are
+    # relationship-only calls that read the same facts.
+    #
+    # Repeating the ask was the single largest source of wasted output in the
+    # 2026-08-25 plan: 173 partitions covering 569 components asked for 2,003
+    # component slots, so the average component was written 3.52 times and 2.52
+    # of those answers were discarded by a later overwrite. Splitting the ask
+    # from the context removes 1,434 slots, about 42.8% of delivered output,
+    # and changes no answer that survives today. Ids are renumbered
+    # sequentially afterwards so they stay dense and deterministic.
+    assembled: list[tuple[tuple[str, ...], tuple[str, ...], bool]] = []
     for pid, group in enumerate(groups):
         rels = sorted(set(rel_by_partition.get(pid, [])))
         if max_relationships > 0 and len(rels) > max_relationships:
-            for start in range(0, len(rels), max_relationships):
+            for index, start in enumerate(range(0, len(rels), max_relationships)):
                 assembled.append(
-                    (tuple(group), tuple(rels[start : start + max_relationships]))
+                    (
+                        tuple(group),
+                        tuple(rels[start : start + max_relationships]),
+                        index == 0,
+                    )
                 )
         else:
-            assembled.append((tuple(group), tuple(rels)))
+            assembled.append((tuple(group), tuple(rels), True))
 
     partitions = tuple(
-        Partition(id=pid, component_ids=comp_ids, relationship_keys=rel_keys)
-        for pid, (comp_ids, rel_keys) in enumerate(assembled)
+        Partition(
+            id=pid,
+            component_ids=comp_ids,
+            relationship_keys=rel_keys,
+            answers_components=answers,
+        )
+        for pid, (comp_ids, rel_keys, answers) in enumerate(assembled)
     )
 
     total = len(set().union(*groups)) if groups else 0

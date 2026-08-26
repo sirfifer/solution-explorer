@@ -55,6 +55,16 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _age(seconds: float) -> str:
+    """A wall-clock age a human reads at a glance: 44s, 2m14s, 1h03m."""
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m{seconds % 60:02d}s"
+    return f"{seconds // 3600}h{(seconds % 3600) // 60:02d}m"
+
+
 class ProcessingRun:
     """One pipeline stage, published as it happens.
 
@@ -262,15 +272,24 @@ class LedgerWatch:
         child_pid: int,
         interval: float = 15.0,
         ps_fn=None,
+        progress_path: Optional[Path] = None,
     ) -> None:
         import threading
 
         self._run = run
         self._ledger = Path(ledger_path)
+        # The item-level stream the engine writes. Defaults beside the ledger,
+        # which is where the engine puts it.
+        self._progress = (
+            Path(progress_path)
+            if progress_path is not None
+            else Path(ledger_path).with_name("progress.jsonl")
+        )
         self._pid = child_pid
         self._interval = interval
         self._ps_fn = ps_fn or self._ps_children
         self._offset = 0
+        self._progress_offset = 0
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         # Aggregates across the whole watch: real completed work only.
@@ -278,6 +297,18 @@ class LedgerWatch:
         self.calls_failed = 0
         self.spent_usd = 0.0
         self.last_phase = ""
+        # Work units, which is what a reader actually wants counted. A run
+        # enhancing thousands of targets that reports "0 of 1" has said
+        # nothing; these are the real numerator and denominator.
+        self.targets_planned = 0
+        self.targets_done = 0
+        self.units_planned = 0
+        self.units_done = 0
+        self.rung = ""
+        self.escalated = 0
+        # unit_id -> what it is and when it started, so the line can name what
+        # is being worked right now instead of counting anonymous processes.
+        self._in_flight: dict = {}
 
     # ------------------------------------------------------------- lifecycle
 
@@ -309,6 +340,7 @@ class LedgerWatch:
             rung = row.get("rung")
             self.last_phase = f"{phase}/{rung}" if rung else phase
 
+        self._read_progress()
         in_flight = self._ps_fn()
 
         if new_rows:
@@ -319,19 +351,51 @@ class LedgerWatch:
                 "calls_ok": self.calls_ok,
                 "calls_failed": self.calls_failed,
                 "spent_usd": round(self.spent_usd, 4),
+                "targets_done": self.targets_done,
+                "targets_planned": self.targets_planned,
             })
 
+        # The board's own progress bar counts work, not calls, and only once
+        # the engine has published a denominator. Until then the record keeps
+        # the count it was constructed with rather than inventing one.
+        if self.targets_planned:
+            self._run.record["total"] = self.targets_planned
+            self._run.record["completed"] = min(self.targets_done, self.targets_planned)
+
         parts = []
-        if self.last_phase:
+        if self.rung:
+            parts.append(f"rung {self.rung}")
+        elif self.last_phase:
             parts.append(self.last_phase)
+        if self.units_planned:
+            parts.append(f"{self.units_done}/{self.units_planned} calls")
+        if self.targets_planned:
+            pct = 100.0 * self.targets_done / max(1, self.targets_planned)
+            parts.append(
+                f"{self.targets_done:,}/{self.targets_planned:,} items ({pct:.0f}%)"
+            )
         parts.append(
-            f"{self.calls_ok} call(s) done"
+            f"${self.spent_usd:.2f}"
             + (f", {self.calls_failed} failed" if self.calls_failed else "")
-            + f", ${self.spent_usd:.2f}"
         )
-        if in_flight:
-            ages = ", ".join(in_flight[:4])
-            parts.append(f"in flight: {len(in_flight)} ({ages})")
+        if self.escalated:
+            parts.append(f"{self.escalated} escalated")
+
+        now = time.time()
+        if self._in_flight:
+            # Name what is being worked, with its real age. This is the line
+            # that answers "is it stuck, and on what".
+            live = sorted(self._in_flight.values(), key=lambda u: u.get("started_at", now))
+            shown = [
+                f"{u.get('label') or u.get('unit_id')} {_age(now - u.get('started_at', now))}"
+                for u in live[:3]
+            ]
+            more = len(live) - len(shown)
+            parts.append(
+                f"working: {'; '.join(shown)}" + (f" (+{more} more)" if more > 0 else "")
+            )
+        elif in_flight:
+            parts.append(f"in flight: {len(in_flight)} ({', '.join(in_flight[:3])})")
         elif not new_rows:
             # True and worth saying: nothing completed this tick and nothing is
             # running. Either the run is between phases or something is wrong,
@@ -340,22 +404,48 @@ class LedgerWatch:
         self._run.record["current"] = " · ".join(parts)
         self._run._flush()
 
-    def _read_new_rows(self) -> list:
+    def _read_progress(self) -> None:
+        """Fold the engine's item-level events into the watcher's counters."""
+        for event in self._read_new_lines(self._progress, "_progress_offset"):
+            kind = event.get("event")
+            if kind == "plan":
+                # Rungs accumulate: 2b's denominator adds to 2a's rather than
+                # replacing it, because the run is not starting over.
+                self.targets_planned += int(event.get("targets") or 0)
+                self.units_planned += int(event.get("partitions") or 0)
+                self.rung = str(event.get("rung") or self.rung)
+                if event.get("rung") in ("2b", "2c"):
+                    self.escalated += int(event.get("targets") or 0)
+            elif kind == "unit_start":
+                self.rung = str(event.get("rung") or self.rung)
+                self._in_flight[str(event.get("unit_id"))] = event
+            elif kind == "unit_end":
+                self._in_flight.pop(str(event.get("unit_id")), None)
+                self.units_done += 1
+                self.targets_done += int(event.get("answered") or 0)
+
+    def _read_new_lines(self, path: Path, offset_attr: str) -> list:
+        """Tail one JSON-lines file from where this watcher last stopped."""
         rows = []
+        offset = getattr(self, offset_attr)
         try:
-            with open(self._ledger, encoding="utf-8") as fh:
-                fh.seek(self._offset)
+            with open(path, encoding="utf-8") as fh:
+                fh.seek(offset)
                 for line in fh:
                     if not line.endswith("\n"):
                         break  # partial write; reread next tick
-                    self._offset += len(line.encode("utf-8"))
+                    offset += len(line.encode("utf-8"))
                     try:
                         rows.append(json.loads(line))
                     except json.JSONDecodeError:
                         continue
+            setattr(self, offset_attr, offset)
         except OSError:
-            pass  # ledger not created yet
+            pass  # stream not created yet
         return rows
+
+    def _read_new_rows(self) -> list:
+        return self._read_new_lines(self._ledger, "_offset")
 
     def _ps_children(self) -> list:
         """Ages of the child's live claude subprocesses, oldest first."""

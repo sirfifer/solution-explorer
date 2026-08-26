@@ -61,8 +61,46 @@ def test_a_pinned_binding_builds_the_same_cli_call_it_always_did(monkeypatch):
     assert seen["argv"][1:] == [
         "-p", "--output-format", "json",
         "--tools", "", "--setting-sources", "user",
+        "--effort", "low",
         "--model", "sonnet",
     ]
+
+
+def test_effort_is_always_passed_and_never_inherited(monkeypatch):
+    """The flag that was missing on 2026-08-25, asserted on the argv itself.
+
+    ``--setting-sources user`` keeps the PROJECT's settings out of a call while
+    leaving the operator's own settings.json free to choose the reasoning
+    budget. That is how a 173-partition batch run inherited an interactive
+    session's "xhigh": two thirds of every billed output token went to
+    thinking, and 35% of completed partitions truncated at the shared ceiling.
+    There is no code path that omits the flag, so an unstated effort is the
+    documented default rather than whatever the machine happens to be set to.
+    """
+    seen = {}
+
+    class FakeProc:
+        returncode = 0
+        stdout = '{"result": "{}", "total_cost_usd": 0.0, "usage": {}}'
+        stderr = ""
+
+    def fake_run(argv, **kwargs):
+        seen["argv"] = argv
+        return FakeProc()
+
+    monkeypatch.setattr("analyzer.enrich.engine.subprocess.run", fake_run)
+
+    ClaudeCliInvoker(model="sonnet")("a prompt")
+    assert "--effort" in seen["argv"]
+    assert seen["argv"][seen["argv"].index("--effort") + 1] == "low"
+
+    ClaudeCliInvoker(model="opus", effort="high")("a prompt")
+    assert seen["argv"][seen["argv"].index("--effort") + 1] == "high"
+
+    # An unpinned binding still pins its effort: routing the model is a
+    # deliberate option, inheriting the reasoning budget never is.
+    ClaudeCliInvoker(model=None)("a prompt")
+    assert "--effort" in seen["argv"]
 
 
 def test_an_unpinned_binding_omits_the_model_flag_so_the_source_routes(monkeypatch):
@@ -84,6 +122,7 @@ def test_an_unpinned_binding_omits_the_model_flag_so_the_source_routes(monkeypat
     assert seen["argv"][1:] == [
         "-p", "--output-format", "json",
         "--tools", "", "--setting-sources", "user",
+        "--effort", "low",
     ]
 
 
@@ -118,7 +157,12 @@ def test_unpinned_is_a_state_not_a_missing_value():
     assert spec.pinned is False
     assert spec.model is None
     assert spec.label == "openrouter:auto"
-    assert spec.to_dict() == {"source": "openrouter", "model": None, "pinned": False}
+    assert spec.to_dict() == {
+        "source": "openrouter",
+        "model": None,
+        "pinned": False,
+        "effort": "low",
+    }
 
 
 def test_a_binding_label_is_what_the_ledger_records():

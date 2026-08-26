@@ -40,7 +40,7 @@ import json
 import threading
 import time
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Protocol
 
@@ -118,6 +118,21 @@ PHASE_ORDER: tuple[str, ...] = (
     "p4_synthesis",
     "p5_determination",
 )
+
+# The output budget one response may use, thinking and answer text together.
+DEFAULT_OUTPUT_CEILING = 64_000
+# Warn once a response comes within this share of the ceiling. A response at
+# 88% of the limit is not comfortable, it is one slightly longer answer away
+# from truncating, and the 2026-08-25 run's very first call sat at exactly that
+# figure while the run continued for another 99 minutes.
+OUTPUT_CEILING_WARN = 0.85
+# Projected mean output is multiplied by this before a preflight gate compares
+# it against the ceiling. Real per-call output varies around its own mean by a
+# wide margin (measured 0.72x to 1.90x across the recorded corpus), so a gate
+# that checks the mean alone passes calls that then overflow: applying it to
+# the 12 recorded overflows catches only 7. Held at the measured worst case
+# until a run at pinned effort recalibrates it.
+OUTPUT_DISPERSION_MAX = 1.90
 
 
 class BudgetExhausted(RuntimeError):
@@ -282,6 +297,20 @@ class LedgerRow:
     tokens_in: int = 0
     tokens_cached: int = 0
     tokens_out: int = 0
+    # Cache CREATION is broken out of tokens_in rather than folded into it. The
+    # two bill differently (a cache write is 2x base input, a fresh input token
+    # is 1x), so a row that merges them cannot distinguish a genuinely large
+    # prompt from a continuation turn re-ingesting its own truncated output.
+    # That indistinguishability is exactly what hid the 2026-08-25 overflow
+    # loop. tokens_in remains the sum for every existing reader; the split is
+    # additive.
+    tokens_cache_write: int = 0
+    tokens_fresh_in: int = 0
+    effort: Optional[str] = None
+    stop_reason: Optional[str] = None
+    num_turns: int = 1
+    partition_id: Optional[int] = None
+    session_id: Optional[str] = None
     cost_usd: float = 0.0
     wall_seconds: float = 0.0
     retries: int = 0
@@ -297,6 +326,13 @@ class LedgerRow:
             "tokens_in": self.tokens_in,
             "tokens_cached": self.tokens_cached,
             "tokens_out": self.tokens_out,
+            "tokens_cache_write": self.tokens_cache_write,
+            "tokens_fresh_in": self.tokens_fresh_in,
+            "effort": self.effort,
+            "stop_reason": self.stop_reason,
+            "num_turns": self.num_turns,
+            "partition_id": self.partition_id,
+            "session_id": self.session_id,
             "cost_usd": round(self.cost_usd, 6),
             "wall_seconds": round(self.wall_seconds, 3),
             "retries": self.retries,
@@ -305,8 +341,13 @@ class LedgerRow:
         }
 
 
-def _usage_tokens(usage: dict) -> tuple[int, int, int]:
-    """Pull (input, cached, output) token counts out of a CLI usage block.
+def _usage_tokens(usage: dict) -> tuple[int, int, int, int, int]:
+    """Pull token counts out of a CLI usage block.
+
+    Returns ``(input, cached, output, cache_write, fresh_in)`` where ``input``
+    is the historical sum ``fresh_in + cache_write`` kept for existing readers,
+    and the last two are that sum's parts. They are reported separately because
+    they bill at different rates: see :class:`LedgerRow`.
 
     ``input`` is fresh work: ``input_tokens`` plus ``cache_creation`` (both are
     full-price token processing). ``cached`` is ``cache_read_input_tokens``,
@@ -317,7 +358,7 @@ def _usage_tokens(usage: dict) -> tuple[int, int, int]:
     ledger row must never be the thing that fails a run.
     """
     if not isinstance(usage, dict):
-        return 0, 0, 0
+        return 0, 0, 0, 0, 0
 
     def _int(key: str) -> int:
         try:
@@ -325,8 +366,15 @@ def _usage_tokens(usage: dict) -> tuple[int, int, int]:
         except (TypeError, ValueError):
             return 0
 
-    tokens_in = _int("input_tokens") + _int("cache_creation_input_tokens")
-    return tokens_in, _int("cache_read_input_tokens"), _int("output_tokens")
+    fresh = _int("input_tokens")
+    cache_write = _int("cache_creation_input_tokens")
+    return (
+        fresh + cache_write,
+        _int("cache_read_input_tokens"),
+        _int("output_tokens"),
+        cache_write,
+        fresh,
+    )
 
 
 class MeteredInvoker:
@@ -348,6 +396,8 @@ class MeteredInvoker:
         rung: Optional[str],
         model: str,
         targets: int = 0,
+        effort: Optional[str] = None,
+        partition_id: Optional[int] = None,
     ) -> None:
         self._inner = inner
         self._ctx = ctx
@@ -355,6 +405,8 @@ class MeteredInvoker:
         self.rung = rung
         self.model = model
         self.targets = targets
+        self.effort = effort
+        self.partition_id = partition_id
         self.calls = 0
 
     def __call__(self, prompt: str) -> InvokeResult:
@@ -374,7 +426,13 @@ class MeteredInvoker:
         started = self._ctx.timer()
         result = self._inner(prompt)
         wall = max(0.0, self._ctx.timer() - started)
-        tokens_in, tokens_cached, tokens_out = _usage_tokens(result.usage)
+        (
+            tokens_in,
+            tokens_cached,
+            tokens_out,
+            tokens_cache_write,
+            tokens_fresh_in,
+        ) = _usage_tokens(result.usage)
         self._ctx.budget.charge(result.cost_usd)
         # Every outcome feeds the systemic-failure circuit: one success resets
         # it, a run of identical failures opens it, and the pre-launch
@@ -388,15 +446,44 @@ class MeteredInvoker:
         # transport ran an agentic loop, which multiplies tokens and replaces
         # the JSON answer with tool narration: say so loudly.
         turns = 0
+        stop_reason: Optional[str] = None
         if isinstance(result.usage, dict):
             try:
                 turns = int(result.usage.get("num_turns") or 0)
             except (TypeError, ValueError):
                 turns = 0
+            raw_stop = result.usage.get("stop_reason")
+            stop_reason = str(raw_stop) if raw_stop else None
         if turns > 1:
             self._ctx.notes.append(
                 f"agentic drift: a {self.phase}/{self.rung} invocation used "
                 f"{turns} turns; the transport is not pinned to pure inference"
+            )
+        # The output-ceiling tripwire. A response that reaches the model's
+        # output limit has not answered, it has been cut off mid-sentence, and
+        # the transport's own auto-continuation then re-ingests the fragment at
+        # the 2x cache-creation rate. On 2026-08-25 this was visible in the
+        # ledger from the very first call (56,605 tokens out, 88% of ceiling, at
+        # $1.77 spent) and nothing looked. Warn at OUTPUT_CEILING_WARN, and
+        # treat an explicit max_tokens stop as a failed call rather than a
+        # successful one whose text happens to be truncated.
+        ceiling = int(self._ctx.policy.output_ceiling or 0)
+        if ceiling > 0 and tokens_out:
+            share = tokens_out / ceiling
+            if share >= OUTPUT_CEILING_WARN:
+                self._ctx.notes.append(
+                    f"output ceiling: a {self.phase}/{self.rung} call emitted "
+                    f"{tokens_out:,} tokens, {share:.0%} of the {ceiling:,} "
+                    "ceiling; responses this close to the limit truncate"
+                )
+        if stop_reason == "max_tokens" and result.ok:
+            result = replace(
+                result,
+                ok=False,
+                error=(
+                    f"response hit the output ceiling ({tokens_out:,} tokens, "
+                    "stop_reason=max_tokens): truncated, not answered"
+                ),
             )
         self._ctx.record_ledger_row(
             LedgerRow(
@@ -407,6 +494,13 @@ class MeteredInvoker:
                 tokens_in=tokens_in,
                 tokens_cached=tokens_cached,
                 tokens_out=tokens_out,
+                tokens_cache_write=tokens_cache_write,
+                tokens_fresh_in=tokens_fresh_in,
+                effort=self.effort,
+                stop_reason=stop_reason,
+                num_turns=max(1, turns),
+                partition_id=self.partition_id,
+                session_id=result.session_id,
                 cost_usd=result.cost_usd,
                 wall_seconds=wall,
                 retries=max(0, retries),
@@ -458,6 +552,11 @@ class LadderPolicy:
     # Run the first parallel task alone before fanning out, so the shared
     # prompt prefix lands in the provider's cache once instead of N times.
     warm_first: bool = True
+    # The model's maximum output tokens for one response. Thinking and answer
+    # text share this budget, so it is a property of the transport rather than
+    # of the prompt. Used by the ceiling tripwire in MeteredInvoker and by the
+    # preflight projection gate. 0 disables both, which no real run should do.
+    output_ceiling: int = DEFAULT_OUTPUT_CEILING
     # Fraction of grounded items P3 spot-checks, weighted by importance.
     spot_check_fraction: float = 0.1
     max_spot_checks: int = 25
@@ -602,8 +701,15 @@ class RunContext:
         phase: str,
         rung: Optional[str] = None,
         targets: int = 0,
+        partition_id: Optional[int] = None,
     ) -> MeteredInvoker:
-        """A metered invoker for one phase or rung, on that key's model."""
+        """A metered invoker for one phase or rung, on that key's model.
+
+        ``targets`` is how many contract targets the call actually answers for,
+        which is what makes per-item economics comparable across rungs. It is
+        not the partition's component count: the 2026-08-25 ledger recorded the
+        latter and understated rung 2a's real work roughly fourfold.
+        """
         spec = self.policy.model_for(key)
         return MeteredInvoker(
             self.invoker_factory(spec),
@@ -612,6 +718,8 @@ class RunContext:
             rung=rung,
             model=spec.label,
             targets=targets,
+            effort=spec.effort,
+            partition_id=partition_id,
         )
 
     def record_ledger_row(self, row: LedgerRow) -> None:
@@ -648,6 +756,23 @@ class RunContext:
         path = self.run_dir.joinpath(*parts)
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
+
+    @property
+    def progress(self):
+        """The run's item-level progress stream, created on first use.
+
+        Separate from the ledger because they answer different questions: the
+        ledger records completed spend, this records work in flight. A watcher
+        with only the former shows a still number for minutes at a time and
+        cannot say which of 6,000 targets is being worked.
+        """
+        stream = getattr(self, "_progress_stream", None)
+        if stream is None:
+            from .progress import ProgressStream
+
+            stream = ProgressStream(self.run_path("progress.jsonl"))
+            object.__setattr__(self, "_progress_stream", stream)
+        return stream
 
 
 @dataclass

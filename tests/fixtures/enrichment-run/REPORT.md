@@ -1,6 +1,6 @@
 # Enrichment Run Report: polyglot
 
-Commit `4f6ef44ff277534ceb2d8007d92f57fc123fa8d1`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
+Commit `ccb8a75e3be755c8776a1f409ef74fde0e81219c`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
 
 **Determination: DONE**
 
@@ -18,7 +18,7 @@ The census shows the map supports a reader orienting and finding the service bou
 |---|---|---|---|---|---|---|---|---|
 | anthropic-claude-cli:opus | 18 | 1 | 21,600 | 0 | 5,400 | 69% | 0.0m | $0.18 |
 | anthropic-claude-cli:fable | 6 | 5 | 7,200 | 0 | 1,800 | 23% | 0.0m | $0.06 |
-| anthropic-claude-cli:sonnet | 2 | 10 | 2,400 | 0 | 600 | 8% | 0.0m | $0.02 |
+| anthropic-claude-cli:sonnet | 2 | 11 | 2,400 | 0 | 600 | 8% | 0.0m | $0.02 |
 
 26 invocation(s) moved 39,000 tokens in 0.0 minutes of model time.
 
@@ -110,7 +110,7 @@ This round produced **no measurable gain**. Recorded as such rather than as work
 | Phase | Rung | Binding | Targets | Tokens in | Tokens out | Cost | Wall s | Retries |
 |---|---|---|---|---|---|---|---|---|
 | p1_orientation |  | anthropic-claude-cli:fable | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p2_ladder | 2a | anthropic-claude-cli:sonnet | 8 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p2_ladder | 2a | anthropic-claude-cli:sonnet | 9 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p2_ladder | opus | anthropic-claude-cli:opus | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p2_ladder | fable | anthropic-claude-cli:fable | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p3_adjudication | verify-identity | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |

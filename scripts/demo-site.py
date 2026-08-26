@@ -2078,7 +2078,13 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
 def _cmd_enhance(args: argparse.Namespace) -> int:
     corpus = load_registry(args.slug)
     mode = "dry run" if args.dry_run else "live, spends real usage"
-    with _published("enhance", args.slug, total=1, note=mode) as run:
+    # total=0 means "denominator not known yet", which the board renders as a
+    # count rather than a percentage. The engine publishes the real one (every
+    # component and relationship it plans to enhance, thousands of them) on its
+    # progress stream as soon as the ladder has a plan, and the watcher adopts
+    # it. Declaring total=1 here was what made an hours-long run over thousands
+    # of items render as a progress bar reading "0 of 1".
+    with _published("enhance", args.slug, total=0, note=mode) as run:
         if run:
             run.step("ladder", f"enrichment ladder ({mode})")
         rc = run_enhance(

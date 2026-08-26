@@ -33,6 +33,7 @@ knows what a model is beyond "something that turns a prompt into text".
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -66,6 +67,12 @@ __all__ = [
 # Contract states live as their own enrichment rows so they reach the store and
 # the Run Report without ever touching the product payload.
 CONTRACT_TARGET_KIND = "contract-state"
+
+# The top-level keys a contract response must carry. Passed to the parser as a
+# shape guard so a salvaged fragment can never be mistaken for an answer: text
+# that begins mid-object parses into some inner evidence item otherwise, and
+# absorbing that would record a partition as answered while storing nothing.
+PARTITION_KEYS = ("components", "relationships")
 
 # How many escalated items share one higher-rung call. Escalations are few by
 # design, and a per-item call would pay the full context overhead for each. Five
@@ -408,6 +415,8 @@ class LadderPhase:
     def _invoke_parallel(
         self, ctx: RunContext, jobs: list[tuple[int, str, int]], *,
         invoker_key: str, rung: str,
+        on_result: Optional[Callable[[int, Optional[dict], Optional[str]], None]] = None,
+        describe: Optional[Callable[[int], dict]] = None,
     ) -> tuple[dict[int, Optional[dict]], dict[int, str], int]:
         """Run independent prompts through a bounded pool, deterministically.
 
@@ -438,26 +447,52 @@ class LadderPhase:
 
         def _task(job):
             job_id, prompt, targets = job
-            invoker = ctx.invoker(invoker_key, phase=self.name, rung=rung, targets=targets)
-            result = invoker(prompt)
-            if not result.ok:
-                return job_id, None, f"did not return: {result.error}"
-            obj = _parse_json_object(result.text)
-            if obj is None:
-                failure_path = ctx.run_path(
-                    "failures", f"{rung}-job-{job_id}.txt"
-                )
+            # Announce the unit as it goes in flight, not when it comes back.
+            # A model call takes minutes; without this the board has nothing
+            # true to say for the whole of that time.
+            if describe is not None:
                 try:
-                    failure_path.write_text(result.text[:2_000_000])
-                except OSError:
+                    ctx.progress.unit_start(rung=rung, unit_id=job_id, **describe(job_id))
+                except Exception:  # noqa: BLE001 - reporting never fails work
                     pass
-                return (
-                    job_id,
-                    None,
-                    "returned unparseable text "
-                    f"(raw response preserved at failures/{failure_path.name})",
-                )
-            return job_id, obj, None
+            invoker = ctx.invoker(
+                invoker_key, phase=self.name, rung=rung, targets=targets,
+                partition_id=job_id,
+            )
+            attempt_prompt = prompt
+            last_error = ""
+            # One corrective retry on a parse failure, which the other three
+            # call sites in this codebase already had and the ladder alone
+            # lacked (passes._invoke_json, engine._enhance_partition,
+            # engine._enhance_architecture). A response that came back as prose
+            # or half an object is usually recoverable by saying so.
+            for attempt in range(2):
+                result = invoker(attempt_prompt)
+                if not result.ok:
+                    return job_id, None, f"did not return: {result.error}"
+                obj = _parse_json_object(result.text, expect_keys=PARTITION_KEYS)
+                if obj is not None:
+                    return job_id, obj, None
+                last_error = "returned unparseable text"
+                if attempt == 0:
+                    attempt_prompt = (
+                        prompt
+                        + "\n\nYour previous response could not be parsed as a "
+                        "single JSON object with the required top-level keys. "
+                        "Return ONLY the JSON object, starting with { and "
+                        "ending with }, with no prose and no markdown fences."
+                    )
+            failure_path = ctx.run_path("failures", f"{rung}-job-{job_id}.txt")
+            try:
+                failure_path.write_text(result.text[:2_000_000])
+            except OSError:
+                pass
+            return (
+                job_id,
+                None,
+                f"{last_error} after a corrective retry "
+                f"(raw response preserved at failures/{failure_path.name})",
+            )
 
         def _drain(in_flight):
             done, _ = wait(in_flight, return_when=FIRST_COMPLETED)
@@ -470,6 +505,16 @@ class LadderPhase:
                 payloads[job_id] = obj
                 if err:
                     errors[job_id] = err
+                # Bank the work NOW, in the coordinator thread, rather than
+                # after the whole pool drains. The 2026-08-25 run held 173
+                # partitions in memory and was killed at 31, so the store
+                # ended with exactly one row and every completed call was
+                # lost. Absorption is safe to do out of order because the
+                # partitioner now gives each target exactly one writer per
+                # rung, which makes it commutative; before that split a
+                # component had 3.52 writers and order decided the answer.
+                if on_result is not None:
+                    on_result(job_id, obj, err)
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
             in_flight: dict = {}
@@ -497,32 +542,73 @@ class LadderPhase:
             (
                 part.id,
                 build_contract_partition_prompt(part, ctx.facts, brief=brief),
-                len(part.component_ids),
+                part.targets,
             )
             for part in partitions
         ]
-        payloads, errors, skipped = self._invoke_parallel(
-            ctx, jobs, invoker_key="p2a_bulk", rung="2a"
+        by_id = {part.id: part for part in partitions}
+        pending_notes: dict[int, str] = {}
+        # The denominator, before any work starts. Rung 2a is the only rung
+        # whose size is known up front; 2b and 2c publish theirs once the rung
+        # below has decided what to escalate.
+        ctx.progress.plan(
+            rung="2a",
+            partitions=len(partitions),
+            components=sum(len(p.answered_component_ids) for p in partitions),
+            relationships=sum(len(p.relationship_keys) for p in partitions),
         )
-        # Absorption runs in the coordinator, in partition order, after the
-        # pool drains: store writes, states and notes are byte-identical to a
-        # sequential run whatever order the calls returned in.
-        for part in partitions:
-            if part.id not in payloads:
-                continue
-            if part.id in errors:
-                outcome.notes.append(
-                    f"rung 2a partition {part.id} {errors[part.id]}"
+
+        def _bank(job_id: int, obj: Optional[dict], err: Optional[str]) -> None:
+            """Absorb one partition the moment it lands, in the coordinator."""
+            part = by_id.get(job_id)
+            if part is None:
+                return
+            answered = 0
+            if isinstance(obj, dict):
+                answered = len(obj.get("components") or {}) + len(
+                    obj.get("relationships") or {}
                 )
-            obj = payloads[part.id]
+            ctx.progress.unit_end(
+                rung="2a", unit_id=job_id, ok=obj is not None,
+                answered=answered, detail=err,
+            )
+            if err:
+                pending_notes[job_id] = f"rung 2a partition {job_id} {err}"
             if obj is None:
-                continue
+                return
             self._absorb(
                 ctx, obj, validator, facts_by_id, outcome,
                 rung="sonnet",
-                component_ids=list(part.component_ids),
+                component_ids=list(part.answered_component_ids),
                 relationship_keys=list(part.relationship_keys),
             )
+
+        def _describe(job_id: int) -> dict:
+            """What a reader needs to see while this unit is in flight."""
+            part = by_id[job_id]
+            names = [cid for cid in part.component_ids[:6]]
+            label = names[0] if names else f"partition {job_id}"
+            extra = len(part.component_ids) - 1
+            if extra > 0:
+                label = f"{label} +{extra}"
+            return {
+                "label": label,
+                "components": len(part.answered_component_ids),
+                "relationships": len(part.relationship_keys),
+                "sample": names,
+            }
+
+        payloads, errors, skipped = self._invoke_parallel(
+            ctx, jobs, invoker_key="p2a_bulk", rung="2a",
+            on_result=_bank, describe=_describe,
+        )
+        # Notes are emitted in partition order even though the work was banked
+        # in completion order, so the report reads the same whatever order the
+        # network returned things in.
+        for part in partitions:
+            note = pending_notes.get(part.id)
+            if note:
+                outcome.notes.append(note)
         if skipped:
             outcome.notes.append(
                 f"rung 2a: {skipped} partition(s) not launched, "
@@ -567,8 +653,42 @@ class LadderPhase:
                 items, rung=rung, terminal=terminal, brief=brief
             )
             jobs.append((index, prompt, len(batch)))
+        # An escalated rung only learns its own size once the rung below has
+        # decided what to escalate, so its denominator is published here.
+        ctx.progress.plan(
+            rung=rung,
+            partitions=len(batches),
+            components=sum(1 for s in pending if s.target_kind == "component"),
+            relationships=sum(1 for s in pending if s.target_kind != "component"),
+        )
+
+        def _describe_batch(index: int) -> dict:
+            batch = batches[index]
+            names = [s.target_id for s in batch[:6]]
+            label = names[0] if names else f"batch {index}"
+            if len(batch) > 1:
+                label = f"{label} +{len(batch) - 1}"
+            return {
+                "label": label,
+                "components": sum(1 for s in batch if s.target_kind == "component"),
+                "relationships": sum(1 for s in batch if s.target_kind != "component"),
+                "sample": names,
+            }
+
+        def _report_batch(index: int, obj: Optional[dict], err: Optional[str]) -> None:
+            answered = 0
+            if isinstance(obj, dict):
+                answered = len(obj.get("components") or {}) + len(
+                    obj.get("relationships") or {}
+                )
+            ctx.progress.unit_end(
+                rung=rung, unit_id=index, ok=obj is not None,
+                answered=answered, detail=err,
+            )
+
         payloads, errors, skipped_batches = self._invoke_parallel(
-            ctx, jobs, invoker_key=key, rung=rung
+            ctx, jobs, invoker_key=key, rung=rung,
+            on_result=_report_batch, describe=_describe_batch,
         )
         # Which items a model actually SAW: their batch call returned a payload.
         # Load-bearing for the terminal stamping below, and born from a real

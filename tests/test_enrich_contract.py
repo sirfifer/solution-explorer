@@ -150,14 +150,17 @@ def test_absent_symbol_fails_and_distinguishes_wrong_file_from_no_such_symbol(
     assert "not in the symbol index" in invented.reason
 
     # A real symbol cited against the wrong file is a different, more useful
-    # failure than a symbol that does not exist at all.
+    # failure than a symbol that does not exist at all. "Wrong file" now means
+    # the symbol is neither defined nor referenced there: citing a symbol at
+    # its USE site is legitimate and is how a relationship contract grounds
+    # "X uses Y", so only a file that never mentions it at all is a failure.
     other = next(
         (f["path"] for f in fixture_store.files() if f["path"] != path), None
     )
     if other:
         misplaced = validator.check({"kind": "symbol", "path": other, "symbol": symbol})
         if not misplaced.ok:
-            assert "exists in the index but not in" in misplaced.reason
+            assert "is neither defined nor referenced in" in misplaced.reason
 
 
 def test_unknown_edge_fails(validator):

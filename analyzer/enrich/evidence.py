@@ -97,6 +97,10 @@ class EvidenceValidator:
         self.root = Path(root).resolve() if root is not None else None
         self._lines_by_path: dict[str, Optional[int]] = {}
         self._symbols_by_path: dict[str, set[str]] = {}
+        # Where a symbol is USED, as opposed to where it is defined. The parser
+        # already records this as a `symbol_reference` signal per file, so the
+        # index costs one more pass over the store and no filesystem reads.
+        self._references_by_path: dict[str, set[str]] = {}
         self._symbol_names: set[str] = set()
         self._edges: set[tuple[str, str, str]] = set()
         self._edge_pairs: set[tuple[str, str]] = set()
@@ -123,6 +127,20 @@ class EvidenceValidator:
             path = file_paths.get(row.get("file_id"))
             if path:
                 self._symbols_by_path.setdefault(path, set()).add(name)
+        for row in store.signals():
+            if (row.get("kind") or "") != "symbol_reference":
+                continue
+            path = file_paths.get(row.get("file_id"))
+            if not path:
+                continue
+            value = row.get("value")
+            name = ""
+            if isinstance(value, dict):
+                name = str(value.get("name") or "").strip()
+            elif value is not None:
+                name = str(value).strip()
+            if name:
+                self._references_by_path.setdefault(path, set()).add(name)
         for row in store.edges():
             source = row.get("source_id") or ""
             target = row.get("target_id") or ""
@@ -234,16 +252,43 @@ class EvidenceValidator:
         return EvidenceCheck(True, kind, detail={"path": path, "line": line})
 
     def _check_symbol(self, path: str, item: dict) -> EvidenceCheck:
+        """Accept a symbol the cited file DEFINES or demonstrably REFERENCES.
+
+        The enrichment task is mostly about relationships: "X uses Y". The
+        natural citation, and the one the prompt invites, is Y at its use site
+        inside X. Accepting only definitions rejected 1,162 of 1,270 symbol
+        citations in the 2026-08-25 run, all with the same reason, which drove
+        the relationship escalation rate to 47% where the true figure is 12%
+        and sent roughly a third of the graph to the most expensive rung for no
+        reason at all.
+
+        This is not a loosened check. A citation still has to name a symbol the
+        parser saw in that exact file; a symbol that exists elsewhere in the
+        index, or nowhere, is still refused. What changes is that "seen" now
+        includes the use site, and ``site`` records which kind of sighting it
+        was so a reader can still tell a definition from a reference.
+        """
         symbol = str(item.get("symbol") or "").strip()
         if not symbol:
             return EvidenceCheck(False, "symbol", "symbol evidence has no symbol name")
         if symbol in self._symbols_by_path.get(path, ()):
-            return EvidenceCheck(True, "symbol", detail={"path": path, "symbol": symbol})
+            return EvidenceCheck(
+                True,
+                "symbol",
+                detail={"path": path, "symbol": symbol, "site": "defined"},
+            )
+        if symbol in self._references_by_path.get(path, ()):
+            return EvidenceCheck(
+                True,
+                "symbol",
+                detail={"path": path, "symbol": symbol, "site": "referenced"},
+            )
         if symbol in self._symbol_names:
             return EvidenceCheck(
                 False,
                 "symbol",
-                f"symbol {symbol!r} exists in the index but not in {path}",
+                f"symbol {symbol!r} exists in the index but is neither defined "
+                f"nor referenced in {path}",
             )
         return EvidenceCheck(
             False, "symbol", f"symbol {symbol!r} is not in the symbol index"

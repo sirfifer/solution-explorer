@@ -126,6 +126,76 @@ metadata, password hashes"
 """
 
 
+# Byte budgets for one component's fact block. The 569-block VS Code mean is
+# 1,417 characters, so these bound the pathological tail without touching a
+# normal block. A prompt that cannot fit in a context window is not a quality
+# choice, it is a failed call.
+MAX_FACT_BLOCK_CHARS = 12_000
+MAX_FACT_VALUE_CHARS = 2_000
+MAX_FACT_STRING_CHARS = 600
+
+
+def _cap_value(value: Any, budget: int) -> Any:
+    """Trim one fact value to a byte budget, saying so where it trims.
+
+    Lists keep whole leading entries and record how many were dropped, so what
+    survives is always something the parser actually found rather than a
+    fragment. Strings are cut with an explicit marker. Nothing is silently
+    shortened: a reader of the prompt can tell the difference between "this is
+    all there was" and "there was more".
+    """
+    if isinstance(value, str):
+        if len(value) <= MAX_FACT_STRING_CHARS:
+            return value
+        return value[:MAX_FACT_STRING_CHARS] + f"... [+{len(value) - MAX_FACT_STRING_CHARS} chars]"
+    if isinstance(value, list):
+        kept: list[Any] = []
+        used = 0
+        for item in value:
+            capped = _cap_value(item, budget)
+            size = len(json.dumps(capped, default=str))
+            if used + size > budget and kept:
+                break
+            kept.append(capped)
+            used += size
+        dropped = len(value) - len(kept)
+        if dropped > 0:
+            kept.append(f"[{dropped} more omitted to fit the prompt budget]")
+        return kept
+    if isinstance(value, dict):
+        out: dict = {}
+        used = 0
+        for key, item in value.items():
+            capped = _cap_value(item, max(200, budget // 2))
+            size = len(json.dumps({key: capped}, default=str))
+            if used + size > budget and out:
+                out["_omitted"] = "further keys omitted to fit the prompt budget"
+                break
+            out[key] = capped
+            used += size
+        return out
+    return value
+
+
+def _cap_block(facts: dict) -> dict:
+    """Bound a whole fact block, trimming its largest fields first."""
+    if len(json.dumps(facts, default=str)) <= MAX_FACT_BLOCK_CHARS:
+        return facts
+    out = dict(facts)
+    # Trim biggest-first so one runaway field cannot evict everything else.
+    by_size = sorted(
+        out.items(),
+        key=lambda kv: len(json.dumps(kv[1], default=str)),
+        reverse=True,
+    )
+    for key, value in by_size:
+        if len(json.dumps(out, default=str)) <= MAX_FACT_BLOCK_CHARS:
+            break
+        if isinstance(value, (str, list, dict)):
+            out[key] = _cap_value(value, MAX_FACT_VALUE_CHARS)
+    return out
+
+
 class StoreFacts:
     """Store-derived grounding for prompts, indexed by component id.
 
@@ -168,7 +238,19 @@ class StoreFacts:
                 self._inbound[t] = self._inbound.get(t, 0) + 1
 
     def component_facts(self, comp_id: str) -> dict:
-        """A compact, JSON-serializable fact block for one component."""
+        """A compact, JSON-serializable fact block for one component.
+
+        Bounded in BYTES before it is returned, not just in item counts. Every
+        list here was already capped by length, which is no protection at all
+        when one entry is enormous: on the VS Code snapshot a single `cli`
+        capability carried a 366,116-character `detail` full of inferred test
+        records, making `cli/src/util` a 373,027-character block, 263 times the
+        569-block mean and larger on its own than any context window this runs
+        against. The partition holding it could never have succeeded.
+        """
+        return _cap_block(self._component_facts(comp_id))
+
+    def _component_facts(self, comp_id: str) -> dict:
         comp = self.component_index.get(comp_id, {"id": comp_id})
         metrics = comp.get("metrics") or {}
         facts = {
@@ -817,11 +899,21 @@ def _contract_targets(partition: Partition, facts: StoreFacts) -> list[dict]:
     from .contract import required_questions
 
     out = []
-    for cid in partition.component_ids:
+    for cid in partition.answered_component_ids:
         block = facts.component_facts(cid)
         block["REQUIRED_QUESTIONS"] = list(required_questions("component", block))
         out.append(block)
     return out
+
+
+def _context_only_components(partition: Partition, facts: StoreFacts) -> list[dict]:
+    """Component facts a relationship-only call reads but does not answer for.
+
+    Carries no REQUIRED_QUESTIONS, because nothing is being asked about these.
+    """
+    if partition.answers_components:
+        return []
+    return [facts.component_facts(cid) for cid in partition.component_ids]
 
 
 def build_contract_partition_prompt(
@@ -869,11 +961,29 @@ def build_contract_partition_prompt(
         "",
         _FEWSHOT,
         "",
-        "COMPONENTS (produce an ai_enhance WITH a contract for every id; "
-        "REQUIRED_QUESTIONS on each component tells you exactly what its contract "
-        "must answer):",
-        json.dumps(components, indent=2, default=str),
-        "",
+    ]
+    if components:
+        parts += [
+            "COMPONENTS (produce an ai_enhance WITH a contract for every id; "
+            "REQUIRED_QUESTIONS on each component tells you exactly what its "
+            "contract must answer):",
+            json.dumps(components, indent=2, default=str),
+            "",
+        ]
+    context_components = _context_only_components(partition, facts)
+    if context_components:
+        # Facts to write relationships AGAINST, not work to be done. Said
+        # plainly, because a model handed component facts under a schema that
+        # describes component contracts will otherwise helpfully produce them,
+        # which is the duplication this split exists to remove.
+        parts += [
+            "COMPONENT CONTEXT (read-only. These components are described by "
+            "another call. Use their facts to ground the relationships below. "
+            "Do NOT emit component blocks for them):",
+            json.dumps(context_components, indent=2, default=str),
+            "",
+        ]
+    parts += [
         "RELATIONSHIPS (produce an ai_enhance with a reduced contract for every key):",
         json.dumps(relationships, indent=2, default=str),
         "",
