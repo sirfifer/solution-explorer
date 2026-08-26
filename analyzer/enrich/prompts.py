@@ -1229,7 +1229,21 @@ Return ONLY a single JSON object, no prose and no fences:
 }
 
 For each claim below, the cited evidence has ALREADY been verified to exist: the
-file is in the analyzed set, the line is inside it, the symbol is in that file.
+file is in the analyzed set, the line is inside it, the symbol is in that file,
+and a "fact" citation names a real field of the analyzer's own output for that
+component with the value shown.
+
+A "fact" citation is NOT a bare assertion. It points at the deterministic
+analyzer's own data, the same numbers the map is built from, and for a claim
+ABOUT that data it is the strongest evidence available. A component whose
+analyzer record says outbound_edges: 0 has zero outbound edges; demanding a
+file or a symbol to prove an edge COUNT, or to prove an absence, asks for
+evidence that cannot exist. Judge such a claim on whether it matches the cited
+value, not on whether it also cites a file.
+
+Where a claim goes BEYOND the cited fact, hold it to the usual standard: a fact
+citation of file_count supports "ten files" and does not support "ten files
+each covering a distinct topic", because the count says nothing about topics.
 That is settled and is not what you are being asked.
 
 The only question is SUFFICIENCY: does that evidence actually support that claim?
