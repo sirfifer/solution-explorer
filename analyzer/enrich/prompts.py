@@ -879,6 +879,23 @@ mechanically after you answer, against the analyzed file set and the graph:
   {"kind": "doc",      "path": "README.md", "line": 12}
   {"kind": "fact",     "component": "<component-id>", "field": "inbound_edges"}
 
+CITE AT THE GRANULARITY OF YOUR CLAIM. This is the single most common way a
+true answer still fails its check:
+
+- A claim about BEHAVIOUR ("switches between two modes", "filters by domain")
+  needs the symbol or the line where that behaviour appears. A bare file
+  citation says the file exists, which is not evidence for what it does.
+- A claim about a COUNT or an ABSENCE ("17 components depend on this", "no
+  outbound edges") needs a "fact" citation naming the field you read it from.
+  An edge citation supports the existence of that one edge and says nothing
+  about how many there are, or that there are no others.
+- A claim drawn from a SYMBOL NAME should cite that symbol, not the file that
+  contains it.
+
+An answer whose evidence is weaker than its claim is marked "uncertain" with a
+reason. That is a better outcome than a confident sentence with a citation that
+does not carry it, and it costs the run far less than being escalated.
+
 Use "fact" when your claim comes from the analyzer's own numbers rather than
 from reading code: how many files or lines a component has, how many components
 depend on it, its detected language or framework. Those numbers are in the
