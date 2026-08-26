@@ -612,7 +612,7 @@ def _repair_truncated(text: str) -> Optional[dict]:
         return None
     closed = candidate + "".join("}" if c == "{" else "]" for c in reversed(openers))
     try:
-        obj = json.loads(closed)
+        obj = json.loads(closed, strict=False)
     except json.JSONDecodeError:
         return None
     return obj if isinstance(obj, dict) else None
@@ -641,7 +641,15 @@ def _parse_json_object(
     if span is None:
         return None
     try:
-        obj = json.loads(span)
+        # strict=False permits literal control characters INSIDE string values,
+        # which is not laxness about structure: a model writing multi-line prose
+        # emits a real newline inside a help_text rather than the \n escape,
+        # and strict JSON then rejects an otherwise perfect 114KB response over
+        # one character. That cost a whole partition (22 components and 40
+        # relationships) on the 2026-08-26 full build before it was found.
+        # Structure is still parsed strictly; only the character class inside
+        # strings is relaxed.
+        obj = json.loads(span, strict=False)
     except json.JSONDecodeError:
         obj = _repair_truncated(span)
     if not isinstance(obj, dict):

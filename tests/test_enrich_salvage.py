@@ -176,3 +176,48 @@ def test_strip_fences_takes_the_newline_with_the_fence():
     assert _strip_fences("```json\n{}") == "{}"
     assert _strip_fences("```\n{}") == "{}"
     assert _strip_fences('{"a": 1}\n```\n') == '{"a": 1}\n'
+
+
+# --- literal control characters inside prose ----------------------------------
+
+
+def test_a_real_newline_inside_a_string_does_not_cost_the_response():
+    """Found on the 2026-08-26 full build, at the cost of a whole partition.
+
+    A model writing multi-line prose emits an actual newline inside a
+    ``help_text`` rather than the \\n escape. Strict JSON rejects the entire
+    document over that one character, so a structurally perfect 114KB response
+    carrying 22 components and 40 relationships was discarded, retried, and
+    discarded again.
+
+    Structure is still parsed strictly. Only the character class permitted
+    inside string VALUES is relaxed, which is the difference between tolerating
+    how models write prose and tolerating malformed JSON.
+    """
+    payload = _payload(components=3, relationships=2)
+    text = json.dumps(payload, indent=2)
+    # Put a real newline inside a string value, the way a model does.
+    damaged = text.replace("A component that does a thing. ", "A component.\nIt does a thing. ", 1)
+    obj = _parse_json_object(damaged, expect_keys=PARTITION_KEYS)
+    assert obj is not None, "one raw newline must not cost the whole response"
+    assert len(obj["components"]) == 3
+    assert "\n" in obj["components"]["comp-0"]["help_text"]
+
+
+def test_a_tab_inside_a_string_is_also_tolerated():
+    payload = _payload(components=2, relationships=1)
+    text = json.dumps(payload, indent=2)
+    damaged = text.replace("does thing 0", "does\tthing 0", 1)
+    obj = _parse_json_object(damaged, expect_keys=PARTITION_KEYS)
+    assert obj is not None
+    assert len(obj["components"]) == 2
+
+
+def test_relaxing_control_characters_does_not_relax_structure():
+    """The tolerance must not extend to genuinely broken JSON."""
+    for broken in (
+        '{"components": {"a": {,}}, "relationships": {}}',
+        '{"components": [1,2,, "relationships": {}}',
+        '{"components": {"a": undefined}, "relationships": {}}',
+    ):
+        assert _parse_json_object(broken, expect_keys=PARTITION_KEYS) is None
