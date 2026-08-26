@@ -306,6 +306,8 @@ class LedgerWatch:
         self.units_done = 0
         self.rung = ""
         self.escalated = 0
+        self.phase = ""
+        self.phase_started = None
         # unit_id -> what it is and when it started, so the line can name what
         # is being worked right now instead of counting anonymous processes.
         self._in_flight: dict = {}
@@ -363,7 +365,16 @@ class LedgerWatch:
             self._run.record["completed"] = min(self.targets_done, self.targets_planned)
 
         parts = []
-        if self.rung:
+        # A phase with no item-level story still reports itself, with how long
+        # it has been working, so silence is never mistaken for a stall.
+        now = time.time()
+        ladder_done = self.targets_planned and self.targets_done >= self.targets_planned
+        if self.phase and (ladder_done or not self.rung):
+            label = self.phase
+            if self.phase_started:
+                label += f" ({_age(now - self.phase_started)})"
+            parts.append(label)
+        elif self.rung:
             parts.append(f"rung {self.rung}")
         elif self.last_phase:
             parts.append(self.last_phase)
@@ -381,7 +392,6 @@ class LedgerWatch:
         if self.escalated:
             parts.append(f"{self.escalated} escalated")
 
-        now = time.time()
         if self._in_flight:
             # Name what is being worked, with its real age. This is the line
             # that answers "is it stuck, and on what".
@@ -419,6 +429,14 @@ class LedgerWatch:
             elif kind == "unit_start":
                 self.rung = str(event.get("rung") or self.rung)
                 self._in_flight[str(event.get("unit_id"))] = event
+            elif kind == "phase_start":
+                # The ladder is not the whole run. Adjudication, synthesis and
+                # determination publish no per-item story, so without this the
+                # board froze on "rung 2c 100%" for an hour while they worked.
+                self.phase = str(event.get("phase") or "")
+                self.phase_started = float(event.get("started_at") or 0) or None
+            elif kind == "phase_end":
+                self.phase_started = None
             elif kind == "unit_end":
                 self._in_flight.pop(str(event.get("unit_id")), None)
                 self.units_done += 1

@@ -217,3 +217,46 @@ def test_a_partial_line_is_reread_next_tick(wired):
         stream.write('-written"}\n')
     watch.tick()
     assert "half-written" in run.record["current"]
+
+
+# --- the run is more than its ladder ------------------------------------------
+
+
+def test_a_phase_with_no_items_still_reports_itself(wired):
+    """The gap the owner hit: the board froze on 'rung 2c 100%' for an hour.
+
+    The ladder publishes rich per-unit progress. Adjudication, synthesis,
+    determination and work orders publish no item-level story, so once the
+    ladder finished the stream went quiet while roughly 40% of the run's work
+    carried on. A watcher cannot tell that from a stall, and the whole point of
+    this telemetry is that it never has to guess.
+    """
+    run, watch, progress, _ = wired
+    progress.plan(rung="2a", partitions=1, components=5, relationships=5)
+    progress.unit_end(rung="2a", unit_id=0, ok=True, answered=10)
+    watch.tick()
+    assert run.record["completed"] == 10 == run.record["total"]
+
+    progress.phase_start(phase="p3_adjudication")
+    watch.tick()
+    assert "p3_adjudication" in run.record["current"], (
+        "a working phase must name itself once the ladder is done"
+    )
+
+    progress.phase_end(phase="p3_adjudication", status="ok", spent_usd=11.8)
+    progress.phase_start(phase="p5_determination")
+    watch.tick()
+    assert "p5_determination" in run.record["current"]
+    assert "p3_adjudication" not in run.record["current"]
+
+
+def test_a_long_phase_shows_its_age(wired):
+    run, watch, progress, _ = wired
+    progress.plan(rung="2a", partitions=1, components=1, relationships=0)
+    progress.unit_end(rung="2a", unit_id=0, ok=True, answered=1)
+    progress.phase_start(phase="p5_determination")
+    watch.tick()
+    first = run.record["current"]
+    time.sleep(1.1)
+    watch.tick()
+    assert run.record["current"] != first, "a slow phase must look different over time"

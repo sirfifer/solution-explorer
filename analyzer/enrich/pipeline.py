@@ -768,9 +768,16 @@ class RunContext:
         """
         stream = getattr(self, "_progress_stream", None)
         if stream is None:
-            from .progress import ProgressStream
+            from .progress import NullProgress, ProgressStream
 
-            stream = ProgressStream(self.run_path("progress.jsonl"))
+            try:
+                stream = ProgressStream(self.run_path("progress.jsonl"))
+            except OSError:
+                # Observability must never fail the work it watches. Writes are
+                # already fenced; CREATING the stream calls run_path, which
+                # makes directories, and an unwritable run directory would
+                # otherwise take the whole run down at the first phase.
+                stream = NullProgress()
             object.__setattr__(self, "_progress_stream", stream)
         return stream
 
@@ -834,6 +841,13 @@ def run_pipeline(ctx: RunContext, phases: Iterable[Phase]) -> PipelineResult:
             )
             result.ceiling_hit = True
         else:
+            # Announce the phase itself. The ladder publishes rich per-unit
+            # progress, but everything after it (adjudication, synthesis,
+            # determination, work orders) published nothing, so a board driven
+            # by this stream froze on "rung 2c 100%" while roughly 40% of the
+            # run's work carried on invisibly for another hour. A phase that is
+            # working must say so even when it has no item-level story to tell.
+            ctx.progress.phase_start(phase=phase.name)
             try:
                 outcome = phase.run(ctx)
             except Exception as exc:  # noqa: BLE001 - per-phase bulkhead
@@ -845,6 +859,11 @@ def run_pipeline(ctx: RunContext, phases: Iterable[Phase]) -> PipelineResult:
                     status="failed",
                     notes=[f"phase raised an unexpected error: {reason}"],
                 )
+        ctx.progress.phase_end(
+            phase=phase.name,
+            status=getattr(outcome, "status", "unknown"),
+            spent_usd=round(ctx.budget.spent, 4),
+        )
         ctx.results[phase.name] = outcome
         result.phases.append(outcome)
 

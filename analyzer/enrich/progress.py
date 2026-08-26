@@ -47,6 +47,10 @@ class NullProgress:
 
     def unit_end(self, **fields: Any) -> None: ...
 
+    def phase_start(self, **fields: Any) -> None: ...
+
+    def phase_end(self, **fields: Any) -> None: ...
+
     def note(self, **fields: Any) -> None: ...
 
     def close(self) -> None: ...
@@ -134,6 +138,18 @@ class ProgressStream:
             escalated=escalated,
             detail=detail,
             ended_at=time.time(),
+        )
+
+    def phase_start(self, *, phase: str) -> None:
+        """A pipeline phase has begun. Emitted for EVERY phase, not just the
+        ladder, so a watcher never has to infer silence as either progress or
+        a stall."""
+        self._emit("phase_start", phase=phase, started_at=time.time())
+
+    def phase_end(self, *, phase: str, status: str, spent_usd: float = 0.0) -> None:
+        self._emit(
+            "phase_end", phase=phase, status=status,
+            spent_usd=spent_usd, ended_at=time.time(),
         )
 
     def note(self, *, message: str, **fields: Any) -> None:
