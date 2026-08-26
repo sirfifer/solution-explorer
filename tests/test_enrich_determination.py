@@ -22,6 +22,7 @@ The contracts:
 from __future__ import annotations
 
 import json
+import re
 import os
 import shutil
 
@@ -250,7 +251,25 @@ class FullPipelineInvoker:
             or "LAST rung" in prompt
         ):
             return self._ok(self._enrichment(prompt))
-        # A verify pass.
+        # A verify pass. The edge and identity passes are BATCHED: one call
+        # carries many independent items and answers each by its own id, so a
+        # fake model has to speak that protocol or every item reads as
+        # unanswered. Per-item calls were 99% of a real run's invocations.
+        ids = re.findall(r'"id":\s*"([^"]+)"', prompt)
+        if "EDGES AND EVIDENCE:" in prompt:
+            return self._ok({"verdicts": {
+                i: {"status": "confirmed", "reason": "the evidence shows it"}
+                for i in ids
+            }})
+        if "COMPONENTS AND FACTS:" in prompt:
+            return self._ok({"components": {
+                i: {
+                    "fields": {f: {"status": "confirmed"} for f in
+                               ("name", "type", "framework", "port")},
+                    "prose_issues": [],
+                }
+                for i in ids
+            }})
         return self._ok({
             "fields": {f: {"status": "confirmed"} for f in
                        ("name", "type", "framework", "port")},

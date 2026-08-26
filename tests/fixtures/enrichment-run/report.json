@@ -2,7 +2,7 @@
   "identity": {
     "subject": "polyglot",
     "root": "/Volumes/Studio/dev/solution-explorer/tests/fixtures/polyglot",
-    "commit": "ccb8a75e3be755c8776a1f409ef74fde0e81219c",
+    "commit": "a23bc4e546e1f011663739370c22c8fb9770e2c7",
     "snapshot_date": "2026-08-21T00:00:00+00:00",
     "analyzer_version": "",
     "engine_version": "1",
@@ -66,8 +66,8 @@
       "max_work_orders": 3
     },
     "totals": {
-      "invocations": 26,
-      "cost_usd": 0.26,
+      "invocations": 23,
+      "cost_usd": 0.23,
       "ceiling_hit": false,
       "failed_phases": []
     },
@@ -161,69 +161,6 @@
     {
       "phase": "p3_adjudication",
       "rung": "verify-identity",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "tokens_cache_write": 0,
-      "tokens_fresh_in": 1200,
-      "effort": "low",
-      "stop_reason": null,
-      "num_turns": 1,
-      "partition_id": null,
-      "session_id": null,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-identity",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "tokens_cache_write": 0,
-      "tokens_fresh_in": 1200,
-      "effort": "low",
-      "stop_reason": null,
-      "num_turns": 1,
-      "partition_id": null,
-      "session_id": null,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-identity",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "tokens_cache_write": 0,
-      "tokens_fresh_in": 1200,
-      "effort": "low",
-      "stop_reason": null,
-      "num_turns": 1,
-      "partition_id": null,
-      "session_id": null,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-edges",
       "model": "anthropic-claude-cli:opus",
       "targets": 0,
       "tokens_in": 1200,
@@ -995,7 +932,7 @@
       "status": "ok",
       "notes": [
         "verify identity: 3 verified, confirmed=3",
-        "verify edges: 0 verified, no verdicts",
+        "verify edges: 1 verified, confirmed=1",
         "verify findings: 0 verified, no verdicts",
         "grounding spot-checks: 0 of 8 claims not supported by their own evidence (disagreement rate 0.0%)",
         "substitution checks: 1 of 1 descriptions did not identify their own subject (100.0%)"
@@ -1027,7 +964,7 @@
       "verdicts": {
         "confirmed": 3
       },
-      "total_cost_usd": 0.03,
+      "total_cost_usd": 0.01,
       "notes": [
         "3 identity-bearing component(s); 3 to verify"
       ],
@@ -1038,21 +975,21 @@
           "id": "apps/ios",
           "status": "done",
           "verdict": "confirmed",
-          "cost_usd": 0.01,
+          "cost_usd": 0.003333,
           "errors": []
         },
         {
           "id": "root",
           "status": "done",
           "verdict": "confirmed",
-          "cost_usd": 0.01,
+          "cost_usd": 0.003333,
           "errors": []
         },
         {
           "id": "services/api",
           "status": "done",
           "verdict": "confirmed",
-          "cost_usd": 0.01,
+          "cost_usd": 0.003333,
           "errors": []
         }
       ]
@@ -1062,12 +999,12 @@
       "mode": "full",
       "dry_run": false,
       "target_count": 1,
-      "done": 0,
-      "failed": [
-        "services/web/src|services/api|http"
-      ],
-      "verdicts": {},
-      "total_cost_usd": 0.02,
+      "done": 1,
+      "failed": [],
+      "verdicts": {
+        "confirmed": 1
+      },
+      "total_cost_usd": 0.01,
       "notes": [
         "1 inferred edge(s); 1 to verify"
       ],
@@ -1076,12 +1013,10 @@
       "outcomes": [
         {
           "id": "services/web/src|services/api|http",
-          "status": "failed",
-          "verdict": null,
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be a non-empty sentence"
-          ]
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.01,
+          "errors": []
         }
       ]
     },
@@ -1242,7 +1177,7 @@
     "substitution_failure_rate": 1.0,
     "notes": [
       "verify identity: 3 verified, confirmed=3",
-      "verify edges: 0 verified, no verdicts",
+      "verify edges: 1 verified, confirmed=1",
       "verify findings: 0 verified, no verdicts",
       "grounding spot-checks: 0 of 8 claims not supported by their own evidence (disagreement rate 0.0%)",
       "substitution checks: 1 of 1 descriptions did not identify their own subject (100.0%)"
@@ -1334,12 +1269,12 @@
     "by_model": [
       {
         "model": "anthropic-claude-cli:opus",
-        "invocations": 18,
+        "invocations": 15,
         "targets": 1,
-        "tokens_in": 21600,
+        "tokens_in": 18000,
         "tokens_cached": 0,
-        "tokens_out": 5400,
-        "cost_usd": 0.18,
+        "tokens_out": 4500,
+        "cost_usd": 0.15,
         "wall_seconds": 0.0,
         "retries": 0,
         "failures": 0,
@@ -1351,9 +1286,9 @@
           "p3_adjudication:verify-findings",
           "p3_adjudication:verify-identity"
         ],
-        "tokens_total": 27000,
-        "token_share": 0.6923,
-        "cost_share": 0.6923
+        "tokens_total": 22500,
+        "token_share": 0.6522,
+        "cost_share": 0.6522
       },
       {
         "model": "anthropic-claude-cli:fable",
@@ -1374,8 +1309,8 @@
           "p5_determination"
         ],
         "tokens_total": 9000,
-        "token_share": 0.2308,
-        "cost_share": 0.2308
+        "token_share": 0.2609,
+        "cost_share": 0.2609
       },
       {
         "model": "anthropic-claude-cli:sonnet",
@@ -1393,17 +1328,17 @@
           "work_order:P5"
         ],
         "tokens_total": 3000,
-        "token_share": 0.0769,
-        "cost_share": 0.0769
+        "token_share": 0.087,
+        "cost_share": 0.087
       }
     ],
     "totals": {
-      "invocations": 26,
-      "tokens_total": 39000,
-      "tokens_in": 31200,
+      "invocations": 23,
+      "tokens_total": 34500,
+      "tokens_in": 27600,
       "tokens_cached": 0,
-      "tokens_out": 7800,
-      "cost_usd": 0.26,
+      "tokens_out": 6900,
+      "cost_usd": 0.23,
       "wall_seconds": 0.0
     },
     "account_delta": null,

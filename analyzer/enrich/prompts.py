@@ -16,7 +16,7 @@ without invoking a model.
 from __future__ import annotations
 
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from .partition import Partition
 
@@ -25,12 +25,14 @@ __all__ = [
     "build_partition_prompt",
     "build_architecture_prompt",
     "build_edge_verify_prompt",
+    "build_edge_verify_batch_prompt",
     "build_concern_name_prompt",
     "build_intent_conformance_prompt",
     "build_intent_proposal_prompt",
     "build_finding_verify_prompt",
     "build_identify_unknowns_prompt",
     "build_identity_verify_prompt",
+    "build_identity_verify_batch_prompt",
     "build_contract_partition_prompt",
     "build_grounding_spotcheck_prompt",
     "build_substitution_prompt",
@@ -459,6 +461,75 @@ RULES:
         contract,
         "",
         "EDGE AND EVIDENCE:",
+        json.dumps(payload, indent=2, default=str),
+        "",
+        "Return the JSON object now.",
+    ])
+
+
+def build_edge_verify_batch_prompt(items: list[dict]) -> str:
+    """Verify SEVERAL inferred edges in one call (P7-3, batched).
+
+    One call per edge is what a verification pass looks like when nobody has
+    measured it. On the 2026-08-25 unamentis-ios run the per-edge loop made 754
+    calls costing $10.50 and returned 16,064 output tokens in total: about 21
+    tokens of verdict per call, against a prompt paid in full every time. The
+    work was almost entirely fixed overhead, charged 754 times.
+
+    The verdict contract per edge is unchanged, so a batched answer is the same
+    answer. Each item carries the id the caller will key the verdict by, which
+    is what makes a partial or reordered response safe to absorb: a verdict
+    nobody asked for is dropped, and an edge with no verdict simply stays
+    unverified rather than silently inheriting its neighbour's.
+    """
+    contract = """\
+Return ONLY a single JSON object, no prose, no fences:
+
+{ "verdicts": {
+    "<edge id, exactly as given>": {
+      "status": "confirmed | refuted | uncertain",
+      "reason": "one sentence, grounded in that edge's own evidence" },
+    ...
+} }
+
+RULES:
+- Judge every edge INDEPENDENTLY. Edges in one batch are unrelated to each
+  other, and a verdict on one is never evidence about another.
+- Return one entry for EVERY id below, using the id exactly as written.
+- confirmed: the evidence genuinely shows this connection exists between these
+  two components.
+- refuted: the evidence does NOT support this connection (for example the
+  snippet is a comment, a string that only resembles a URL, an unrelated match,
+  or points at a different target).
+- uncertain: the evidence is too thin to decide either way.
+- reason MUST cite what in that edge's evidence drove the verdict. Do not
+  invent facts not present above. When unsure, say uncertain rather than
+  guessing.
+"""
+    payload = [
+        {
+            "id": item["id"],
+            "edge": {
+                "source": (item.get("edge") or {}).get("source"),
+                "target": (item.get("edge") or {}).get("target"),
+                "type": (item.get("edge") or {}).get("type"),
+                "confidence": (item.get("edge") or {}).get("confidence"),
+                "evidence": ((item.get("edge") or {}).get("evidence") or [])[:5],
+            },
+            "source_component": item.get("source"),
+            "target_component": item.get("target"),
+        }
+        for item in items
+    ]
+    return "\n".join([
+        "You are verifying INFERRED dependency edges in an architecture graph. "
+        "Each was guessed by a static heuristic and may be a false positive. "
+        "Using ONLY the evidence and endpoint summaries below, return a verdict "
+        "for each edge.",
+        "",
+        contract,
+        "",
+        "EDGES AND EVIDENCE:",
         json.dumps(payload, indent=2, default=str),
         "",
         "Return the JSON object now.",
@@ -914,6 +985,61 @@ def _context_only_components(partition: Partition, facts: StoreFacts) -> list[di
     if partition.answers_components:
         return []
     return [facts.component_facts(cid) for cid in partition.component_ids]
+
+
+def build_identity_verify_batch_prompt(items: list[dict]) -> str:
+    """Verify SEVERAL components' published identity claims in one call.
+
+    Same reason as the batched edge verify: the answers are independent and
+    small relative to the prompt that has to be re-sent for each one. Measured
+    on the 2026-08-25 unamentis-ios run, 111 per-component identity calls cost
+    $8.54 for a mean of 292 output tokens each.
+
+    Each item keeps its own id so a partial answer is safe: a component with no
+    entry stays unverified rather than adopting another component's verdict.
+    """
+    contract = """\
+Return ONLY a single JSON object, no prose, no fences:
+
+{ "components": {
+    "<component id, exactly as given>": {
+      "fields": {
+        "name":      { "status": "confirmed | corrected | uncertain", "value": "...", "reason": "...", "evidence": { "file": "...", "line": 1 } },
+        "type":      { ... same shape ... },
+        "framework": { ... },
+        "port":      { ... }
+      },
+      "prose_issues": [
+        { "claim": "the prose statement", "fact": "the contradicting analyzer fact" }
+      ]
+    },
+    ...
+} }
+
+RULES:
+- Judge every component INDEPENDENTLY, using only its own facts.
+- Return one entry for EVERY id below, using the id exactly as written.
+- Every one of the four fields must be present for every component.
+- Do not invent evidence. Where a claim cannot be checked from the facts given,
+  say uncertain.
+"""
+    payload = [
+        {"id": item["id"], "component": item.get("component"), "facts": item.get("facts")}
+        for item in items
+    ]
+    return "\n".join([
+        "You are verifying the PUBLISHED IDENTITY claims of several components "
+        "in an architecture map against the analyzer's own facts. For each "
+        "component, say whether each identity field is confirmed, corrected, or "
+        "uncertain.",
+        "",
+        contract,
+        "",
+        "COMPONENTS AND FACTS:",
+        json.dumps(payload, indent=2, default=str),
+        "",
+        "Return the JSON object now.",
+    ])
 
 
 def build_contract_partition_prompt(

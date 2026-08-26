@@ -38,6 +38,8 @@ from .intents import IntentFileError, find_intents_file, load_intents
 from .overlay import apply_enrichment_overlay
 from .partition import flatten_components
 from .prompts import (
+    build_edge_verify_batch_prompt,
+    build_identity_verify_batch_prompt,
     build_concern_name_prompt,
     build_edge_verify_prompt,
     build_finding_verify_prompt,
@@ -74,6 +76,12 @@ class VerifyConfig:
     report_path: Optional[Path] = None
     intents_path: Optional[Path] = None
     propose_intents: bool = False
+    # How many independent verdicts share one call. A verify answer is a status
+    # and one sentence, so a per-item call spends nearly all of its cost on the
+    # prompt it repeats: measured on 2026-08-25, 754 per-edge calls cost $10.50
+    # and returned 21 output tokens each. Batching amortizes the fixed overhead
+    # across items that were always judged independently anyway.
+    verify_batch: int = 25
 
 
 @dataclass
@@ -301,25 +309,57 @@ def verify_edges(
                 report.plan_preview.append({"id": key, "prompt_chars": len(prompt)})
             return _finalize(report, config)
 
-        for key, rel in targets:
-            prompt = build_edge_verify_prompt(
-                rel,
-                _endpoint_summary(comp_index, rel.get("source", "")),
-                _endpoint_summary(comp_index, rel.get("target", "")),
-            )
-            obj, cost, errs = _invoke_json(invoker, prompt, validate)
-            outcome = TargetOutcome(id=key, status="failed", cost_usd=cost)
-            if obj is None:
-                outcome.errors = errs
-            else:
-                payload = {"status": obj["status"], "reason": obj["reason"].strip()}
-                stamp_enrichment(
-                    store, "edge-verdict", key, payload,
-                    digest_index=index, commit_sha=commit_sha, clock=clock,
-                )
-                outcome.status = "done"
-                outcome.verdict = obj["status"]
-            report.outcomes.append(outcome)
+        def validate_batch(obj: dict) -> list[str]:
+            verdicts = obj.get("verdicts")
+            if not isinstance(verdicts, dict) or not verdicts:
+                return ["verdicts must be a non-empty object keyed by edge id"]
+            return []
+
+        batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1))
+        for start in range(0, len(targets), batch_size):
+            chunk = targets[start : start + batch_size]
+            prompt = build_edge_verify_batch_prompt([
+                {
+                    "id": key,
+                    "edge": rel,
+                    "source": _endpoint_summary(comp_index, rel.get("source", "")),
+                    "target": _endpoint_summary(comp_index, rel.get("target", "")),
+                }
+                for key, rel in chunk
+            ])
+            obj, cost, errs = _invoke_json(invoker, prompt, validate_batch)
+            verdicts = (obj or {}).get("verdicts") or {}
+            # Cost is attributed evenly across the batch so per-target
+            # accounting stays meaningful; the batch is one billable call.
+            share = cost / max(1, len(chunk))
+            for key, _rel in chunk:
+                outcome = TargetOutcome(id=key, status="failed", cost_usd=share)
+                entry = verdicts.get(key) if isinstance(verdicts, dict) else None
+                # An edge the model did not answer for stays unverified. It is
+                # never given a neighbour's verdict, and never defaulted to
+                # confirmed: an unasked question has no answer.
+                if not isinstance(entry, dict):
+                    outcome.errors = errs or [
+                        "no verdict returned for this edge in its batch"
+                    ]
+                elif entry.get("status") not in _EDGE_STATUSES:
+                    outcome.errors = [
+                        f"status must be one of {sorted(_EDGE_STATUSES)}"
+                    ]
+                elif not str(entry.get("reason") or "").strip():
+                    outcome.errors = ["reason must be a non-empty sentence"]
+                else:
+                    payload = {
+                        "status": entry["status"],
+                        "reason": str(entry["reason"]).strip(),
+                    }
+                    stamp_enrichment(
+                        store, "edge-verdict", key, payload,
+                        digest_index=index, commit_sha=commit_sha, clock=clock,
+                    )
+                    outcome.status = "done"
+                    outcome.verdict = entry["status"]
+                report.outcomes.append(outcome)
         report.total_cost_usd = sum(o.cost_usd for o in report.outcomes)
         store.commit()
         return _finalize(report, config)
@@ -838,13 +878,47 @@ def verify_identity(
                 )
             return _finalize(report, config)
 
-        for comp in targets:
-            prompt = build_identity_verify_prompt(comp, _identity_facts(comp))
-            obj, cost, errs = _invoke_json(invoker, prompt, _validate_identity)
-            outcome = TargetOutcome(id=comp["id"], status="failed", cost_usd=cost)
-            if obj is None:
-                outcome.errors = errs
-            else:
+        def _validate_identity_batch(obj: dict) -> list[str]:
+            comps = obj.get("components")
+            if not isinstance(comps, dict) or not comps:
+                return ["components must be a non-empty object keyed by component id"]
+            return []
+
+        # Identity answers are ~14x larger per item than an edge verdict, so
+        # they take a smaller batch. Still one call for a dozen components
+        # instead of a dozen calls.
+        batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1) // 2)
+        for start in range(0, len(targets), batch_size):
+            chunk = targets[start : start + batch_size]
+            prompt = build_identity_verify_batch_prompt([
+                {
+                    "id": comp["id"],
+                    "component": comp,
+                    "facts": _identity_facts(comp),
+                }
+                for comp in chunk
+            ])
+            obj, cost, errs = _invoke_json(invoker, prompt, _validate_identity_batch)
+            answers = (obj or {}).get("components") or {}
+            share = cost / max(1, len(chunk))
+            for comp in chunk:
+                entry = answers.get(comp["id"]) if isinstance(answers, dict) else None
+                outcome = TargetOutcome(id=comp["id"], status="failed", cost_usd=share)
+                # A component the model skipped stays unverified. Identity is a
+                # published claim; leaving it unchecked is honest, inventing a
+                # confirmation is not.
+                if not isinstance(entry, dict):
+                    outcome.errors = errs or [
+                        "no verdict returned for this component in its batch"
+                    ]
+                    report.outcomes.append(outcome)
+                    continue
+                field_errors = _validate_identity(entry)
+                if field_errors:
+                    outcome.errors = field_errors
+                    report.outcomes.append(outcome)
+                    continue
+                obj = entry
                 payload = {
                     "fields": obj["fields"],
                     "prose_issues": obj.get("prose_issues") or [],
@@ -864,7 +938,7 @@ def verify_identity(
                 else:
                     outcome.verdict = "confirmed"
                 outcome.status = "done"
-            report.outcomes.append(outcome)
+                report.outcomes.append(outcome)
         report.total_cost_usd = sum(o.cost_usd for o in report.outcomes)
         store.commit()
         return _finalize(report, config)

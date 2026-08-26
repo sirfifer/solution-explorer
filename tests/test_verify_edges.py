@@ -10,6 +10,7 @@ recorded in TASKS.md P7-3 Evidence.
 from __future__ import annotations
 
 import json
+import re
 import os
 from pathlib import Path
 
@@ -42,10 +43,26 @@ def _cfg(db, **kw):
     return VerifyConfig(store_path=db, root=Path(POLYGLOT), **kw)
 
 
-def _mock(status, reason="grounded reason"):
+def _ids_in(prompt):
+    """The edge ids a batched verify prompt is asking about."""
+    return re.findall(r'"id":\s*"([^"]+)"', prompt)
+
+
+def _mock(status, reason="grounded reason", calls=None):
+    """A model that answers every edge in the batch it was handed.
+
+    Verification is batched: one call carries many independent edges and
+    returns a verdict per id. A per-edge call spent nearly all of its cost
+    re-sending the prompt for a 21-token answer, 754 times on one real run.
+    """
     def invoker(prompt):
+        if calls is not None:
+            calls.append(prompt)
+        verdicts = {
+            eid: {"status": status, "reason": reason} for eid in _ids_in(prompt)
+        }
         return InvokeResult(
-            ok=True, text=json.dumps({"status": status, "reason": reason}), cost_usd=0.01
+            ok=True, text=json.dumps({"verdicts": verdicts}), cost_usd=0.01
         )
     return invoker
 
@@ -189,3 +206,71 @@ def test_update_reverifies_only_stale_or_missing(tmp_path):
     store.close()
     report2 = verify_edges(_cfg(db, update=True), invoker=_mock("refuted"), clock=FIXED_CLOCK)
     assert report2.target_count == 1 and report2.tally() == {"refuted": 1}
+
+
+# --- batching: the fix for a pass that cost more than the work it verified ----
+
+
+def test_many_edges_are_verified_in_one_call(tmp_path, monkeypatch):
+    """The measurement that forced this: 754 calls, $10.50, 21 tokens each.
+
+    Verification answers are a status and one sentence. A per-item call pays the
+    whole prompt to get them, so on the 2026-08-25 unamentis-ios run the verify
+    passes were 99% of the run's invocations and 76% of its cost, 3.4x the
+    enhancement work they existed to check. The verdicts were always
+    independent, so batching changes the bill and not the answers.
+    """
+    db = _build_store(tmp_path)
+    calls = []
+    report = verify_edges(
+        _cfg(db, verify_batch=25), invoker=_mock("confirmed", calls=calls),
+        clock=FIXED_CLOCK,
+    )
+    assert report.ok
+    assert report.done >= 1
+    # Every target answered, in far fewer calls than there were targets.
+    assert len(calls) == 1, f"expected one batched call, got {len(calls)}"
+
+
+def test_an_edge_with_no_verdict_in_its_batch_stays_unverified(tmp_path):
+    """A missing answer is not a confirmation.
+
+    The risk batching introduces is a model that returns fewer verdicts than it
+    was asked for. An edge whose id is absent must stay unverified rather than
+    inherit a neighbour's verdict or default to confirmed, because an unasked
+    question has no answer.
+    """
+    db = _build_store(tmp_path)
+
+    def silent(prompt):
+        return InvokeResult(ok=True, text=json.dumps({"verdicts": {}}), cost_usd=0.01)
+
+    report = verify_edges(_cfg(db), invoker=silent, clock=FIXED_CLOCK)
+    assert report.done == 0
+    store = FactStore(str(db))
+    try:
+        rows = [r for r in store.enrichment() if r["target_kind"] == "edge-verdict"]
+        assert rows == [], "an unanswered edge must not be stamped with a verdict"
+    finally:
+        store.close()
+
+
+def test_a_malformed_verdict_in_a_batch_fails_only_that_edge(tmp_path):
+    """One bad entry must not discard the good verdicts beside it."""
+    db = _build_store(tmp_path)
+
+    def mixed(prompt):
+        ids = _ids_in(prompt)
+        verdicts = {}
+        for i, eid in enumerate(ids):
+            if i == 0:
+                verdicts[eid] = {"status": "not-a-real-status", "reason": "x"}
+            else:
+                verdicts[eid] = {"status": "confirmed", "reason": "sound"}
+        return InvokeResult(ok=True, text=json.dumps({"verdicts": verdicts}), cost_usd=0.01)
+
+    report = verify_edges(_cfg(db), invoker=mixed, clock=FIXED_CLOCK)
+    # The bad one failed; it did not take the batch down with it.
+    bad = [o for o in report.outcomes if o.status == "failed"]
+    assert len(bad) >= 1
+    assert any("status must be one of" in e for o in bad for e in o.errors)
