@@ -343,6 +343,10 @@ class LadderPhase:
         if ctx.dry_run:
             return self._plan_only(ctx, partitions, brief, outcome)
 
+        # The validator can only check a "fact" citation against the same fact
+        # blocks the prompts were built from, so it gets them before any rung
+        # runs. Without this every such citation fails closed.
+        validator.attach_facts(facts_by_id)
         self._rung_2a(ctx, partitions, validator, facts_by_id, brief, outcome)
         self._rung_escalated(
             ctx, validator, facts_by_id, brief, outcome,

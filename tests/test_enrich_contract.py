@@ -535,3 +535,74 @@ def test_an_identity_attribute_the_parser_lacks_is_not_exempt():
     assert _parser_settles("identity.framework", {}) is False
     assert _parser_settles("purpose", {"purpose": "anything"}) is False
     assert _parser_settles("mechanism", {"mechanism": "x"}) is False
+
+
+# --- citing the analyzer's own facts ------------------------------------------
+
+
+def test_a_claim_from_the_analyzers_own_numbers_can_be_cited(fixture_store):
+    """The gap that produced a 64.1% grounding disagreement rate.
+
+    A component's fact block says inbound_edges: 17. A tier that reports "17
+    components depend on this" is stating something TRUE and taken from the
+    prompt it was given, but before "fact" evidence existed the only citable
+    things were files, symbols and edges, and two edges cannot support a claim
+    about seventeen. The claim was correct and unciteable, so it read as
+    ungrounded, escalated to a more expensive tier that could not fix it
+    either, and was then counted as a disagreement.
+    """
+    from analyzer.enrich.evidence import EvidenceValidator
+
+    v = EvidenceValidator(fixture_store, root=POLYGLOT)
+    v.attach_facts({"svc": {"inbound_edges": 17, "file_count": 4}})
+
+    ok = v.check({"kind": "fact", "component": "svc", "field": "inbound_edges"})
+    assert ok.ok is True
+    assert ok.detail["value"] == 17
+
+
+def test_fact_evidence_is_not_a_free_text_escape_hatch(fixture_store):
+    """It must be able to fail, or it grounds everything and checks nothing."""
+    from analyzer.enrich.evidence import EvidenceValidator
+
+    v = EvidenceValidator(fixture_store, root=POLYGLOT)
+    v.attach_facts({"svc": {"inbound_edges": 17}})
+
+    # A field the analyzer never produces.
+    assert v.check({"kind": "fact", "component": "svc", "field": "vibes"}).ok is False
+    # A field not present for THIS component.
+    missing = v.check({"kind": "fact", "component": "svc", "field": "framework"})
+    assert missing.ok is False
+    assert "produced no" in missing.reason
+    # A component that does not exist.
+    assert v.check({"kind": "fact", "component": "ghost", "field": "file_count"}).ok is False
+    # Malformed.
+    assert v.check({"kind": "fact", "component": "svc"}).ok is False
+    assert v.check({"kind": "fact", "field": "file_count"}).ok is False
+
+
+def test_fact_evidence_fails_closed_when_no_facts_were_attached(fixture_store):
+    """A validator with no fact blocks must reject, never wave through."""
+    from analyzer.enrich.evidence import EvidenceValidator
+
+    v = EvidenceValidator(fixture_store, root=POLYGLOT)
+    assert v.check({"kind": "fact", "component": "svc", "field": "file_count"}).ok is False
+
+
+def test_the_validator_still_leaves_sufficiency_to_adjudication(fixture_store):
+    """Citing a real fact does not make a wrong claim right.
+
+    The component below reports file_count 0. A tier claiming "18 Swift files"
+    while citing that field produces a VALID citation and a false claim, which
+    is exactly the split the design asks for: the validator proves the pointer
+    is real, adjudication judges whether the prose matches it.
+    """
+    from analyzer.enrich.evidence import EvidenceValidator
+
+    v = EvidenceValidator(fixture_store, root=POLYGLOT)
+    v.attach_facts({"audio": {"file_count": 0}})
+    check = v.check({"kind": "fact", "component": "audio", "field": "file_count"})
+    assert check.ok is True
+    assert check.detail["value"] == 0, (
+        "the real value must travel with the check so adjudication can compare"
+    )

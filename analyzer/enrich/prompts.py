@@ -876,6 +876,16 @@ mechanically after you answer, against the analyzed file set and the graph:
                        "edge_type": "imports"}
   {"kind": "manifest", "path": "package.json"}
   {"kind": "doc",      "path": "README.md", "line": 12}
+  {"kind": "fact",     "component": "<component-id>", "field": "inbound_edges"}
+
+Use "fact" when your claim comes from the analyzer's own numbers rather than
+from reading code: how many files or lines a component has, how many components
+depend on it, its detected language or framework. Those numbers are in the
+facts you were given, and a file or an edge cannot carry a statement about
+seventeen of them. Cite the field you took the number from. Citable fields:
+file_count, line_count, inbound_edges, outbound_edges, language, framework,
+port, type, capabilities, data_entities, external_services, action_count,
+ai_surface, has_testing_data, testing.
 
 Paths must come from the files listed in the facts for that component. A citation
 to a file that is not in the analyzed set fails the check, and the answer is
