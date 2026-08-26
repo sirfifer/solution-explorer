@@ -343,10 +343,18 @@ class LadderPhase:
         if ctx.dry_run:
             return self._plan_only(ctx, partitions, brief, outcome)
 
-        # The validator can only check a "fact" citation against the same fact
-        # blocks the prompts were built from, so it gets them before any rung
-        # runs. Without this every such citation fails closed.
-        validator.attach_facts(facts_by_id)
+        # The validator must check a "fact" citation against THE SAME blocks the
+        # prompt showed the model, which are StoreFacts.component_facts(), not
+        # the raw arch component dicts. They are not interchangeable: the fact
+        # block carries computed fields (inbound_edges, outbound_edges,
+        # file_count) that the arch dict never had. Attaching the arch dicts
+        # made every citation of a computed field fail as "the analyzer
+        # produced no 'inbound_edges'", which turned correct answers into E2
+        # failures, escalated them, and left 94 false honest gaps on the
+        # `place` question alone in the 2026-08-26 full build.
+        validator.attach_facts({
+            cid: ctx.facts.component_facts(cid) for cid in facts_by_id
+        })
         self._rung_2a(ctx, partitions, validator, facts_by_id, brief, outcome)
         self._rung_escalated(
             ctx, validator, facts_by_id, brief, outcome,

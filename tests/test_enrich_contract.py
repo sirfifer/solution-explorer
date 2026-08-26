@@ -606,3 +606,51 @@ def test_the_validator_still_leaves_sufficiency_to_adjudication(fixture_store):
     assert check.detail["value"] == 0, (
         "the real value must travel with the check so adjudication can compare"
     )
+
+
+def test_the_validator_checks_the_same_blocks_the_prompt_showed(fixture_store):
+    """The two dictionaries are not interchangeable, and confusing them is silent.
+
+    The prompt shows a model `StoreFacts.component_facts()`, which carries
+    COMPUTED fields the raw arch component dict never had: inbound_edges,
+    outbound_edges, file_count. Attaching the arch dicts to the validator
+    instead made every citation of a computed field fail as "the analyzer
+    produced no 'inbound_edges'". The model had answered correctly and cited
+    correctly; the check was looking somewhere else.
+
+    On the 2026-08-26 full build that alone produced 94 false honest gaps on
+    the `place` question, escalated the items to more expensive tiers that
+    could not fix them, and inflated the grounding disagreement rate.
+    """
+    from analyzer.enrich.evidence import EvidenceValidator
+    from analyzer.enrich.prompts import StoreFacts
+
+    rows = fixture_store.components()
+    by_id = {r["id"]: dict(r, children=[]) for r in rows}
+    roots = []
+    for r in rows:
+        parent = r.get("parent_id")
+        target = by_id[parent]["children"] if parent and parent in by_id else roots
+        target.append(by_id[r["id"]])
+    rels = [
+        {"source": e.get("source_id"), "target": e.get("target_id"), "type": e.get("type")}
+        for e in fixture_store.edges()
+    ]
+    facts = StoreFacts(
+        {"components": roots}, fixture_store.capabilities(),
+        fixture_store.data_entities(), fixture_store.rules(), rels,
+    )
+    if not rows:
+        return
+    cid = rows[0]["id"]
+    block = facts.component_facts(cid)
+    # The computed fields exist in the prompt's block...
+    assert "inbound_edges" in block and "outbound_edges" in block
+    # ...and are absent from the raw arch dict the ladder flattens.
+    assert "inbound_edges" not in by_id[cid]
+
+    v = EvidenceValidator(fixture_store, root=POLYGLOT)
+    v.attach_facts({cid: block})
+    check = v.check({"kind": "fact", "component": cid, "field": "inbound_edges"})
+    assert check.ok is True, "a citation of a computed fact must validate"
+    assert check.detail["value"] == block["inbound_edges"]

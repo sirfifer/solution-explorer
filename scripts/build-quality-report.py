@@ -25,7 +25,22 @@ def main(db: str, run_dir: str) -> int:
     if p.exists():
         report = json.loads(p.read_text())
 
-    comps = {r["id"]: dict(r) for r in c.execute("SELECT * FROM components")}
+    # The DENOMINATOR is the projected component set, not the components table.
+    # The projection derives components the table never holds (the synthetic
+    # __ui__ groupings among them), so counting the table reported 148 enriched
+    # against 86 "total" and produced a coverage figure above 100%.
+    comps: dict = {}
+    arch_dir = Path(db).parent / "architecture.json"
+    manifest = arch_dir / "manifest.json"
+    if manifest.exists():
+        def _walk(nodes):
+            for n in nodes or []:
+                if isinstance(n, dict) and n.get("id"):
+                    comps[n["id"]] = n
+                    _walk(n.get("children"))
+        _walk(json.loads(manifest.read_text()).get("components"))
+    if not comps:
+        comps = {r["id"]: dict(r) for r in c.execute("SELECT * FROM components")}
     enriched, rels, gaps = {}, 0, []
     prose_lens, missing_desc = [], []
     for r in c.execute("SELECT target_kind,target_id,payload_json FROM enrichment"):
