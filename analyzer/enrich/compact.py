@@ -15,7 +15,9 @@ remain missing so the ordinary ladder rules escalate them.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
+from pathlib import PurePosixPath
 from typing import Any, Optional
 
 from .contract import CONTRACT_KEY
@@ -161,7 +163,7 @@ def compact_json_schema(prefix: Optional[str], user: str) -> Optional[dict]:
                              ]}},
                             {
                                 "type": "object", "additionalProperties": False,
-                                "maxProperties": 7,
+                                "maxProperties": 8,
                                 "properties": {
                                     "kind": {"type": "string", "maxLength": 32},
                                     "path": {"type": "string", "maxLength": 500},
@@ -172,6 +174,7 @@ def compact_json_schema(prefix: Optional[str], user: str) -> Optional[dict]:
                                     "edge_type": {"type": "string", "maxLength": 80},
                                     "field": {"type": "string", "maxLength": 120},
                                     "value": {"type": "string", "maxLength": 500},
+                                    "scope": {"enum": ["local", "global"]},
                                 },
                             },
                         ],
@@ -186,7 +189,12 @@ def compact_json_schema(prefix: Optional[str], user: str) -> Optional[dict]:
     }
     q = {
         "type": "object", "additionalProperties": False,
-        "properties": {name: answer for name in ("purpose", "mechanism", "place", "next_step")},
+        "properties": {
+            name: answer for name in (
+                "purpose", "mechanism", "place", "next_step",
+                "why_matters", "data_handled",
+            )
+        },
     }
     product = {
         "help_text": {"type": "string", "maxLength": 1_600},
@@ -235,8 +243,8 @@ def compact_json_schema(prefix: Optional[str], user: str) -> Optional[dict]:
         "i": {"type": "string", "maxLength": 500}, **product, "q": q,
         "label": {"type": "string", "maxLength": 240},
         "purpose": answer, "mechanism": answer, "place": answer, "next": answer,
-        "why_matters": {"type": "string", "maxLength": 500},
-        "data": {"type": "string", "maxLength": 600},
+        "why_matters": answer,
+        "data": answer,
         "id": identity_exception,
         "confusion": {"type": "string", "maxLength": 400},
         "generic": {"const": True},
@@ -303,16 +311,197 @@ def compact_json_schema(prefix: Optional[str], user: str) -> Optional[dict]:
     }
 
 
+def _is_type(value: Any, expected: str) -> bool:
+    if expected == "object":
+        return isinstance(value, dict)
+    if expected == "array":
+        return isinstance(value, list)
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "boolean":
+        return isinstance(value, bool)
+    return True
+
+
+def _schema_issues(value: Any, schema: dict, path: str = "$") -> list[str]:
+    """Validate the compact schema subset without a runtime dependency.
+
+    The project deliberately has no jsonschema dependency. This covers every
+    keyword emitted by :func:`compact_json_schema`; adding a new keyword there
+    therefore requires adding it here and a test, rather than silently weakening
+    the production boundary.
+    """
+    if "oneOf" in schema:
+        alternatives = [_schema_issues(value, item, path) for item in schema["oneOf"]]
+        if any(not errors for errors in alternatives):
+            return []
+        shortest = min(alternatives, key=len, default=[f"{path}: matched no alternative"])
+        return [f"{path}: matched no allowed shape", *shortest[:2]]
+    expected = schema.get("type")
+    if expected and not _is_type(value, expected):
+        return [f"{path}: expected {expected}, got {type(value).__name__}"]
+    issues: list[str] = []
+    if "enum" in schema and value not in schema["enum"]:
+        issues.append(f"{path}: value is not one of {schema['enum']!r}")
+    if "const" in schema and value != schema["const"]:
+        issues.append(f"{path}: value must equal {schema['const']!r}")
+    if isinstance(value, str) and len(value) > int(schema.get("maxLength", len(value))):
+        issues.append(f"{path}: string length {len(value)} exceeds {schema['maxLength']}")
+    if isinstance(value, int) and not isinstance(value, bool) and "minimum" in schema:
+        if value < schema["minimum"]:
+            issues.append(f"{path}: {value} is below minimum {schema['minimum']}")
+    if isinstance(value, list):
+        if len(value) < int(schema.get("minItems", len(value))):
+            issues.append(f"{path}: has {len(value)} items, minimum is {schema['minItems']}")
+        if len(value) > int(schema.get("maxItems", len(value))):
+            issues.append(f"{path}: has {len(value)} items, maximum is {schema['maxItems']}")
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict):
+            for index, item in enumerate(value):
+                issues.extend(_schema_issues(item, item_schema, f"{path}[{index}]"))
+    if isinstance(value, dict):
+        properties = schema.get("properties") or {}
+        for required in schema.get("required") or []:
+            if required not in value:
+                issues.append(f"{path}: missing required property {required!r}")
+        if schema.get("additionalProperties") is False:
+            for key in value:
+                if key not in properties:
+                    issues.append(f"{path}: unknown property {key!r}")
+        if len(value) > int(schema.get("maxProperties", len(value))):
+            issues.append(
+                f"{path}: has {len(value)} properties, maximum is {schema['maxProperties']}"
+            )
+        for key, child in value.items():
+            if key in properties:
+                issues.extend(_schema_issues(child, properties[key], f"{path}.{key}"))
+    return issues
+
+
+def _strip_unknown(value: Any, schema: dict, path: str = "$") -> tuple[Any, list[str]]:
+    """Remove bounded cosmetic aliases while retaining an explicit audit note."""
+    if "oneOf" in schema:
+        alternatives = schema["oneOf"]
+        matching = [
+            item for item in alternatives
+            if not item.get("type") or _is_type(value, item["type"])
+        ]
+        chosen = min(
+            matching or alternatives,
+            key=lambda item: len(_schema_issues(value, item)),
+        )
+        return _strip_unknown(value, chosen, path)
+    removed: list[str] = []
+    if isinstance(value, dict) and schema.get("type") == "object":
+        properties = schema.get("properties") or {}
+        # Resolve the provider's familiar {file, snippet} spelling only inside
+        # an unmistakable compact evidence object. Without this closed alias a
+        # valid file locator is stripped to {}, causing a pure spelling
+        # difference to climb every rung.
+        if (
+            "kind" in properties and "path" in properties
+            and "file" in value and "path" not in value
+        ):
+            value = dict(value)
+            value["path"] = value.get("file")
+            value.setdefault("kind", "file")
+        cleaned = {}
+        for key, child in value.items():
+            if schema.get("additionalProperties") is False and key not in properties:
+                removed.append(f"{path}.{key}")
+                continue
+            child_schema = properties.get(key)
+            if isinstance(child_schema, dict):
+                cleaned[key], child_removed = _strip_unknown(
+                    child, child_schema, f"{path}.{key}"
+                )
+                removed.extend(child_removed)
+            else:
+                cleaned[key] = child
+        return cleaned, removed
+    if isinstance(value, list) and schema.get("type") == "array":
+        item_schema = schema.get("items")
+        max_items = schema.get("maxItems")
+        if path.endswith(".e") and isinstance(max_items, int) and len(value) > max_items:
+            removed.append(f"{path}[{max_items}:]")
+            value = value[:max_items]
+        cleaned = []
+        for index, child in enumerate(value):
+            if isinstance(item_schema, dict):
+                child, child_removed = _strip_unknown(
+                    child, item_schema, f"{path}[{index}]"
+                )
+                removed.extend(child_removed)
+            cleaned.append(child)
+        return cleaned, removed
+    return value, removed
+
+
+def validate_compact_response(
+    obj: Any, *, prefix: Optional[str], user: str
+) -> tuple[Any, list[str], list[str]]:
+    """Return ``(sanitized, errors, stripped_paths)`` for a compact response."""
+    schema = compact_json_schema(prefix, user)
+    if schema is None:
+        return obj, [], []
+    sanitized, stripped = _strip_unknown(obj, schema)
+    return sanitized, _schema_issues(sanitized, schema), stripped
+
+
+def salvage_compact_response(
+    obj: Any, *, prefix: Optional[str], user: str
+) -> tuple[Optional[dict], list[str]]:
+    """Keep individually valid entries after a failed corrective response.
+
+    This is the final bulkhead: one malformed item becomes one missing target
+    for the ordinary ladder to escalate; its valid siblings are never bought a
+    third time.
+    """
+    schema = compact_json_schema(prefix, user)
+    if schema is None or not isinstance(obj, dict):
+        return None, []
+    out = {"components": [], "relationships": []}
+    rejected: list[str] = []
+    for branch in ("components", "relationships"):
+        values = obj.get(branch)
+        if not isinstance(values, list):
+            rejected.append(branch)
+            continue
+        item_schema = schema["properties"][branch]["items"]
+        for index, value in enumerate(values):
+            cleaned, _ = _strip_unknown(value, item_schema, f"$.{branch}[{index}]")
+            if _schema_issues(cleaned, item_schema, f"$.{branch}[{index}]"):
+                rejected.append(f"{branch}[{index}]")
+            else:
+                out[branch].append(cleaned)
+    if not out["components"] and not out["relationships"]:
+        return None, rejected
+    return out, rejected
+
+
 def _invalid_evidence(reason: str) -> dict:
     # EvidenceValidator fails this closed and preserves a useful reason through
     # the ordinary E2 path.  Never silently drop a malformed compact citation.
     return {"kind": "compact-invalid", "reason": reason}
 
 
-def _component_evidence(raw: Any, component_id: str, facts: Any) -> dict:
+def _component_evidence(
+    raw: Any, component_id: str, facts: Any, *, claim: str = ""
+) -> Any:
     block = facts.component_facts(component_id)
     files = list(block.get("files") or [])
     edges = list(facts.component_edge_menu(component_id))
+
+    def manifest_path(path: str) -> bool:
+        name = PurePosixPath(path).name.lower()
+        return name in {
+            "package.json", "pyproject.toml", "cargo.toml", "package.swift",
+            "go.mod", "pom.xml", "build.gradle", "build.gradle.kts",
+            "docker-compose.yml", "docker-compose.yaml", "compose.yml",
+            "compose.yaml",
+        }
 
     if isinstance(raw, bool):
         return _invalid_evidence("boolean is not a citation index")
@@ -320,6 +509,28 @@ def _component_evidence(raw: Any, component_id: str, facts: Any) -> dict:
         if 0 <= raw < len(files):
             return {"kind": "file", "path": files[raw]}
         return _invalid_evidence(f"file index {raw} is outside the supplied menu")
+    if isinstance(raw, str) and raw.startswith("F."):
+        field = raw[2:]
+        if field in CITABLE_FACTS:
+            item = {"kind": "fact", "component": component_id, "field": field}
+            if field.startswith(("same_", "system_")):
+                item["scope"] = "global"
+            return item
+        return _invalid_evidence(f"fact field {field!r} is not citable")
+    if isinstance(raw, str) and raw in CITABLE_FACTS:
+        item = {"kind": "fact", "component": component_id, "field": raw}
+        if raw.startswith(("same_", "system_")):
+            item["scope"] = "global"
+        return item
+    if isinstance(raw, str) and raw in files:
+        return {"kind": "file", "path": raw}
+    if isinstance(raw, str) and "->" in raw:
+        _, _, suffix = raw.partition("->")
+        matches = [path for path in files if path == suffix or path.endswith("/" + suffix)]
+        if len(matches) == 1:
+            return {"kind": "file", "path": matches[0]}
+    if isinstance(raw, str) and raw == block.get("path"):
+        return {"kind": "fact", "component": component_id, "field": "path"}
     if isinstance(raw, str) and raw.startswith("E") and raw[1:].isdigit():
         index = int(raw[1:])
         if 0 <= index < len(edges):
@@ -329,6 +540,26 @@ def _component_evidence(raw: Any, component_id: str, facts: Any) -> dict:
                 "target": edge.get("target"), "edge_type": edge.get("type"),
             }
         return _invalid_evidence(f"edge index {raw} is outside the supplied menu")
+    if raw == "F":
+        # A recurring model shorthand for "the local fact(s) named in this
+        # sentence". Resolve it only when the claim itself names an exact
+        # allow-listed field; count contradiction checks then verify the value.
+        named = [
+            field for field in CITABLE_FACTS
+            if field.replace("_", " ") in claim.lower()
+            or (
+                field == "inbound_edges" and "inbound" in claim.lower()
+            )
+            or (
+                field == "outbound_edges" and "outbound" in claim.lower()
+            )
+        ]
+        if named:
+            return [
+                {"kind": "fact", "component": component_id, "field": field}
+                for field in named
+            ]
+        return _invalid_evidence("bare F did not name a citable field in its claim")
     if isinstance(raw, list) and len(raw) == 2 and raw[0] == "F":
         # ["F", "<field>"]: this component's own analyzer fact. The kind exists
         # because count and absence claims ("6 inbound edges") have no file or
@@ -336,7 +567,10 @@ def _component_evidence(raw: Any, component_id: str, facts: Any) -> dict:
         # had no form for it (IMPLEMENTATION-DELTA-PROMPT.md section 2.3).
         field = raw[1]
         if isinstance(field, str) and field in CITABLE_FACTS:
-            return {"kind": "fact", "component": component_id, "field": field}
+            item = {"kind": "fact", "component": component_id, "field": field}
+            if field.startswith(("same_", "system_")):
+                item["scope"] = "global"
+            return item
         return _invalid_evidence(
             f"fact field {field!r} is not citable; use one of: " + ", ".join(CITABLE_FACTS)
         )
@@ -349,7 +583,21 @@ def _component_evidence(raw: Any, component_id: str, facts: Any) -> dict:
         if isinstance(detail, int):
             return {"kind": "file", "path": files[index], "line": detail}
         if isinstance(detail, str) and detail.strip():
+            if detail.strip() in (files[index], PurePosixPath(files[index]).name):
+                return {"kind": "file", "path": files[index]}
+            if manifest_path(files[index]):
+                return {"kind": "manifest", "path": files[index]}
             return {"kind": "symbol", "path": files[index], "symbol": detail.strip()}
+    if isinstance(raw, list) and len(raw) == 2 and isinstance(raw[0], str):
+        path, detail = raw
+        if path not in files:
+            return _invalid_evidence(f"path {path!r} is outside the supplied file menu")
+        if isinstance(detail, str) and detail.strip():
+            if detail.strip() in (path, PurePosixPath(path).name):
+                return {"kind": "file", "path": path}
+            if manifest_path(path):
+                return {"kind": "manifest", "path": path}
+            return {"kind": "symbol", "path": path, "symbol": detail.strip()}
     if isinstance(raw, dict):
         return dict(raw)
     return _invalid_evidence("citation did not match compact/v1")
@@ -358,14 +606,36 @@ def _component_evidence(raw: Any, component_id: str, facts: Any) -> dict:
 def _relationship_evidence(raw: Any, relationship_key: str, facts: Any) -> dict:
     block = facts.relationship_facts(relationship_key)
     evidence = list(block.get("evidence") or [])
+
+    def canonical(item: Any) -> dict:
+        if not isinstance(item, dict):
+            return _invalid_evidence("relationship citation is not an object")
+        path = item.get("path") or item.get("file")
+        kind = str(item.get("kind") or "").strip().lower()
+        if path and kind not in ("file", "symbol", "manifest", "doc"):
+            kind = "file"
+        if path:
+            out = {"kind": kind or "file", "path": path}
+            if item.get("line") is not None:
+                out["line"] = item.get("line")
+            if kind == "symbol" and item.get("symbol"):
+                out["symbol"] = item.get("symbol")
+            return out
+        if item.get("source") and item.get("target"):
+            return {
+                "kind": "edge", "source": item.get("source"),
+                "target": item.get("target"),
+                "edge_type": item.get("edge_type") or item.get("type"),
+            }
+        return dict(item)
     if isinstance(raw, bool):
         return _invalid_evidence("boolean is not a citation index")
     if isinstance(raw, int):
         if 0 <= raw < len(evidence) and isinstance(evidence[raw], dict):
-            return dict(evidence[raw])
+            return canonical(evidence[raw])
         return _invalid_evidence(f"relationship evidence index {raw} is outside the menu")
     if isinstance(raw, dict):
-        return dict(raw)
+        return canonical(raw)
     return _invalid_evidence("citation did not match compact/v1")
 
 
@@ -380,10 +650,17 @@ def _answer(raw: Any, expand_evidence, *, default_evidence: Iterable[dict] = ())
         return {"claim": "", "status": "dropped", "reason": "answer was absent"}
     status = {"u": "uncertain", "d": "dropped"}.get(raw.get("s"), "answered")
     evidence_raw = raw.get("e") if isinstance(raw.get("e"), list) else []
+    expanded = []
+    for item in evidence_raw:
+        value = expand_evidence(item, str(raw.get("t") or ""))
+        if isinstance(value, list):
+            expanded.extend(value)
+        else:
+            expanded.append(value)
     answer = {
         "claim": str(raw.get("t") or "").strip(),
         "status": status,
-        "evidence": [expand_evidence(item) for item in evidence_raw],
+        "evidence": expanded,
     }
     if status == "answered" and not answer["evidence"] and default_evidence:
         answer["evidence"] = [dict(item) for item in default_evidence]
@@ -400,6 +677,55 @@ def _answer(raw: Any, expand_evidence, *, default_evidence: Iterable[dict] = ())
 
 def _component_entry(entry: dict, component_id: str, facts: Any) -> dict:
     product = {name: entry[name] for name in _PRODUCT_FIELDS if entry.get(name) not in (None, "", [])}
+    # Analyzer-owned attributes are prose formatting work, not inference. Render
+    # them from the exact fact block so framework, port, size, service, and test
+    # statements cannot drift while being paraphrased by a model.
+    fact_block = facts.component_facts(component_id)
+    identity = [
+        str(fact_block.get(name)) for name in ("type", "language", "framework")
+        if fact_block.get(name) not in (None, "")
+    ]
+    if identity:
+        deterministic = "Analyzer classification: " + "; ".join(identity) + "."
+        interpretation = str(product.get("tech_context") or "").strip()
+        product["tech_context"] = (deterministic + " " + interpretation).strip()[:700]
+    if fact_block.get("port") not in (None, ""):
+        deterministic = (
+            f"The analyzer records port {fact_block['port']} for this component."
+        )
+        interpretation = str(product.get("port_assessment") or "").strip()
+        product["port_assessment"] = (
+            deterministic + " " + interpretation
+        ).strip()[:400]
+    lines = fact_block.get("lines")
+    files = fact_block.get("file_count")
+    if (isinstance(lines, int) and lines > 5_000) or (
+        isinstance(files, int) and files > 20
+    ):
+        deterministic = (
+            f"The analyzer records {lines or 0:,} lines across {files or 0:,} files."
+        )
+        interpretation = str(product.get("complexity_assessment") or "").strip()
+        product["complexity_assessment"] = (
+            deterministic + " " + interpretation
+        ).strip()[:500]
+    if fact_block.get("external_services"):
+        names = [
+            str(item.get("name") or item.get("service") or item)
+            if isinstance(item, dict) else str(item)
+            for item in fact_block["external_services"][:8]
+        ]
+        deterministic = "Analyzer-detected external services: " + ", ".join(names) + "."
+        interpretation = str(product.get("external_services_assessment") or "").strip()
+        product["external_services_assessment"] = (
+            deterministic + " " + interpretation
+        ).strip()[:500]
+    if fact_block.get("has_testing_data"):
+        deterministic = "Analyzer-detected testing data is present."
+        interpretation = str(product.get("testing_assessment") or "").strip()
+        product["testing_assessment"] = (
+            deterministic + " " + interpretation
+        ).strip()[:600]
     compact_answers = entry.get("q") if isinstance(entry.get("q"), dict) else {
         "purpose": entry.get("purpose"),
         "mechanism": entry.get("mechanism"),
@@ -407,14 +733,199 @@ def _component_entry(entry: dict, component_id: str, facts: Any) -> dict:
         "next_step": entry.get("next"),
     }
     answers = {
-        str(question): _answer(raw, lambda ev: _component_evidence(ev, component_id, facts))
+        str(question): _answer(
+            raw,
+            lambda ev, claim: _component_evidence(
+                ev, component_id, facts, claim=claim
+            ),
+        )
         for question, raw in compact_answers.items()
-        if question in ("purpose", "mechanism", "place", "next_step") and raw is not None
+        if question in (
+            "purpose", "mechanism", "place", "next_step",
+            "why_matters", "data_handled",
+        ) and raw is not None
     }
     if entry.get("label") and not product.get("description"):
         product["description"] = str(entry["label"]).strip()
-    if entry.get("data") and not product.get("data_handled"):
-        product["data_handled"] = str(entry["data"]).strip()
+    for wire_name, question, product_name in (
+        ("why_matters", "why_matters", None),
+        ("data", "data_handled", "data_handled"),
+    ):
+        if entry.get(wire_name) not in (None, "", []):
+            answer_value = _answer(
+                entry[wire_name],
+                lambda ev, claim: _component_evidence(
+                    ev, component_id, facts, claim=claim
+                ),
+            )
+            if (
+                question == "data_handled"
+                and fact_block.get("data_entity_count") == 0
+                and "no data entit" in answer_value.get("claim", "").lower()
+            ):
+                answer_value["evidence"].append({
+                    "kind": "fact", "component": component_id,
+                    "field": "data_entity_count",
+                })
+            answers[question] = answer_value
+            if product_name and answer_value.get("claim"):
+                product[product_name] = answer_value["claim"]
+    local_singletons = {
+        "file_count": r"\b(?:only|sole|single)\s+(?:source\s+)?files?\b",
+        "inbound_edges": r"\b(?:only|sole|single)\s+inbound\s+(?:edge|relationship)\b",
+        "outbound_edges": r"\b(?:only|sole|single)\s+outbound\s+(?:edge|relationship)\b",
+        "capability_count": r"\b(?:only|sole|single)\s+(?:route|capability|endpoint)\b",
+        "data_entity_count": r"\b(?:only|sole|single)\s+data\s+entit(?:y|ies)\b",
+    }
+    global_singletons = {
+        "same_language_component_count": (
+            rf"\b(?:only|sole|single)\b[^.]{{0,100}}(?:"
+            rf"\b{re.escape(str(fact_block.get('language') or ''))}\b[^.]{{0,60}}"
+            r"\b(?:component|representative|sample|target)\b|"
+            r"\b(?:component|representative|sample|target)\b[^.]{0,60}"
+            rf"\b{re.escape(str(fact_block.get('language') or ''))}\b)"
+        ),
+        "same_type_component_count": (
+            rf"\b(?:only|sole|single)\b[^.]{{0,100}}(?:"
+            rf"\b{re.escape(str(fact_block.get('type') or ''))}\b[^.]{{0,60}}"
+            r"\b(?:component|representative|sample|target|type)\b|"
+            r"\b(?:component|representative|sample|target|type)\b[^.]{0,60}"
+            rf"\b{re.escape(str(fact_block.get('type') or ''))}\b)"
+        ),
+        "system_relationship_count": (
+            r"\b(?:only|sole|single)\b[^.]{0,80}"
+            r"\b(?:edge|relationship|call)\b"
+        ),
+        "system_capability_count": (
+            r"\b(?:only|sole|single)\s+(?:api\s+)?capabilit(?:y|ies)\b"
+        ),
+        "system_capability_component_count": (
+            r"\b(?:only|sole|single)\b[^.]{0,80}"
+            r"\bcomponent\b[^.]{0,80}\bcapabilit(?:y|ies)\b"
+        ),
+    }
+    for answer_value in answers.values():
+        claim = str(answer_value.get("claim") or "")
+        for field, pattern in local_singletons.items():
+            if fact_block.get(field) == 1 and re.search(pattern, claim, re.I):
+                evidence = answer_value.setdefault("evidence", [])
+                citation = {
+                    "kind": "fact", "component": component_id, "field": field,
+                }
+                if citation not in evidence:
+                    evidence.append(citation)
+        for field, pattern in global_singletons.items():
+            if fact_block.get(field) == 1 and re.search(pattern, claim, re.I):
+                evidence = answer_value.setdefault("evidence", [])
+                citation = {
+                    "kind": "fact", "component": component_id,
+                    "field": field, "scope": "global",
+                }
+                if citation not in evidence:
+                    evidence.append(citation)
+        capabilities = fact_block.get("capabilities") or []
+        capability_terms = []
+        for capability in capabilities:
+            if not isinstance(capability, dict):
+                continue
+            capability_terms.append(str(capability.get("name") or ""))
+            detail = capability.get("detail") or {}
+            if isinstance(detail, dict):
+                capability_terms.extend([
+                    str(detail.get("path") or ""),
+                    str(detail.get("framework") or ""),
+                    str(detail.get("symbol") or "").rsplit(" ", 1)[-1],
+                ])
+        if any(
+            len(term) >= 4 and term.lower() in claim.lower()
+            for term in capability_terms
+        ):
+            evidence = answer_value.setdefault("evidence", [])
+            citation = {
+                "kind": "fact", "component": component_id,
+                "field": "capabilities",
+            }
+            if citation not in evidence and len(evidence) < 2:
+                evidence.append(citation)
+        deterministic_matches = []
+        if re.search(r"\b\d[\d,]*\s+lines?\b", claim, re.I):
+            deterministic_matches.append("lines")
+        if re.search(
+            r"\b\d[\d,]*[- ]files?\b|\b(?:single|one)\s+files?\b",
+            claim,
+            re.I,
+        ):
+            deterministic_matches.append("file_count")
+        if re.search(
+            r"\bno\s+(?:detected\s+)?capabilit(?:y|ies)\b", claim, re.I
+        ):
+            deterministic_matches.append("capability_count")
+        if "highest inbound" in claim.lower():
+            deterministic_matches.append("system_max_inbound_edges")
+        if "highest outbound" in claim.lower():
+            deterministic_matches.append("system_max_outbound_edges")
+        for field in ("framework", "language", "port"):
+            value = fact_block.get(field)
+            if value not in (None, "") and str(value).lower() in claim.lower():
+                deterministic_matches.append(field)
+        files = fact_block.get("files") or []
+        names_a_file = any(
+            str(path).lower() in claim.lower()
+            or PurePosixPath(str(path)).name.lower() in claim.lower()
+            for path in files
+        )
+        already_cites_file = any(
+            isinstance(item, dict)
+            and item.get("kind") in ("file", "symbol", "manifest", "doc")
+            for item in answer_value.get("evidence") or []
+        )
+        if names_a_file and not already_cites_file:
+            deterministic_matches.append("files")
+        edges = fact_block.get("edges") or []
+        if any(
+            (
+                str(edge.get("source") or "").lower() in claim.lower()
+                and str(edge.get("target") or "").lower() in claim.lower()
+            )
+            or (
+                str(edge.get("type") or "").lower() in claim.lower()
+                and (
+                    str(edge.get("source") or "").lower() in claim.lower()
+                    or str(edge.get("target") or "").lower() in claim.lower()
+                )
+            )
+            for edge in edges if isinstance(edge, dict)
+        ):
+            deterministic_matches.append("edges")
+        config_files = fact_block.get("config_files") or []
+        if any(
+            str(item.get("path") or "").lower() in claim.lower()
+            or PurePosixPath(str(item.get("path") or "")).name.lower()
+            in claim.lower()
+            or any(
+                len(str(service)) >= 2
+                and re.search(
+                    rf"\b{re.escape(str(service).lower())}\b",
+                    claim.lower(),
+                )
+                for service in (item.get("services") or [])
+            )
+            for item in config_files if isinstance(item, dict)
+        ):
+            deterministic_matches.append("config_files")
+        if "readme" in claim.lower() and fact_block.get("documentation"):
+            deterministic_matches.append("documentation")
+        for field in dict.fromkeys(deterministic_matches):
+            if field not in fact_block:
+                continue
+            evidence = answer_value.setdefault("evidence", [])
+            citation = {
+                "kind": "fact", "component": component_id, "field": field,
+            }
+            if field.startswith("system_"):
+                citation["scope"] = "global"
+            if citation not in evidence:
+                evidence.append(citation)
     # Generate each semantic atom once.  The reader prose and audit contract
     # share those exact atoms instead of paying the model for two paraphrases.
     if not product.get("help_text"):
@@ -422,7 +933,7 @@ def _component_entry(entry: dict, component_id: str, facts: Any) -> dict:
             answers.get(name, {}).get("claim", "")
             for name in ("purpose", "mechanism", "place")
         ]
-        prose.append(str(entry.get("why_matters") or "").strip())
+        prose.append(answers.get("why_matters", {}).get("claim", ""))
         product["help_text"] = " ".join(text for text in prose if text)
     # Identity is parser-owned by default.  Only exceptions cross the wire, and
     # they remain in the audit record for adjudication and future parser work.
@@ -465,8 +976,23 @@ def _relationship_entry(entry: dict, key: str, facts: Any) -> dict:
         if question in entry:
             answers[question] = _answer(
                 entry[question],
-                lambda ev: _relationship_evidence(ev, key, facts),
+                lambda ev, claim: _relationship_evidence(ev, key, facts),
             )
+    relationship_facts = facts.relationship_facts(key)
+    if relationship_facts.get("system_relationship_count") == 1:
+        for answer in answers.values():
+            claim = str(answer.get("claim") or "")
+            if not re.search(
+                r"\b(?:only|sole|single)\b[^.]{0,80}"
+                r"\b(?:edge|relationship|call|connection)\b",
+                claim,
+                re.I,
+            ):
+                continue
+            evidence = answer.setdefault("evidence", [])
+            if evidence and isinstance(evidence[0], dict):
+                evidence[0]["scope"] = "global"
+                evidence[0]["value"] = {"system_relationship_count": 1}
     if entry.get("d"):
         product["data_flow_description"] = entry["d"]
     elif answers.get("flow", {}).get("claim"):

@@ -429,6 +429,12 @@ class LadderPhase:
         if not outcome.states:
             status = "failed"
             outcome.notes.append("the ladder produced no contract states at all")
+        elif any(row.phase == self.name and not row.ok for row in ctx.ledger):
+            status = "degraded"
+            outcome.notes.append(
+                "one or more model calls failed; fallback output was retained but "
+                "the phase is degraded, not clean"
+            )
         return PhaseResult(
             name=self.name,
             status=status,
@@ -565,6 +571,10 @@ class LadderPhase:
             )
             attempt_prompt = prompt
             last_error = ""
+            from .compact import salvage_compact_response, validate_compact_response
+            from .prompts import split_cached_prompt
+
+            compact_prefix, compact_user = split_cached_prompt(prompt)
             # One corrective retry on a parse failure, which the other three
             # call sites in this codebase already had and the ladder alone
             # lacked (passes._invoke_json, engine._enhance_partition,
@@ -572,22 +582,24 @@ class LadderPhase:
             # or half an object is usually recoverable by saying so.
             for attempt in range(2):
                 result = invoker(attempt_prompt)
-                if not result.ok:
-                    return job_id, None, f"did not return: {result.error}"
                 response_bytes = len(result.text.encode("utf-8"))
                 parsed_candidate = _parse_json_object(
                     result.text, expect_keys=PARTITION_KEYS
                 )
-                compact_wire = bool(
-                    isinstance(parsed_candidate, dict)
-                    and (
-                        isinstance(parsed_candidate.get("components"), list)
-                        or isinstance(parsed_candidate.get("relationships"), list)
+                transport_note = None
+                if not result.ok:
+                    if parsed_candidate is None:
+                        return job_id, None, f"did not return: {result.error}"
+                    # Some CLI-side failures occur after the model has authored
+                    # usable JSON. Preserve and validate that paid payload while
+                    # retaining the failed ledger row for honest completion and
+                    # accounting.
+                    transport_note = (
+                        "recovered JSON payload from nonzero transport exit: "
+                        f"{result.error}"
                     )
-                )
                 if (
                     output_budget is not None
-                    and (compact_wire or result.structured_output_enforced)
                     and response_bytes > output_budget
                 ):
                     # Do not buy a second oversized response.  Shape drift is a
@@ -600,15 +612,46 @@ class LadderPhase:
                     )
                 obj = parsed_candidate
                 if obj is not None:
-                    return job_id, obj, None
-                last_error = "returned unparseable text"
+                    # Canonical object maps remain a supported compatibility
+                    # boundary for injected providers and stored replays. They
+                    # still obey the unconditional call byte budget and exact
+                    # coverage checks; compact list responses additionally use
+                    # the field-level schema below.
+                    if isinstance(obj.get("components"), dict) or isinstance(
+                        obj.get("relationships"), dict
+                    ):
+                        return job_id, obj, transport_note
+                    obj, schema_errors, stripped = validate_compact_response(
+                        obj, prefix=compact_prefix, user=compact_user
+                    )
+                    if not schema_errors:
+                        note = (
+                            "stripped unknown compact fields: " + ", ".join(stripped[:8])
+                            if stripped else None
+                        )
+                        if transport_note:
+                            note = transport_note + ("; " + note if note else "")
+                        return job_id, obj, note
+                    last_error = "compact schema rejected: " + "; ".join(schema_errors[:8])
+                    if attempt == 1:
+                        salvaged, rejected = salvage_compact_response(
+                            obj, prefix=compact_prefix, user=compact_user
+                        )
+                        if salvaged is not None:
+                            return (
+                                job_id, salvaged,
+                                f"{last_error}; salvaged valid siblings and rejected "
+                                + ", ".join(rejected[:8]),
+                            )
+                else:
+                    last_error = "returned unparseable text"
                 if attempt == 0:
                     attempt_prompt = (
                         prompt
-                        + "\n\nYour previous response could not be parsed as a "
-                        "single JSON object with the required top-level keys. "
-                        "Return ONLY the JSON object, starting with { and "
-                        "ending with }, with no prose and no markdown fences."
+                        + "\n\nYour previous response failed deterministic validation: "
+                        + last_error
+                        + ". Return ONLY one corrected JSON object, starting with { "
+                        "and ending with }, with no prose and no markdown fences."
                     )
             failure_path = ctx.run_path("failures", f"{rung}-job-{job_id}.txt")
             try:
@@ -922,6 +965,14 @@ class LadderPhase:
                     component_ids=[s.target_id for s in batch if s.target_kind == "component"],
                     relationship_keys=[s.target_id for s in batch if s.target_kind == "relationship"],
                 )
+                # A duplicate is not an answer. The compact wire uses arrays,
+                # so normalization would otherwise turn a duplicate into a
+                # silent last-write-wins value. Rung 2a already rejects this
+                # ambiguity; repairs must obey the same exact-set contract.
+                for cid in issues["duplicate_components"]:
+                    (obj.get("components") or {}).pop(cid, None)
+                for key in issues["duplicate_relationships"]:
+                    (obj.get("relationships") or {}).pop(key, None)
                 answered = len(obj.get("components") or {}) + len(obj.get("relationships") or {})
                 examined.update((s.target_kind, s.target_id) for s in batch)
                 self._absorb(
@@ -1093,6 +1144,7 @@ class LadderPhase:
         facts_by_id: dict, outcome: LadderOutcome, *, rung: str,
         component_ids: list[str], relationship_keys: list[str],
         terminal: bool = False,
+        reject_demotion: bool = False,
     ) -> None:
         """Stamp the product payload and recompute the contract state, per target."""
         comps = obj.get("components") if isinstance(obj.get("components"), dict) else {}
@@ -1109,13 +1161,13 @@ class LadderPhase:
                 self._absorb_one(
                     ctx, validator, facts_by_id, outcome,
                     rung=rung, target_kind=target_kind, target_id=target_id,
-                    raw=raw, terminal=terminal,
+                    raw=raw, terminal=terminal, reject_demotion=reject_demotion,
                 )
 
     def _absorb_one(
         self, ctx: RunContext, validator: EvidenceValidator, facts_by_id: dict,
         outcome: LadderOutcome, *, rung: str, target_kind: str, target_id: str,
-        raw: dict, terminal: bool,
+        raw: dict, terminal: bool, reject_demotion: bool = False,
     ) -> None:
         key = (target_kind, target_id)
         previous_state = outcome.states.get(key)
@@ -1175,6 +1227,24 @@ class LadderPhase:
                 state.state = "escalate"
                 state.failed = remaining + closed
 
+        if reject_demotion and previous_state is not None:
+            rank = {"escalate": 0, "honest_gap": 1, "grounded": 2}
+            if rank.get(state.state, -1) < rank.get(previous_state.state, -1):
+                outcome.transitions.append({
+                    "target_kind": target_kind,
+                    "target_id": target_id,
+                    "rung": rung,
+                    "from_state": previous_state.state,
+                    "state": previous_state.state,
+                    "failed": [failure.to_dict() for failure in state.failed],
+                    "parser_first": list(state.parser_first),
+                    "resolution": (
+                        "rejected work-order result: contract state would demote "
+                        f"from {previous_state.state} to {state.state}"
+                    ),
+                })
+                return
+
         # The routing record survives re-evaluation: class-at-entry is stamped
         # once, at the first escalate, and carried forward even after the item
         # grounds, so the run can measure its own routing populations (the v2
@@ -1182,6 +1252,7 @@ class LadderPhase:
         if previous_state is not None:
             state.entry_triggers = list(previous_state.entry_triggers)
             state.entry_class = previous_state.entry_class
+            state.entry_class_basis = previous_state.entry_class_basis
             state.repair_attempted = previous_state.repair_attempted
         state.record_entry_class()
 

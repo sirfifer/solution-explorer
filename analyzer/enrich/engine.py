@@ -25,6 +25,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import uuid
 from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
@@ -144,10 +145,9 @@ class InvokeResult:
     # Max plan the Sonnet and Opus buckets are separate. This is ground truth
     # from the process that did the metering; the binding is only our intent.
     model_usage: dict = field(default_factory=dict)
-    # True only when the transport itself constrained decoding with the compact
-    # JSON Schema.  Scripted/legacy invokers leave it false, which lets the test
-    # seam remain backwards compatible without pretending their canonical
-    # fixtures exercised the production byte gate.
+    # Historical transport marker. New compact calls validate in-process so a
+    # CLI-side schema rejection cannot destroy paid output; old run artifacts
+    # retain this bit so their two-turn StructuredOutput handoff is auditable.
     structured_output_enforced: bool = False
     # Characters of the cacheable prefix this call actually sent as an appended
     # system prompt; 0 when the prompt carried no marker and the legacy argv
@@ -162,6 +162,66 @@ class InvokeResult:
 Invoker = Callable[[str], InvokeResult]
 
 
+def _recover_transcript_usage(session_id: str) -> tuple[dict, dict]:
+    """Best-effort usage recovery when the CLI exits without an envelope.
+
+    Claude's transcript repeats one assistant message as its content evolves
+    (thinking, then tool handoff), so message ids are deduplicated before token
+    counts are summed. Raw transcript content never leaves the provider-owned
+    directory and is never copied into a run artifact.
+    """
+    usage = {
+        "input_tokens": 0, "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0, "output_tokens": 0,
+    }
+    by_model: dict[str, dict] = {}
+    try:
+        matches = list(
+            (Path.home() / ".claude" / "projects").glob(f"*/{session_id}.jsonl")
+        )
+        if not matches:
+            return {}, {}
+        seen: set[str] = set()
+        turns = 0
+        stop_reason = None
+        for line in matches[0].read_text(encoding="utf-8").splitlines():
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            message = record.get("message") or {}
+            if record.get("type") != "assistant" or not isinstance(message, dict):
+                continue
+            message_id = str(message.get("id") or record.get("uuid") or "")
+            if not message_id or message_id in seen:
+                continue
+            seen.add(message_id)
+            turns += 1
+            block = message.get("usage") or {}
+            model = str(message.get("model") or "unknown")
+            model_block = by_model.setdefault(model, {
+                "inputTokens": 0, "cacheCreationInputTokens": 0,
+                "cacheReadInputTokens": 0, "outputTokens": 0,
+            })
+            for source, aggregate, model_key in (
+                ("input_tokens", "input_tokens", "inputTokens"),
+                ("cache_creation_input_tokens", "cache_creation_input_tokens", "cacheCreationInputTokens"),
+                ("cache_read_input_tokens", "cache_read_input_tokens", "cacheReadInputTokens"),
+                ("output_tokens", "output_tokens", "outputTokens"),
+            ):
+                value = int(block.get(source) or 0)
+                usage[aggregate] += value
+                model_block[model_key] += value
+            stop_reason = message.get("stop_reason") or stop_reason
+        if not seen:
+            return {}, {}
+        usage["num_turns"] = turns
+        usage["stop_reason"] = stop_reason
+        return usage, by_model
+    except (OSError, TypeError, ValueError):
+        return {}, {}
+
+
 class ClaudeCliInvoker:
     """Invoke Claude headlessly via the `claude` CLI (the installed mechanism).
 
@@ -170,6 +230,10 @@ class ClaudeCliInvoker:
     the JSON envelope's ``result`` (model text), ``total_cost_usd``, and
     ``usage``. The Python Agent SDK is not installed in this environment; the CLI
     is the simplest available headless path and reports cost per call.
+
+    Compact JSON is deliberately not forced with the CLI's ``--json-schema``:
+    the ladder validates the same bounded schema after delivery and can repair
+    or salvage a malformed item without discarding the whole response.
 
     ``model`` is optional. A model name pins the call to that model, which is
     what every caller does today. ``model=None`` OMITS the flag entirely and lets
@@ -186,15 +250,32 @@ class ClaudeCliInvoker:
         claude_bin: str = "claude",
         timeout: int = 600,
         effort: str = DEFAULT_EFFORT,
+        max_budget_usd: Optional[float] = None,
     ):
         self.model = model
         self.claude_bin = claude_bin
         self.timeout = timeout
         self.effort = effort
+        self.max_budget_usd = max_budget_usd
+
+    def set_max_budget_usd(self, value: Optional[float]) -> None:
+        """Set the CLI's best-effort allowance for the next invocation.
+
+        The shared run meter assigns this immediately before launch.  Keeping
+        it mutable avoids rebuilding the provider stack for every call while
+        still letting each call see the run's exact remaining reservation. The
+        CLI may exceed this value for a single response, so callers must treat
+        it as a launch allowance and validate measured cost afterwards.
+        """
+        self.max_budget_usd = value
 
     def __call__(self, prompt: str) -> InvokeResult:
         structured_output_enforced = False
         prefix_chars = 0
+        # Allocate the id before spawning. A CLI-side validation or transport
+        # failure can exit without an envelope, which used to leave the ledger
+        # with no way to locate the provider transcript.
+        session_id = str(uuid.uuid4())
         try:
             # A None model omits the flag entirely, which lets the CLI route the
             # call itself instead of being pinned to one model. That is the
@@ -223,9 +304,12 @@ class ClaudeCliInvoker:
                 self.claude_bin, "-p", "--output-format", "json",
                 "--tools", "", "--setting-sources", "user",
                 "--effort", self.effort,
+                "--session-id", session_id,
             ]
             if self.model:
                 argv += ["--model", self.model]
+            if self.max_budget_usd is not None:
+                argv += ["--max-budget-usd", f"{max(0.01, self.max_budget_usd):.6f}"]
             # Compact ladder prompts mark a byte-stable instruction prefix.
             # Put that prefix in the CLI's appended system prompt and send only
             # facts on stdin.  Repeated calls can now read the same provider
@@ -240,10 +324,6 @@ class ClaudeCliInvoker:
                     timeout=self.timeout,
                 )
             else:
-                from .compact import compact_json_schema
-
-                schema = compact_json_schema(prefix, user_prompt)
-                structured_output_enforced = schema is not None
                 prefix_chars = len(prefix)
                 with tempfile.NamedTemporaryFile(
                     mode="w", encoding="utf-8", suffix=".prompt", delete=True
@@ -262,16 +342,16 @@ class ClaudeCliInvoker:
                             "--exclude-dynamic-system-prompt-sections",
                             "--append-system-prompt-file", prefix_file.name,
                             "--max-turns", "1",
-                            *(["--json-schema", json.dumps(
-                                schema, separators=(",", ":"), sort_keys=True
-                            )] if schema is not None else []),
                         ],
                         input=user_prompt, capture_output=True, text=True,
                         timeout=self.timeout,
                     )
         except (OSError, subprocess.SubprocessError) as exc:
             # Spawn failure or subprocess timeout: a bounded transient (R2).
-            return InvokeResult(ok=False, text="", error=f"invocation failed: {exc}")
+            return InvokeResult(
+                ok=False, text="", error=f"invocation failed: {exc}",
+                session_id=session_id,
+            )
         if proc.returncode != 0:
             # A nonzero exit can still carry a structured JSON error envelope on
             # stdout: a real claude CLI run returns exit 1 for an API error WITH
@@ -280,23 +360,46 @@ class ClaudeCliInvoker:
             # retry layer can tell a transient (429/5xx) from a deterministic
             # (4xx) failure; fall back to stderr only when there is no envelope.
             status, detail = _envelope_error(proc.stdout)
+            recovered_usage, recovered_models = _recover_transcript_usage(session_id)
+            try:
+                error_envelope = json.loads(proc.stdout)
+                if not isinstance(error_envelope, dict):
+                    error_envelope = {}
+            except (json.JSONDecodeError, TypeError):
+                error_envelope = {}
+            envelope_usage = error_envelope.get("usage") or recovered_usage
+            envelope_models = error_envelope.get("modelUsage") or recovered_models
+            envelope_cost = float(error_envelope.get("total_cost_usd", 0.0) or 0.0)
             if status is not None or detail is not None:
                 return InvokeResult(
                     ok=False,
-                    text=detail or "",
+                    text=proc.stdout or proc.stderr or detail or "",
+                    cost_usd=envelope_cost,
                     error=f"claude exited {proc.returncode}: {(detail or proc.stderr).strip()[:400]}",
                     status_code=status,
+                    session_id=session_id,
+                    usage=envelope_usage,
+                    model_usage=envelope_models,
+                    model=self.model,
                 )
             return InvokeResult(
-                ok=False, text="",
+                ok=False, text=proc.stdout or proc.stderr or "",
+                cost_usd=envelope_cost,
                 error=f"claude exited {proc.returncode}: {proc.stderr.strip()[:400]}",
+                session_id=session_id,
+                usage=envelope_usage,
+                model_usage=envelope_models,
+                model=self.model,
             )
         try:
             envelope = json.loads(proc.stdout)
         except json.JSONDecodeError as exc:
             # Well-formed run (exit 0) that returned non-JSON: a deterministic
             # parse failure. NEVER retried at the transport layer (R2).
-            return InvokeResult(ok=False, text="", error=f"unparseable envelope: {exc}")
+            return InvokeResult(
+                ok=False, text=proc.stdout,
+                error=f"unparseable envelope: {exc}", session_id=session_id,
+            )
         if envelope.get("is_error"):
             return InvokeResult(
                 ok=False, text=str(envelope.get("result", "")),
@@ -309,6 +412,7 @@ class ClaudeCliInvoker:
                 status_code=_coerce_status(envelope.get("api_error_status")),
                 model=self.model,
                 model_usage=envelope.get("modelUsage", {}) or {},
+                session_id=envelope.get("session_id") or session_id,
             )
         # The success path carries the envelope's own account of HOW the answer
         # was produced, not just the answer. num_turns feeds the agentic-drift
@@ -330,7 +434,7 @@ class ClaudeCliInvoker:
             ),
             model=self.model,
             model_usage=envelope.get("modelUsage", {}) or {},
-            session_id=envelope.get("session_id"),
+            session_id=envelope.get("session_id") or session_id,
             structured_output_enforced=structured_output_enforced,
             prefix_chars=prefix_chars,
         )

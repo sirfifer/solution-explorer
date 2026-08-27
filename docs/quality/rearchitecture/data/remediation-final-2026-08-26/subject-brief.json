@@ -1,0 +1,82 @@
+{
+  "identity": "polyglot is a deliberately tiny test fixture, not a product: a 13-file, 255-line multi-language 'solution' committed inside the analyzer's own test suite. Its job is to exercise the analyzer engine across every supported tree-sitter language and the main component and relationship types, and to serve as the anchor for the P4-1 parity snapshot that the P4-7 cutover is diffed against. Every service in it (FastAPI api, TypeScript web client, Go worker, Rust/Ruby libs, Swift app, docker-compose db and cache) exists to trigger a specific detection path, not to do real work.",
+  "audience": "Developers of the analyzer itself (and its test suite), inferred from the README since no other audience is documented. They open a map of this fixture to verify that the analyzer detected what the fixture was built to make detectable \u2014 languages, component types, entry points, the one declared relationship \u2014 and to diff parity snapshots when the engine changes. A reader treating this as a real system to operate or extend is misreading it.",
+  "what_matters": [
+    "Coverage completeness: every language and component type the fixture was planted to exercise must appear in the map, because a missing one is an analyzer bug, not fixture noise",
+    "The single declared relationship (web client \u2192 api over HTTP) and its contract-backed boundary, since it is the only relationship signal the fixture provides",
+    "Entry-point detection correctness: api's port 8000 bind, worker's main.go, and the suspicious 'listens on a port' attribution on the markdown root",
+    "Stability of the map as a parity baseline: descriptions must be deterministic and grounded so P4-7 cutover diffs are meaningful",
+    "Not inflating: the map must present this as a fixture, since architecture verdicts (zone of uselessness, low activity) are artifacts of its purpose"
+  ],
+  "criteria": [
+    {
+      "id": "s1",
+      "statement": "The map states explicitly that this is a test fixture for the analyzer, and every component description is framed as 'exists to exercise X' rather than as production functionality.",
+      "why": "The fixture's only value is what it exercises; a map describing polyglot-api as a real API server would mislead the exact reader (an analyzer developer) checking detection behavior.",
+      "how_to_check": "Read the identity/summary and each component description; any description that could apply to a real production service of that name fails.",
+      "universal": false
+    },
+    {
+      "id": "s2",
+      "statement": "All eleven languages present in the tree (python, typescript, javascript, go, rust, ruby, swift, plus markdown/yaml/toml/json) are attributed to the correct component, with none silently dropped.",
+      "why": "Language coverage is the fixture's reason to exist; a dropped language means the analyzer's tree-sitter path for it went unexercised.",
+      "how_to_check": "Cross the languages histogram in the scale data against the language field of each mapped component; every code language must appear on exactly the component the README assigns it to.",
+      "universal": false
+    },
+    {
+      "id": "s3",
+      "statement": "The web\u2192api HTTP relationship is named with its direction and protocol, and the map notes it is the fixture's sole cross-component edge.",
+      "why": "With total_relationships=1, this edge is 100% of the relationship-detection evidence; getting it wrong or omitting it invalidates the parity anchor.",
+      "how_to_check": "Find the relationship in the map; it must run from services/web (or services/web/src) to services/api and say HTTP.",
+      "universal": false
+    },
+    {
+      "id": "s4",
+      "statement": "The 'root' component's 'listens on a port' entry-point claim is either corrected or flagged as an attribution of docker-compose's db/cache port bindings, not left as-is.",
+      "why": "A markdown/infrastructure root that 'listens on a port' will read as an analyzer bug to the fixture's audience; the map must resolve whether it is docker-compose signal bleeding upward.",
+      "how_to_check": "Look at the root component's entry in the map and confirm the port claim is explained against docker-compose.yml rather than repeated verbatim.",
+      "universal": false
+    },
+    {
+      "id": "s5",
+      "statement": "The 'zone of uselessness' finding on services/web/src is contextualized as expected for a fixture (nothing consumes the web client by design), not surfaced as an architectural defect.",
+      "why": "Mechanical findings on a fixture measure the fixture's construction, not design failures; reporting it as a defect would tell an analyzer developer their tool misjudges fixtures.",
+      "how_to_check": "Find where the map mentions services/web/src; the wording must attribute the unused flexibility to fixture design.",
+      "universal": false
+    },
+    {
+      "id": "u1",
+      "statement": "Every enrichment target reached a terminal contract state.",
+      "why": "An item still asking to climb is unfinished work, and a run that reports done over unfinished work is the failure mode the census exists to make visible.",
+      "how_to_check": "The census has no items in the escalate state.",
+      "universal": true
+    },
+    {
+      "id": "u2",
+      "statement": "Claims are grounded in evidence that checks out.",
+      "why": "A claim without evidence you can point at is not an answer, and a form scorer cannot tell the difference.",
+      "how_to_check": "The grounded fraction of the census, and the adjudicator's spot-check disagreement rate.",
+      "universal": true
+    },
+    {
+      "id": "u3",
+      "statement": "What could not be established is visible as an honest gap, with a reason a reader can act on.",
+      "why": "An honest map says what it does not know. A gap papered over with a plausible sentence is worse than a gap.",
+      "how_to_check": "Every honest-gap item carries a non-empty reason.",
+      "universal": true
+    }
+  ],
+  "weighting_adjustments": [
+    "Shift effort from services/api (ranked #1 by fan-in) toward per-language completeness across the band-3/4/5 components; in a coverage fixture the tail components carry equal evidentiary weight to the head, and the mechanical ranking's importance bands do not reflect that.",
+    "Spend effort on the root/docker-compose infrastructure component: its 15 commits are the only git activity in the subject and its entry-point attribution looks wrong; it is where the mechanical signals most need adjudication.",
+    "Spend near-zero on deep symbol-level enrichment; 33 symbols across 255 lines means file-level description is sufficient, and per-symbol work would cost more than the whole fixture is worth."
+  ],
+  "idiom_warnings": [
+    "Every component is deliberately minimal and mostly disconnected (7 of 8 have zero inbound dependencies, zero commits); this is fixture design, not dead code or abandonment. Do not escalate to explain 'why nothing uses libs/core' \u2014 the README's answer is 'to exercise Rust parsing'.",
+    "The README's instruction 'Keep it tiny. It is committed as real files and must parse fast in CI' is a hard constraint: apparent under-implementation (a 24-line Rust 'library', a 21-line Ruby 'package') is intentional.",
+    "The 'listens on a port' entry_point_because on the markdown root component is likely an analyzer attribution artifact from docker-compose.yml's db/cache services, not a property of any file at root; treat it as a signal to verify, not a fact to repeat.",
+    "Names like polyglot-api and polyglot-web mimic production naming conventions on purpose so the analyzer's framework detection (FastAPI, SwiftUI) has something real to find; the gap between the production-sounding name and the trivial body is the point."
+  ],
+  "notes": [],
+  "generated": true
+}

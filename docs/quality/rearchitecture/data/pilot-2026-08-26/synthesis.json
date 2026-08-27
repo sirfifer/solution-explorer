@@ -1,0 +1,193 @@
+{
+  "tours": [
+    {
+      "id": "coverage-walk",
+      "title": "Language coverage walk",
+      "description": "Visits each stub component to confirm every tree-sitter grammar the fixture exercises is detected, from the ground-truth README outward.",
+      "steps": [
+        {
+          "target": "root",
+          "title": "The ground truth",
+          "narration": "Start at the README and docker-compose.yml: they declare what the fixture contains \u2014 api, db, and cache services \u2014 and state its intent as an analyzer test fixture. Everything else in the map must agree with these two files.",
+          "evidence": {
+            "file": "README.md",
+            "line": 1
+          }
+        },
+        {
+          "target": "services/api",
+          "title": "Python: the API stub",
+          "narration": "The first language stop after the ground truth, because it is the fixture's only api-server-typed component. server.py exists to be parsed as Python and to sit at the receiving end of the fixture's one relationship \u2014 verified at the next stop, not here.",
+          "evidence": {
+            "file": "services/api/api/server.py",
+            "line": 1
+          }
+        },
+        {
+          "target": "services/web/src",
+          "title": "TypeScript and JavaScript",
+          "narration": "Two languages in one module: client.ts hardcodes http://api:8000, which is how the analyzer infers the fixture's single HTTP edge back to the API you just saw; format.js adds JavaScript coverage. The mechanical 'zone of uselessness' finding here is expected \u2014 zero dependents is the fixture's design, not a smell.",
+          "evidence": {
+            "file": "services/web/src/client.ts",
+            "line": 1
+          }
+        },
+        {
+          "target": "services/web",
+          "title": "The content wrapper",
+          "narration": "The package.json above the src module gives the analyzer a content-typed TypeScript component. Note an honest gap: the enrichment could not establish this component's place in the system, which is visible in the census rather than papered over.",
+          "evidence": {
+            "file": "services/web/package.json",
+            "line": 1
+          }
+        },
+        {
+          "target": "services/worker",
+          "title": "Go",
+          "narration": "A deliberately isolated 21-line main.go with no edges either way. Its emptiness is the point: being parseable as Go is its entire function.",
+          "evidence": {
+            "file": "services/worker/main.go",
+            "line": 1
+          }
+        },
+        {
+          "target": "libs/core",
+          "title": "Rust",
+          "narration": "A minimal Cargo crate exercising both Cargo-manifest and Rust source parsing. Like the worker, its isolation is by design.",
+          "evidence": {
+            "file": "libs/core/src/lib.rs",
+            "line": 1
+          }
+        },
+        {
+          "target": "libs/rubylib",
+          "title": "Ruby",
+          "narration": "One file laid out as a conventional Ruby library so the analyzer classifies it as a package \u2014 testing classification, not just parsing.",
+          "evidence": {
+            "file": "libs/rubylib/lib/parser.rb",
+            "line": 1
+          }
+        },
+        {
+          "target": "apps/ios",
+          "title": "Swift",
+          "narration": "The last grammar: a Swift Package manifest plus one SwiftUI view. With this stop every code language the fixture ships (Python, TypeScript, JavaScript, Go, Rust, Ruby, Swift) has appeared, and the config-doc languages were covered at the root.",
+          "evidence": {
+            "file": "apps/ios/Sources/App/ContentView.swift",
+            "line": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "one-relationship",
+      "title": "The one relationship",
+      "description": "Follows the fixture's single declared cross-component edge from its source in client.ts to its target in the API stub, plus the infrastructure that frames it.",
+      "steps": [
+        {
+          "target": "services/web/src",
+          "title": "The caller",
+          "narration": "The edge originates here: client.ts hardcodes the API base URL http://api:8000, the signal the analyzer must turn into an HTTP relationship. This is the source end of the only inter-component edge the fixture declares.",
+          "evidence": {
+            "file": "services/web/src/client.ts",
+            "line": 1
+          }
+        },
+        {
+          "target": "services/api",
+          "title": "The callee",
+          "narration": "The API stub receives that call \u2014 the census shows exactly one inbound edge here. Be careful with stronger phrasings: adjudication found that the evidence supports the inbound edge and the FastAPI route, but does not itself identify the web client or HTTP protocol as the caller; that identification comes from the client.ts URL at the previous stop.",
+          "evidence": {
+            "file": "services/api/api/server.py",
+            "line": 1
+          }
+        },
+        {
+          "target": "root",
+          "title": "The frame",
+          "narration": "docker-compose.yml binds the api service to port 8000 \u2014 matching the URL in client.ts \u2014 and declares the db and cache services that give the fixture its infrastructure-detection targets. The 'listens on a port' heuristic on root is an artifact of these declarations; root is docs and config, not a server.",
+          "evidence": {
+            "file": "docker-compose.yml",
+            "line": 1
+          }
+        }
+      ]
+    }
+  ],
+  "lenses": [
+    {
+      "name": "The API summary carries three adjudicated-unsupported claims into the parity snapshot",
+      "observation": "All three disputed claims sit on services/api, and each fails for the same reason: the summary asserts corroboration across files (pyproject.toml packaging, docker-compose port declaration, web-client-as-caller) that no single component's cited evidence can back. The facts are true in the fixture but ungrounded in the component's own evidence, so they will read as drift in the P4-7 cutover diff.",
+      "why_it_matters": "Analyzer developers diffing against the P4-1 parity snapshot need descriptions that are stable and evidence-backed; a summary that restates cross-file facts without cross-file citations churns the snapshot and hides real engine changes.",
+      "confidence": "high",
+      "work_order": {
+        "scope": [
+          "services/api"
+        ],
+        "lens": "Rewrite the services/api summary to claim only what its own cited evidence supports (FastAPI, the GET /users/{user_id} route, port 8000, one inbound edge), moving cross-component claims (caller identity, docker-compose declaration) to the edge or root component where the evidence lives.",
+        "criteria": "Re-adjudication of services/api yields zero unsupported claims; the route, framework, and port facts are retained.",
+        "expected_effect": "truth: adjudicator disagreement count on services/api drops from 3 to 0",
+        "budget": {
+          "max_cost_usd": 1.0,
+          "max_targets": 1
+        }
+      }
+    },
+    {
+      "name": "The one honest gap sits on the fixture's least substantive component",
+      "observation": "The only unestablished question ('place' on services/web) attaches to a 9-line package.json whose place is fully stated by the README and directory layout \u2014 the gap exists because the component's own evidence is too thin to cite, not because the fact is unknowable.",
+      "why_it_matters": "For readers checking whether gaps signal analyzer regressions, this one does not: it is an evidence-granularity artifact. Closing it cheaply from the root component's files would make the census fully grounded without any deep read.",
+      "confidence": "medium",
+      "work_order": {
+        "scope": [
+          "services/web",
+          "root"
+        ],
+        "lens": "Answer services/web's 'place' question using the README's one-line-per-component layout and docker-compose as citable evidence, rather than the component's own package.json.",
+        "criteria": "The census shows 9/9 grounded with the 'place' answer citing a real line in README.md or docker-compose.yml.",
+        "expected_effect": "truth: honest-gap count moves from 1 to 0 with the grounded fraction reaching 100%",
+        "budget": {
+          "max_cost_usd": 0.5,
+          "max_targets": 2
+        }
+      }
+    }
+  ],
+  "work_orders": [
+    {
+      "scope": [
+        "services/api"
+      ],
+      "lens": "Rewrite the services/api summary to claim only what its own cited evidence supports (FastAPI, the GET /users/{user_id} route, port 8000, one inbound edge), moving cross-component claims (caller identity, docker-compose declaration) to the edge or root component where the evidence lives.",
+      "criteria": "Re-adjudication of services/api yields zero unsupported claims; the route, framework, and port facts are retained.",
+      "expected_effect": "truth: adjudicator disagreement count on services/api drops from 3 to 0",
+      "budget": {
+        "max_cost_usd": 1.0,
+        "max_targets": 1
+      },
+      "issued_by": "P4",
+      "outcome": null
+    },
+    {
+      "scope": [
+        "services/web",
+        "root"
+      ],
+      "lens": "Answer services/web's 'place' question using the README's one-line-per-component layout and docker-compose as citable evidence, rather than the component's own package.json.",
+      "criteria": "The census shows 9/9 grounded with the 'place' answer citing a real line in README.md or docker-compose.yml.",
+      "expected_effect": "truth: honest-gap count moves from 1 to 0 with the grounded fraction reaching 100%",
+      "budget": {
+        "max_cost_usd": 0.5,
+        "max_targets": 2
+      },
+      "issued_by": "P4",
+      "outcome": null
+    }
+  ],
+  "rejected_orders": [],
+  "rejected_tours": [],
+  "narrative_written": true,
+  "notes": [
+    "2 tour(s) written, 2 lens(es) discovered, 2 work order(s) issued"
+  ]
+}

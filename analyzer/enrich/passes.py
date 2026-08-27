@@ -83,6 +83,12 @@ class VerifyConfig:
     # and returned 21 output tokens each. Batching amortizes the fixed overhead
     # across items that were always judged independently anyway.
     verify_batch: int = 25
+    # Exact bounded-run scope. max_targets merely truncates the global list and
+    # can verify unrelated rows from a pre-existing store; these sets name the
+    # targets the current ladder actually attempted.
+    component_scope: Optional[frozenset[str]] = None
+    relationship_scope: Optional[frozenset[str]] = None
+    finding_scope: Optional[frozenset[str]] = None
 
 
 @dataclass
@@ -308,6 +314,8 @@ def verify_edges(
             key = relationship_target_id(
                 rel.get("source", ""), rel.get("target", ""), rel.get("type", "")
             )
+            if config.relationship_scope is not None and key not in config.relationship_scope:
+                continue
             if config.update and not _missing_or_stale(store, index, "edge-verdict", key):
                 continue
             targets.append((key, rel))
@@ -347,6 +355,8 @@ def verify_edges(
 
         batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1))
         for chunk in _batches(targets, batch_size, sizer=lambda t: t[1]):
+            if hasattr(invoker, "set_targets"):
+                invoker.set_targets(len(chunk))
             prompt = build_edge_verify_batch_prompt([
                 {
                     "id": key,
@@ -710,6 +720,23 @@ def verify_findings(
             f for f in findings
             if _missing_or_stale(store, index, "finding-verdict", f["id"])
         ]
+        if config.finding_scope is not None:
+            targets = [f for f in targets if f.get("id") in config.finding_scope]
+        elif config.component_scope is not None:
+            def _member_ids(finding: dict) -> set[str]:
+                out = set()
+                for member in finding.get("members") or []:
+                    if isinstance(member, str):
+                        out.add(member)
+                    elif isinstance(member, dict):
+                        value = member.get("component_id") or member.get("id")
+                        if value:
+                            out.add(str(value))
+                return out
+
+            targets = [
+                f for f in targets if _member_ids(f) & set(config.component_scope)
+            ]
         # On a full run, verify every finding lacking a verdict; on --update also
         # re-verify stale ones (both captured by _missing_or_stale, which returns
         # True for missing always and for stale only matters when a row exists).
@@ -746,6 +773,8 @@ def verify_findings(
 
         batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1))
         for chunk in _batches(targets, batch_size):
+            if hasattr(invoker, "set_targets"):
+                invoker.set_targets(len(chunk))
             prompt = build_finding_verify_batch_prompt(chunk)
             batch_obj, cost, errs = _invoke_json(invoker, prompt, validate_batch)
             verdicts = (batch_obj or {}).get("verdicts") or {}
@@ -941,6 +970,8 @@ def verify_identity(
             comp for comp in candidates
             if _missing_or_stale(store, index, "identity-verdict", comp["id"])
         ]
+        if config.component_scope is not None:
+            targets = [comp for comp in targets if comp["id"] in config.component_scope]
         if config.max_targets is not None:
             targets = targets[: config.max_targets]
 
@@ -975,6 +1006,8 @@ def verify_identity(
             targets, batch_size,
             sizer=lambda c: _identity_facts(c, framework_evidence),
         ):
+            if hasattr(invoker, "set_targets"):
+                invoker.set_targets(len(chunk))
             prompt = build_identity_verify_batch_prompt([
                 {
                     "id": comp["id"],

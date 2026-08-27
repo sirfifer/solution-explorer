@@ -38,6 +38,7 @@ from analyzer.enrich.contract import (
 from analyzer.enrich.determine import (
     DeterminationPhase,
     IterationRound,
+    build_determination_prompt,
     evaluate_universal,
 )
 from analyzer.enrich.engine import InvokeResult
@@ -52,6 +53,7 @@ from analyzer.enrich.pipeline import (
     run_ladder,
     run_pipeline,
 )
+from analyzer.enrich.prompts import split_cached_prompt
 from analyzer.enrich.runreport import REQUIRED_SECTIONS, build_report, render_markdown
 from analyzer.extract import extract_repo
 from analyzer.store import FactStore
@@ -59,6 +61,47 @@ from analyzer.store import FactStore
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 POLYGLOT = os.path.join(FIXTURES, "polyglot")
 FIXED_CLOCK = lambda: "2026-08-21T00:00:00+00:00"  # noqa: E731
+
+
+def test_determination_census_changes_only_the_uncached_tail():
+    common = dict(
+        criteria=universal_criteria(), adjudication={"checked": 1},
+        synthesis={"tours": []}, brief={"subject": "fixture"},
+        forced_round=False, rounds_so_far=[], budget_note="BUDGET: bounded",
+    )
+    first = build_determination_prompt(
+        census={"total": 2, "grounded": 1}, **common
+    )
+    second = build_determination_prompt(
+        census={"total": 2, "grounded": 2}, **common
+    )
+    first_prefix, first_tail = split_cached_prompt(first)
+    second_prefix, second_tail = split_cached_prompt(second)
+    assert first_prefix == second_prefix
+    assert first_tail != second_tail
+    assert '"grounded":1' in first_tail
+    assert '"grounded":2' in second_tail
+
+
+def test_determination_adjudication_changes_only_the_uncached_tail():
+    common = dict(
+        criteria=universal_criteria(), census={"total": 2, "grounded": 2},
+        synthesis={"tours": []}, brief={"subject": "fixture"},
+        forced_round=False, rounds_so_far=[], budget_note="BUDGET: bounded",
+    )
+    first = build_determination_prompt(
+        adjudication={"checked": 1, "unsupported": 1}, **common,
+    )
+    second = build_determination_prompt(
+        adjudication={"checked": 2, "unsupported": 0}, **common,
+    )
+    first_prefix, first_tail = split_cached_prompt(first)
+    second_prefix, second_tail = split_cached_prompt(second)
+
+    assert first_prefix == second_prefix
+    assert first_tail != second_tail
+    assert '"unsupported":1' in first_tail
+    assert '"unsupported":0' in second_tail
 
 
 # --- 1. the universal gates are answered by code ------------------------------
@@ -283,7 +326,10 @@ class FullPipelineInvoker:
         })
 
     def _enrichment(self, prompt):
-        ids = [cid for cid in self.world["components"] if f'"{cid}"' in prompt]
+        relationship_call = "ENRICHMENT TASK: relationships" in prompt
+        ids = [] if relationship_call else [
+            cid for cid in self.world["components"] if f'"{cid}"' in prompt
+        ]
         if "HIGHER RUNG" in prompt or "LAST rung" in prompt:
             # An escalation prompt names its items explicitly; answer only those,
             # the way a real higher rung would.
@@ -332,6 +378,7 @@ class FullPipelineInvoker:
                     "claim": "", "status": "dropped",
                     "reason": "generated at build time",
                 }
+        relationship_work = relationship_call or '"target_kind": "relationship"' in prompt
         relationships = {
             key: {
                 "data_flow_description": "identifiers and request payloads",
@@ -347,7 +394,7 @@ class FullPipelineInvoker:
                     "self_state": "grounded",
                 },
             }
-            for key in self.world["relationships"] if key in prompt
+            for key in self.world["relationships"] if relationship_work and key in prompt
         }
         return {"components": components, "relationships": relationships}
 
@@ -547,6 +594,8 @@ def test_the_determination_prompt_forbids_look_again(world):
     prompt = next(p for p in invoker.prompts if "deciding whether an automated map" in p)
     assert '"not-done" is only a legal verdict' in prompt
     assert "are not work orders" in prompt
+    assert "cannot change parser facts" in prompt
+    assert "Never issue a work order" in prompt
 
 
 def test_an_unmet_criterion_qualifies_a_done_verdict(world):
@@ -812,8 +861,10 @@ def test_the_committed_reference_report_matches_what_the_engine_produces(world):
         accounting = report.get("accounting") or {}
         for bucket in accounting.get("by_model") or []:
             bucket["wall_seconds"] = 0.0
-        if accounting.get("totals"):
-            accounting["totals"]["wall_seconds"] = 0.0
+            if accounting.get("totals"):
+                accounting["totals"]["wall_seconds"] = 0.0
+            if report.get("audit"):
+                report["audit"]["run_dir"] = "<run-dir>"
 
     assert produced == reference, (
         "the committed reference report no longer matches what the engine "

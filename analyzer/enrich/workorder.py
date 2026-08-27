@@ -20,6 +20,7 @@ does not terminate.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -230,7 +231,7 @@ def execute_work_order(
     "the map got better", and a determination that cannot tell them apart will
     keep buying rounds that do nothing.
     """
-    from .compact import normalize_compact_response, response_budget_bytes
+    from .compact import coverage_issues, normalize_compact_response, response_budget_bytes
     from .evidence import EvidenceValidator
     from .ladder import LadderOutcome, LadderPhase
     from .partition import flatten_components, plan_partitions
@@ -268,6 +269,14 @@ def execute_work_order(
         cid: ctx.facts.component_facts(cid) for cid in facts_by_id
     })
     scope_set = set(scope)
+    adjudication = (
+        (ctx.phase_data("p3_adjudication") or {}).get("adjudication")
+    )
+    unsupported_by_target: dict[str, list] = {}
+    for check in getattr(adjudication, "unsupported", []) or []:
+        target_id = str(getattr(check, "target_id", "") or "")
+        if target_id in scope_set:
+            unsupported_by_target.setdefault(target_id, []).append(check)
     before = {
         key: {"state": state.state, "terminal": state.terminal}
         for key, state in shared.states.items()
@@ -305,6 +314,21 @@ def execute_work_order(
         for cid in component_ids:
             payload = shared.payloads.get(("component", cid), {})
             contract = payload.get("contract") if isinstance(payload, dict) else {}
+            established = (contract or {}).get("answers", {})
+            failed = []
+            for check in unsupported_by_target.get(cid, []):
+                question = str(getattr(check, "question", "") or "")
+                answer = established.get(question, {}) if isinstance(established, dict) else {}
+                failed.append({
+                    "question": question,
+                    "trigger": "E2",
+                    "claim": str(getattr(check, "claim", "") or ""),
+                    "evidence": (
+                        list(answer.get("evidence") or [])
+                        if isinstance(answer, dict) else []
+                    ),
+                    "note": str(getattr(check, "reason", "") or ""),
+                })
             items.append({
                 "wire": "work-order/v1",
                 "target_kind": "component",
@@ -313,8 +337,13 @@ def execute_work_order(
                 "current_product": {
                     k: v for k, v in payload.items() if k != "contract"
                 } if isinstance(payload, dict) else {},
-                "established": (contract or {}).get("answers", {}),
-                "todo": ["apply the scoped lens; emit only changed fields or answers"],
+                "established": established,
+                "failed": failed,
+                "todo": (
+                    [item["question"] for item in failed]
+                    if failed else
+                    ["apply the scoped lens; emit only changed fields or answers"]
+                ),
             })
         prompt = build_compact_escalation_prompt(
             items, terminal=False, assignment=assignment
@@ -342,9 +371,16 @@ def execute_work_order(
                 f"{response_bytes} > {output_budget} UTF-8 bytes"
             )
             continue
+        issues = coverage_issues(obj, component_ids=component_ids)
         obj = normalize_compact_response(
             obj, facts=ctx.facts, component_ids=component_ids,
         )
+        for cid in issues["duplicate_components"]:
+            (obj.get("components") or {}).pop(cid, None)
+        if any(issues.values()):
+            outcome.notes.append(
+                "compact coverage violation: " + json.dumps(issues, sort_keys=True)
+            )
         # One level of federation, enforced structurally: the absorber reads
         # components and relationships and nothing else, so a response that
         # proposes further orders has proposed them into a void.
@@ -353,6 +389,7 @@ def execute_work_order(
             rung=executing_rung,
             component_ids=component_ids,
             relationship_keys=[],
+            reject_demotion=True,
         )
         outcome.executed = True
         ctx.store.commit()

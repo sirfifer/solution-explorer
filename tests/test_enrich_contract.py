@@ -316,6 +316,112 @@ def test_an_answer_whose_citations_all_fail_validation_is_e2(validator, a_real_f
     assert "not in the analyzed file set" in state.failed[0].note
 
 
+def test_local_fact_cannot_ground_a_global_uniqueness_claim():
+    answers = _grounded_answers("unused.py")
+    answers["place"] = {
+        "claim": "This is the only inbound route.",
+        "status": "answered",
+        "evidence": [{
+            "kind": "fact", "component": "c1", "field": "inbound_edges",
+        }],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={"inbound_edges": 1}, validator=None,
+    )
+    failure = next(item for item in state.failed if item.question == "place")
+    assert failure.trigger == "E3"
+    assert "local analyzer fact" in failure.note
+
+
+def test_only_as_a_modifier_is_not_misread_as_global_uniqueness():
+    answers = _grounded_answers("unused.py")
+    answers["purpose"] = {
+        "claim": "This manifest-only package exists only to be parsed.",
+        "status": "answered",
+        "evidence": [{"kind": "file", "path": "unused.py"}],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={}, validator=None,
+    )
+    assert not any(
+        failure.question == "purpose" and failure.trigger == "E3"
+        for failure in state.failed
+    )
+
+
+def test_global_count_can_ground_a_real_uniqueness_claim():
+    answers = _grounded_answers("unused.py")
+    answers["purpose"] = {
+        "claim": "This is the only Swift component in the fixture.",
+        "status": "answered",
+        "evidence": [{
+            "kind": "fact", "component": "c1",
+            "field": "same_language_component_count", "scope": "global",
+        }],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={"same_language_component_count": 1},
+        validator=None,
+    )
+    assert not any(failure.question == "purpose" for failure in state.failed)
+
+
+def test_labeled_count_claim_must_equal_the_analyzer_atom():
+    answers = _grounded_answers("unused.py")
+    answers["place"] = {
+        "claim": "The analyzer records 7 inbound relationships.",
+        "status": "answered",
+        "evidence": [{
+            "kind": "fact", "component": "c1", "field": "inbound_edges",
+        }],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={"inbound_edges": 1}, validator=None,
+    )
+    failure = next(item for item in state.failed if item.question == "place")
+    assert failure.trigger == "E3"
+    assert "analyzer fact is 1" in failure.note
+
+
+def test_optional_reader_claims_are_audited_not_smuggled_into_product_prose():
+    answers = _grounded_answers("unused.py")
+    answers["why_matters"] = {
+        "claim": "It is the only mobile surface.",
+        "status": "answered",
+        "evidence": [{"kind": "file", "path": "unused.py"}],
+    }
+    answers["data_handled"] = {
+        "claim": "User records.", "status": "answered", "evidence": [],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={}, validator=None,
+    )
+    by_question = {failure.question: failure for failure in state.failed}
+    assert by_question["why_matters"].trigger == "E3"
+    assert by_question["data_handled"].trigger == "E2"
+
+
+def test_local_singleton_is_allowed_when_the_matching_count_atom_is_one():
+    answers = _grounded_answers("unused.py")
+    answers["mechanism"] = {
+        "claim": "A single file contains the implementation.",
+        "status": "answered",
+        "evidence": [{
+            "kind": "fact", "component": "c1", "field": "file_count",
+        }],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={"file_count": 1}, validator=None,
+    )
+    assert state.state == "grounded"
+
+
 def test_uncertain_becomes_e2_and_dropped_becomes_e1(validator, a_real_file):
     path, _, _ = a_real_file
     answers = _grounded_answers(path)
@@ -646,6 +752,8 @@ def test_the_validator_checks_the_same_blocks_the_prompt_showed(fixture_store):
     block = facts.component_facts(cid)
     # The computed fields exist in the prompt's block...
     assert "inbound_edges" in block and "outbound_edges" in block
+    assert "system_relationship_count" in block
+    assert "system_capability_count" in block
     # ...and are absent from the raw arch dict the ladder flattens.
     assert "inbound_edges" not in by_id[cid]
 

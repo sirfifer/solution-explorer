@@ -73,7 +73,7 @@ class ScriptedLadder:
     """
 
     def __init__(self, plan, real_file, all_components, all_relationships,
-                 facts_by_id=None):
+                 facts_by_id=None, duplicate_on_higher=None):
         self.plan = plan
         self.real_file = real_file
         self.all_components = all_components
@@ -82,6 +82,7 @@ class ScriptedLadder:
         # would: the required set is computed from the same facts the
         # validator uses, so a component with a language is asked about it.
         self.facts_by_id = facts_by_id or {}
+        self.duplicate_on_higher = duplicate_on_higher
         self.prompts = []
         self.cost = 0.0
 
@@ -93,7 +94,10 @@ class ScriptedLadder:
             rung = 1
         else:
             rung = 0
-        ids = [cid for cid in self.all_components if f'"{cid}"' in prompt]
+        relationship_call = "ENRICHMENT TASK: relationships" in prompt
+        ids = [] if relationship_call else [
+            cid for cid in self.all_components if f'"{cid}"' in prompt
+        ]
         components = {}
         for cid in ids:
             steps = self.plan.get(cid, ("ground",))
@@ -102,10 +106,19 @@ class ScriptedLadder:
             if block is not None:
                 components[cid] = block
         relationships = {}
-        if rung == 0:
+        if relationship_call or '"target_kind": "relationship"' in prompt:
             for key in self.all_relationships:
                 if key in prompt:
                     relationships[key] = self._relationship()
+        if rung == 1 and self.duplicate_on_higher in components:
+            cid = self.duplicate_on_higher
+            # Compact arrays can represent the same target twice. The second
+            # value must never silently win and ground an ambiguous repair.
+            repair = {
+                "i": cid,
+                "q": {"mechanism": {"t": "a repaired mechanism", "e": [0]}},
+            }
+            components = [repair, dict(repair)]
         return InvokeResult(
             ok=True,
             text=json.dumps({"components": components, "relationships": relationships}),
@@ -216,10 +229,10 @@ def world(tmp_path):
     }
 
 
-def _run(world, plan, *, ceiling=None, tmp_path=None):
+def _run(world, plan, *, ceiling=None, tmp_path=None, duplicate_on_higher=None):
     invoker = ScriptedLadder(
         plan, world["real_file"], world["components"], world["relationships"],
-        world["facts_by_id"],
+        world["facts_by_id"], duplicate_on_higher,
     )
     config = LadderConfig(
         store_path=world["db"],
@@ -328,12 +341,32 @@ def test_a_climbing_item_keeps_the_answers_the_lower_rung_grounded(world):
     assert state.state == "grounded"
     assert state.rung == "opus"
     assert state.terminal == "grounded@opus"
+    assert state.entry_class == "reasoning"
+    assert state.entry_class_basis == "lacked:0/trigger:1"
     # The history records where it came from, so the census can say what climbed.
     assert state.history == ["sonnet:escalate"]
     # And the parser-first finding raised at 2a survived the climb.
     assert any(
         f["target_id"] == target and "manifest" in f["finding"]
         for f in outcome.parser_findings
+    )
+
+
+def test_a_duplicate_higher_rung_repair_is_rejected_instead_of_last_write_wins(world):
+    target = world["components"][0]
+    plan = {cid: ("ground",) for cid in world["components"]}
+    plan[target] = ("gap", "ground", "ground")
+
+    _, outcome, _, _ = _run(
+        world, plan, duplicate_on_higher=target,
+    )
+
+    # Opus's duplicate was ignored, so the unambiguous terminal repair did the
+    # grounding. The coverage violation remains in the exit data.
+    assert outcome.states[("component", target)].terminal == "grounded@fable"
+    assert any(
+        "duplicate_components" in note and target in note
+        for note in outcome.notes
     )
 
 

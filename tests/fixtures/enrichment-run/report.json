@@ -1,8 +1,8 @@
 {
   "identity": {
     "subject": "polyglot",
-    "root": "/Volumes/Studio/dev/.worktrees/solution-explorer--enrichment-economics/tests/fixtures/polyglot",
-    "commit": "a98479be31cf7447039ca59e65234f2ef4625e9a",
+    "root": "/Volumes/Studio/dev/solution-explorer/tests/fixtures/polyglot",
+    "commit": "e1dbb70df6e7bc1e1202ccb9d0e59f09dde7d1ab",
     "snapshot_date": "2026-08-21T00:00:00+00:00",
     "analyzer_version": "",
     "engine_version": "1",
@@ -66,8 +66,10 @@
       "max_work_orders": 3
     },
     "totals": {
-      "invocations": 15,
-      "cost_usd": 0.15,
+      "invocations": 19,
+      "cost_usd": 0.19,
+      "cost_ceiling_usd": null,
+      "cost_ceiling_exceeded": false,
       "ceiling_hit": false,
       "failed_phases": []
     },
@@ -92,8 +94,8 @@
       "prefix_hash": null,
       "prefix_tokens_est": 0,
       "response_bytes": 526,
-      "output_budget_bytes": null,
-      "output_budget_ok": null,
+      "output_budget_bytes": 12000,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -116,11 +118,11 @@
       "num_turns": 1,
       "partition_id": 0,
       "session_id": null,
-      "prefix_hash": "a5a838dc569ce8fb8dad5405135d0237058c550f112f4308a29c832c49997f94",
+      "prefix_hash": "9b39e061a3ce0a824dd3df7f3ea8892e8bc3791049113c43ec64edde3aa790f8",
       "prefix_tokens_est": 0,
       "response_bytes": 11731,
       "output_budget_bytes": 31656,
-      "output_budget_ok": null,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -145,9 +147,9 @@
       "session_id": null,
       "prefix_hash": "732fc554bae33e59bb93d8d4eca1a223dc740418134c53855036db31d56706c0",
       "prefix_tokens_est": 0,
-      "response_bytes": 3663,
+      "response_bytes": 481,
       "output_budget_bytes": 1330,
-      "output_budget_ok": null,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -170,11 +172,11 @@
       "num_turns": 1,
       "partition_id": 0,
       "session_id": null,
-      "prefix_hash": "d5c0ee8ac32e48f169a5ce6c3851c25d0e0a86a73371781b77c01fc11f2c9a87",
+      "prefix_hash": "9ad178acc1e49f0e9c7e6086d8d9a7a952c9d8d5d15e12333c44f36122659d91",
       "prefix_tokens_est": 0,
       "response_bytes": 1305,
       "output_budget_bytes": 4440,
-      "output_budget_ok": null,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -197,11 +199,11 @@
       "num_turns": 1,
       "partition_id": 0,
       "session_id": null,
-      "prefix_hash": "7927955cab9e72b8d3cefd89fa1b54940fb7fa0660ace180368edbb97e7240b4",
+      "prefix_hash": "2bb14f254a1ae54500f793abef04d00d98321ab20c38aa136643f8f012f9cf0d",
       "prefix_tokens_est": 0,
       "response_bytes": 1540,
       "output_budget_bytes": 4440,
-      "output_budget_ok": null,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -213,7 +215,7 @@
       "phase": "p3_adjudication",
       "rung": "verify-identity",
       "model": "anthropic-claude-cli:opus",
-      "targets": 0,
+      "targets": 3,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
@@ -227,8 +229,8 @@
       "prefix_hash": null,
       "prefix_tokens_est": 0,
       "response_bytes": 565,
-      "output_budget_bytes": null,
-      "output_budget_ok": null,
+      "output_budget_bytes": 26000,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -240,7 +242,7 @@
       "phase": "p3_adjudication",
       "rung": "verify-edges",
       "model": "anthropic-claude-cli:opus",
-      "targets": 0,
+      "targets": 1,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
@@ -254,8 +256,8 @@
       "prefix_hash": null,
       "prefix_tokens_est": 0,
       "response_bytes": 112,
-      "output_budget_bytes": null,
-      "output_budget_ok": null,
+      "output_budget_bytes": 15000,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -267,7 +269,7 @@
       "phase": "p3_adjudication",
       "rung": "verify-findings",
       "model": "anthropic-claude-cli:opus",
-      "targets": 0,
+      "targets": 5,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
@@ -281,8 +283,8 @@
       "prefix_hash": null,
       "prefix_tokens_est": 0,
       "response_bytes": 879,
-      "output_budget_bytes": null,
-      "output_budget_ok": null,
+      "output_budget_bytes": 20000,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -294,7 +296,7 @@
       "phase": "p3_adjudication",
       "rung": "grounding-spot-check",
       "model": "anthropic-claude-cli:opus",
-      "targets": 0,
+      "targets": 1,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
@@ -308,8 +310,8 @@
       "prefix_hash": null,
       "prefix_tokens_est": 0,
       "response_bytes": 575,
-      "output_budget_bytes": null,
-      "output_budget_ok": null,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -321,7 +323,7 @@
       "phase": "p3_adjudication",
       "rung": "substitution-check",
       "model": "anthropic-claude-cli:opus",
-      "targets": 0,
+      "targets": 1,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
@@ -335,8 +337,8 @@
       "prefix_hash": null,
       "prefix_tokens_est": 0,
       "response_bytes": 79,
-      "output_budget_bytes": null,
-      "output_budget_ok": null,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -362,8 +364,8 @@
       "prefix_hash": null,
       "prefix_tokens_est": 0,
       "response_bytes": 221,
-      "output_budget_bytes": null,
-      "output_budget_ok": null,
+      "output_budget_bytes": 12000,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -389,8 +391,8 @@
       "prefix_hash": null,
       "prefix_tokens_est": 0,
       "response_bytes": 1121,
-      "output_budget_bytes": null,
-      "output_budget_ok": null,
+      "output_budget_bytes": 24000,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -413,11 +415,11 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": "1b7f3890b049c29498a3c91c472ea8419beb9f42e9d0d9d7db5c417921a78bc8",
+      "prefix_hash": "aceeb6cc7ca61927586e12a23c5b0b899788242abf2d022694b3101b14b01fce",
       "prefix_tokens_est": 0,
       "response_bytes": 721,
-      "output_budget_bytes": null,
-      "output_budget_ok": null,
+      "output_budget_bytes": 12000,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -440,11 +442,119 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": "e8a1922175fcc4145e9d980401413b8ac54bf5cdb816761c0edfd7736d831c68",
+      "prefix_hash": "fd54b138af295b86340fdfab431cbb5f0478d5da23e830d04e0599ad6d2da7cd",
       "prefix_tokens_est": 0,
       "response_bytes": 3049,
       "output_budget_bytes": 8328,
-      "output_budget_ok": null,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 503,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 498,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 79,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 79,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -467,11 +577,11 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": "1b7f3890b049c29498a3c91c472ea8419beb9f42e9d0d9d7db5c417921a78bc8",
+      "prefix_hash": "aceeb6cc7ca61927586e12a23c5b0b899788242abf2d022694b3101b14b01fce",
       "prefix_tokens_est": 0,
       "response_bytes": 721,
-      "output_budget_bytes": null,
-      "output_budget_ok": null,
+      "output_budget_bytes": 12000,
+      "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
@@ -496,7 +606,9 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": [],
+        "history": [
+          "sonnet:grounded"
+        ],
         "entry_triggers": [],
         "entry_class": null,
         "entry_class_basis": null,
@@ -528,7 +640,7 @@
           "E1"
         ],
         "entry_class": "reasoning",
-        "entry_class_basis": null,
+        "entry_class_basis": "lacked:0/trigger:1",
         "repair_attempted": false
       },
       {
@@ -557,7 +669,9 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": [],
+        "history": [
+          "sonnet:grounded"
+        ],
         "entry_triggers": [],
         "entry_class": null,
         "entry_class_basis": null,
@@ -772,7 +886,8 @@
         "rung_moves": [],
         "grounded_before": 8,
         "grounded_after": 8,
-        "cost_usd": 0.01
+        "cost_usd": 0.05,
+        "adjudication_cost_usd": 0.04
       },
       "perceived_delta": "deepen the boundary descriptions on the two services that face outward",
       "perceived_delta_is_judgment": true,
@@ -1045,7 +1160,7 @@
       "kind": "inter-tier-disagreement",
       "pattern": "claims adjudication would not stand behind",
       "rate": 0.0,
-      "sampled": 8
+      "sampled": 22
     },
     {
       "kind": "forced-iteration",
@@ -1066,7 +1181,6 @@
       "name": "p2_ladder",
       "status": "ok",
       "notes": [
-        "rung 2a call 1 compact coverage violation: {\"duplicate_components\": [], \"duplicate_relationships\": [], \"extra_components\": [\"services/api\", \"services/web/src\"], \"extra_relationships\": [], \"missing_components\": [], \"missing_relationships\": []}",
         "census: grounded@sonnet=8, honest-gap=1"
       ]
     },
@@ -1289,6 +1403,132 @@
         "supported": true,
         "confidence": "high",
         "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "identity.framework",
+        "claim": "apps/ios: a specific answer for identity.framework",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "identity.language",
+        "claim": "apps/ios: a specific answer for identity.language",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "identity.type",
+        "claim": "apps/ios: a specific answer for identity.type",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "mechanism",
+        "claim": "apps/ios: a specific answer for mechanism",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "next_step",
+        "claim": "apps/ios: a specific answer for next_step",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "place",
+        "claim": "apps/ios: a specific answer for place",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "purpose",
+        "claim": "apps/ios: a specific answer for purpose",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "identity.language",
+        "claim": "root: a specific answer for identity.language",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "identity.port",
+        "claim": "root: a specific answer for identity.port",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "identity.type",
+        "claim": "root: a specific answer for identity.type",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "mechanism",
+        "claim": "root: a specific answer for mechanism",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "next_step",
+        "claim": "root: a specific answer for next_step",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "place",
+        "claim": "root: a specific answer for place",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "purpose",
+        "claim": "root: a specific answer for purpose",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
       }
     ],
     "substitution_checks": [
@@ -1298,18 +1538,34 @@
         "chose": "apps/ios",
         "confirmed_failure": true,
         "reason": "it names its own files"
+      },
+      {
+        "target_id": "apps/ios",
+        "distinctive": true,
+        "chose": "apps/ios",
+        "confirmed_failure": false,
+        "reason": "it names its own files"
+      },
+      {
+        "target_id": "root",
+        "distinctive": true,
+        "chose": "apps/ios",
+        "confirmed_failure": true,
+        "reason": "it names its own files"
       }
     ],
-    "checked": 8,
+    "checked": 22,
     "unsupported": 0,
     "disagreement_rate": 0.0,
-    "substitution_failure_rate": 1.0,
+    "substitution_failure_rate": 0.6667,
     "notes": [
       "verify identity: 3 verified, confirmed=3",
       "verify edges: 1 verified, confirmed=1",
       "verify findings: 5 verified, verified=5",
       "grounding spot-checks: 0 of 8 claims not supported by their own evidence (disagreement rate 0.0%)",
-      "substitution checks: 1 of 1 descriptions did not identify their own subject (100.0%)"
+      "substitution checks: 1 of 1 descriptions did not identify their own subject (100.0%)",
+      "grounding spot-checks: 0 of 22 claims not supported by their own evidence (disagreement rate 0.0%)",
+      "substitution checks: 2 of 3 descriptions did not identify their own subject (66.7%)"
     ]
   },
   "synthesis": {
@@ -1397,6 +1653,32 @@
   "accounting": {
     "by_model": [
       {
+        "model": "anthropic-claude-cli:opus",
+        "invocations": 10,
+        "targets": 16,
+        "tokens_in": 12000,
+        "tokens_cached": 0,
+        "tokens_cache_write": 0,
+        "tokens_out": 3000,
+        "response_bytes": 4674,
+        "output_budget_violations": 0,
+        "cost_usd": 0.1,
+        "wall_seconds": 0.0,
+        "retries": 0,
+        "failures": 0,
+        "phases": [
+          "p2_ladder:opus",
+          "p3_adjudication:grounding-spot-check",
+          "p3_adjudication:substitution-check",
+          "p3_adjudication:verify-edges",
+          "p3_adjudication:verify-findings",
+          "p3_adjudication:verify-identity"
+        ],
+        "tokens_total": 15000,
+        "token_share": 0.5263,
+        "cost_share": 0.5263
+      },
+      {
         "model": "anthropic-claude-cli:fable",
         "invocations": 6,
         "targets": 5,
@@ -1418,34 +1700,8 @@
           "p5_determination"
         ],
         "tokens_total": 9000,
-        "token_share": 0.4,
-        "cost_share": 0.4
-      },
-      {
-        "model": "anthropic-claude-cli:opus",
-        "invocations": 6,
-        "targets": 1,
-        "tokens_in": 7200,
-        "tokens_cached": 0,
-        "tokens_cache_write": 0,
-        "tokens_out": 1800,
-        "response_bytes": 3515,
-        "output_budget_violations": 0,
-        "cost_usd": 0.06,
-        "wall_seconds": 0.0,
-        "retries": 0,
-        "failures": 0,
-        "phases": [
-          "p2_ladder:opus",
-          "p3_adjudication:grounding-spot-check",
-          "p3_adjudication:substitution-check",
-          "p3_adjudication:verify-edges",
-          "p3_adjudication:verify-findings",
-          "p3_adjudication:verify-identity"
-        ],
-        "tokens_total": 9000,
-        "token_share": 0.4,
-        "cost_share": 0.4
+        "token_share": 0.3158,
+        "cost_share": 0.3158
       },
       {
         "model": "anthropic-claude-cli:sonnet",
@@ -1455,7 +1711,7 @@
         "tokens_cached": 0,
         "tokens_cache_write": 0,
         "tokens_out": 900,
-        "response_bytes": 18443,
+        "response_bytes": 15261,
         "output_budget_violations": 0,
         "cost_usd": 0.03,
         "wall_seconds": 0.0,
@@ -1466,26 +1722,26 @@
           "work_order:P5"
         ],
         "tokens_total": 4500,
-        "token_share": 0.2,
-        "cost_share": 0.2
+        "token_share": 0.1579,
+        "cost_share": 0.1579
       }
     ],
     "totals": {
-      "invocations": 15,
-      "tokens_total": 22500,
-      "tokens_in": 18000,
+      "invocations": 19,
+      "tokens_total": 28500,
+      "tokens_in": 22800,
       "tokens_cached": 0,
       "tokens_cache_write": 0,
-      "tokens_out": 4500,
-      "response_bytes": 26808,
+      "tokens_out": 5700,
+      "response_bytes": 24785,
       "output_budget_violations": 0,
-      "cost_usd": 0.15,
+      "cost_usd": 0.19,
       "wall_seconds": 0.0
     },
     "output_efficiency": {
-      "billed_output_tokens": 4500,
-      "delivered_response_bytes": 26808,
-      "compact_budgeted_calls": 0,
+      "billed_output_tokens": 5700,
+      "delivered_response_bytes": 24785,
+      "compact_budgeted_calls": 19,
       "compact_budget_violations": 0,
       "note": "Delivered JSON is schema- and byte-bounded. Billed output also includes hidden reasoning; the Claude CLI exposes no per-call max_tokens below its provider ceiling, so billed-token reduction is measured and gated against the baseline, not falsely called a transport guarantee."
     },
@@ -1494,12 +1750,12 @@
       "reads": 0,
       "read_write_ratio": 0.0,
       "prefix_hashes": [
-        "1b7f3890b049c29498a3c91c472ea8419beb9f42e9d0d9d7db5c417921a78bc8",
+        "2bb14f254a1ae54500f793abef04d00d98321ab20c38aa136643f8f012f9cf0d",
         "732fc554bae33e59bb93d8d4eca1a223dc740418134c53855036db31d56706c0",
-        "7927955cab9e72b8d3cefd89fa1b54940fb7fa0660ace180368edbb97e7240b4",
-        "a5a838dc569ce8fb8dad5405135d0237058c550f112f4308a29c832c49997f94",
-        "d5c0ee8ac32e48f169a5ce6c3851c25d0e0a86a73371781b77c01fc11f2c9a87",
-        "e8a1922175fcc4145e9d980401413b8ac54bf5cdb816761c0edfd7736d831c68"
+        "9ad178acc1e49f0e9c7e6086d8d9a7a952c9d8d5d15e12333c44f36122659d91",
+        "9b39e061a3ce0a824dd3df7f3ea8892e8bc3791049113c43ec64edde3aa790f8",
+        "aceeb6cc7ca61927586e12a23c5b0b899788242abf2d022694b3101b14b01fce",
+        "fd54b138af295b86340fdfab431cbb5f0478d5da23e830d04e0599ad6d2da7cd"
       ],
       "mechanism_verified": true,
       "budgeted_as_saving": false,
@@ -1535,5 +1791,153 @@
       }
     ]
   },
-  "cost_note": "Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent."
+  "cost_note": "Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent.",
+  "quality": {
+    "status": "incomplete",
+    "complete": false,
+    "issues": [
+      "enrichment audit verdict is 'fail'"
+    ]
+  },
+  "audit": {
+    "run_dir": "/private/var/folders/j1/f88bws916px1k7zn1bltx2j00000gn/T/pytest-of-ramerman/pytest-460/test_the_committed_reference_r0/run",
+    "spend_usd": 0.19,
+    "calls": 19,
+    "calls_failed": 0,
+    "tokens": {
+      "fresh_in": 22800,
+      "cache_write": 0,
+      "cache_read": 0,
+      "out": 5700,
+      "ladder_out": 1200,
+      "output_share_of_billed": 0.2,
+      "cache_hit_share": 0.0
+    },
+    "work": {
+      "planned_targets": 9,
+      "answered": 9,
+      "units_done": 4,
+      "usd_per_target": 0.02111,
+      "out_tokens_per_target": 633.3
+    },
+    "output_gate": {
+      "baseline_output_tokens": null,
+      "target_ratio": null,
+      "allowed_output_tokens": null,
+      "compact_calls": 19,
+      "compact_budget_violations": 0,
+      "non_warm_cache_misses": 1,
+      "prefix_read_shortfalls": 0,
+      "stable_prefix_fragmentations": 0,
+      "bulk_tokens_per_target": 66.7,
+      "ladder_tokens_per_unique_target": 133.3,
+      "escalation_tokens_per_attempt": 300.0
+    },
+    "by_rung": {
+      "2a": {
+        "calls": 2,
+        "cost_usd": 0.02,
+        "targets": 9,
+        "out_tokens": 600,
+        "usd_per_target": 0.00222
+      },
+      "P5": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 2,
+        "out_tokens": 300,
+        "usd_per_target": 0.005
+      },
+      "fable": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 1,
+        "out_tokens": 300,
+        "usd_per_target": 0.01
+      },
+      "grounding-spot-check": {
+        "calls": 3,
+        "cost_usd": 0.03,
+        "targets": 3,
+        "out_tokens": 900,
+        "usd_per_target": 0.01
+      },
+      "narrative": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 1,
+        "out_tokens": 300,
+        "usd_per_target": 0.01
+      },
+      "opus": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 1,
+        "out_tokens": 300,
+        "usd_per_target": 0.01
+      },
+      "p1_orientation": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 1,
+        "out_tokens": 300,
+        "usd_per_target": 0.01
+      },
+      "p5_determination": {
+        "calls": 2,
+        "cost_usd": 0.02,
+        "targets": 2,
+        "out_tokens": 600,
+        "usd_per_target": 0.01
+      },
+      "spine": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 0,
+        "out_tokens": 300,
+        "usd_per_target": null
+      },
+      "substitution-check": {
+        "calls": 3,
+        "cost_usd": 0.03,
+        "targets": 3,
+        "out_tokens": 900,
+        "usd_per_target": 0.01
+      },
+      "verify-edges": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 1,
+        "out_tokens": 300,
+        "usd_per_target": 0.01
+      },
+      "verify-findings": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 5,
+        "out_tokens": 300,
+        "usd_per_target": 0.002
+      },
+      "verify-identity": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 3,
+        "out_tokens": 300,
+        "usd_per_target": 0.00333
+      }
+    },
+    "findings": [
+      {
+        "level": "fail",
+        "check": "cache-boundary",
+        "detail": "1 non-warm cacheable call(s) read zero cached tokens"
+      },
+      {
+        "level": "fail",
+        "check": "escalation-output-density",
+        "detail": "escalations emitted 300.0 billed tokens per attempt; limit is 260"
+      }
+    ],
+    "verdict": "fail"
+  }
 }

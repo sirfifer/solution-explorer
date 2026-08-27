@@ -423,7 +423,10 @@ class SynthesisPhase:
         if not ctx.budget.under():
             outcome.notes.append("architecture narrative not written: cost ceiling")
             return
-        invoker = ctx.invoker("p4_synthesis", phase=self.name, rung="narrative", targets=1)
+        invoker = ctx.invoker(
+            "p4_synthesis", phase=self.name, rung="narrative", targets=1,
+            output_budget_bytes=12_000,
+        )
         payload, _cost, errors = _enhance_architecture(
             ctx.facts, ctx.scorer, invoker, ctx.clock
         )
@@ -447,7 +450,10 @@ class SynthesisPhase:
         if not ctx.budget.under():
             outcome.notes.append("tours and lenses not authored: cost ceiling")
             return
-        invoker = ctx.invoker("p4_synthesis", phase=self.name, rung="spine")
+        invoker = ctx.invoker(
+            "p4_synthesis", phase=self.name, rung="spine",
+            output_budget_bytes=24_000,
+        )
         result = invoker(prompt)
         if not result.ok:
             outcome.notes.append(f"synthesis did not return: {result.error}")

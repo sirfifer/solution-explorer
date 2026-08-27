@@ -1,6 +1,6 @@
 # Enrichment Run Report: polyglot
 
-Commit `a98479be31cf7447039ca59e65234f2ef4625e9a`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
+Commit `e1dbb70df6e7bc1e1202ccb9d0e59f09dde7d1ab`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
 
 **Determination: DONE**
 
@@ -8,7 +8,7 @@ The census shows the map supports a reader orienting and finding the service bou
 
 ## What this run cost
 
-15 model invocation(s), $0.1500 API-equivalent.
+19 model invocation(s), $0.1900 API-equivalent.
 
 > Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent.
 
@@ -16,19 +16,19 @@ The census shows the map supports a reader orienting and finding the service bou
 
 | Model | Calls | Targets | Fresh in | Cached in | Out | Share | Wall | API-equiv |
 |---|---|---|---|---|---|---|---|---|
-| anthropic-claude-cli:fable | 6 | 5 | 7,200 | 0 | 1,800 | 40% | 0.0m | $0.06 |
-| anthropic-claude-cli:opus | 6 | 1 | 7,200 | 0 | 1,800 | 40% | 0.0m | $0.06 |
-| anthropic-claude-cli:sonnet | 3 | 11 | 3,600 | 0 | 900 | 20% | 0.0m | $0.03 |
+| anthropic-claude-cli:opus | 10 | 16 | 12,000 | 0 | 3,000 | 53% | 0.0m | $0.10 |
+| anthropic-claude-cli:fable | 6 | 5 | 7,200 | 0 | 1,800 | 32% | 0.0m | $0.06 |
+| anthropic-claude-cli:sonnet | 3 | 11 | 3,600 | 0 | 900 | 16% | 0.0m | $0.03 |
 
-15 invocation(s) moved 22,500 tokens in 0.0 minutes of model time.
+19 invocation(s) moved 28,500 tokens in 0.0 minutes of model time.
 
-Delivered response payload: 26,808 UTF-8 bytes total. 0 call(s) exercised the compact transport gate, with 0 violation(s).
+Delivered response payload: 24,785 UTF-8 bytes total. 19 call(s) exercised the compact transport gate, with 0 violation(s).
 
 Prompt cache: 0 tokens read and 0 written (read/write 0.00). Only measured reads are counted as savings.
 
 Delivered JSON is schema- and byte-bounded. Billed output also includes hidden reasoning; the Claude CLI exposes no per-call max_tokens below its provider ceiling, so billed-token reduction is measured and gated against the baseline, not falsely called a transport guarantee.
 
-**anthropic-claude-cli:fable** did the most of it, 40% of all tokens across p1_orientation, p2_ladder:fable, p4_synthesis:narrative, p4_synthesis:spine, p5_determination.
+**anthropic-claude-cli:opus** did the most of it, 53% of all tokens across p2_ladder:opus, p3_adjudication:grounding-spot-check, p3_adjudication:substitution-check, p3_adjudication:verify-edges, p3_adjudication:verify-findings, p3_adjudication:verify-identity.
 
 ### What this costs the account
 
@@ -90,7 +90,7 @@ For each trigger, the question worth asking before the next run is not "was the 
 
 **Target:** deepen the boundary descriptions on the two services that face outward
 
-**Measured delta:** {"changed": 0, "targets": [], "state_changes": {}, "rung_moves": [], "grounded_before": 8, "grounded_after": 8, "cost_usd": 0.01}
+**Measured delta:** {"changed": 0, "targets": [], "state_changes": {}, "rung_moves": [], "grounded_before": 8, "grounded_after": 8, "cost_usd": 0.05, "adjudication_cost_usd": 0.04}
 
 **Perceived delta (judgment, not measurement):** deepen the boundary descriptions on the two services that face outward
 
@@ -145,15 +145,19 @@ This round produced **no measurable gain**. Recorded as such rather than as work
 | p2_ladder | 2a | anthropic-claude-cli:sonnet | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p2_ladder | opus | anthropic-claude-cli:opus | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p2_ladder | fable | anthropic-claude-cli:fable | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-identity | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-edges | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | verify-findings | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | grounding-spot-check | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p3_adjudication | substitution-check | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p3_adjudication | verify-identity | anthropic-claude-cli:opus | 3 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p3_adjudication | verify-edges | anthropic-claude-cli:opus | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p3_adjudication | verify-findings | anthropic-claude-cli:opus | 5 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p3_adjudication | grounding-spot-check | anthropic-claude-cli:opus | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p3_adjudication | substitution-check | anthropic-claude-cli:opus | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p4_synthesis | narrative | anthropic-claude-cli:fable | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p4_synthesis | spine | anthropic-claude-cli:fable | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p5_determination |  | anthropic-claude-cli:fable | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | work_order | P5 | anthropic-claude-cli:sonnet | 2 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p3_adjudication | grounding-spot-check | anthropic-claude-cli:opus | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p3_adjudication | grounding-spot-check | anthropic-claude-cli:opus | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p3_adjudication | substitution-check | anthropic-claude-cli:opus | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p3_adjudication | substitution-check | anthropic-claude-cli:opus | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p5_determination |  | anthropic-claude-cli:fable | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 
 ## Lessons
@@ -162,6 +166,6 @@ Scrub-safe abstractions only: patterns and counts, never the subject's paths, id
 
 - **escalation-trigger**: E1 (count=1, of_total=9)
 - **parser-first**: deterministic processing could have answered this (count=3, of_total=9)
-- **inter-tier-disagreement**: claims adjudication would not stand behind (rate=0.0, sampled=8)
+- **inter-tier-disagreement**: claims adjudication would not stand behind (rate=0.0, sampled=22)
 - **forced-iteration**: a forced improvement round produced no measurable gain (round=1)
 

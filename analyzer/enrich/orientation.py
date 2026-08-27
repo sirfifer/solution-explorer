@@ -441,7 +441,10 @@ class OrientationPhase:
                 data={"brief": None, "prompt_chars": len(prompt)},
             )
 
-        invoker = ctx.invoker("p1_orientation", phase=self.name, targets=1)
+        invoker = ctx.invoker(
+            "p1_orientation", phase=self.name, targets=1,
+            output_budget_bytes=12_000,
+        )
         result = invoker(prompt)
         if not result.ok:
             return self._degraded(ctx, f"orientation did not return: {result.error}")

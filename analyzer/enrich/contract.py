@@ -29,6 +29,7 @@ for the record because a tier that consistently overclaims is itself a finding.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -70,6 +71,7 @@ COMPONENT_QUESTIONS: tuple[str, ...] = (
 
 # Relationships carry a reduced form: what flows, and why it exists (4.1).
 RELATIONSHIP_QUESTIONS: tuple[str, ...] = ("flow", "why")
+AUDITED_OPTIONAL_QUESTIONS: tuple[str, ...] = ("why_matters", "data_handled")
 
 # Mechanical escalation triggers (4.3). The trigger travels with the item.
 TRIGGERS: dict[str, str] = {
@@ -456,7 +458,11 @@ def evaluate(
     required = required_questions(target_kind, facts)
     failed: list[FailedQuestion] = []
 
-    for question in required:
+    questions = [
+        *required,
+        *(q for q in AUDITED_OPTIONAL_QUESTIONS if q in parsed and q not in required),
+    ]
+    for question in questions:
         # An identity attribute the PARSER already determined is settled before
         # a model is consulted. The question is only asked at all because the
         # analyzer detected the attribute, the prompt hands the detected value
@@ -517,6 +523,68 @@ def evaluate(
                     "no citation checked out: " + "; ".join(r for r in reasons if r)[:300],
                 )
             )
+            continue
+        # A local count is not evidence for a corpus-wide uniqueness claim.
+        # Keep this deliberately typed and narrow: ordinary prose is untouched;
+        # explicit uniqueness words fail only when their factual support is
+        # exclusively component-local.
+        uniqueness_claim = re.search(
+            r"\b(?:(?:the|its|fixture's|system's|suite's)\s+"
+            r"(?:only|sole|unique|single)|(?:only|sole|unique|single)\s+"
+            r"(?:\w+[\s/-]+){0,3}(?:component|representative|sample|target|"
+            r"file|edge|relationship|capability|endpoint|source|route|type))\b",
+            answer.claim,
+            re.I,
+        )
+        if uniqueness_claim:
+            globally_scoped = [
+                item for item in answer.evidence
+                if isinstance(item, dict) and item.get("scope") == "global"
+            ]
+            local_singletons = {
+                "file_count": r"\b(?:only|sole|single)\s+(?:source\s+)?files?\b",
+                "inbound_edges": r"\b(?:only|sole|single)\s+inbound\s+(?:edge|relationship)\b",
+                "outbound_edges": r"\b(?:only|sole|single)\s+outbound\s+(?:edge|relationship)\b",
+                "capability_count": r"\b(?:only|sole|single)\s+(?:route|capability|endpoint)\b",
+                "data_entity_count": r"\b(?:only|sole|single)\s+data\s+entit(?:y|ies)\b",
+            }
+            cited_fields = {
+                str(item.get("field") or "") for item in answer.evidence
+                if isinstance(item, dict) and item.get("kind") == "fact"
+            }
+            locally_supported = any(
+                field in cited_fields
+                and (facts or {}).get(field) == 1
+                and re.search(pattern, answer.claim, re.I)
+                for field, pattern in local_singletons.items()
+            )
+            if not globally_scoped and not locally_supported:
+                failed.append(FailedQuestion(
+                    question, "E3",
+                    "a local analyzer fact cannot support a global uniqueness claim",
+                ))
+                continue
+        # Count atoms are deterministic enough to check without model judgment.
+        labels = {
+            "inbound_edges": "inbound", "outbound_edges": "outbound",
+            "file_count": "files", "lines": "lines", "action_count": "actions",
+        }
+        for item in answer.evidence:
+            if not isinstance(item, dict) or item.get("kind") != "fact":
+                continue
+            field = str(item.get("field") or "")
+            label = labels.get(field)
+            value = (facts or {}).get(field)
+            if label and isinstance(value, int):
+                match = re.search(
+                    rf"\b(\d[\d,]*)\s+{re.escape(label)}\b", answer.claim, re.I
+                )
+                if match and int(match.group(1).replace(",", "")) != value:
+                    failed.append(FailedQuestion(
+                        question, "E3",
+                        f"claim says {match.group(1)} {label}; analyzer fact is {value}",
+                    ))
+                    break
 
     if strict_identity:
         for question, note in _contradiction_notes(facts, parsed):

@@ -58,10 +58,13 @@ def test_a_pinned_binding_builds_the_same_cli_call_it_always_did(monkeypatch):
 
     monkeypatch.setattr("analyzer.enrich.engine.subprocess.run", fake_run)
     ClaudeCliInvoker(model="sonnet")("a prompt")
+    session = seen["argv"][seen["argv"].index("--session-id") + 1]
+    assert session
     assert seen["argv"][1:] == [
         "-p", "--output-format", "json",
         "--tools", "", "--setting-sources", "user",
         "--effort", "low",
+        "--session-id", session,
         "--model", "sonnet",
     ]
 
@@ -103,6 +106,24 @@ def test_effort_is_always_passed_and_never_inherited(monkeypatch):
     assert "--effort" in seen["argv"]
 
 
+def test_cli_arms_the_provider_cost_backstop(monkeypatch):
+    seen = {}
+
+    class FakeProc:
+        returncode = 0
+        stdout = '{"result": "{}", "total_cost_usd": 0.0, "usage": {}}'
+        stderr = ""
+
+    def fake_run(argv, **kwargs):
+        seen["argv"] = argv
+        return FakeProc()
+
+    monkeypatch.setattr("analyzer.enrich.engine.subprocess.run", fake_run)
+    ClaudeCliInvoker(model="sonnet", max_budget_usd=0.375)("a prompt")
+    index = seen["argv"].index("--max-budget-usd")
+    assert seen["argv"][index + 1] == "0.375000"
+
+
 def test_an_unpinned_binding_omits_the_model_flag_so_the_source_routes(monkeypatch):
     """Unpinned is a real option on the provider that ships, not just on a router."""
     seen = {}
@@ -119,10 +140,13 @@ def test_an_unpinned_binding_omits_the_model_flag_so_the_source_routes(monkeypat
     monkeypatch.setattr("analyzer.enrich.engine.subprocess.run", fake_run)
     ClaudeCliInvoker(model=None)("a prompt")
     assert "--model" not in seen["argv"]
+    session = seen["argv"][seen["argv"].index("--session-id") + 1]
+    assert session
     assert seen["argv"][1:] == [
         "-p", "--output-format", "json",
         "--tools", "", "--setting-sources", "user",
         "--effort", "low",
+        "--session-id", session,
     ]
 
 

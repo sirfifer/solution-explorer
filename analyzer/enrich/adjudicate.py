@@ -239,7 +239,9 @@ def build_digest(state: ContractState, answers: dict, facts: Optional[dict] = No
                 continue
             kept = {k: v for k, v in item.items() if k in
                     ("kind", "path", "line", "symbol", "source", "target",
-                     "edge_type", "component", "field")}
+                     "edge_type", "component", "field", "scope")}
+            if "value" in item:
+                kept["value"] = item["value"]
             if item.get("kind") == "fact" and isinstance(facts, dict):
                 field_name = item.get("field")
                 if field_name in facts:
@@ -290,6 +292,34 @@ class AdjudicationPhase:
             data={"adjudication": outcome},
         )
 
+    def recheck(self, ctx: RunContext, target_ids: set[str]) -> AdjudicationOutcome:
+        """Re-adjudicate only targets an executed work order could change."""
+        outcome = (ctx.phase_data(self.name) or {}).get("adjudication")
+        if outcome is None:
+            outcome = AdjudicationOutcome()
+        target_ids = {str(value) for value in target_ids if value}
+        outcome.spot_checks = [
+            check for check in outcome.spot_checks
+            if check.target_id not in target_ids
+        ]
+        outcome.substitution_checks = [
+            check for check in outcome.substitution_checks
+            if check.target_id not in target_ids
+        ]
+        states = [
+            pair for pair in self._grounded_states(ctx)
+            if pair[0].target_id in target_ids
+        ]
+        ranking = rank_components(ctx.store)
+        self._spot_check_grounding(
+            ctx, outcome, states, ranking, force_all=True
+        )
+        self._spot_check_substitution(
+            ctx, outcome, states, ranking, force_all=True
+        )
+        self._record(ctx, outcome)
+        return outcome
+
     # --- inputs --------------------------------------------------------------
 
     def _grounded_states(self, ctx: RunContext) -> list[tuple[ContractState, dict]]:
@@ -300,12 +330,16 @@ class AdjudicationPhase:
         audits a predecessor's memory rather than its output cannot catch a
         write that went wrong.
         """
+        ladder = (ctx.phase_data("p2_ladder") or {}).get("ladder")
+        attempted = set(ladder.states) if ladder is not None else None
         out: list[tuple[ContractState, dict]] = []
         for row in ctx.store.enrichment():
             if row.get("target_kind") != CONTRACT_TARGET_KIND:
                 continue
             payload = row.get("payload") or {}
             state = ContractState.from_dict(payload)
+            if attempted is not None and (state.target_kind, state.target_id) not in attempted:
+                continue
             if state.state != "grounded":
                 continue
             out.append((state, payload.get("answers") or {}))
@@ -321,6 +355,19 @@ class AdjudicationPhase:
         and every call it makes appears in the Run Report ledger. That is the
         whole reason these are wired rather than shelled out to.
         """
+        ladder = (ctx.phase_data("p2_ladder") or {}).get("ladder")
+        component_scope = (
+            frozenset(
+                target_id for (kind, target_id) in ladder.states
+                if kind == "component"
+            ) if ladder is not None else None
+        )
+        relationship_scope = (
+            frozenset(
+                target_id for (kind, target_id) in ladder.states
+                if kind == "relationship"
+            ) if ladder is not None else None
+        )
         passes = (
             ("identity", verify_identity, "identity"),
             ("edges", verify_edges, "edges"),
@@ -334,9 +381,14 @@ class AdjudicationPhase:
                 continue
             config = VerifyConfig(
                 store_path=ctx.store_path, root=ctx.root, dry_run=False,
+                component_scope=component_scope,
+                relationship_scope=relationship_scope,
             )
             invoker = ctx.invoker(
-                "p3_adjudication", phase=self.name, rung=f"verify-{label}"
+                "p3_adjudication", phase=self.name, rung=f"verify-{label}",
+                output_budget_bytes={
+                    "identity": 26_000, "edges": 15_000, "findings": 20_000,
+                }[label],
             )
             try:
                 report = fn(config, invoker=invoker, clock=ctx.clock)
@@ -368,6 +420,7 @@ class AdjudicationPhase:
     def _spot_check_grounding(
         self, ctx: RunContext, outcome: AdjudicationOutcome,
         states: list[tuple[ContractState, dict]], ranking: ImportanceRanking,
+        *, force_all: bool = False,
     ) -> None:
         if not states:
             outcome.notes.append(
@@ -376,10 +429,11 @@ class AdjudicationPhase:
             )
             return
         answers_by_key = {(s.target_kind, s.target_id): a for s, a in states}
-        quota = self._quota(ctx, len(states))
+        quota = len(states) if force_all else self._quota(ctx, len(states))
         sampled = sample_by_importance([s for s, _ in states], ranking, quota)
         invoker = ctx.invoker(
-            "p3_adjudication", phase=self.name, rung="grounding-spot-check"
+            "p3_adjudication", phase=self.name, rung="grounding-spot-check",
+            output_budget_bytes=8_000,
         )
         for state in sampled:
             if not ctx.budget.under():
@@ -388,6 +442,7 @@ class AdjudicationPhase:
                 )
                 break
             answers = answers_by_key.get((state.target_kind, state.target_id), {})
+            invoker.set_targets(1)
             digest = build_digest(
                 state, answers,
                 facts=(
@@ -436,6 +491,7 @@ class AdjudicationPhase:
     def _spot_check_substitution(
         self, ctx: RunContext, outcome: AdjudicationOutcome,
         states: list[tuple[ContractState, dict]], ranking: ImportanceRanking,
+        *, force_all: bool = False,
     ) -> None:
         components = [
             c for c in flatten_components(ctx.arch.get("components", []))
@@ -454,10 +510,16 @@ class AdjudicationPhase:
         component_states = [
             s for s, _ in states if s.target_kind == "component" and s.target_id in by_id
         ]
-        quota = max(1, self._quota(ctx, len(component_states)) // 2) if component_states else 0
+        quota = (
+            len(component_states)
+            if force_all else
+            (max(1, self._quota(ctx, len(component_states)) // 2)
+             if component_states else 0)
+        )
         sampled = sample_by_importance(component_states, ranking, quota)
         invoker = ctx.invoker(
-            "p3_adjudication", phase=self.name, rung="substitution-check"
+            "p3_adjudication", phase=self.name, rung="substitution-check",
+            output_budget_bytes=2_000,
         )
         for state in sampled:
             if not ctx.budget.under():
@@ -466,6 +528,7 @@ class AdjudicationPhase:
                 )
                 break
             payload = payloads.get(state.target_id) or {}
+            invoker.set_targets(1)
             description = str(payload.get("help_text") or payload.get("description") or "")
             if not description.strip():
                 continue

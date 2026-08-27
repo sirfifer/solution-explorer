@@ -21,6 +21,7 @@ import os
 import pytest
 
 from analyzer.derive import derive_all
+from analyzer.enrich.adjudicate import AdjudicationOutcome, SpotCheck
 from analyzer.enrich.contract import CONTRACT_KEY, ContractState, required_questions
 from analyzer.enrich.engine import InvokeResult
 from analyzer.enrich.ladder import CONTRACT_TARGET_KIND, LadderOutcome
@@ -29,6 +30,7 @@ from analyzer.enrich.pipeline import (
     BudgetMeter,
     LadderConfig,
     LadderPolicy,
+    PhaseResult,
     build_run_context,
 )
 from analyzer.enrich.workorder import (
@@ -66,11 +68,13 @@ def world(tmp_path):
 class ScriptedOrder:
     """Answers a scoped work-order prompt; optionally proposes further orders."""
 
-    def __init__(self, world, *, ground=True, propose_orders=False, ok=True):
+    def __init__(self, world, *, ground=True, propose_orders=False, ok=True,
+                 duplicate=False):
         self.world = world
         self.ground = ground
         self.propose_orders = propose_orders
         self.ok = ok
+        self.duplicate = duplicate
         self.prompts = []
 
     def __call__(self, prompt):
@@ -101,6 +105,13 @@ class ScriptedOrder:
                 },
             }
         body = {"components": components, "relationships": {}}
+        if self.duplicate and ids:
+            cid = ids[0]
+            duplicate = {
+                "i": cid,
+                "q": {"purpose": {"t": "through the lens", "e": [0]}},
+            }
+            body["components"] = [duplicate, dict(duplicate)]
         if self.propose_orders:
             body["work_orders"] = [{
                 "scope": self.world["components"][:1], "lens": "one more look",
@@ -167,6 +178,30 @@ def test_an_order_moves_the_contract_state_of_the_targets_in_scope(world):
         assert shared.states[("component", cid)].state == "grounded"
 
 
+def test_a_work_order_cannot_demote_a_grounded_contract_state(world):
+    invoker = ScriptedOrder(world, ground=False)
+    ctx = _ctx(world, invoker)
+    cid = world["components"][0]
+    shared = LadderOutcome()
+    shared.states[("component", cid)] = ContractState(
+        "component", cid, state="grounded", rung="opus"
+    )
+    try:
+        outcome = execute_work_order(
+            ctx, _order(world, n=1), ladder_outcome=shared
+        )
+    finally:
+        ctx.store.close()
+
+    assert outcome.executed is True
+    assert outcome.changed_anything is False
+    assert shared.states[("component", cid)].terminal == "grounded@opus"
+    assert any(
+        "rejected work-order result" in transition.get("resolution", "")
+        for transition in shared.transitions
+    )
+
+
 def test_an_order_runs_through_the_same_contract_and_writes_the_same_rows(world):
     invoker = ScriptedOrder(world, ground=True)
     ctx = _ctx(world, invoker)
@@ -205,6 +240,39 @@ def test_the_order_prompt_carries_the_lens_the_criteria_and_the_expected_effect(
     assert "each answer cites the file where the protocol is set" in prompt
     assert "truth: the grounded fraction should rise" in prompt
     assert "an order is not a licence to redo finished work" in prompt
+
+
+def test_the_order_prompt_carries_the_exact_adjudication_failures(world):
+    invoker = ScriptedOrder(world)
+    ctx = _ctx(world, invoker)
+    cid = world["components"][0]
+    adjudication = AdjudicationOutcome(spot_checks=[SpotCheck(
+        target_kind="component", target_id=cid, question="mechanism",
+        claim="The file name proves runtime behaviour.", supported=False,
+        reason="A file path proves existence, not runtime behaviour.",
+    )])
+    ctx.results["p3_adjudication"] = PhaseResult(
+        "p3_adjudication", "ok", data={"adjudication": adjudication},
+    )
+    shared = LadderOutcome()
+    shared.payloads[("component", cid)] = {
+        "contract": {"answers": {"mechanism": {
+            "claim": "The file name proves runtime behaviour.",
+            "status": "answered",
+            "evidence": [{"kind": "file", "path": world["real_file"]}],
+        }}}
+    }
+    try:
+        execute_work_order(
+            ctx, _order(world, n=1), ladder_outcome=shared,
+        )
+    finally:
+        ctx.store.close()
+
+    prompt = invoker.prompts[0]
+    assert '"todo": ["mechanism"]' in prompt
+    assert "The file name proves runtime behaviour." in prompt
+    assert "A file path proves existence, not runtime behaviour." in prompt
 
 
 def test_the_scope_is_capped_by_the_orders_own_budget(world):
@@ -316,6 +384,28 @@ def test_an_unusable_response_leaves_the_order_honest_about_it(world):
         ctx.store.close()
     assert outcome.executed is False
     assert any("did not return" in n for n in outcome.notes)
+
+
+def test_a_duplicate_work_order_target_is_rejected_and_reported(world):
+    cid = world["components"][0]
+    invoker = ScriptedOrder(world, duplicate=True)
+    ctx = _ctx(world, invoker)
+    shared = LadderOutcome()
+    shared.states[("component", cid)] = ContractState(
+        "component", cid, state="escalate", rung="sonnet"
+    )
+    try:
+        outcome = execute_work_order(
+            ctx, _order(world, n=1), ladder_outcome=shared
+        )
+    finally:
+        ctx.store.close()
+
+    assert shared.states[("component", cid)].state == "escalate"
+    assert any(
+        "compact coverage violation" in note and "duplicate_components" in note
+        for note in outcome.notes
+    )
 
 
 # --- the descent seam ----------------------------------------------------------

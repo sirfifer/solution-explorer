@@ -60,6 +60,20 @@ def test_compact_byte_violation_fails_the_run(tmp_path):
     )
 
 
+def test_measured_cost_above_configured_ceiling_fails_the_run(tmp_path):
+    run = _run_dir(tmp_path, output=10)
+    report_path = run / "report.json"
+    report = json.loads(report_path.read_text())
+    report["identity"] = {"policy": {"max_cost_usd": 0.50}}
+    report_path.write_text(json.dumps(report))
+
+    audited = _audit_module().audit(run)
+    assert any(
+        f["level"] == "fail" and f["check"] == "cost-ceiling-overshoot"
+        for f in audited["findings"]
+    )
+
+
 def test_real_escalation_rung_names_are_included_in_cost(tmp_path):
     report = _audit_module().audit(
         _run_dir(tmp_path, output=10, rung="opus")
@@ -120,3 +134,56 @@ def test_the_cache_read_floor_catches_a_small_unrelated_read(tmp_path):
     (legacy / "report.json").write_text(json.dumps({"census": {"total": 2}}))
     legacy_report = _audit_module().audit(legacy)
     assert legacy_report["output_gate"]["prefix_read_shortfalls"] == 0
+
+
+def test_cache_boundary_also_covers_non_schema_phases(tmp_path):
+    """A cacheable P5-style prefix is audited even without a compact schema."""
+    run = tmp_path / "run"
+    run.mkdir(parents=True)
+    common = {
+        "rung": "p5", "phase": "p5_determination", "effort": "low",
+        "ok": True, "num_turns": 1, "targets": 1, "cost_usd": 0.1,
+        "tokens_out": 100, "structured_output_enforced": False,
+        "prefix_hash": "stable-p5", "model": "sonnet",
+        "prefix_tokens_est": 4000,
+    }
+    rows = [dict(common, tokens_cached=0), dict(common, tokens_cached=80)]
+    (run / "ledger.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n"
+    )
+    (run / "progress.jsonl").write_text("")
+    (run / "report.json").write_text(json.dumps({"census": {"total": 0}}))
+
+    report = _audit_module().audit(run)
+    assert report["output_gate"]["prefix_read_shortfalls"] == 1
+    assert any(
+        finding["check"] == "cache-boundary"
+        for finding in report["findings"]
+    )
+
+
+def test_two_cold_p5_prefixes_fail_even_though_each_hash_is_a_singleton(tmp_path):
+    run = tmp_path / "run"
+    run.mkdir(parents=True)
+    common = {
+        "phase": "p5_determination", "effort": "low", "ok": True,
+        "num_turns": 1, "targets": 1, "cost_usd": 0.1,
+        "tokens_out": 100, "model": "fable", "tokens_cached": 0,
+    }
+    rows = [
+        dict(common, prefix_hash="p5-before"),
+        dict(common, prefix_hash="p5-after"),
+    ]
+    (run / "ledger.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n"
+    )
+    (run / "progress.jsonl").write_text("")
+    (run / "report.json").write_text(json.dumps({"census": {"total": 0}}))
+
+    report = _audit_module().audit(run)
+    assert report["output_gate"]["stable_prefix_fragmentations"] == 1
+    assert any(
+        finding["check"] == "cache-boundary"
+        and "leaked into" in finding["detail"]
+        for finding in report["findings"]
+    )

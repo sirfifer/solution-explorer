@@ -186,6 +186,11 @@ class RetryingInvoker:
         # the Invoker protocol: a caller that does not ask still sees identical
         # behaviour.
         self.last_attempts = 0
+        self.max_budget_usd: Optional[float] = None
+
+    def set_max_budget_usd(self, value: Optional[float]) -> None:
+        """Bound the whole logical invoke, including all retry attempts."""
+        self.max_budget_usd = value
 
     def _full_jitter(self, attempt: int) -> float:
         """Full-jitter backoff for a 1-based attempt index: uniform(0, cap)."""
@@ -200,6 +205,13 @@ class RetryingInvoker:
         total_cost = 0.0
         last: Optional[InvokeResult] = None
         for attempt in range(1, attempts + 1):
+            if self.max_budget_usd is not None:
+                remaining_cost = max(0.0, self.max_budget_usd - total_cost)
+                if remaining_cost < 0.01:
+                    break
+                setter = getattr(self._base, "set_max_budget_usd", None)
+                if callable(setter):
+                    setter(remaining_cost)
             result = self._base(prompt)
             total_cost += result.cost_usd
             last = result
@@ -219,6 +231,11 @@ class RetryingInvoker:
                 sleep_s = remaining
             self._sleep(sleep_s)
         # Exhausted (attempts or budget) on a persistent transient failure.
+        if last is None:
+            return InvokeResult(
+                ok=False, text="", cost_usd=total_cost,
+                error="invocation not launched: per-call cost reservation exhausted",
+            )
         return replace(last, cost_usd=total_cost)
 
 

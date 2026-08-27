@@ -1,0 +1,1555 @@
+{
+  "identity": {
+    "subject": "polyglot",
+    "root": "/Volumes/Studio/dev/solution-explorer/tests/fixtures/polyglot",
+    "commit": "e1dbb70df6e7bc1e1202ccb9d0e59f09dde7d1ab",
+    "snapshot_date": "2026-08-27T04:00:11.723543+00:00",
+    "analyzer_version": "",
+    "engine_version": "1",
+    "policy": {
+      "models": {
+        "p1_orientation": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p2a_bulk": {
+          "source": "anthropic-claude-cli",
+          "model": "sonnet",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p2b_escalated": {
+          "source": "anthropic-claude-cli",
+          "model": "opus",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p2c_residue": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p3_adjudication": {
+          "source": "anthropic-claude-cli",
+          "model": "opus",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p4_synthesis": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p5_determination": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true,
+          "effort": "low"
+        },
+        "workorder": {
+          "source": "anthropic-claude-cli",
+          "model": "sonnet",
+          "pinned": true,
+          "effort": "low"
+        }
+      },
+      "iteration": {
+        "min_rounds": 0,
+        "max_rounds": 0
+      },
+      "max_cost_usd": 3.0,
+      "spot_check_fraction": 0.1,
+      "max_work_orders": 3
+    },
+    "totals": {
+      "invocations": 15,
+      "cost_usd": 2.150543,
+      "ceiling_hit": false,
+      "failed_phases": []
+    },
+    "dry_run": false
+  },
+  "ledger": [
+    {
+      "phase": "p1_orientation",
+      "rung": null,
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 8461,
+      "tokens_cached": 0,
+      "tokens_out": 1921,
+      "tokens_cache_write": 8459,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "1ab5808c-7188-4f93-afdd-721937f20a1a",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 5830,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.268178,
+      "wall_seconds": 29.365,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "2a",
+      "model": "anthropic-claude-cli:sonnet",
+      "targets": 8,
+      "tokens_in": 0,
+      "tokens_cached": 0,
+      "tokens_out": 0,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 0,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": 0,
+      "session_id": null,
+      "prefix_hash": "28751db8167d9ce677dd97cdb17aaa3ab80053bfdd47ec67ceb86ef43274f23d",
+      "prefix_tokens_est": 0,
+      "response_bytes": 0,
+      "output_budget_bytes": 31656,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.0,
+      "wall_seconds": 25.648,
+      "retries": 0,
+      "ok": false,
+      "error": "claude exited 1: "
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "2a",
+      "model": "anthropic-claude-cli:sonnet",
+      "targets": 1,
+      "tokens_in": 20578,
+      "tokens_cached": 0,
+      "tokens_out": 221,
+      "tokens_cache_write": 20576,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "tool_use",
+      "num_turns": 2,
+      "partition_id": 1,
+      "session_id": "96bc42c0-7e92-4bb3-8047-d521890ae73b",
+      "prefix_hash": "71cf26538a4cb926afc146c8fb2bffdb42a63fefd812b429ff20cc3111a5961b",
+      "prefix_tokens_est": 1644,
+      "response_bytes": 403,
+      "output_budget_bytes": 1330,
+      "output_budget_ok": true,
+      "structured_output_enforced": true,
+      "cost_usd": 0.127518,
+      "wall_seconds": 3.876,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "opus",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 5,
+      "tokens_in": 0,
+      "tokens_cached": 0,
+      "tokens_out": 0,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 0,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": 0,
+      "session_id": null,
+      "prefix_hash": "9219cca0372f7a9bc87aff49f3f15259340ae656b5db726c0ceff4591fabe16f",
+      "prefix_tokens_est": 0,
+      "response_bytes": 0,
+      "output_budget_bytes": 19992,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.0,
+      "wall_seconds": 26.542,
+      "retries": 0,
+      "ok": false,
+      "error": "claude exited 1: "
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "opus",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 4,
+      "tokens_in": 0,
+      "tokens_cached": 0,
+      "tokens_out": 0,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 0,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": 1,
+      "session_id": null,
+      "prefix_hash": "9219cca0372f7a9bc87aff49f3f15259340ae656b5db726c0ceff4591fabe16f",
+      "prefix_tokens_est": 0,
+      "response_bytes": 0,
+      "output_budget_bytes": 12994,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.0,
+      "wall_seconds": 18.866,
+      "retries": 0,
+      "ok": false,
+      "error": "claude exited 1: "
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "fable",
+      "model": "anthropic-claude-cli:fable",
+      "targets": 5,
+      "tokens_in": 18587,
+      "tokens_cached": 0,
+      "tokens_out": 1827,
+      "tokens_cache_write": 18585,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "tool_use",
+      "num_turns": 2,
+      "partition_id": 0,
+      "session_id": "64cfdbaf-e656-4154-92fb-f6d1d7f533ab",
+      "prefix_hash": "ceebb4a1ebae0dd98611ef2b09c98130b45870e2ae90c5dd147e125cf2c8ea06",
+      "prefix_tokens_est": 2455,
+      "response_bytes": 4038,
+      "output_budget_bytes": 19992,
+      "output_budget_ok": true,
+      "structured_output_enforced": true,
+      "cost_usd": 0.465701,
+      "wall_seconds": 24.296,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "fable",
+      "model": "anthropic-claude-cli:fable",
+      "targets": 4,
+      "tokens_in": 5023,
+      "tokens_cached": 12962,
+      "tokens_out": 1562,
+      "tokens_cache_write": 5021,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "tool_use",
+      "num_turns": 2,
+      "partition_id": 1,
+      "session_id": "2b84d5e8-e119-4c15-b862-13963d82833d",
+      "prefix_hash": "ceebb4a1ebae0dd98611ef2b09c98130b45870e2ae90c5dd147e125cf2c8ea06",
+      "prefix_tokens_est": 2455,
+      "response_bytes": 3370,
+      "output_budget_bytes": 12994,
+      "output_budget_ok": true,
+      "structured_output_enforced": true,
+      "cost_usd": 0.19367,
+      "wall_seconds": 19.403,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-identity",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 7265,
+      "tokens_cached": 0,
+      "tokens_out": 2019,
+      "tokens_cache_write": 7263,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "f27a1dc8-7cfd-4adf-88cb-773ef96772e8",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 3967,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.125285,
+      "wall_seconds": 23.765,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-edges",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 2691,
+      "tokens_cached": 3663,
+      "tokens_out": 84,
+      "tokens_cache_write": 2689,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "91bb5718-021a-46b7-9742-94c809f53af5",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 206,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.032237,
+      "wall_seconds": 2.791,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 4207,
+      "tokens_cached": 3663,
+      "tokens_out": 728,
+      "tokens_cache_write": 4205,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "ab88c627-f526-4049-8345-a6d5a9e95b01",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 1483,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.064839,
+      "wall_seconds": 10.905,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 3325,
+      "tokens_cached": 3663,
+      "tokens_out": 735,
+      "tokens_cache_write": 3323,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "e34900ac-7636-4ce7-a640-d03d1ee11a46",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 819,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.055417,
+      "wall_seconds": 13.422,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 0,
+      "tokens_in": 2120,
+      "tokens_cached": 3663,
+      "tokens_out": 63,
+      "tokens_cache_write": 2118,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "45caa580-5bd5-4c3a-98fb-866bc063185c",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 171,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.0256,
+      "wall_seconds": 2.553,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p4_synthesis",
+      "rung": "narrative",
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 2265,
+      "tokens_cached": 3974,
+      "tokens_out": 628,
+      "tokens_cache_write": 2263,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "228b7f76-86cc-4b63-9c2f-1b2f386a9d5d",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 1890,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.081768,
+      "wall_seconds": 10.05,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p4_synthesis",
+      "rung": "spine",
+      "model": "anthropic-claude-cli:fable",
+      "targets": 0,
+      "tokens_in": 8212,
+      "tokens_cached": 3974,
+      "tokens_out": 2453,
+      "tokens_cache_write": 8210,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "27812363-3858-4c35-9157-c607f8d5bca4",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 7055,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.296533,
+      "wall_seconds": 32.184,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p5_determination",
+      "rung": null,
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 14325,
+      "tokens_cached": 0,
+      "tokens_out": 2534,
+      "tokens_cache_write": 14323,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "85fbb39c-2736-445c-9a6e-c7cb0bce6b29",
+      "prefix_hash": "ee1dffa912d10fceb883a332b2f24188604c7e784a9079077e68e6f1916068f4",
+      "prefix_tokens_est": 10940,
+      "response_bytes": 5659,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.413799,
+      "wall_seconds": 32.088,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    }
+  ],
+  "census": {
+    "by_state": {
+      "grounded@fable": 8,
+      "honest-gap": 1
+    },
+    "items": [
+      {
+        "state": "grounded",
+        "rung": "fable",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:escalate"
+        ],
+        "entry_triggers": [
+          "E1"
+        ],
+        "entry_class": "reasoning",
+        "entry_class_basis": "lacked:0/trigger:4",
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "fable",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "libs/core",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:escalate"
+        ],
+        "entry_triggers": [
+          "E1"
+        ],
+        "entry_class": "reasoning",
+        "entry_class_basis": "lacked:0/trigger:4",
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "fable",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "libs/rubylib",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:escalate"
+        ],
+        "entry_triggers": [
+          "E1"
+        ],
+        "entry_class": "reasoning",
+        "entry_class_basis": "lacked:0/trigger:4",
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "fable",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "root",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:escalate"
+        ],
+        "entry_triggers": [
+          "E1"
+        ],
+        "entry_class": "reasoning",
+        "entry_class_basis": "lacked:0/trigger:4",
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "fable",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "services/api",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:escalate"
+        ],
+        "entry_triggers": [
+          "E1"
+        ],
+        "entry_class": "reasoning",
+        "entry_class_basis": "lacked:0/trigger:4",
+        "repair_attempted": false
+      },
+      {
+        "state": "honest_gap",
+        "rung": "fable",
+        "failed": [
+          {
+            "question": "place",
+            "trigger": "E2",
+            "note": "no citation checked out: unknown evidence kind 'compact-invalid'; expected one of file, symbol, edge, manifest, doc, fact"
+          }
+        ],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "services/web",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:escalate"
+        ],
+        "entry_triggers": [
+          "E1"
+        ],
+        "entry_class": "reasoning",
+        "entry_class_basis": "lacked:0/trigger:4",
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "fable",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "services/web/src",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:escalate"
+        ],
+        "entry_triggers": [
+          "E1"
+        ],
+        "entry_class": "reasoning",
+        "entry_class_basis": "lacked:0/trigger:4",
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "fable",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "services/worker",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:escalate"
+        ],
+        "entry_triggers": [
+          "E1"
+        ],
+        "entry_class": "reasoning",
+        "entry_class_basis": "lacked:0/trigger:4",
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "fable",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "relationship",
+        "target_id": "services/web/src|services/api|http",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:escalate"
+        ],
+        "entry_triggers": [
+          "E2"
+        ],
+        "entry_class": "context",
+        "entry_class_basis": "lacked:0/trigger:2",
+        "repair_attempted": false
+      }
+    ],
+    "total": 9,
+    "grounded": 8,
+    "grounded_fraction": 0.8889,
+    "trigger_counts": {
+      "E2": 1
+    },
+    "unresolved": []
+  },
+  "escalations": [
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "climbed_from": [
+        "sonnet:escalate"
+      ],
+      "resolved_at": "fable",
+      "terminal": "grounded@fable",
+      "triggers": [],
+      "failed_questions": []
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "climbed_from": [
+        "sonnet:escalate"
+      ],
+      "resolved_at": "fable",
+      "terminal": "grounded@fable",
+      "triggers": [],
+      "failed_questions": []
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/rubylib",
+      "climbed_from": [
+        "sonnet:escalate"
+      ],
+      "resolved_at": "fable",
+      "terminal": "grounded@fable",
+      "triggers": [],
+      "failed_questions": []
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "climbed_from": [
+        "sonnet:escalate"
+      ],
+      "resolved_at": "fable",
+      "terminal": "grounded@fable",
+      "triggers": [],
+      "failed_questions": []
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "climbed_from": [
+        "sonnet:escalate"
+      ],
+      "resolved_at": "fable",
+      "terminal": "grounded@fable",
+      "triggers": [],
+      "failed_questions": []
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "climbed_from": [
+        "sonnet:escalate"
+      ],
+      "resolved_at": "fable",
+      "terminal": "honest-gap",
+      "triggers": [
+        "E2"
+      ],
+      "failed_questions": [
+        {
+          "question": "place",
+          "trigger": "E2",
+          "note": "no citation checked out: unknown evidence kind 'compact-invalid'; expected one of file, symbol, edge, manifest, doc, fact"
+        }
+      ]
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "climbed_from": [
+        "sonnet:escalate"
+      ],
+      "resolved_at": "fable",
+      "terminal": "grounded@fable",
+      "triggers": [],
+      "failed_questions": []
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/worker",
+      "climbed_from": [
+        "sonnet:escalate"
+      ],
+      "resolved_at": "fable",
+      "terminal": "grounded@fable",
+      "triggers": [],
+      "failed_questions": []
+    },
+    {
+      "target_kind": "relationship",
+      "target_id": "services/web/src|services/api|http",
+      "climbed_from": [
+        "sonnet:escalate"
+      ],
+      "resolved_at": "fable",
+      "terminal": "grounded@fable",
+      "triggers": [],
+      "failed_questions": []
+    }
+  ],
+  "work_orders": [
+    {
+      "scope": [
+        "services/api"
+      ],
+      "lens": "Rewrite the services/api summary to claim only what its own cited evidence supports (FastAPI, the GET /users/{user_id} route, port 8000, one inbound edge), moving cross-component claims (caller identity, docker-compose declaration) to the edge or root component where the evidence lives.",
+      "criteria": "Re-adjudication of services/api yields zero unsupported claims; the route, framework, and port facts are retained.",
+      "expected_effect": "truth: adjudicator disagreement count on services/api drops from 3 to 0",
+      "budget": {
+        "max_cost_usd": 1.0,
+        "max_targets": 1
+      },
+      "issued_by": "P4",
+      "outcome": null,
+      "executed": false
+    },
+    {
+      "scope": [
+        "services/web",
+        "root"
+      ],
+      "lens": "Answer services/web's 'place' question using the README's one-line-per-component layout and docker-compose as citable evidence, rather than the component's own package.json.",
+      "criteria": "The census shows 9/9 grounded with the 'place' answer citing a real line in README.md or docker-compose.yml.",
+      "expected_effect": "truth: honest-gap count moves from 1 to 0 with the grounded fraction reaching 100%",
+      "budget": {
+        "max_cost_usd": 0.5,
+        "max_targets": 2
+      },
+      "issued_by": "P4",
+      "outcome": null,
+      "executed": false
+    },
+    {
+      "scope": [
+        "services/api"
+      ],
+      "lens": "Rewrite the services/api summary to claim only what its own cited evidence supports (FastAPI, the GET /users/{user_id} route, port 8000, one inbound edge), moving cross-component claims (caller identity, docker-compose declaration) to the edge or root component where the evidence lives; while there, cite the Postgres driver dependency if the manifest declares one.",
+      "criteria": "Re-adjudication of services/api yields zero unsupported claims; route, framework, and port facts retained; Postgres dependency either cited or explicitly noted absent.",
+      "expected_effect": "truth: adjudicator disagreement count on services/api drops from 3 to 0",
+      "budget": {
+        "max_cost_usd": 0.7,
+        "max_targets": 1
+      },
+      "issued_by": "P5",
+      "outcome": null,
+      "executed": false
+    },
+    {
+      "scope": [
+        "services/web",
+        "root"
+      ],
+      "lens": "Answer services/web's 'place' question using the README's one-line-per-component layout and docker-compose as citable evidence, replacing the invalid 'compact-invalid' citation with a valid file citation.",
+      "criteria": "Census shows 9/9 grounded with the 'place' answer citing a real line in README.md or docker-compose.yml.",
+      "expected_effect": "truth: honest-gap count moves from 1 to 0, grounded fraction reaches 100%",
+      "budget": {
+        "max_cost_usd": 0.4,
+        "max_targets": 2
+      },
+      "issued_by": "P5",
+      "outcome": null,
+      "executed": false
+    }
+  ],
+  "iterations": [],
+  "parser_findings": [],
+  "identity_flags": [],
+  "criteria": [
+    {
+      "criterion_id": "s1",
+      "statement": "Every one of the 11 languages (python, typescript, javascript, go, rust, ruby, swift, plus markdown/yaml/toml/json config-docs) is attributed to at least one mapped component, because the fixture exists precisely to exercise each tree-sitter grammar.",
+      "verdict": "met",
+      "evidence": [
+        "Coverage-walk tour visits components for Python, TypeScript, JavaScript, Go, Rust, Ruby, and Swift, and attributes markdown/yaml/toml/json to root",
+        "All 8 components appear in the census, 8 grounded"
+      ],
+      "reasoning": "Every code language maps to a specific component with a cited file, and the config-doc languages are covered at root. No language is absent."
+    },
+    {
+      "criterion_id": "s2",
+      "statement": "The web-to-API HTTP call is named as a relationship with its protocol, since it is the only inter-component relationship the fixture declares.",
+      "verdict": "met",
+      "evidence": [
+        "verify-edges: 1 target, verdict confirmed",
+        "Tour 'one-relationship' traces client.ts hardcoding http://api:8000 to the API stub, with docker-compose binding port 8000 at root"
+      ],
+      "reasoning": "The single HTTP edge is present, protocol and port are named, and independent adjudication confirmed the edge itself."
+    },
+    {
+      "criterion_id": "s3",
+      "statement": "Every component description identifies the code as fixture/stub material, not as a real product feature, and stays consistent with the README's one-line-per-component layout.",
+      "verdict": "met",
+      "evidence": [
+        "Tour narrations consistently call components stubs/fixture material ('its emptiness is the point', 'exists to be parsed')",
+        "The unsupported claims on services/api are grounding failures, not invented product narrative \u2014 e.g. 'FastAPI stub server that gives the fixture its api-server component type'"
+      ],
+      "reasoning": "Descriptions stay in fixture register with no invented users or business purpose; the adjudication disputes are about citation coverage, not fabricated narrative."
+    },
+    {
+      "criterion_id": "s4",
+      "statement": "The docker-compose infrastructure (db, cache) and the API's Postgres driver dependency are surfaced, because they are the fixture's only infrastructure and external-dependency signals.",
+      "verdict": "unknown",
+      "evidence": [
+        "Root tour step cites docker-compose.yml declaring db and cache services",
+        "No item in the census or adjudication record mentions a Postgres driver dependency on services/api"
+      ],
+      "reasoning": "The db/cache half is clearly surfaced, but nothing in the record shows the API's Postgres driver dependency being captured, so this cannot be called met."
+    },
+    {
+      "criterion_id": "s5",
+      "statement": "Enrichment spend per component stays minimal and roughly flat across components rather than following the importance ranking, because no component here is genuinely more important than another.",
+      "verdict": "unknown",
+      "evidence": [
+        "The census reports states per target but no per-component token or escalation spend; all 8 components reached the same 'fable' rung"
+      ],
+      "reasoning": "Uniform rung suggests flat treatment, but no spend data exists in the record to verify the distribution, so the honest answer is unknown."
+    },
+    {
+      "criterion_id": "u1",
+      "statement": "Every enrichment target reached a terminal contract state.",
+      "verdict": "met",
+      "evidence": [
+        "0 item(s) still in the escalate state"
+      ],
+      "reasoning": "every enrichment target reached a terminal contract state"
+    },
+    {
+      "criterion_id": "u2",
+      "statement": "Claims are grounded in evidence that checks out.",
+      "verdict": "unmet",
+      "evidence": [
+        "grounded fraction 88.9%",
+        "adjudication disagreement rate 75.0%"
+      ],
+      "reasoning": "88.9% of items grounded; adjudication would not stand behind 75.0% of the claims it sampled"
+    },
+    {
+      "criterion_id": "u3",
+      "statement": "What could not be established is visible as an honest gap, with a reason a reader can act on.",
+      "verdict": "met",
+      "evidence": [
+        "1 honest gap(s)"
+      ],
+      "reasoning": "all 1 honest gap(s) carry a reason a reader can act on"
+    }
+  ],
+  "determination": {
+    "verdict": "not-done",
+    "reasoning": "The map already supports its core reader task: a developer can walk the coverage tour and confirm every fixture language is detected, follow the single web-to-API HTTP edge (independently confirmed by edge verification), and see the db/cache infrastructure framed at root. What it does not yet support is trusting the services/api summary as parity-snapshot material: 3 of 4 adjudicated claims on that component are unsupported by their own citations (a 75% spot-check disagreement rate), because the summary restates cross-file facts without cross-file evidence. There is also one honest gap ('place' on services/web) that is closable from README/docker-compose evidence at near-zero cost. Both fixes have concrete, already-drafted work orders with predictable effects, so 'not-done' is legal and honest. Budgets are trimmed to fit the remaining $1.26.",
+    "rounds_run": 0,
+    "rounds_recorded": 0,
+    "criteria_met": 5,
+    "criteria_unmet": 1,
+    "criteria_unknown": 2,
+    "notes": []
+  },
+  "lessons": [
+    {
+      "kind": "escalation-trigger",
+      "pattern": "E1",
+      "count": 8,
+      "of_total": 9
+    },
+    {
+      "kind": "escalation-trigger",
+      "pattern": "E2",
+      "count": 2,
+      "of_total": 9
+    },
+    {
+      "kind": "inter-tier-disagreement",
+      "pattern": "claims adjudication would not stand behind",
+      "rate": 0.75,
+      "sampled": 4
+    }
+  ],
+  "phases": [
+    {
+      "name": "p1_orientation",
+      "status": "ok",
+      "notes": [
+        "subject brief written: 5 subject criteria plus 3 universal gates",
+        "5 idiom warning(s) declared up front, so confusion on them is expected rather than shameful"
+      ]
+    },
+    {
+      "name": "p2_ladder",
+      "status": "ok",
+      "notes": [
+        "rung 2a partition 0 did not return: claude exited 1: ",
+        "rung opus batch did not return: claude exited 1: ",
+        "rung opus batch did not return: claude exited 1: ",
+        "census: grounded@fable=8, honest-gap=1"
+      ]
+    },
+    {
+      "name": "p3_adjudication",
+      "status": "ok",
+      "notes": [
+        "verify identity: 3 verified, confirmed=1, uncertain=2",
+        "verify edges: 1 verified, confirmed=1",
+        "verify findings: 5 verified, refuted=4, uncertain=1",
+        "grounding spot-checks: 3 of 4 claims not supported by their own evidence (disagreement rate 75.0%)",
+        "substitution checks: 0 of 1 descriptions did not identify their own subject (0.0%)"
+      ]
+    },
+    {
+      "name": "p4_synthesis",
+      "status": "ok",
+      "notes": [
+        "2 tour(s) written, 2 lens(es) discovered, 2 work order(s) issued"
+      ]
+    },
+    {
+      "name": "p5_determination",
+      "status": "ok",
+      "notes": []
+    }
+  ],
+  "adjudication": {
+    "identity": {
+      "pass": "verify-identity",
+      "mode": "full",
+      "dry_run": false,
+      "target_count": 3,
+      "done": 3,
+      "failed": [],
+      "verdicts": {
+        "confirmed": 1,
+        "uncertain": 2
+      },
+      "total_cost_usd": 0.125285,
+      "notes": [
+        "3 identity-bearing component(s); 3 to verify"
+      ],
+      "plan_preview": [],
+      "extra": {},
+      "outcomes": [
+        {
+          "id": "apps/ios",
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.041762,
+          "errors": []
+        },
+        {
+          "id": "root",
+          "status": "done",
+          "verdict": "uncertain",
+          "cost_usd": 0.041762,
+          "errors": []
+        },
+        {
+          "id": "services/api",
+          "status": "done",
+          "verdict": "uncertain",
+          "cost_usd": 0.041762,
+          "errors": []
+        }
+      ]
+    },
+    "edges": {
+      "pass": "verify-edges",
+      "mode": "full",
+      "dry_run": false,
+      "target_count": 1,
+      "done": 1,
+      "failed": [],
+      "verdicts": {
+        "confirmed": 1
+      },
+      "total_cost_usd": 0.032237,
+      "notes": [
+        "1 inferred edge(s); 1 to verify"
+      ],
+      "plan_preview": [],
+      "extra": {},
+      "outcomes": [
+        {
+          "id": "services/web/src|services/api|http",
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.032237,
+          "errors": []
+        }
+      ]
+    },
+    "findings": {
+      "pass": "verify-findings",
+      "mode": "full",
+      "dry_run": false,
+      "target_count": 5,
+      "done": 5,
+      "failed": [],
+      "verdicts": {
+        "refuted": 4,
+        "uncertain": 1
+      },
+      "total_cost_usd": 0.064839,
+      "notes": [
+        "5 finding(s); 5 to verify"
+      ],
+      "plan_preview": [],
+      "extra": {},
+      "outcomes": [
+        {
+          "id": "finding:unreferenced:apps/ios",
+          "status": "done",
+          "verdict": "refuted",
+          "cost_usd": 0.012968,
+          "errors": []
+        },
+        {
+          "id": "finding:unreferenced:libs/core",
+          "status": "done",
+          "verdict": "refuted",
+          "cost_usd": 0.012968,
+          "errors": []
+        },
+        {
+          "id": "finding:unreferenced:libs/rubylib",
+          "status": "done",
+          "verdict": "refuted",
+          "cost_usd": 0.012968,
+          "errors": []
+        },
+        {
+          "id": "finding:unreferenced:services/web/src",
+          "status": "done",
+          "verdict": "uncertain",
+          "cost_usd": 0.012968,
+          "errors": []
+        },
+        {
+          "id": "finding:unreferenced:services/worker",
+          "status": "done",
+          "verdict": "refuted",
+          "cost_usd": 0.012968,
+          "errors": []
+        }
+      ]
+    },
+    "spot_checks": [
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "mechanism",
+        "claim": "A Python package (pyproject.toml) whose server.py defines one FastAPI route, GET /users/{user_id} handled by read_user, served on port 8000 as declared in docker-compose.",
+        "supported": false,
+        "confidence": "medium",
+        "reason": "The capabilities and port facts support the route, handler, framework and port, but nothing cited backs the pyproject.toml packaging or the docker-compose declaration."
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "next_step",
+        "claim": "No product work; verify the GET /users/{user_id} capability and the inbound web\u2192api edge keep appearing in analyzer output, as their absence signals an engine regression.",
+        "supported": true,
+        "confidence": "low",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "place",
+        "claim": "The only component with an inbound edge: the web client calls it over HTTP, which is the single relationship the fixture exists to test.",
+        "supported": false,
+        "confidence": "high",
+        "reason": "inbound_edges: 1 shows this component has one inbound edge but says nothing about other components being edgeless, and no edge citation identifies the web client or HTTP as the caller."
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "purpose",
+        "claim": "FastAPI stub server that gives the fixture its api-server component type and the target end of its one real relationship (web client \u2192 api over HTTP).",
+        "supported": false,
+        "confidence": "medium",
+        "reason": "framework and inbound_edges:1 support 'FastAPI' and 'one inbound relationship' but not the edge's source/protocol (web client over HTTP) or the api-server component typing."
+      }
+    ],
+    "substitution_checks": [
+      {
+        "target_id": "services/api",
+        "distinctive": true,
+        "chose": "services/api",
+        "confirmed_failure": false,
+        "reason": "It is the only api-server candidate, matching the FastAPI stub with the inbound HTTP edge from the web client."
+      }
+    ],
+    "checked": 4,
+    "unsupported": 3,
+    "disagreement_rate": 0.75,
+    "substitution_failure_rate": 0.0,
+    "notes": [
+      "verify identity: 3 verified, confirmed=1, uncertain=2",
+      "verify edges: 1 verified, confirmed=1",
+      "verify findings: 5 verified, refuted=4, uncertain=1",
+      "grounding spot-checks: 3 of 4 claims not supported by their own evidence (disagreement rate 75.0%)",
+      "substitution checks: 0 of 1 descriptions did not identify their own subject (0.0%)"
+    ]
+  },
+  "synthesis": {
+    "tours": [
+      {
+        "id": "coverage-walk",
+        "title": "Language coverage walk",
+        "description": "Visits each stub component to confirm every tree-sitter grammar the fixture exercises is detected, from the ground-truth README outward.",
+        "steps": [
+          {
+            "target": "root",
+            "title": "The ground truth",
+            "narration": "Start at the README and docker-compose.yml: they declare what the fixture contains \u2014 api, db, and cache services \u2014 and state its intent as an analyzer test fixture. Everything else in the map must agree with these two files.",
+            "evidence": {
+              "file": "README.md",
+              "line": 1
+            }
+          },
+          {
+            "target": "services/api",
+            "title": "Python: the API stub",
+            "narration": "The first language stop after the ground truth, because it is the fixture's only api-server-typed component. server.py exists to be parsed as Python and to sit at the receiving end of the fixture's one relationship \u2014 verified at the next stop, not here.",
+            "evidence": {
+              "file": "services/api/api/server.py",
+              "line": 1
+            }
+          },
+          {
+            "target": "services/web/src",
+            "title": "TypeScript and JavaScript",
+            "narration": "Two languages in one module: client.ts hardcodes http://api:8000, which is how the analyzer infers the fixture's single HTTP edge back to the API you just saw; format.js adds JavaScript coverage. The mechanical 'zone of uselessness' finding here is expected \u2014 zero dependents is the fixture's design, not a smell.",
+            "evidence": {
+              "file": "services/web/src/client.ts",
+              "line": 1
+            }
+          },
+          {
+            "target": "services/web",
+            "title": "The content wrapper",
+            "narration": "The package.json above the src module gives the analyzer a content-typed TypeScript component. Note an honest gap: the enrichment could not establish this component's place in the system, which is visible in the census rather than papered over.",
+            "evidence": {
+              "file": "services/web/package.json",
+              "line": 1
+            }
+          },
+          {
+            "target": "services/worker",
+            "title": "Go",
+            "narration": "A deliberately isolated 21-line main.go with no edges either way. Its emptiness is the point: being parseable as Go is its entire function.",
+            "evidence": {
+              "file": "services/worker/main.go",
+              "line": 1
+            }
+          },
+          {
+            "target": "libs/core",
+            "title": "Rust",
+            "narration": "A minimal Cargo crate exercising both Cargo-manifest and Rust source parsing. Like the worker, its isolation is by design.",
+            "evidence": {
+              "file": "libs/core/src/lib.rs",
+              "line": 1
+            }
+          },
+          {
+            "target": "libs/rubylib",
+            "title": "Ruby",
+            "narration": "One file laid out as a conventional Ruby library so the analyzer classifies it as a package \u2014 testing classification, not just parsing.",
+            "evidence": {
+              "file": "libs/rubylib/lib/parser.rb",
+              "line": 1
+            }
+          },
+          {
+            "target": "apps/ios",
+            "title": "Swift",
+            "narration": "The last grammar: a Swift Package manifest plus one SwiftUI view. With this stop every code language the fixture ships (Python, TypeScript, JavaScript, Go, Rust, Ruby, Swift) has appeared, and the config-doc languages were covered at the root.",
+            "evidence": {
+              "file": "apps/ios/Sources/App/ContentView.swift",
+              "line": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "one-relationship",
+        "title": "The one relationship",
+        "description": "Follows the fixture's single declared cross-component edge from its source in client.ts to its target in the API stub, plus the infrastructure that frames it.",
+        "steps": [
+          {
+            "target": "services/web/src",
+            "title": "The caller",
+            "narration": "The edge originates here: client.ts hardcodes the API base URL http://api:8000, the signal the analyzer must turn into an HTTP relationship. This is the source end of the only inter-component edge the fixture declares.",
+            "evidence": {
+              "file": "services/web/src/client.ts",
+              "line": 1
+            }
+          },
+          {
+            "target": "services/api",
+            "title": "The callee",
+            "narration": "The API stub receives that call \u2014 the census shows exactly one inbound edge here. Be careful with stronger phrasings: adjudication found that the evidence supports the inbound edge and the FastAPI route, but does not itself identify the web client or HTTP protocol as the caller; that identification comes from the client.ts URL at the previous stop.",
+            "evidence": {
+              "file": "services/api/api/server.py",
+              "line": 1
+            }
+          },
+          {
+            "target": "root",
+            "title": "The frame",
+            "narration": "docker-compose.yml binds the api service to port 8000 \u2014 matching the URL in client.ts \u2014 and declares the db and cache services that give the fixture its infrastructure-detection targets. The 'listens on a port' heuristic on root is an artifact of these declarations; root is docs and config, not a server.",
+            "evidence": {
+              "file": "docker-compose.yml",
+              "line": 1
+            }
+          }
+        ]
+      }
+    ],
+    "lenses": [
+      {
+        "name": "The API summary carries three adjudicated-unsupported claims into the parity snapshot",
+        "observation": "All three disputed claims sit on services/api, and each fails for the same reason: the summary asserts corroboration across files (pyproject.toml packaging, docker-compose port declaration, web-client-as-caller) that no single component's cited evidence can back. The facts are true in the fixture but ungrounded in the component's own evidence, so they will read as drift in the P4-7 cutover diff.",
+        "why_it_matters": "Analyzer developers diffing against the P4-1 parity snapshot need descriptions that are stable and evidence-backed; a summary that restates cross-file facts without cross-file citations churns the snapshot and hides real engine changes.",
+        "confidence": "high",
+        "work_order": {
+          "scope": [
+            "services/api"
+          ],
+          "lens": "Rewrite the services/api summary to claim only what its own cited evidence supports (FastAPI, the GET /users/{user_id} route, port 8000, one inbound edge), moving cross-component claims (caller identity, docker-compose declaration) to the edge or root component where the evidence lives.",
+          "criteria": "Re-adjudication of services/api yields zero unsupported claims; the route, framework, and port facts are retained.",
+          "expected_effect": "truth: adjudicator disagreement count on services/api drops from 3 to 0",
+          "budget": {
+            "max_cost_usd": 1.0,
+            "max_targets": 1
+          }
+        }
+      },
+      {
+        "name": "The one honest gap sits on the fixture's least substantive component",
+        "observation": "The only unestablished question ('place' on services/web) attaches to a 9-line package.json whose place is fully stated by the README and directory layout \u2014 the gap exists because the component's own evidence is too thin to cite, not because the fact is unknowable.",
+        "why_it_matters": "For readers checking whether gaps signal analyzer regressions, this one does not: it is an evidence-granularity artifact. Closing it cheaply from the root component's files would make the census fully grounded without any deep read.",
+        "confidence": "medium",
+        "work_order": {
+          "scope": [
+            "services/web",
+            "root"
+          ],
+          "lens": "Answer services/web's 'place' question using the README's one-line-per-component layout and docker-compose as citable evidence, rather than the component's own package.json.",
+          "criteria": "The census shows 9/9 grounded with the 'place' answer citing a real line in README.md or docker-compose.yml.",
+          "expected_effect": "truth: honest-gap count moves from 1 to 0 with the grounded fraction reaching 100%",
+          "budget": {
+            "max_cost_usd": 0.5,
+            "max_targets": 2
+          }
+        }
+      }
+    ],
+    "work_orders": [
+      {
+        "scope": [
+          "services/api"
+        ],
+        "lens": "Rewrite the services/api summary to claim only what its own cited evidence supports (FastAPI, the GET /users/{user_id} route, port 8000, one inbound edge), moving cross-component claims (caller identity, docker-compose declaration) to the edge or root component where the evidence lives.",
+        "criteria": "Re-adjudication of services/api yields zero unsupported claims; the route, framework, and port facts are retained.",
+        "expected_effect": "truth: adjudicator disagreement count on services/api drops from 3 to 0",
+        "budget": {
+          "max_cost_usd": 1.0,
+          "max_targets": 1
+        },
+        "issued_by": "P4",
+        "outcome": null
+      },
+      {
+        "scope": [
+          "services/web",
+          "root"
+        ],
+        "lens": "Answer services/web's 'place' question using the README's one-line-per-component layout and docker-compose as citable evidence, rather than the component's own package.json.",
+        "criteria": "The census shows 9/9 grounded with the 'place' answer citing a real line in README.md or docker-compose.yml.",
+        "expected_effect": "truth: honest-gap count moves from 1 to 0 with the grounded fraction reaching 100%",
+        "budget": {
+          "max_cost_usd": 0.5,
+          "max_targets": 2
+        },
+        "issued_by": "P4",
+        "outcome": null
+      }
+    ],
+    "rejected_orders": [],
+    "rejected_tours": [],
+    "narrative_written": true,
+    "notes": [
+      "2 tour(s) written, 2 lens(es) discovered, 2 work order(s) issued"
+    ]
+  },
+  "accounting": {
+    "by_model": [
+      {
+        "model": "anthropic-claude-cli:fable",
+        "invocations": 6,
+        "targets": 12,
+        "tokens_in": 56873,
+        "tokens_cached": 20910,
+        "tokens_cache_write": 56861,
+        "tokens_out": 10925,
+        "response_bytes": 27842,
+        "output_budget_violations": 0,
+        "cost_usd": 1.719649,
+        "wall_seconds": 147.4,
+        "retries": 0,
+        "failures": 0,
+        "phases": [
+          "p1_orientation",
+          "p2_ladder:fable",
+          "p4_synthesis:narrative",
+          "p4_synthesis:spine",
+          "p5_determination"
+        ],
+        "tokens_total": 88708,
+        "token_share": 0.6018,
+        "cost_share": 0.7996
+      },
+      {
+        "model": "anthropic-claude-cli:opus",
+        "invocations": 7,
+        "targets": 9,
+        "tokens_in": 19608,
+        "tokens_cached": 14652,
+        "tokens_cache_write": 19598,
+        "tokens_out": 3629,
+        "response_bytes": 6646,
+        "output_budget_violations": 0,
+        "cost_usd": 0.303376,
+        "wall_seconds": 98.8,
+        "retries": 0,
+        "failures": 2,
+        "phases": [
+          "p2_ladder:opus",
+          "p3_adjudication:grounding-spot-check",
+          "p3_adjudication:substitution-check",
+          "p3_adjudication:verify-edges",
+          "p3_adjudication:verify-findings",
+          "p3_adjudication:verify-identity"
+        ],
+        "tokens_total": 37889,
+        "token_share": 0.2571,
+        "cost_share": 0.1411
+      },
+      {
+        "model": "anthropic-claude-cli:sonnet",
+        "invocations": 2,
+        "targets": 9,
+        "tokens_in": 20578,
+        "tokens_cached": 0,
+        "tokens_cache_write": 20576,
+        "tokens_out": 221,
+        "response_bytes": 403,
+        "output_budget_violations": 0,
+        "cost_usd": 0.127518,
+        "wall_seconds": 29.5,
+        "retries": 0,
+        "failures": 1,
+        "phases": [
+          "p2_ladder:2a"
+        ],
+        "tokens_total": 20799,
+        "token_share": 0.1411,
+        "cost_share": 0.0593
+      }
+    ],
+    "totals": {
+      "invocations": 15,
+      "tokens_total": 147396,
+      "tokens_in": 97059,
+      "tokens_cached": 35562,
+      "tokens_cache_write": 97035,
+      "tokens_out": 14775,
+      "response_bytes": 34891,
+      "output_budget_violations": 0,
+      "cost_usd": 2.150543,
+      "wall_seconds": 275.7
+    },
+    "output_efficiency": {
+      "billed_output_tokens": 14775,
+      "delivered_response_bytes": 34891,
+      "compact_budgeted_calls": 3,
+      "compact_budget_violations": 0,
+      "note": "Delivered JSON is schema- and byte-bounded. Billed output also includes hidden reasoning; the Claude CLI exposes no per-call max_tokens below its provider ceiling, so billed-token reduction is measured and gated against the baseline, not falsely called a transport guarantee."
+    },
+    "cache_efficiency": {
+      "writes": 97035,
+      "reads": 35562,
+      "read_write_ratio": 0.3665,
+      "prefix_hashes": [
+        "28751db8167d9ce677dd97cdb17aaa3ab80053bfdd47ec67ceb86ef43274f23d",
+        "71cf26538a4cb926afc146c8fb2bffdb42a63fefd812b429ff20cc3111a5961b",
+        "9219cca0372f7a9bc87aff49f3f15259340ae656b5db726c0ceff4591fabe16f",
+        "ceebb4a1ebae0dd98611ef2b09c98130b45870e2ae90c5dd147e125cf2c8ea06",
+        "ee1dffa912d10fceb883a332b2f24188604c7e784a9079077e68e6f1916068f4"
+      ],
+      "mechanism_verified": true,
+      "budgeted_as_saving": true,
+      "note": "The F-9 live probe verified that the stable appended prefix is cache-read only when dynamic system sections are excluded. This report books no hypothetical saving: only cache reads measured in this run count."
+    },
+    "account_delta": null,
+    "calibration_note": "To turn this into a share of the weekly allowance: take a /usage reading immediately before the run, keep hands off the account for its duration, take a second reading immediately after, and record the difference with scripts/usage-budget.py calibrate. Nothing else measures a subscription; the dollar figures here are API-equivalent prices for work that was never billed at API rates."
+  },
+  "escalation_economics": {
+    "climbed": 9,
+    "escalated_cost_usd": 0.659371,
+    "escalated_tokens": 26999,
+    "cost_per_climb_usd": 0.073263,
+    "by_trigger": [
+      {
+        "trigger": "E1",
+        "meaning": "no-answer: a required question the tier could not answer at all",
+        "items": 8,
+        "questions": [
+          {
+            "question": "purpose",
+            "items": 8
+          },
+          {
+            "question": "mechanism",
+            "items": 8
+          },
+          {
+            "question": "place",
+            "items": 8
+          },
+          {
+            "question": "next_step",
+            "items": 8
+          }
+        ],
+        "class": "reasoning",
+        "class_basis": "lacked:0/trigger:32"
+      },
+      {
+        "trigger": "E2",
+        "meaning": "ungrounded: an answer whose evidence the tier could not cite",
+        "items": 2,
+        "questions": [
+          {
+            "question": "place",
+            "items": 2
+          },
+          {
+            "question": "flow",
+            "items": 1
+          },
+          {
+            "question": "why",
+            "items": 1
+          }
+        ],
+        "class": "context",
+        "class_basis": "lacked:0/trigger:4"
+      }
+    ],
+    "deterministic_opportunities": []
+  },
+  "cost_note": "Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent."
+}

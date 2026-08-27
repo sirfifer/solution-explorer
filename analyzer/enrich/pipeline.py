@@ -149,8 +149,9 @@ class BudgetExhausted(RuntimeError):
 
     Phases are expected to check :meth:`BudgetMeter.under` before launching, the
     way the engine checks before submitting a partition. This exception is the
-    backstop for a phase that does not, so spend past the ceiling is impossible
-    rather than merely discouraged.
+    backstop for a phase that does not. It prevents a new launch after the
+    recorded ceiling is reached; it cannot stop an already-running provider
+    response from exceeding a CLI allowance.
     """
 
 
@@ -159,14 +160,18 @@ class BudgetMeter:
     """One cost meter shared by every phase and rung of a ladder run.
 
     ``ceiling`` is the API-equivalent dollar ceiling for the whole run; None
-    disables it. The meter is soft in exactly the way the engine's is: work
-    already in flight when the ceiling is reached runs to completion, so the
-    total can exceed the ceiling by up to one batch, and no NEW work launches.
+    disables it. Provider-capable invokers reserve an allowance before launch,
+    so parallel calls cannot each be handed the same remainder. The current
+    Claude CLI receives that allowance through ``--max-budget-usd``, but its
+    flag is not a server-side single-response cap: a live 2026-08-26 call billed
+    more than the value. Overshoot is therefore detected and fails publication;
+    an API transport with a hard output-token limit is required to prevent it.
     """
 
     ceiling: Optional[float] = None
     spent: float = 0.0
     charges: int = 0
+    reserved: float = 0.0
     # The wall-clock ceiling, in seconds, with the same soft semantics as the
     # cost ceiling: work in flight when it is reached runs to completion, and
     # no NEW work launches. Configured via configure_wall because it needs the
@@ -250,8 +255,10 @@ class BudgetMeter:
         """True while new work may be launched (all three ceilings clear)."""
         if self._systemic_error is not None:
             return False
-        if self.ceiling is not None and self.spent >= self.ceiling:
-            return False
+        if self.ceiling is not None:
+            with self._lock:
+                if self.spent + self.reserved >= self.ceiling:
+                    return False
         return not self._over_wall()
 
     def stop_reason(self) -> str:
@@ -276,7 +283,35 @@ class BudgetMeter:
     def remaining(self) -> Optional[float]:
         if self.ceiling is None:
             return None
-        return max(0.0, self.ceiling - self.spent)
+        with self._lock:
+            return max(0.0, self.ceiling - self.spent - self.reserved)
+
+    def reserve(self, *, slots: int = 1) -> Optional[float]:
+        """Reserve one provider call's maximum spend atomically.
+
+        Dividing the run ceiling by the configured concurrency gives every
+        simultaneous call a usable allowance while ensuring their maxima sum to
+        no more than the run ceiling. Sequential runs receive the entire
+        remainder, so the cap does not arbitrarily lower answer quality.
+        """
+        if self.ceiling is None:
+            return None
+        with self._lock:
+            available = max(0.0, self.ceiling - self.spent - self.reserved)
+            if available < 0.01:
+                return 0.0
+            unit = self.ceiling / max(1, int(slots))
+            amount = min(available, unit)
+            self.reserved += amount
+            return amount
+
+    def settle(self, reservation: Optional[float], cost_usd: float) -> None:
+        """Release a reservation and charge the provider's measured cost."""
+        with self._lock:
+            if reservation is not None:
+                self.reserved = max(0.0, self.reserved - max(0.0, reservation))
+            self.spent += max(0.0, float(cost_usd or 0.0))
+            self.charges += 1
 
     def charge(self, cost_usd: float) -> None:
         # Locked: with parallel rungs, += from worker threads is a lost-update
@@ -437,6 +472,10 @@ class MeteredInvoker:
         self.output_budget_bytes = output_budget_bytes
         self.calls = 0
 
+    def set_targets(self, value: int) -> None:
+        """Set the exact number of targets answered by the next call."""
+        self.targets = max(0, int(value))
+
     def __call__(self, prompt: str) -> InvokeResult:
         self.calls += 1
         if not self._ctx.budget.under():
@@ -451,8 +490,27 @@ class MeteredInvoker:
             )
             self._ctx.record_ledger_row(row)
             return InvokeResult(ok=False, text="", error=reason)
+        reservation: Optional[float] = None
+        budget_setter = getattr(self._inner, "set_max_budget_usd", None)
+        if callable(budget_setter) and self._ctx.budget.ceiling is not None:
+            reservation = self._ctx.budget.reserve(
+                slots=max(1, self._ctx.policy.max_parallel)
+            )
+            if reservation is not None and reservation < 0.01:
+                reason = "not invoked: run cost ceiling is fully reserved"
+                self._ctx.record_ledger_row(LedgerRow(
+                    phase=self.phase, rung=self.rung, model=self.model,
+                    targets=self.targets, ok=False, error=reason,
+                ))
+                return InvokeResult(ok=False, text="", error=reason)
+            budget_setter(reservation)
         started = self._ctx.timer()
-        result = self._inner(prompt)
+        try:
+            result = self._inner(prompt)
+        except Exception:
+            if reservation is not None:
+                self._ctx.budget.settle(reservation, 0.0)
+            raise
         wall = max(0.0, self._ctx.timer() - started)
         (
             tokens_in,
@@ -461,7 +519,18 @@ class MeteredInvoker:
             tokens_cache_write,
             tokens_fresh_in,
         ) = _usage_tokens(result.usage)
-        self._ctx.budget.charge(result.cost_usd)
+        if reservation is not None:
+            self._ctx.budget.settle(reservation, result.cost_usd)
+        else:
+            self._ctx.budget.charge(result.cost_usd)
+        if reservation is not None and result.cost_usd > reservation + 1e-9:
+            result = replace(
+                result, ok=False,
+                error=(
+                    f"provider exceeded its ${reservation:.6f} per-call cost "
+                    f"reservation with ${result.cost_usd:.6f}"
+                ),
+            )
         # Every outcome feeds the systemic-failure circuit: one success resets
         # it, a run of identical failures opens it, and the pre-launch
         # budget.under() gate above then refuses all further work with the
@@ -525,27 +594,22 @@ class MeteredInvoker:
         # the cache boundary must not claim a prefix the provider never saw.
         prefix_tokens_est = round(result.prefix_chars / PREFIX_CHARS_PER_TOKEN)
         response_bytes = len((result.text or "").encode("utf-8"))
-        # Canonical dict fixtures exist for injected invokers predating
-        # compact/v1.  They are compatibility coverage, not evidence that the
-        # production schema/byte ceiling ran.  Only schema-enforced responses
-        # and actual compact array envelopes receive a budget verdict.
-        compact_wire = False
-        try:
-            candidate = json.loads(result.text or "")
-            compact_wire = isinstance(candidate, dict) and any(
-                isinstance(candidate.get(name), list)
-                for name in ("components", "relationships")
-            )
-        except (json.JSONDecodeError, TypeError):
-            pass
-        budget_applies = bool(
-            self.output_budget_bytes is not None
-            and (result.structured_output_enforced or compact_wire)
-        )
+        # The caller declared this a compact-budgeted call. That declaration,
+        # not the response's self-reported shape, makes the byte ceiling apply.
+        # Otherwise prose or a placeholder object can evade the exact gate.
+        budget_applies = self.output_budget_bytes is not None
         output_budget_ok = (
             response_bytes <= self.output_budget_bytes
             if budget_applies and self.output_budget_bytes is not None else None
         )
+        if output_budget_ok is False and result.ok:
+            result = replace(
+                result, ok=False,
+                error=(
+                    f"response exceeded its delivered-byte budget: "
+                    f"{response_bytes:,} > {self.output_budget_bytes:,} UTF-8 bytes"
+                ),
+            )
         self._ctx.record_ledger_row(
             LedgerRow(
                 phase=self.phase,
@@ -616,6 +680,10 @@ class LadderPolicy:
     # MEDIAN legitimate call ran ~554s against the old fixed 600s, so timeouts
     # were routine and, with the retry budget below the timeout, unrecoverable.
     invoke_timeout_s: int = 1200
+    # Transport attempts per logical invocation. Kept on the ladder policy so
+    # the CLI's --retry-attempts control reaches the real provider wrapper;
+    # previously the flag was parsed but silently ignored on the ladder path.
+    retry_attempts: int = 4
     # Run the first parallel task alone before fanning out, so the shared
     # prompt prefix lands in the provider's cache once instead of N times.
     warm_first: bool = True
@@ -659,7 +727,10 @@ def policy_invoker_factory(policy: LadderPolicy) -> Callable[[ModelSpec], Invoke
     """
     from .retry import RetryPolicy
 
-    retry = RetryPolicy(total_budget_s=float(policy.invoke_timeout_s) + 300.0)
+    retry = RetryPolicy(
+        max_attempts=max(1, int(policy.retry_attempts)),
+        total_budget_s=float(policy.invoke_timeout_s) + 300.0,
+    )
 
     def factory(spec: ModelSpec) -> Invoker:
         return build_invoker(
@@ -674,7 +745,7 @@ class PhaseResult:
     """What one phase reports back to the pipeline."""
 
     name: str
-    status: str = "ok"  # "ok" | "skipped" | "failed"
+    status: str = "ok"  # "ok" | "degraded" | "skipped" | "failed"
     notes: list[str] = field(default_factory=list)
     data: dict = field(default_factory=dict)
 
@@ -859,7 +930,11 @@ class PipelineResult:
     ledger: list[LedgerRow] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     total_cost_usd: float = 0.0
+    cost_ceiling_usd: Optional[float] = None
     ceiling_hit: bool = False
+    quality_status: str = "not-evaluated"
+    quality_issues: list[str] = field(default_factory=list)
+    audit: Optional[dict] = None
 
     @property
     def failed_phases(self) -> list[str]:
@@ -869,14 +944,22 @@ class PipelineResult:
     def ok(self) -> bool:
         return not self.failed_phases
 
+    @property
+    def quality_ok(self) -> bool:
+        return self.quality_status == "complete"
+
     def to_dict(self) -> dict:
         return {
             "phases": [p.to_dict() for p in self.phases],
             "ledger": [row.to_dict() for row in self.ledger],
             "notes": list(self.notes),
             "total_cost_usd": round(self.total_cost_usd, 6),
+            "cost_ceiling_usd": self.cost_ceiling_usd,
             "ceiling_hit": self.ceiling_hit,
             "failed_phases": self.failed_phases,
+            "quality_status": self.quality_status,
+            "quality_issues": list(self.quality_issues),
+            "audit": self.audit,
         }
 
 
@@ -940,6 +1023,7 @@ def run_pipeline(ctx: RunContext, phases: Iterable[Phase]) -> PipelineResult:
         result.ceiling_hit = True
     result.ledger = list(ctx.ledger)
     result.total_cost_usd = ctx.budget.spent
+    result.cost_ceiling_usd = ctx.budget.ceiling
     result.notes = list(ctx.notes)
     return result
 
@@ -1119,9 +1203,23 @@ def run_ladder(
         # Written here rather than inside P5, so a run whose determination phase
         # is the one that failed still produces a report. A run with no report is
         # a run nobody can audit, and that is the one outcome to rule out.
+        # First write supplies the artifact consumed by the adversarial audit.
+        # Then the same result is rewritten with the audit and publishability
+        # verdict attached. A quality failure therefore cannot hide behind an
+        # operationally successful phase list.
+        from .completion import audit_run, evaluate_completion
         from .runreport import write_run_report
 
+        result.quality_status, result.quality_issues = evaluate_completion(result)
         write_run_report(ctx, result)
+        if not config.dry_run and any(
+            phase.name == "p5_determination" for phase in result.phases
+        ):
+            result.audit = audit_run(config.run_dir, store_path=config.store_path)
+            result.quality_status, result.quality_issues = evaluate_completion(
+                result, audit=result.audit
+            )
+            write_run_report(ctx, result)
         result.notes = list(ctx.notes)
         return result
     finally:

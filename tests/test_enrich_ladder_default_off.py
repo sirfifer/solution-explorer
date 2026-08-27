@@ -144,11 +144,13 @@ def test_with_the_flag_run_enhance_is_never_called(store, monkeypatch, tmp_path)
     code = enhance_cli.main([
         POLYGLOT, "--store", str(store), "--ladder",
         "--run-dir", str(tmp_path / "run"),
+        "--retry-attempts", "1",
     ])
 
     assert code == 0
     assert called["ladder"] == 1
     assert called["config"].policy.iteration.min_rounds == 1
+    assert called["config"].policy.retry_attempts == 1
 
 
 def test_an_unknown_binding_stops_the_run_before_anything_happens(

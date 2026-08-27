@@ -94,6 +94,12 @@ def build_report(ctx, result, *, engine_version: str = "1") -> dict:
         "accounting": _accounting(ctx, result),
         "escalation_economics": _escalation_economics(ctx, result),
         "cost_note": COST_NOTE,
+        "quality": {
+            "status": result.quality_status,
+            "complete": result.quality_ok,
+            "issues": list(result.quality_issues),
+        },
+        "audit": result.audit,
     }
     missing = [key for key in REQUIRED_SECTIONS if key not in report]
     if missing:  # pragma: no cover - guards a future edit, not a runtime path
@@ -426,6 +432,11 @@ def _identity(ctx, result, engine_version: str) -> dict:
         "totals": {
             "invocations": len(result.ledger or []),
             "cost_usd": round(result.total_cost_usd, 6),
+            "cost_ceiling_usd": result.cost_ceiling_usd,
+            "cost_ceiling_exceeded": (
+                result.cost_ceiling_usd is not None
+                and result.total_cost_usd > result.cost_ceiling_usd + 1e-9
+            ),
             "ceiling_hit": result.ceiling_hit,
             "failed_phases": result.failed_phases,
         },
@@ -434,8 +445,13 @@ def _identity(ctx, result, engine_version: str) -> dict:
 
 
 def _census(census, ladder) -> dict:
-    if census is None and ladder is not None:
-        census = ladder.census
+    if ladder is not None:
+        # Work orders mutate the shared ladder after P2's original PhaseResult
+        # was recorded. Rebuild from current states so the published census
+        # cannot disagree with the determination that just judged it.
+        from .contract import build_census
+
+        census = build_census(list(ladder.states.values()))
     if census is None:
         return {
             "by_state": {},
@@ -902,6 +918,12 @@ def render_markdown(report: dict) -> str:
         lines += [
             "**The run cost ceiling was reached.** Work below was left undone and "
             "is recorded as skipped, not as complete.",
+            "",
+        ]
+    if totals.get("cost_ceiling_exceeded"):
+        lines += [
+            "**The provider exceeded the configured run allowance.** Measured "
+            "cost is above the requested ceiling; this run is not publishable.",
             "",
         ]
     if totals.get("failed_phases"):

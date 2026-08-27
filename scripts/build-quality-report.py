@@ -106,7 +106,7 @@ def main(db: str, run_dir: str) -> int:
 
     led = Path(run_dir) / "ledger.jsonl"
     if led.exists():
-        rows = [json.loads(l) for l in led.read_text().splitlines() if l.strip()]
+        rows = [json.loads(line) for line in led.read_text().splitlines() if line.strip()]
         spend = sum(r.get("cost_usd") or 0 for r in rows)
         trunc = sum(1 for r in rows if (r.get("stop_reason") or "") == "max_tokens")
         multi = sum(1 for r in rows if int(r.get("num_turns") or 1) > 1)

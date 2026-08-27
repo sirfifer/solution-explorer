@@ -274,6 +274,8 @@ def test_t6_every_citable_fact_is_a_key_the_fact_block_can_emit():
         "testing": {"framework": "pytest"},
         "actions": [{"name": "run"}],
         "external_services": ["stripe"],
+        "config_files": [{"path": "pyproject.toml", "type": "python"}],
+        "docs": {"purpose": "The public API", "readme": "Setup guide"},
     }
     facts = StoreFacts(
         {

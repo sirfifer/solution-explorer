@@ -362,6 +362,9 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
         max_cost_usd=args.max_cost_usd,
         threshold=args.threshold,
         max_parallel=max(1, int(args.max_parallel or 1)),
+        retry_attempts=(
+            4 if args.retry_attempts is None else max(1, int(args.retry_attempts))
+        ),
     )
     if args.max_wall_minutes is not None:
         policy.max_wall_minutes = args.max_wall_minutes
@@ -401,7 +404,14 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
         print("  note: run cost ceiling reached; partial state reported honestly")
     if result.failed_phases:
         print(f"  FAILED phases: {result.failed_phases}")
-    return 0 if result.ok else 1
+    if not result.ok:
+        return 1
+    if args.dry_run:
+        return 0
+    # 2 remains configuration/usage failure throughout this command. Quality
+    # incomplete is distinct so automation can tell "could not run" from "ran
+    # but must not publish" without parsing prose.
+    return 0 if getattr(result, "quality_ok", result.ok) else 3
 
 
 def _run_stamp() -> str:

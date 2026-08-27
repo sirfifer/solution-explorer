@@ -231,6 +231,21 @@ class StoreFacts:
         self.ai_by_comp = _group_by(arch.get("ai_surface") or [], "component_id")
         self.entities_by_comp = _group_by(data_entities, "component_id")
         self.rules_by_comp = _group_by(rules, "component_id")
+        self._language_counts: dict[str, int] = {}
+        self._type_counts: dict[str, int] = {}
+        for component in self.component_index.values():
+            language = str(component.get("language") or "").strip().lower()
+            component_type = str(component.get("type") or "").strip().lower()
+            if language:
+                self._language_counts[language] = self._language_counts.get(language, 0) + 1
+            if component_type:
+                self._type_counts[component_type] = self._type_counts.get(component_type, 0) + 1
+        self._relationship_count = len(relationships)
+        self._capability_count = len(capabilities)
+        self._capability_component_count = len({
+            str(row.get("component_id")) for row in capabilities
+            if row.get("component_id")
+        })
         self._rel_by_key = {
             f"{r.get('source','')}|{r.get('target','')}|{r.get('type','')}": r
             for r in relationships
@@ -252,6 +267,8 @@ class StoreFacts:
                 str(r.get("source") or ""), str(r.get("target") or ""),
                 str(r.get("type") or ""),
             ))
+        self._max_inbound = max(self._inbound.values(), default=0)
+        self._max_outbound = max(self._outbound.values(), default=0)
 
     def component_facts(self, comp_id: str) -> dict:
         """A compact, JSON-serializable fact block for one component.
@@ -282,11 +299,40 @@ class StoreFacts:
             "existing_description": comp.get("description") or None,
             "inbound_edges": self._inbound.get(comp_id, 0),
             "outbound_edges": self._outbound.get(comp_id, 0),
+            "capability_count": len(self.caps_by_comp.get(comp_id) or []),
+            "data_entity_count": len(self.entities_by_comp.get(comp_id) or []),
+            "system_relationship_count": self._relationship_count,
+            "system_capability_count": self._capability_count,
+            "system_capability_component_count": self._capability_component_count,
+            "system_max_inbound_edges": self._max_inbound,
+            "system_max_outbound_edges": self._max_outbound,
+            "edges": [
+                {
+                    "source": row.get("source"), "target": row.get("target"),
+                    "type": row.get("type"),
+                }
+                for row in self._edges_by_component.get(comp_id, [])[:12]
+            ],
         }
+        language_key = str(comp.get("language") or "").strip().lower()
+        type_key = str(comp.get("type") or "").strip().lower()
+        if language_key:
+            facts["same_language_component_count"] = self._language_counts[language_key]
+        if type_key:
+            facts["same_type_component_count"] = self._type_counts[type_key]
         # Conditional data the schema keys on. Only present when non-empty, so the
         # model sees exactly which optional fields apply.
         if comp.get("port"):
             facts["port"] = comp.get("port")
+        if comp.get("config_files"):
+            facts["config_files"] = (comp.get("config_files") or [])[:8]
+        docs = comp.get("docs") or {}
+        documentation = {
+            "purpose": docs.get("purpose"),
+            "readme_excerpt": str(docs.get("readme") or "")[:1_600] or None,
+        }
+        if any(value for value in documentation.values()):
+            facts["documentation"] = documentation
         if comp.get("testing"):
             facts["has_testing_data"] = True
             facts["testing"] = comp.get("testing")
@@ -335,6 +381,7 @@ class StoreFacts:
             "protocol": rel.get("protocol"),
             "port": rel.get("port"),
             "confidence": rel.get("confidence"),
+            "system_relationship_count": self._relationship_count,
             "evidence": (rel.get("evidence") or [])[:3],
         }
 
@@ -954,6 +1001,11 @@ seventeen of them. Cite the field you took the number from. Citable fields:
 file_count, lines, inbound_edges, outbound_edges, language, framework,
 port, type, capabilities, data_entities, external_services, action_count,
 ai_surface, has_testing_data, testing.
+Also citable: path, existing_description, capability_count,
+data_entity_count, same_language_component_count, same_type_component_count,
+system_relationship_count, system_capability_count,
+system_capability_component_count, system_max_inbound_edges,
+system_max_outbound_edges, files, edges, config_files, and documentation.
 
 Paths must come from the files listed in the facts for that component. A citation
 to a file that is not in the analyzed set fails the check, and the answer is
@@ -1098,9 +1150,10 @@ COMPONENTS (produce one compact entry per requested id).
 "purpose":{"t":"complete sentence: what job it does","e":[0]},
 "mechanism":{"t":"complete sentence: how it works","e":[[1,"Symbol"]]},
 "place":{"t":"complete sentence: how it connects","e":["E0"]},
-"why_matters":"complete sentence: why a reader should care",
+"why_matters":{"t":"complete sentence: why a reader should care","e":[0]},
 "next":{"t":"complete sentence: where to go next and why","e":[0]},
-"data":"specific data types","criticality":"critical|important|supporting"}],
+"data":{"t":"specific data types","e":[0]},
+"criticality":"critical|important|supporting"}],
 "relationships":[]}
 
 One entry per id. Generate each meaning ONCE. The coordinator constructs the
@@ -1113,17 +1166,37 @@ port_assessment, complexity_assessment, external_services_assessment,
 actions_summary, key_user_flows. Omit nulls, empties, defaults, and all fields not
 listed here.
 
-EVIDENCE uses the target's menus: 2 = file index 2; [2,"Symbol"] = symbol in
-that file; [2,120] = line; "E3" = edge index 3; ["F","inbound_edges"] = this
-component's own analyzer fact (fields: file_count, lines, inbound_edges,
-outbound_edges, language, framework, port, type, capabilities, data_entities,
-external_services, action_count, ai_surface, has_testing_data, testing). Use
+EVIDENCE applies to purpose, mechanism, place, why_matters, next, and data. It
+uses the target's menus: 2 (or the exact supplied path) = that file;
+[2,"Symbol"] (or ["exact/path","Symbol"]) = symbol in that file; [2,120] =
+line; "E3" = edge index 3; ["F","inbound_edges"] = this component's own
+analyzer fact; "F.type" is accepted shorthand. Fields: file_count, lines,
+inbound_edges, outbound_edges, language, framework, port, type, path,
+existing_description, capability_count, capabilities, data_entity_count,
+data_entities, same_language_component_count, same_type_component_count,
+system_relationship_count, system_capability_count,
+system_capability_component_count, system_max_inbound_edges,
+system_max_outbound_edges, files, edges, config_files, documentation,
+external_services, action_count, ai_surface, has_testing_data, testing. Use
 it for any claim about a count, an absence, or a detected attribute. A full
 evidence object is the escape hatch. An answer with t+e is answered by default. If it cannot be
 grounded, emit {"t":"best bounded claim","s":"u","r":"why"}; add
 "l":"fact","need":"specific missing fact" only when more deterministic context
 would settle it, otherwise "l":"judgment". Emit {"s":"d","r":"why"} only when
 nothing worth saying exists.
+
+Every CLAUSE must be carried by one of the answer's one or two citations. When
+you name a detected endpoint, route, framework, or data shape, cite
+["F","capabilities"] or the exact fact that contains it. A file's existence
+does not prove an adjacent claim about its contents. If two citations cannot
+carry every clause, narrow the sentence; do not append an uncited detail.
+
+Each fact block includes deterministic_atoms. Those are authoritative local
+facts and already carry their exact citation. Copy a relevant value faithfully;
+do not turn a local count into a global word such as only, sole, unique, or
+single. The coordinator renders analyzer-owned identity, port, size, service,
+and testing prose itself. Your value is the interpretation: purpose, mechanism,
+reader significance, and the most useful next step.
 
 Identity values are parser-owned. Emit only a contradiction as
 "id":{"framework":{"v":"correct value","e":[0],"r":"why"}}. Emit
@@ -1178,6 +1251,36 @@ def build_compact_component_prompt(
             f"{r.get('source')}->{r.get('target')} ({r.get('type')})"
             for r in facts.component_edge_menu(cid)
         ]
+        atoms = []
+        for field in (
+            "type", "language", "framework", "port", "file_count", "lines",
+            "inbound_edges", "outbound_edges", "capability_count",
+            "data_entity_count", "same_language_component_count",
+            "same_type_component_count", "system_relationship_count",
+            "system_capability_count", "system_capability_component_count",
+            "system_max_inbound_edges", "system_max_outbound_edges",
+        ):
+            if field in block and block[field] not in (None, "", []):
+                atoms.append({
+                    "scope": (
+                        "global" if field.startswith(("same_", "system_"))
+                        else "local"
+                    ),
+                    "field": field, "value": block[field],
+                    "citation": ["F", field],
+                })
+        for field in ("capabilities", "data_entities"):
+            values = block.get(field)
+            if isinstance(values, list) and values:
+                atoms.append({
+                    "scope": "local", "field": field, "count": len(values),
+                    "names": [
+                        str(item.get("name") or item.get("kind") or "")[:120]
+                        for item in values[:12] if isinstance(item, dict)
+                    ],
+                    "citation": ["F", field],
+                })
+        block["deterministic_atoms"] = atoms
         components.append(block)
     user = "COMPONENTS:\n" + json.dumps(components, separators=(",", ":"), default=str)
     user += "\nReturn the JSON object now."
@@ -1253,6 +1356,9 @@ Rules:
   needs evidence.
 - E3: correct the claim, or flag the detected value via
   "id":{"<field>":{"v":<value or null>,"e":[<citation>],"r":"<one line>"}}.
+  A local fact never proves that an item is the only/sole/unique one in the
+  whole system. Remove that global comparison and state the supported local
+  count or relationship instead; do not turn avoidable wording into a gap.
 - E4: make the answer specific to THIS item: name the fact that could not be
   true of a sibling. If you cannot, say so with "s":"u".
 - E5: the declared confusion is stated on the item. Resolve it from the
@@ -1274,8 +1380,6 @@ def build_compact_escalation_prompt(
         if terminal else
         "You are a HIGHER RUNG of an enrichment ladder.\n"
     ) + _COMPACT_ESCALATION_PREFIX
-    if assignment:
-        prefix += "\nSCOPED ASSIGNMENT:\n" + assignment.strip()
     if terminal:
         prefix += (
             "\nThere is no rung after you and there is no loop. A TODO you "
@@ -1288,6 +1392,8 @@ def build_compact_escalation_prompt(
             "missing or contradictory."
         )
     user = "ITEMS:\n" + json.dumps(items, default=str)
+    if assignment:
+        user = "SCOPED ASSIGNMENT:\n" + assignment.strip() + "\n" + user
     user += "\nReturn the JSON object now."
     return _cached_prompt(prefix + _brief_prefix(brief), user)
 
@@ -1519,6 +1625,12 @@ analyzer record says outbound_edges: 0 has zero outbound edges; demanding a
 file or a symbol to prove an edge COUNT, or to prove an absence, asks for
 evidence that cannot exist. Judge such a claim on whether it matches the cited
 value, not on whether it also cites a file.
+
+Global analyzer facts obey the same arithmetic. If system_relationship_count is
+1 and this component's outbound_edges is 1, that edge is necessarily the only
+outbound edge in the analyzed graph. If system_max_inbound_edges equals this
+component's inbound_edges, "highest inbound count" is supported. Do not reject
+an implication that follows exactly from the supplied counts.
 
 Where a claim goes BEYOND the cited fact, hold it to the usual standard: a fact
 citation of file_count supports "ten files" and does not support "ten files

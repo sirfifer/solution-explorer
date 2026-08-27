@@ -249,6 +249,17 @@ def test_budget_meter_charging_is_thread_safe():
     assert abs(meter.spent - 8.0) < 1e-6
 
 
+def test_cost_reservations_cannot_sum_past_the_run_ceiling():
+    meter = BudgetMeter(ceiling=2.0)
+    reservations = [meter.reserve(slots=4) for _ in range(4)]
+    assert reservations == [0.5, 0.5, 0.5, 0.5]
+    assert meter.remaining() == 0.0
+    assert meter.under() is False
+    meter.settle(reservations[0], 0.1)
+    assert abs(meter.spent - 0.1) < 1e-9
+    assert abs(meter.reserve(slots=4) - 0.4) < 1e-9
+
+
 # --- 4. the ledger streams ------------------------------------------------------
 
 
@@ -325,10 +336,13 @@ def test_dry_run_projects_wall_time_and_names_the_armed_limits(world, tmp_path):
 
 
 def test_the_retry_budget_scales_with_the_invoke_timeout():
-    factory = policy_invoker_factory(LadderPolicy(invoke_timeout_s=1200))
+    factory = policy_invoker_factory(
+        LadderPolicy(invoke_timeout_s=1200, retry_attempts=2)
+    )
     invoker = factory("anthropic-claude-cli:sonnet")
     # The per-attempt timeout reached the transport, and the retry budget
     # exceeds it, so a single full timeout no longer exhausts the budget and
     # one recovery attempt is actually possible.
     assert invoker._base.timeout == 1200
+    assert invoker._policy.max_attempts == 2
     assert invoker._policy.total_budget_s > 1200

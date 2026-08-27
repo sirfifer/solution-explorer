@@ -222,6 +222,12 @@ better than a confident "met" that nothing supports.
 Work from what you are given below. Do not ask for a re-read of the components:
 the census is the record of what was established about them, and it is what you
 are judging.
+
+A work order can repair or sharpen enrichment claims for its scoped components
+and relationships. It cannot change parser facts or the independent identity,
+edge, or finding verifier verdicts: those require deterministic parser work or
+a separately scheduled verification pass. Never issue a work order that merely
+asks the enrichment ladder to re-verify one of those independent verdicts.
 """
 
 
@@ -238,9 +244,11 @@ def build_determination_prompt(
 ) -> str:
     # The prompt splits at the stable/variable seam. Everything identical
     # across a run's determination calls (instructions, contract, brief,
-    # criteria, corpus digests) renders FIRST and travels as the cacheable
-    # prefix; everything round-specific (the forced-round policy, rounds so
-    # far, the budget note) renders in the user tail. The v2 run's three p5
+    # criteria, adjudication and synthesis) renders FIRST and travels as the
+    # cacheable prefix. The census is deliberately in the user tail: work
+    # orders can change it between judgments, and putting it in the prefix
+    # invalidated the whole cache while claiming the boundary was stable.
+    # Everything round-specific renders in that same tail. The v2 run's three p5
     # calls shipped a near-identical body at the 2x write rate three times
     # because the forced-round block sat at position 3 and broke byte
     # stability between call 1 and the rest (IMPLEMENTATION-DELTA-ORCH.md
@@ -259,23 +267,28 @@ def build_determination_prompt(
         "enrichment ran, so they are not shaped by what happened to be easy):",
         json.dumps([c.to_dict() for c in criteria], indent=2, default=str),
         "",
-        "THE ITEM CENSUS (what was actually established, per target):",
-        json.dumps(census, indent=2, default=str),
-        "",
     ]
-    if adjudication:
-        prefix_parts += [
-            "WHAT INDEPENDENT ADJUDICATION FOUND:",
-            json.dumps(adjudication, indent=2, default=str),
-            "",
-        ]
     if synthesis:
         prefix_parts += [
             "THE STORY AND THE LENSES:",
             json.dumps(synthesis, indent=2, default=str),
             "",
         ]
-    tail_parts = []
+    tail_parts = [
+        "THE CURRENT ITEM CENSUS (what is established now):",
+        json.dumps(census, separators=(",", ":"), default=str),
+        "",
+    ]
+    if adjudication:
+        # Work-order rechecks change this evidence between determinations. It
+        # belongs beside the changing census, not in the cacheable prefix; the
+        # live pilot otherwise cold-wrote the P5 block again precisely when a
+        # repair round had done useful work.
+        tail_parts += [
+            "WHAT INDEPENDENT ADJUDICATION FOUND:",
+            json.dumps(adjudication, separators=(",", ":"), default=str),
+            "",
+        ]
     if forced_round:
         tail_parts += [
             "POLICY: this run must carry out at least one improvement round even "
@@ -291,11 +304,43 @@ def build_determination_prompt(
         tail_parts += [
             "IMPROVEMENT ROUNDS ALREADY RUN, and what they actually changed. A "
             "round that changed nothing is evidence about the next one:",
-            json.dumps(rounds_so_far, indent=2, default=str),
+            json.dumps(_rounds_digest(rounds_so_far), separators=(",", ":"), default=str),
             "",
         ]
     tail_parts += [budget_note, "", "Return the JSON object now."]
     return _cached_prompt("\n".join(prefix_parts), "\n".join(tail_parts))
+
+
+def _rounds_digest(rounds: list[dict]) -> list[dict]:
+    """Carry measured deltas, not the full prose already judged last round."""
+    out = []
+    for round_ in rounds:
+        if not isinstance(round_, dict):
+            continue
+        orders = []
+        for order in round_.get("work_orders") or []:
+            if not isinstance(order, dict):
+                continue
+            result = order.get("outcome") if isinstance(order.get("outcome"), dict) else {}
+            orders.append({
+                "scope": order.get("scope"),
+                "expected_effect": order.get("expected_effect"),
+                "executed": result.get("executed"),
+                "state_changes": result.get("state_changes"),
+                "changed_anything": result.get("changed_anything"),
+                "cost_usd": result.get("cost_usd"),
+                "notes": result.get("notes"),
+            })
+        out.append({
+            "number": round_.get("number"),
+            "forced": round_.get("forced"),
+            "target": round_.get("target"),
+            "ran": round_.get("ran"),
+            "measured_delta": round_.get("measured_delta"),
+            "orders": orders,
+            "notes": round_.get("notes"),
+        })
+    return out
 
 
 def _census_digest(census: dict) -> dict:
@@ -407,14 +452,7 @@ class DeterminationPhase:
 
         # The three universal gates are answered by code before anything is
         # asked of a model, so their verdicts cannot be talked out of.
-        mechanical: dict[str, CriterionVerdict] = {}
-        for criterion in criteria:
-            if criterion.universal:
-                verdict = evaluate_universal(
-                    criterion, census=census, adjudication=adjudication
-                )
-                if verdict is not None:
-                    mechanical[criterion.id] = verdict
+        mechanical = self._mechanical(criteria, census, adjudication)
 
         policy = ctx.policy.iteration.normalized()
         ctx.descend = make_descender(ctx, ladder)
@@ -443,7 +481,29 @@ class DeterminationPhase:
             outcome.rounds.append(round_)
             if not round_.ran:
                 break
+            recheck_ids = {
+                target_id
+                for result in round_.outcomes if result.executed
+                for target_id in result.order.scope[: result.order.max_targets]
+            }
+            if recheck_ids:
+                from .adjudicate import AdjudicationPhase
+
+                recheck_spent_before = ctx.budget.spent
+                adjudication = AdjudicationPhase().recheck(ctx, recheck_ids)
+                recheck_cost = ctx.budget.spent - recheck_spent_before
+                round_.measured_delta["adjudication_cost_usd"] = round(
+                    recheck_cost, 6
+                )
+                round_.measured_delta["cost_usd"] = round(
+                    float(round_.measured_delta.get("cost_usd") or 0.0)
+                    + recheck_cost,
+                    6,
+                )
             census = self._census(ctx, ladder=ladder)
+            if ladder is not None:
+                ladder.census = census
+            mechanical = self._mechanical(criteria, census, adjudication)
             judged = self._judge(
                 ctx, outcome, criteria, census, adjudication, synthesis, brief,
                 forced_round=False,
@@ -482,6 +542,18 @@ class DeterminationPhase:
             return list(brief.criteria)
         return universal_criteria()
 
+    def _mechanical(self, criteria, census, adjudication) -> dict:
+        out: dict[str, CriterionVerdict] = {}
+        for criterion in criteria:
+            if not criterion.universal:
+                continue
+            verdict = evaluate_universal(
+                criterion, census=census, adjudication=adjudication
+            )
+            if verdict is not None:
+                out[criterion.id] = verdict
+        return out
+
     # --- judging ---------------------------------------------------------------
 
     def _judge(
@@ -514,7 +586,10 @@ class DeterminationPhase:
             rounds_so_far=rounds_so_far or [],
             budget_note=budget_note,
         )
-        invoker = ctx.invoker("p5_determination", phase=self.name, targets=1)
+        invoker = ctx.invoker(
+            "p5_determination", phase=self.name, targets=1,
+            output_budget_bytes=12_000,
+        )
         result = invoker(prompt)
         if not result.ok:
             outcome.notes.append(f"determination did not return: {result.error}")

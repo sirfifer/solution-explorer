@@ -66,7 +66,13 @@ CITABLE_FACTS = (
     "file_count", "lines", "inbound_edges", "outbound_edges",
     "language", "framework", "port", "type", "capabilities",
     "data_entities", "external_services", "action_count", "ai_surface",
-    "has_testing_data", "testing",
+    "has_testing_data", "testing", "path", "existing_description",
+    "capability_count", "data_entity_count",
+    "same_language_component_count", "same_type_component_count",
+    "system_relationship_count", "system_capability_count",
+    "system_capability_component_count", "system_max_inbound_edges",
+    "system_max_outbound_edges", "files", "edges", "config_files",
+    "documentation",
 )
 
 

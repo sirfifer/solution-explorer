@@ -1,0 +1,25 @@
+{"at": 1787802935.842762, "event": "phase_start", "phase": "p1_orientation", "seq": 1, "started_at": 1787802935.842761}
+{"at": 1787802965.2190988, "ended_at": 1787802965.219096, "event": "phase_end", "phase": "p1_orientation", "seq": 2, "spent_usd": 0.2682, "status": "ok"}
+{"at": 1787802965.219892, "event": "phase_start", "phase": "p2_ladder", "seq": 3, "started_at": 1787802965.2198908}
+{"at": 1787802965.222063, "components": 8, "event": "plan", "partitions": 2, "relationships": 1, "rung": "2a", "seq": 4, "targets": 9}
+{"at": 1787802965.224191, "components": 8, "event": "unit_start", "label": "apps/ios [component] +7", "relationships": 0, "rung": "2a", "sample": ["apps/ios", "libs/core", "libs/rubylib", "root", "services/api", "services/web"], "seq": 5, "started_at": 1787802965.22419, "unit_id": 0}
+{"answered": 0, "at": 1787802990.872949, "detail": "did not return: claude exited 1: ", "ended_at": 1787802990.872947, "escalated": 0, "event": "unit_end", "ok": false, "rung": "2a", "seq": 6, "unit_id": 0}
+{"at": 1787802990.874492, "components": 0, "event": "unit_start", "label": "apps/ios [relationship] +7", "relationships": 1, "rung": "2a", "sample": ["apps/ios", "libs/core", "libs/rubylib", "root", "services/api", "services/web"], "seq": 7, "started_at": 1787802990.874491, "unit_id": 1}
+{"answered": 1, "at": 1787802994.752353, "detail": null, "ended_at": 1787802994.752351, "escalated": 0, "event": "unit_end", "ok": true, "rung": "2a", "seq": 8, "unit_id": 1}
+{"at": 1787802994.753349, "components": 8, "event": "plan", "partitions": 2, "relationships": 1, "rung": "2b", "seq": 9, "targets": 9}
+{"at": 1787802994.7562618, "components": 5, "event": "unit_start", "label": "apps/ios +4", "relationships": 0, "rung": "2b", "sample": ["apps/ios", "libs/core", "libs/rubylib", "root", "services/api"], "seq": 10, "started_at": 1787802994.7562618, "unit_id": 0}
+{"answered": 0, "at": 1787803021.298974, "detail": "did not return: claude exited 1: ", "ended_at": 1787803021.298968, "escalated": 0, "event": "unit_end", "ok": false, "rung": "2b", "seq": 11, "unit_id": 0}
+{"at": 1787803021.2992902, "components": 3, "event": "unit_start", "label": "services/web +3", "relationships": 1, "rung": "2b", "sample": ["services/web", "services/web/src", "services/worker", "services/web/src|services/api|http"], "seq": 12, "started_at": 1787803021.299289, "unit_id": 1}
+{"answered": 0, "at": 1787803040.1654232, "detail": "did not return: claude exited 1: ", "ended_at": 1787803040.16542, "escalated": 0, "event": "unit_end", "ok": false, "rung": "2b", "seq": 13, "unit_id": 1}
+{"at": 1787803040.166015, "components": 8, "event": "plan", "partitions": 2, "relationships": 1, "rung": "2c", "seq": 14, "targets": 9}
+{"at": 1787803040.166799, "components": 5, "event": "unit_start", "label": "apps/ios +4", "relationships": 0, "rung": "2c", "sample": ["apps/ios", "libs/core", "libs/rubylib", "root", "services/api"], "seq": 15, "started_at": 1787803040.166798, "unit_id": 0}
+{"answered": 5, "at": 1787803064.464562, "detail": null, "ended_at": 1787803064.46456, "escalated": 0, "event": "unit_end", "ok": true, "rung": "2c", "seq": 16, "unit_id": 0}
+{"at": 1787803064.4647171, "components": 3, "event": "unit_start", "label": "services/web +3", "relationships": 1, "rung": "2c", "sample": ["services/web", "services/web/src", "services/worker", "services/web/src|services/api|http"], "seq": 17, "started_at": 1787803064.464716, "unit_id": 1}
+{"answered": 4, "at": 1787803083.869996, "detail": null, "ended_at": 1787803083.869995, "escalated": 0, "event": "unit_end", "ok": true, "rung": "2c", "seq": 18, "unit_id": 1}
+{"at": 1787803083.8738291, "ended_at": 1787803083.8738291, "event": "phase_end", "phase": "p2_ladder", "seq": 19, "spent_usd": 1.0551, "status": "ok"}
+{"at": 1787803083.873929, "event": "phase_start", "phase": "p3_adjudication", "seq": 20, "started_at": 1787803083.8739278}
+{"at": 1787803137.387748, "ended_at": 1787803137.387746, "event": "phase_end", "phase": "p3_adjudication", "seq": 21, "spent_usd": 1.3584, "status": "ok"}
+{"at": 1787803137.387934, "event": "phase_start", "phase": "p4_synthesis", "seq": 22, "started_at": 1787803137.387933}
+{"at": 1787803179.631904, "ended_at": 1787803179.631903, "event": "phase_end", "phase": "p4_synthesis", "seq": 23, "spent_usd": 1.7367, "status": "ok"}
+{"at": 1787803179.6321201, "event": "phase_start", "phase": "p5_determination", "seq": 24, "started_at": 1787803179.632119}
+{"at": 1787803211.721948, "ended_at": 1787803211.721947, "event": "phase_end", "phase": "p5_determination", "seq": 25, "spent_usd": 2.1505, "status": "ok"}
