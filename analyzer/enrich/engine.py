@@ -144,6 +144,17 @@ class InvokeResult:
     # Max plan the Sonnet and Opus buckets are separate. This is ground truth
     # from the process that did the metering; the binding is only our intent.
     model_usage: dict = field(default_factory=dict)
+    # True only when the transport itself constrained decoding with the compact
+    # JSON Schema.  Scripted/legacy invokers leave it false, which lets the test
+    # seam remain backwards compatible without pretending their canonical
+    # fixtures exercised the production byte gate.
+    structured_output_enforced: bool = False
+    # Characters of the cacheable prefix this call actually sent as an appended
+    # system prompt; 0 when the prompt carried no marker and the legacy argv
+    # ran. The ledger turns it into a token estimate so the cache audit can
+    # require a warm call to read back at least its own prefix. Counting
+    # zero-read calls alone passes a call that read some small unrelated entry.
+    prefix_chars: int = 0
 
 
 # An invoker takes a prompt and returns an InvokeResult. Injectable so tests can
@@ -182,6 +193,8 @@ class ClaudeCliInvoker:
         self.effort = effort
 
     def __call__(self, prompt: str) -> InvokeResult:
+        structured_output_enforced = False
+        prefix_chars = 0
         try:
             # A None model omits the flag entirely, which lets the CLI route the
             # call itself instead of being pinned to one model. That is the
@@ -213,13 +226,49 @@ class ClaudeCliInvoker:
             ]
             if self.model:
                 argv += ["--model", self.model]
-            proc = subprocess.run(
-                argv,
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-            )
+            # Compact ladder prompts mark a byte-stable instruction prefix.
+            # Put that prefix in the CLI's appended system prompt and send only
+            # facts on stdin.  Repeated calls can now read the same provider
+            # cache entry instead of writing every unique full prompt at the 1h
+            # creation rate.  Unmarked callers retain the exact legacy argv.
+            from .prompts import split_cached_prompt
+
+            prefix, user_prompt = split_cached_prompt(prompt)
+            if prefix is None:
+                proc = subprocess.run(
+                    argv, input=user_prompt, capture_output=True, text=True,
+                    timeout=self.timeout,
+                )
+            else:
+                from .compact import compact_json_schema
+
+                schema = compact_json_schema(prefix, user_prompt)
+                structured_output_enforced = schema is not None
+                prefix_chars = len(prefix)
+                with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", suffix=".prompt", delete=True
+                ) as prefix_file:
+                    prefix_file.write(prefix)
+                    prefix_file.flush()
+                    proc = subprocess.run(
+                        [
+                            *argv,
+                            # Verified by the F-9 live probe: without this flag
+                            # cwd/git/environment text changes ahead of the
+                            # appended prefix, so every otherwise identical call
+                            # writes a new cache entry.  Relocating those dynamic
+                            # sections makes the base+prefix byte-stable; later
+                            # calls then read the full entry at cache-read rates.
+                            "--exclude-dynamic-system-prompt-sections",
+                            "--append-system-prompt-file", prefix_file.name,
+                            "--max-turns", "1",
+                            *(["--json-schema", json.dumps(
+                                schema, separators=(",", ":"), sort_keys=True
+                            )] if schema is not None else []),
+                        ],
+                        input=user_prompt, capture_output=True, text=True,
+                        timeout=self.timeout,
+                    )
         except (OSError, subprocess.SubprocessError) as exc:
             # Spawn failure or subprocess timeout: a bounded transient (R2).
             return InvokeResult(ok=False, text="", error=f"invocation failed: {exc}")
@@ -282,6 +331,8 @@ class ClaudeCliInvoker:
             model=self.model,
             model_usage=envelope.get("modelUsage", {}) or {},
             session_id=envelope.get("session_id"),
+            structured_output_enforced=structured_output_enforced,
+            prefix_chars=prefix_chars,
         )
 
 

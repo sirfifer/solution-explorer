@@ -36,6 +36,7 @@ metered against the owner's subscription. They are never money spent. See
 
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 import time
@@ -133,6 +134,14 @@ OUTPUT_CEILING_WARN = 0.85
 # the 12 recorded overflows catches only 7. Held at the measured worst case
 # until a run at pinned effort recalibrates it.
 OUTPUT_DISPERSION_MAX = 1.90
+# Characters of prompt text per billed token, used only to size the cacheable
+# prefix in the ledger. Measured, not assumed: the mean of prefix characters
+# over cache-creation tokens across 34 real CLI sessions
+# (docs/quality/rearchitecture/reviews/ARCHITECT-ON-PROMPT-SPEC.md). It exists
+# so the cache audit can compare a call's cache READ against the size of the
+# prefix that call sent, which is the only comparison that catches a warm call
+# reading somebody else's small entry.
+PREFIX_CHARS_PER_TOKEN = 2.385
 
 
 class BudgetExhausted(RuntimeError):
@@ -311,6 +320,17 @@ class LedgerRow:
     num_turns: int = 1
     partition_id: Optional[int] = None
     session_id: Optional[str] = None
+    prefix_hash: Optional[str] = None
+    # How big the cacheable prefix was, in billed tokens. Without it the cache
+    # audit can only ask whether a call read ANY cached tokens, and a call that
+    # read a small unrelated entry passes that test while writing its whole
+    # prefix again. 0 means the row predates the field or the call sent no
+    # prefix; the audit falls back to the zero-read rule for those.
+    prefix_tokens_est: int = 0
+    response_bytes: int = 0
+    output_budget_bytes: Optional[int] = None
+    output_budget_ok: Optional[bool] = None
+    structured_output_enforced: bool = False
     cost_usd: float = 0.0
     wall_seconds: float = 0.0
     retries: int = 0
@@ -333,6 +353,12 @@ class LedgerRow:
             "num_turns": self.num_turns,
             "partition_id": self.partition_id,
             "session_id": self.session_id,
+            "prefix_hash": self.prefix_hash,
+            "prefix_tokens_est": self.prefix_tokens_est,
+            "response_bytes": self.response_bytes,
+            "output_budget_bytes": self.output_budget_bytes,
+            "output_budget_ok": self.output_budget_ok,
+            "structured_output_enforced": self.structured_output_enforced,
             "cost_usd": round(self.cost_usd, 6),
             "wall_seconds": round(self.wall_seconds, 3),
             "retries": self.retries,
@@ -398,6 +424,7 @@ class MeteredInvoker:
         targets: int = 0,
         effort: Optional[str] = None,
         partition_id: Optional[int] = None,
+        output_budget_bytes: Optional[int] = None,
     ) -> None:
         self._inner = inner
         self._ctx = ctx
@@ -407,6 +434,7 @@ class MeteredInvoker:
         self.targets = targets
         self.effort = effort
         self.partition_id = partition_id
+        self.output_budget_bytes = output_budget_bytes
         self.calls = 0
 
     def __call__(self, prompt: str) -> InvokeResult:
@@ -485,6 +513,39 @@ class MeteredInvoker:
                     "stop_reason=max_tokens): truncated, not answered"
                 ),
             )
+        from .prompts import split_cached_prompt
+
+        prefix, _ = split_cached_prompt(prompt)
+        prefix_hash = (
+            hashlib.sha256(prefix.encode("utf-8")).hexdigest() if prefix is not None else None
+        )
+        # Sized from what the TRANSPORT sent, not from the prompt hashed here.
+        # Only the CLI invoker actually ships a prefix as an appended system
+        # prompt; an injected invoker leaves this 0, and a row that never used
+        # the cache boundary must not claim a prefix the provider never saw.
+        prefix_tokens_est = round(result.prefix_chars / PREFIX_CHARS_PER_TOKEN)
+        response_bytes = len((result.text or "").encode("utf-8"))
+        # Canonical dict fixtures exist for injected invokers predating
+        # compact/v1.  They are compatibility coverage, not evidence that the
+        # production schema/byte ceiling ran.  Only schema-enforced responses
+        # and actual compact array envelopes receive a budget verdict.
+        compact_wire = False
+        try:
+            candidate = json.loads(result.text or "")
+            compact_wire = isinstance(candidate, dict) and any(
+                isinstance(candidate.get(name), list)
+                for name in ("components", "relationships")
+            )
+        except (json.JSONDecodeError, TypeError):
+            pass
+        budget_applies = bool(
+            self.output_budget_bytes is not None
+            and (result.structured_output_enforced or compact_wire)
+        )
+        output_budget_ok = (
+            response_bytes <= self.output_budget_bytes
+            if budget_applies and self.output_budget_bytes is not None else None
+        )
         self._ctx.record_ledger_row(
             LedgerRow(
                 phase=self.phase,
@@ -501,6 +562,12 @@ class MeteredInvoker:
                 num_turns=max(1, turns),
                 partition_id=self.partition_id,
                 session_id=result.session_id,
+                prefix_hash=prefix_hash,
+                prefix_tokens_est=prefix_tokens_est,
+                response_bytes=response_bytes,
+                output_budget_bytes=self.output_budget_bytes,
+                output_budget_ok=output_budget_ok,
+                structured_output_enforced=result.structured_output_enforced,
                 cost_usd=result.cost_usd,
                 wall_seconds=wall,
                 retries=max(0, retries),
@@ -702,6 +769,7 @@ class RunContext:
         rung: Optional[str] = None,
         targets: int = 0,
         partition_id: Optional[int] = None,
+        output_budget_bytes: Optional[int] = None,
     ) -> MeteredInvoker:
         """A metered invoker for one phase or rung, on that key's model.
 
@@ -720,6 +788,7 @@ class RunContext:
             targets=targets,
             effort=spec.effort,
             partition_id=partition_id,
+            output_budget_bytes=output_budget_bytes,
         )
 
     def record_ledger_row(self, row: LedgerRow) -> None:

@@ -207,8 +207,9 @@ WHAT WOULD SATISFY THIS: {criteria}
 WHAT SHOULD MEASURABLY CHANGE: {expected_effect}
 
 Answer the completeness contract for each component in scope, THROUGH THIS LENS.
-Where the existing answers already satisfy the order, say so by repeating them
-rather than rewriting them: an order is not a licence to redo finished work.
+Where the existing answers already satisfy the order, omit them:
+an order is not a licence to redo finished work. Return only changed fields or answers for
+this lens.
 
 Do NOT propose further work orders. This is the only level of follow-up there is,
 and anything you would want a second order for belongs in your answers here.
@@ -229,10 +230,11 @@ def execute_work_order(
     "the map got better", and a determination that cannot tell them apart will
     keep buying rounds that do nothing.
     """
+    from .compact import normalize_compact_response, response_budget_bytes
     from .evidence import EvidenceValidator
     from .ladder import LadderOutcome, LadderPhase
     from .partition import flatten_components, plan_partitions
-    from .prompts import build_contract_partition_prompt
+    from .prompts import build_compact_escalation_prompt
 
     outcome = WorkOrderOutcome(order=order)
     problems = order.problems()
@@ -256,6 +258,15 @@ def execute_work_order(
         for c in flatten_components(ctx.arch.get("components", []))
         if c.get("id")
     }
+    # A fact citation validates against the SAME blocks the prompt shows, which
+    # are StoreFacts.component_facts(), never the raw arch dicts (the 8df5965
+    # lesson). This validator lacked the attachment entirely, so a correct
+    # compact fact citation produced during a work order failed closed as
+    # "no component in the analyzed set". Found by the cross-session review;
+    # present in both working trees until now.
+    validator.attach_facts({
+        cid: ctx.facts.component_facts(cid) for cid in facts_by_id
+    })
     scope_set = set(scope)
     before = {
         key: {"state": state.state, "terminal": state.terminal}
@@ -276,9 +287,6 @@ def execute_work_order(
         lens=order.lens, criteria=order.criteria,
         expected_effect=order.expected_effect,
     )
-    invoker = ctx.invoker(
-        "workorder", phase="work_order", rung=order.issued_by, targets=len(scope)
-    )
     # The contract state's rung records WHICH TIER grounded an item, so a work
     # order stamps the tier that actually executed it, not the phase that issued
     # it. Recording "p5" there would claim the determination phase did enrichment
@@ -290,11 +298,34 @@ def execute_work_order(
         if not ctx.budget.under():
             outcome.notes.append("stopped early: run cost ceiling reached")
             break
-        prompt = build_contract_partition_prompt(
-            partition, ctx.facts, assignment=assignment
+        component_ids = [c for c in partition.answered_component_ids if c in scope_set]
+        if not component_ids:
+            continue
+        items = []
+        for cid in component_ids:
+            payload = shared.payloads.get(("component", cid), {})
+            contract = payload.get("contract") if isinstance(payload, dict) else {}
+            items.append({
+                "wire": "work-order/v1",
+                "target_kind": "component",
+                "target_id": cid,
+                "facts": ctx.facts.component_facts(cid),
+                "current_product": {
+                    k: v for k, v in payload.items() if k != "contract"
+                } if isinstance(payload, dict) else {},
+                "established": (contract or {}).get("answers", {}),
+                "todo": ["apply the scoped lens; emit only changed fields or answers"],
+            })
+        prompt = build_compact_escalation_prompt(
+            items, terminal=False, assignment=assignment
+        )
+        output_budget = response_budget_bytes(components=len(component_ids))
+        invoker = ctx.invoker(
+            "workorder", phase="work_order", rung=order.issued_by,
+            targets=len(component_ids), output_budget_bytes=output_budget,
         )
         result = invoker(prompt)
-        outcome.targets_attempted += len(partition.component_ids)
+        outcome.targets_attempted += len(component_ids)
         if not result.ok:
             outcome.notes.append(f"partition did not return: {result.error}")
             continue
@@ -304,16 +335,27 @@ def execute_work_order(
         if obj is None:
             outcome.notes.append("partition returned unparseable text")
             continue
+        response_bytes = len(result.text.encode("utf-8"))
+        if response_bytes > output_budget:
+            outcome.notes.append(
+                f"partition response exceeded compact budget: "
+                f"{response_bytes} > {output_budget} UTF-8 bytes"
+            )
+            continue
+        obj = normalize_compact_response(
+            obj, facts=ctx.facts, component_ids=component_ids,
+        )
         # One level of federation, enforced structurally: the absorber reads
         # components and relationships and nothing else, so a response that
         # proposes further orders has proposed them into a void.
         phase._absorb(
             ctx, obj, validator, facts_by_id, shared,
             rung=executing_rung,
-            component_ids=[c for c in partition.component_ids if c in set(scope)],
-            relationship_keys=list(partition.relationship_keys),
+            component_ids=component_ids,
+            relationship_keys=[],
         )
         outcome.executed = True
+        ctx.store.commit()
 
     after = {
         key: {"state": state.state, "terminal": state.terminal}

@@ -38,12 +38,12 @@ from .intents import IntentFileError, find_intents_file, load_intents
 from .overlay import apply_enrichment_overlay
 from .partition import flatten_components
 from .prompts import (
-    build_edge_verify_batch_prompt,
-    build_finding_verify_batch_prompt,
-    build_identity_verify_batch_prompt,
     build_concern_name_prompt,
+    build_edge_verify_batch_prompt,
     build_edge_verify_prompt,
+    build_finding_verify_batch_prompt,
     build_finding_verify_prompt,
+    build_identity_verify_batch_prompt,
     build_identity_verify_prompt,
     build_intent_conformance_prompt,
     build_intent_proposal_prompt,
@@ -817,7 +817,37 @@ def _identity_targets(comp_index: dict[str, dict]) -> list[dict]:
     return out
 
 
-def _identity_facts(comp: dict) -> dict:
+def _framework_evidence(store: FactStore) -> dict[str, dict]:
+    """Per-component framework signals: name, file count, one path exemplar.
+
+    The v2 run's identity pass returned uncertain for 98 of 99 components, 97
+    of them on the framework field alone, and the judge's own reasons said the
+    same thing every time: no framework evidence in the supplied facts. The
+    store held 101 framework signal rows the prompt never shipped. This is
+    that evidence, aggregated small (about 300 chars per component), built
+    once per run (IMPLEMENTATION-DELTA-ORCH.md section 2.3).
+    """
+    paths = {row["id"]: row["path"] for row in store.files()}
+    path_components: dict[str, list[str]] = {}
+    for row in store.component_files():
+        path_components.setdefault(row["path"], []).append(row["component_id"])
+    out: dict[str, dict] = {}
+    for signal in store.signals():
+        if signal.get("kind") != "framework":
+            continue
+        name = (signal.get("value") or {}).get("name")
+        path = paths.get(signal.get("file_id"))
+        if not name or not path:
+            continue
+        for comp_id in path_components.get(path, []):
+            per_name = out.setdefault(comp_id, {}).setdefault(
+                name, {"files": 0, "example": path}
+            )
+            per_name["files"] += 1
+    return out
+
+
+def _identity_facts(comp: dict, framework_evidence: Optional[dict] = None) -> dict:
     """Compact evidence block for the identity prompt, from projected facts."""
     docs = comp.get("docs") or {}
     ai = comp.get("ai_enhance") or {}
@@ -831,6 +861,7 @@ def _identity_facts(comp: dict) -> dict:
         "env_vars": (docs.get("env_vars") or [])[:10],
         "purpose": docs.get("purpose") or None,
         "patterns": docs.get("patterns") or [],
+        "framework_signals": (framework_evidence or {}).get(comp.get("id"), {}),
         "prose": {
             "help_text": ai.get("help_text"),
             "description": ai.get("description"),
@@ -903,6 +934,7 @@ def verify_identity(
         comp_index = _component_index(arch)
         commit_sha = current_commit_sha(str(config.root))
 
+        framework_evidence = _framework_evidence(store)
         candidates = _identity_targets(comp_index)
         mode = "update" if config.update else "full"
         targets = [
@@ -923,7 +955,7 @@ def verify_identity(
 
         if config.dry_run:
             for comp in targets:
-                prompt = build_identity_verify_prompt(comp, _identity_facts(comp))
+                prompt = build_identity_verify_prompt(comp, _identity_facts(comp, framework_evidence))
                 report.plan_preview.append(
                     {"id": comp["id"], "prompt_chars": len(prompt)}
                 )
@@ -939,12 +971,15 @@ def verify_identity(
         # they take a smaller batch. Still one call for a dozen components
         # instead of a dozen calls.
         batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1) // 2)
-        for chunk in _batches(targets, batch_size, sizer=_identity_facts):
+        for chunk in _batches(
+            targets, batch_size,
+            sizer=lambda c: _identity_facts(c, framework_evidence),
+        ):
             prompt = build_identity_verify_batch_prompt([
                 {
                     "id": comp["id"],
                     "component": comp,
-                    "facts": _identity_facts(comp),
+                    "facts": _identity_facts(comp, framework_evidence),
                 }
                 for comp in chunk
             ])

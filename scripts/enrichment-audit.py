@@ -47,14 +47,18 @@ def _rows(path: Path) -> list[dict]:
     return out
 
 
-def audit(run_dir: Path) -> dict:
+def audit(
+    run_dir: Path, *, baseline_output_tokens: int | None = None,
+    target_ratio: float = 0.30, store_path: Path | None = None,
+) -> dict:
     ledger = _rows(run_dir / "ledger.jsonl")
     events = _rows(run_dir / "progress.jsonl")
     failures = sorted((run_dir / "failures").glob("*.txt")) if (run_dir / "failures").is_dir() else []
 
-    calls = [r for r in ledger if r.get("tokens_out") or r.get("cost_usd")]
     spend = sum(float(r.get("cost_usd") or 0) for r in ledger)
     out_tokens = sum(int(r.get("tokens_out") or 0) for r in ledger)
+    ladder_rows = [r for r in ledger if r.get("phase") == "p2_ladder"]
+    ladder_out_tokens = sum(int(r.get("tokens_out") or 0) for r in ladder_rows)
     fresh_in = sum(int(r.get("tokens_fresh_in") or 0) for r in ledger)
     cache_write = sum(int(r.get("tokens_cache_write") or 0) for r in ledger)
     cache_read = sum(int(r.get("tokens_cached") or 0) for r in ledger)
@@ -70,9 +74,9 @@ def audit(run_dir: Path) -> dict:
         efforts[r.get("effort") or "UNSET"] += 1
     if efforts.get("UNSET"):
         finding("fail", "effort", f"{efforts['UNSET']} call(s) recorded no effort: it was inherited, not pinned")
-    hot = {e: n for e, n in efforts.items() if e in ("high", "xhigh")}
-    if hot:
-        finding("warn", "effort", f"calls at elevated effort: {hot}; measured 4.5x output vs low")
+    not_low = {e: n for e, n in efforts.items() if e not in ("low", "UNSET")}
+    if not_low:
+        finding("fail", "effort", f"calls not pinned to low effort: {not_low}")
 
     # --- ceiling --------------------------------------------------------------
     truncated = [r for r in ledger if (r.get("stop_reason") or "") == "max_tokens"]
@@ -101,11 +105,37 @@ def audit(run_dir: Path) -> dict:
         )
 
     # --- duplication ----------------------------------------------------------
-    planned_targets = sum(int(e.get("targets") or 0) for e in events if e.get("event") == "plan")
-    answered = sum(int(e.get("answered") or 0) for e in events if e.get("event") == "unit_end")
+    # Later-rung plans and answers are repeated WORK on the same targets, not
+    # new targets.  The 2a plan is the unique-target denominator; the final
+    # census is the unique-target numerator.
+    bulk_plan = next(
+        (e for e in events if e.get("event") == "plan" and e.get("rung") == "2a"),
+        {},
+    )
+    planned_targets = int(bulk_plan.get("targets") or 0)
+    final_report = {}
+    try:
+        final_report = json.loads((run_dir / "report.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        pass
+    answered = int((final_report.get("census") or {}).get("total") or 0)
     units_done = sum(1 for e in events if e.get("event") == "unit_end")
-    if planned_targets and answered > planned_targets * 1.05:
-        finding("fail", "duplication", f"{answered:,} answers for {planned_targets:,} planned targets ({answered/planned_targets:.2f}x)")
+    if planned_targets and answered != planned_targets:
+        finding(
+            "fail", "target-conservation",
+            f"final census has {answered:,} targets for {planned_targets:,} planned; equality is required",
+        )
+    phase_notes = [
+        str(note)
+        for phase in (final_report.get("phases") or []) if isinstance(phase, dict)
+        for note in (phase.get("notes") or [])
+    ]
+    coverage_notes = [note for note in phase_notes if "coverage violation" in note]
+    if coverage_notes:
+        finding(
+            "fail", "target-conservation",
+            f"{len(coverage_notes)} compact call(s) reported missing, extra, or duplicate targets",
+        )
 
     # --- escalation -----------------------------------------------------------
     by_rung: dict[str, dict] = defaultdict(lambda: {"calls": 0, "cost": 0.0, "targets": 0, "out": 0})
@@ -116,17 +146,165 @@ def audit(run_dir: Path) -> dict:
         b["cost"] += float(r.get("cost_usd") or 0)
         b["targets"] += int(r.get("targets") or 0)
         b["out"] += int(r.get("tokens_out") or 0)
-    esc_cost = sum(v["cost"] for k, v in by_rung.items() if k in ("2b", "2c"))
+    esc_cost = sum(v["cost"] for k, v in by_rung.items() if k in ("2b", "2c", "opus", "fable"))
     if spend and esc_cost > 0.5 * spend:
         finding("warn", "escalation", f"escalated rungs are {esc_cost/spend:.0%} of spend; the cheap rung is not carrying the work")
 
     # --- coverage -------------------------------------------------------------
-    if planned_targets and answered < planned_targets:
-        gap = planned_targets - answered
+    # Exact equality above subsumes the old tolerance-based coverage check.
+
+    # --- compact delivered-output and same-corpus billed-output gates ---------
+    compact_rows = [r for r in ledger if r.get("output_budget_ok") is not None]
+    compact_violations = [r for r in compact_rows if r.get("output_budget_ok") is False]
+    if compact_violations:
         finding(
-            "warn" if gap <= 0.02 * planned_targets else "fail",
-            "coverage",
-            f"{gap:,} of {planned_targets:,} planned targets were never answered",
+            "fail", "compact-output",
+            f"{len(compact_violations)} compact response(s) exceeded their declared delivered-output budget",
+        )
+    cache_groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for row in compact_rows:
+        if row.get("structured_output_enforced") and row.get("prefix_hash"):
+            cache_groups[(str(row.get("model")), str(row.get("prefix_hash")))].append(row)
+    cache_misses = 0
+    prefix_read_shortfalls = 0
+    for rows in cache_groups.values():
+        # warm_first deliberately permits one cold writer per stable prefix.
+        zero_read = sum(1 for row in rows if int(row.get("tokens_cached") or 0) == 0)
+        cache_misses += max(0, zero_read - 1)
+        # Reading SOMETHING is not the same as reading THIS prefix. A call that
+        # picked up a small unrelated entry satisfies the zero-read rule while
+        # still writing its own stable block again at the 2x creation rate, so
+        # every call but the group's coldest must read back at least its own
+        # prefix. The coldest row is the one permitted writer, chosen by
+        # measured reads rather than by ledger order, which parallel phases do
+        # not guarantee. A row carrying no estimate is an older ledger and stays
+        # governed by the zero-read rule alone, so the audit still runs on it.
+        by_read = sorted(rows, key=lambda row: int(row.get("tokens_cached") or 0))
+        for row in by_read[1:]:
+            floor = int(row.get("prefix_tokens_est") or 0)
+            if floor and int(row.get("tokens_cached") or 0) < floor:
+                prefix_read_shortfalls += 1
+    if cache_misses:
+        finding(
+            "fail", "cache-boundary",
+            f"{cache_misses} non-warm compact call(s) read zero cached tokens",
+        )
+    if prefix_read_shortfalls:
+        finding(
+            "fail", "cache-boundary",
+            f"{prefix_read_shortfalls} non-warm compact call(s) read fewer cached "
+            "tokens than their own prefix; the stable block was rewritten, not reused",
+        )
+
+    unexplained_gaps = []
+    for item in (final_report.get("escalations") or []):
+        if not isinstance(item, dict) or item.get("terminal") != "honest-gap":
+            continue
+        for failure in item.get("failed") or []:
+            reason = str(failure.get("note") or "").strip() if isinstance(failure, dict) else ""
+            if not reason or reason == "no answer was produced for a required question":
+                unexplained_gaps.append(item.get("target_id"))
+    if unexplained_gaps:
+        finding(
+            "fail", "honest-gap-quality",
+            f"{len(unexplained_gaps)} honest gap question(s) have no specific reader-facing reason",
+        )
+    if baseline_output_tokens is not None:
+        allowed = int(max(0, baseline_output_tokens) * target_ratio)
+        if ladder_out_tokens > allowed:
+            finding(
+                "fail", "output-reduction",
+                f"{ladder_out_tokens:,} ladder billed output tokens exceeds the same-corpus gate "
+                f"{allowed:,} ({target_ratio:.1%} of baseline {baseline_output_tokens:,})",
+            )
+
+    # --- input-per-call ceilings by phase (V-P8) ------------------------------
+    # Hard ceilings on what one call may ship, from the measured post-diet
+    # shapes (IMPLEMENTATION-DELTA-ORCH.md section 4). A phase whose prompt
+    # regrows past its ceiling re-pins the number only through a committed
+    # measurement doc, never by editing this table to make a run pass.
+    input_ceilings = {
+        "p5_determination": 35_000,
+        "verify-identity": 15_000,
+        "verify-edges": 30_000,
+    }
+    for r in ledger:
+        ceiling_key = (
+            r.get("rung") if r.get("rung") in input_ceilings
+            else r.get("phase") if r.get("phase") in input_ceilings
+            else None
+        )
+        if ceiling_key is None:
+            continue
+        call_in = int(r.get("tokens_fresh_in") or 0) + int(r.get("tokens_cache_write") or 0)
+        if call_in > input_ceilings[ceiling_key]:
+            finding(
+                "fail", "input-ceiling",
+                f"a {ceiling_key} call shipped {call_in:,} input tokens against "
+                f"its {input_ceilings[ceiling_key]:,} ceiling",
+            )
+
+    # --- store-census conservation (P6) ---------------------------------------
+    # The census is derived from in-memory states; the store is what every
+    # later phase and rerun reads. The v2 build diverged 47 rows without any
+    # check noticing. When the run dir names its store, compare terminal
+    # distributions exactly.
+    if store_path is not None and store_path.exists():
+        import sqlite3
+
+        stored_states: dict[str, int] = defaultdict(int)
+        try:
+            db = sqlite3.connect(str(store_path))
+            for (payload,) in db.execute(
+                "select payload_json from enrichment where target_kind = 'contract-state'"
+            ):
+                try:
+                    stored_states[json.loads(payload).get("state") or "?"] += 1
+                except json.JSONDecodeError:
+                    stored_states["?"] += 1
+            db.close()
+        except sqlite3.Error as exc:
+            finding("warn", "store-conservation", f"store unreadable: {exc}")
+            stored_states = {}
+        census_states: dict[str, int] = defaultdict(int)
+        for key, count in ((final_report.get("census") or {}).get("by_state") or {}).items():
+            base = str(key).split("@")[0].replace("honest-gap", "honest_gap")
+            census_states[base] += int(count or 0)
+        if stored_states and dict(stored_states) != dict(census_states):
+            finding(
+                "fail", "store-conservation",
+                f"store contract-state distribution {dict(stored_states)} does not "
+                f"equal the census {dict(census_states)}; later phases and reruns "
+                "read the store, and it is lying about terminal states",
+            )
+
+    bulk_rows = [r for r in ladder_rows if r.get("rung") == "2a"]
+    bulk_targets = sum(int(r.get("targets") or 0) for r in bulk_rows)
+    bulk_output = sum(int(r.get("tokens_out") or 0) for r in bulk_rows)
+    bulk_per_target = bulk_output / bulk_targets if bulk_targets else None
+    if bulk_per_target is not None and bulk_per_target > 380:
+        finding(
+            "fail", "bulk-output-density",
+            f"rung 2a emitted {bulk_per_target:.1f} billed tokens per target; limit is 380",
+        )
+    ladder_per_target = ladder_out_tokens / answered if answered else None
+    if ladder_per_target is not None and ladder_per_target > 500:
+        finding(
+            "fail", "ladder-output-density",
+            f"the ladder emitted {ladder_per_target:.1f} billed tokens per unique target; limit is 500",
+        )
+    escalation_rows = [
+        r for r in ladder_rows if r.get("rung") in ("2b", "2c", "opus", "fable")
+    ]
+    escalation_targets = sum(int(r.get("targets") or 0) for r in escalation_rows)
+    escalation_output = sum(int(r.get("tokens_out") or 0) for r in escalation_rows)
+    escalation_per_attempt = (
+        escalation_output / escalation_targets if escalation_targets else None
+    )
+    if escalation_per_attempt is not None and escalation_per_attempt > 260:
+        finding(
+            "fail", "escalation-output-density",
+            f"escalations emitted {escalation_per_attempt:.1f} billed tokens per attempt; limit is 260",
         )
 
     total_in = fresh_in + cache_write
@@ -140,6 +318,7 @@ def audit(run_dir: Path) -> dict:
             "cache_write": cache_write,
             "cache_read": cache_read,
             "out": out_tokens,
+            "ladder_out": ladder_out_tokens,
             "output_share_of_billed": round(out_tokens / max(1, out_tokens + total_in), 4),
             "cache_hit_share": round(cache_read / max(1, cache_read + total_in), 4),
         },
@@ -149,6 +328,28 @@ def audit(run_dir: Path) -> dict:
             "units_done": units_done,
             "usd_per_target": round(spend / answered, 5) if answered else None,
             "out_tokens_per_target": round(out_tokens / answered, 1) if answered else None,
+        },
+        "output_gate": {
+            "baseline_output_tokens": baseline_output_tokens,
+            "target_ratio": target_ratio if baseline_output_tokens is not None else None,
+            "allowed_output_tokens": (
+                int(baseline_output_tokens * target_ratio)
+                if baseline_output_tokens is not None else None
+            ),
+            "compact_calls": len(compact_rows),
+            "compact_budget_violations": len(compact_violations),
+            "non_warm_cache_misses": cache_misses,
+            "prefix_read_shortfalls": prefix_read_shortfalls,
+            "bulk_tokens_per_target": (
+                round(bulk_per_target, 1) if bulk_per_target is not None else None
+            ),
+            "ladder_tokens_per_unique_target": (
+                round(ladder_per_target, 1) if ladder_per_target is not None else None
+            ),
+            "escalation_tokens_per_attempt": (
+                round(escalation_per_attempt, 1)
+                if escalation_per_attempt is not None else None
+            ),
         },
         "by_rung": {
             k: {
@@ -169,9 +370,31 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("run_dir", type=Path)
     ap.add_argument("--json", action="store_true", help="machine-readable output")
+    ap.add_argument(
+        "--baseline-run-dir", type=Path,
+        help="same-corpus baseline run; enforces the ladder billed-output reduction gate",
+    )
+    ap.add_argument(
+        "--target-ratio", type=float, default=0.30,
+        help="maximum new/baseline ladder billed-output ratio (default: 0.30)",
+    )
+    ap.add_argument(
+        "--store", type=Path, default=None,
+        help="the run's index.db; enforces store-census conservation (P6)",
+    )
     args = ap.parse_args(argv)
 
-    report = audit(args.run_dir)
+    baseline = None
+    if args.baseline_run_dir:
+        baseline = sum(
+            int(row.get("tokens_out") or 0)
+            for row in _rows(args.baseline_run_dir / "ledger.jsonl")
+            if row.get("phase") == "p2_ladder"
+        )
+    report = audit(
+        args.run_dir, baseline_output_tokens=baseline,
+        target_ratio=args.target_ratio, store_path=args.store,
+    )
     if args.json:
         print(json.dumps(report, indent=2))
         return 0 if report["verdict"] != "fail" else 1

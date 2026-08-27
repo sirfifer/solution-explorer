@@ -39,6 +39,13 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..derive.importance import ImportanceRanking, rank_components, store_ranking
+from .compact import (
+    COMPONENT_CALL_CAP,
+    RELATIONSHIP_CALL_CAP,
+    coverage_issues,
+    normalize_compact_response,
+    response_budget_bytes,
+)
 from .contract import (
     Census,
     ContractState,
@@ -51,7 +58,11 @@ from .engine import _clean_component_payload, _clean_relationship_payload, _pars
 from .evidence import EvidenceValidator
 from .partition import Partition, flatten_components, plan_partitions
 from .pipeline import PhaseResult, RunContext
-from .prompts import build_contract_partition_prompt
+from .prompts import (
+    build_compact_component_prompt,
+    build_compact_escalation_prompt,
+    build_compact_relationship_prompt,
+)
 from .provenance import stamp_enrichment
 
 __all__ = [
@@ -62,6 +73,7 @@ __all__ = [
     "build_escalation_prompt",
     "merge_payloads",
     "order_partitions",
+    "plan_compact_chunks",
 ]
 
 # Contract states live as their own enrichment rows so they reach the store and
@@ -98,6 +110,47 @@ def _rung_label(key: str, fallback: str) -> str:
 # amortizes that without diluting attention across a crowd of unrelated gaps.
 DEFAULT_ESCALATION_BATCH = 5
 
+# The cap-21 rule binds regardless of partition size: the G2 output arithmetic
+# both rearchitecture specs adopted prices a component call at targets x
+# central block x dispersion against the output ceiling, and 21 is the largest
+# count that clears it at the 1.90 dispersion default. Relationships chunk at
+# 80. Menus are per target, so chunking cannot disturb them
+# (IMPLEMENTATION-DELTA-PROMPT.md section 2.4). The constants live in
+# compact.py because the byte-constant JSON schema is bounded by them,
+# and are imported at the top of this module.
+
+
+def plan_compact_chunks(partitions: list[Partition]) -> list[tuple[str, Partition]]:
+    """The 2a call plan: (kind, chunk) pairs in dispatch order.
+
+    One function feeds the live rung, the dry-run preview, and the zero-cost
+    replay preflight, so the three views of "what will this run ask" cannot
+    drift apart. Chunk ids are placeholders; the caller assigns real job ids.
+    """
+    out: list[tuple[str, Partition]] = []
+    for part in partitions:
+        component_ids = list(part.answered_component_ids)
+        for start in range(0, len(component_ids), COMPONENT_CALL_CAP):
+            chunk = component_ids[start : start + COMPONENT_CALL_CAP]
+            out.append((
+                "component",
+                Partition(
+                    id=0, component_ids=tuple(chunk),
+                    relationship_keys=(), answers_components=True,
+                ),
+            ))
+        relationship_keys = list(part.relationship_keys)
+        for start in range(0, len(relationship_keys), RELATIONSHIP_CALL_CAP):
+            chunk = relationship_keys[start : start + RELATIONSHIP_CALL_CAP]
+            out.append((
+                "relationship",
+                Partition(
+                    id=0, component_ids=part.component_ids,
+                    relationship_keys=tuple(chunk), answers_components=False,
+                ),
+            ))
+    return out
+
 
 @dataclass
 class LadderOutcome:
@@ -113,6 +166,11 @@ class LadderOutcome:
     parser_findings: list[dict] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     rung_counts: dict[str, int] = field(default_factory=dict)
+    # Append-only attempt history.  ``ContractState`` is intentionally the
+    # latest verdict, so it cannot also be the forensic record of why an item
+    # climbed.  Keeping attempts here preserves those causes after a later rung
+    # succeeds and gives the exit report something actionable to learn from.
+    transitions: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -122,6 +180,7 @@ class LadderOutcome:
             "honest_gaps": [s.to_dict() for s in self.honest_gaps],
             "parser_findings": list(self.parser_findings),
             "rung_counts": dict(self.rung_counts),
+            "transitions": list(self.transitions),
             "notes": list(self.notes),
         }
 
@@ -395,12 +454,20 @@ class LadderPhase:
     def _plan_only(
         self, ctx: RunContext, partitions: list[Partition], brief, outcome: LadderOutcome
     ) -> PhaseResult:
+        # The preview builds the SAME compact prompts the live rung sends
+        # (plan_compact_chunks feeds both), so a dry run's sizes are the run's
+        # sizes rather than a legacy estimate.
         preview = []
-        for part in partitions:
-            prompt = build_contract_partition_prompt(part, ctx.facts, brief=brief)
+        for index, (kind, part) in enumerate(plan_compact_chunks(partitions)):
+            if kind == "component":
+                prompt = build_compact_component_prompt(part, ctx.facts, brief=brief)
+            else:
+                prompt = build_compact_relationship_prompt(part, ctx.facts, brief=brief)
             preview.append({
-                "id": part.id,
-                "components": list(part.component_ids),
+                "id": index,
+                "kind": kind,
+                "components": list(part.answered_component_ids),
+                "relationships": list(part.relationship_keys),
                 "prompt_chars": len(prompt),
                 "prompt_tokens_est": len(prompt) // 4,
             })
@@ -444,7 +511,7 @@ class LadderPhase:
     # --- bounded-parallel invocation ------------------------------------------
 
     def _invoke_parallel(
-        self, ctx: RunContext, jobs: list[tuple[int, str, int]], *,
+        self, ctx: RunContext, jobs: list[tuple], *,
         invoker_key: str, rung: str,
         on_result: Optional[Callable[[int, Optional[dict], Optional[str]], None]] = None,
         describe: Optional[Callable[[int], dict]] = None,
@@ -452,7 +519,8 @@ class LadderPhase:
     ) -> tuple[dict[int, Optional[dict]], dict[int, str], int]:
         """Run independent prompts through a bounded pool, deterministically.
 
-        ``jobs`` is ``(job_id, prompt, target_count)``. Returns parsed payloads
+        ``jobs`` is ``(job_id, prompt, target_count, output_budget_bytes)``.
+        The fourth item is optional for non-compact callers. Returns parsed payloads
         by job id (None for a failed or unparseable job), error text by job id,
         and how many jobs were never launched because a ceiling tripped.
 
@@ -478,7 +546,8 @@ class LadderPhase:
         workers = max(1, min(int(ctx.policy.max_parallel), len(jobs) or 1))
 
         def _task(job):
-            job_id, prompt, targets = job
+            job_id, prompt, targets = job[:3]
+            output_budget = int(job[3]) if len(job) > 3 and job[3] else None
             # Announce the unit as it goes in flight, not when it comes back.
             # A model call takes minutes; without this the board has nothing
             # true to say for the whole of that time.
@@ -492,6 +561,7 @@ class LadderPhase:
             invoker = ctx.invoker(
                 invoker_key, phase=self.name, rung=rung, targets=targets,
                 partition_id=job_id,
+                output_budget_bytes=output_budget,
             )
             attempt_prompt = prompt
             last_error = ""
@@ -504,7 +574,31 @@ class LadderPhase:
                 result = invoker(attempt_prompt)
                 if not result.ok:
                     return job_id, None, f"did not return: {result.error}"
-                obj = _parse_json_object(result.text, expect_keys=PARTITION_KEYS)
+                response_bytes = len(result.text.encode("utf-8"))
+                parsed_candidate = _parse_json_object(
+                    result.text, expect_keys=PARTITION_KEYS
+                )
+                compact_wire = bool(
+                    isinstance(parsed_candidate, dict)
+                    and (
+                        isinstance(parsed_candidate.get("components"), list)
+                        or isinstance(parsed_candidate.get("relationships"), list)
+                    )
+                )
+                if (
+                    output_budget is not None
+                    and (compact_wire or result.structured_output_enforced)
+                    and response_bytes > output_budget
+                ):
+                    # Do not buy a second oversized response.  Shape drift is a
+                    # hard efficiency failure, not a parse failure that more
+                    # generation can repair.
+                    return (
+                        job_id, None,
+                        f"response exceeded deterministic compact budget: "
+                        f"{response_bytes:,} > {output_budget:,} UTF-8 bytes",
+                    )
+                obj = parsed_candidate
                 if obj is not None:
                     return job_id, obj, None
                 last_error = "returned unparseable text"
@@ -572,31 +666,79 @@ class LadderPhase:
         self, ctx: RunContext, partitions: list[Partition],
         validator: EvidenceValidator, facts_by_id: dict, brief, outcome: LadderOutcome,
     ) -> None:
-        jobs = [
-            (
-                part.id,
-                build_contract_partition_prompt(part, ctx.facts, brief=brief),
-                part.targets,
+        # Component and relationship work have different schemas and very
+        # different output sizes.  Asking them together forces both through the
+        # maximal contract and makes deterministic output budgeting impossible.
+        job_meta: dict[int, tuple[str, Partition]] = {}
+        component_jobs = []
+        relationship_parts: list[tuple[int, Partition]] = []
+        next_job = 0
+        for kind, chunk_part in plan_compact_chunks(partitions):
+            chunk_part = Partition(
+                id=next_job, component_ids=chunk_part.component_ids,
+                relationship_keys=chunk_part.relationship_keys,
+                answers_components=chunk_part.answers_components,
             )
-            for part in partitions
-        ]
-        by_id = {part.id: part for part in partitions}
+            if kind == "component":
+                component_jobs.append((
+                    next_job,
+                    build_compact_component_prompt(chunk_part, ctx.facts, brief=brief),
+                    len(chunk_part.answered_component_ids),
+                    response_budget_bytes(
+                        components=len(chunk_part.answered_component_ids)
+                    ),
+                ))
+            else:
+                # Relationship prompts are built only after every component
+                # call has banked, so endpoint context uses the fresh one-line
+                # descriptions.  A failed component call falls back
+                # deterministically to parser identity; it never blocks the
+                # relationship wave.
+                relationship_parts.append((next_job, chunk_part))
+            job_meta[next_job] = (kind, chunk_part)
+            next_job += 1
         pending_notes: dict[int, str] = {}
         # The denominator, before any work starts. Rung 2a is the only rung
         # whose size is known up front; 2b and 2c publish theirs once the rung
         # below has decided what to escalate.
         ctx.progress.plan(
             rung="2a",
-            partitions=len(partitions),
+            partitions=len(component_jobs) + len(relationship_parts),
             components=sum(len(p.answered_component_ids) for p in partitions),
             relationships=sum(len(p.relationship_keys) for p in partitions),
         )
 
         def _bank(job_id: int, obj: Optional[dict], err: Optional[str]) -> None:
             """Absorb one partition the moment it lands, in the coordinator."""
-            part = by_id.get(job_id)
-            if part is None:
+            meta = job_meta.get(job_id)
+            if meta is None:
                 return
+            kind, part = meta
+            issues = None
+            if isinstance(obj, dict):
+                issues = coverage_issues(
+                    obj,
+                    component_ids=part.answered_component_ids,
+                    relationship_keys=part.relationship_keys,
+                )
+                obj = normalize_compact_response(
+                    obj, facts=ctx.facts,
+                    component_ids=part.answered_component_ids,
+                    relationship_keys=part.relationship_keys,
+                )
+                for cid in issues["duplicate_components"]:
+                    (obj.get("components") or {}).pop(cid, None)
+                for key in issues["duplicate_relationships"]:
+                    (obj.get("relationships") or {}).pop(key, None)
+                if any(issues.values()):
+                    pending_notes[job_id] = (
+                        f"rung 2a call {job_id} compact coverage violation: "
+                        + json.dumps(issues, sort_keys=True)
+                    )
+                if kind == "component":
+                    for cid, block in (obj.get("components") or {}).items():
+                        if isinstance(block, dict):
+                            ctx.facts.set_enriched_description(cid, block.get("description"))
             answered = 0
             if isinstance(obj, dict):
                 answered = len(obj.get("components") or {}) + len(
@@ -609,19 +751,51 @@ class LadderPhase:
             if err:
                 pending_notes[job_id] = f"rung 2a partition {job_id} {err}"
             if obj is None:
+                for cid in part.answered_component_ids:
+                    self._absorb_one(
+                        ctx, validator, facts_by_id, outcome,
+                        rung="sonnet", target_kind="component", target_id=cid,
+                        raw={"contract": {"answers": {}}}, terminal=False,
+                    )
+                for key in part.relationship_keys:
+                    self._absorb_one(
+                        ctx, validator, facts_by_id, outcome,
+                        rung="sonnet", target_kind="relationship", target_id=key,
+                        raw={"contract": {"answers": {}}}, terminal=False,
+                    )
+                ctx.store.commit()
                 return
             self._absorb(
                 ctx, obj, validator, facts_by_id, outcome,
                 rung="sonnet",
-                component_ids=list(part.answered_component_ids),
-                relationship_keys=list(part.relationship_keys),
+                component_ids=(list(part.answered_component_ids) if kind == "component" else []),
+                relationship_keys=(list(part.relationship_keys) if kind == "relationship" else []),
             )
+            # Every requested target enters the census, including omissions and
+            # duplicates.  Missing work becomes an explicit E1 escalation; it
+            # can never vanish and make a partial run look complete.
+            if issues:
+                for cid in issues["missing_components"] + issues["duplicate_components"]:
+                    self._absorb_one(
+                        ctx, validator, facts_by_id, outcome,
+                        rung="sonnet", target_kind="component", target_id=cid,
+                        raw={"contract": {"answers": {}}}, terminal=False,
+                    )
+                for key in issues["missing_relationships"] + issues["duplicate_relationships"]:
+                    self._absorb_one(
+                        ctx, validator, facts_by_id, outcome,
+                        rung="sonnet", target_kind="relationship", target_id=key,
+                        raw={"contract": {"answers": {}}}, terminal=False,
+                    )
+            # Completion means durable completion.  A kill after this point may
+            # lose in-flight calls, never a call the progress stream banked.
+            ctx.store.commit()
 
         def _describe(job_id: int) -> dict:
             """What a reader needs to see while this unit is in flight."""
-            part = by_id[job_id]
+            kind, part = job_meta[job_id]
             names = [cid for cid in part.component_ids[:6]]
-            label = names[0] if names else f"partition {job_id}"
+            label = (names[0] if names else f"partition {job_id}") + f" [{kind}]"
             extra = len(part.component_ids) - 1
             if extra > 0:
                 label = f"{label} +{extra}"
@@ -632,20 +806,35 @@ class LadderPhase:
                 "sample": names,
             }
 
-        payloads, errors, skipped = self._invoke_parallel(
-            ctx, jobs, invoker_key="p2a_bulk", rung="2a",
+        _, _, skipped_components = self._invoke_parallel(
+            ctx, component_jobs, invoker_key="p2a_bulk", rung="2a",
             on_result=_bank, describe=_describe, rung_label="2a",
         )
+        relationship_jobs = [
+            (
+                job_id,
+                build_compact_relationship_prompt(part, ctx.facts, brief=brief),
+                len(part.relationship_keys),
+                response_budget_bytes(relationships=len(part.relationship_keys)),
+            )
+            for job_id, part in relationship_parts
+        ]
+        _, _, skipped_relationships = self._invoke_parallel(
+            ctx, relationship_jobs, invoker_key="p2a_bulk", rung="2a",
+            on_result=_bank, describe=_describe, rung_label="2a",
+        )
+        all_jobs = [*component_jobs, *relationship_jobs]
+        skipped = skipped_components + skipped_relationships
         # Notes are emitted in partition order even though the work was banked
         # in completion order, so the report reads the same whatever order the
         # network returned things in.
-        for part in partitions:
-            note = pending_notes.get(part.id)
+        for job_id, _, _, _ in all_jobs:
+            note = pending_notes.get(job_id)
             if note:
                 outcome.notes.append(note)
         if skipped:
             outcome.notes.append(
-                f"rung 2a: {skipped} partition(s) not launched, "
+                f"rung 2a: {skipped} target-kind call(s) not launched, "
                 f"{ctx.budget.stop_reason()}; the most important partitions "
                 "ran first"
             )
@@ -683,10 +872,16 @@ class LadderPhase:
                 self._escalation_item(ctx, state, facts_by_id, outcome)
                 for state in batch
             ]
-            prompt = build_escalation_prompt(
-                items, rung=rung, terminal=terminal, brief=brief
+            prompt = build_compact_escalation_prompt(
+                items, terminal=terminal, brief=brief
             )
-            jobs.append((index, prompt, len(batch)))
+            jobs.append((
+                index, prompt, len(batch),
+                response_budget_bytes(
+                    components=sum(1 for s in batch if s.target_kind == "component"),
+                    relationships=sum(1 for s in batch if s.target_kind == "relationship"),
+                ),
+            ))
         # An escalated rung only learns its own size once the rung below has
         # decided what to escalate, so its denominator is published here.
         display = _rung_label(key, rung)
@@ -710,12 +905,37 @@ class LadderPhase:
                 "sample": names,
             }
 
+        examined: set[tuple[str, str]] = set()
+        batch_notes: dict[int, str] = {}
+
         def _report_batch(index: int, obj: Optional[dict], err: Optional[str]) -> None:
+            batch = batches[index]
             answered = 0
             if isinstance(obj, dict):
-                answered = len(obj.get("components") or {}) + len(
-                    obj.get("relationships") or {}
+                issues = coverage_issues(
+                    obj,
+                    component_ids=[s.target_id for s in batch if s.target_kind == "component"],
+                    relationship_keys=[s.target_id for s in batch if s.target_kind == "relationship"],
                 )
+                obj = normalize_compact_response(
+                    obj, facts=ctx.facts,
+                    component_ids=[s.target_id for s in batch if s.target_kind == "component"],
+                    relationship_keys=[s.target_id for s in batch if s.target_kind == "relationship"],
+                )
+                answered = len(obj.get("components") or {}) + len(obj.get("relationships") or {})
+                examined.update((s.target_kind, s.target_id) for s in batch)
+                self._absorb(
+                    ctx, obj, validator, facts_by_id, outcome,
+                    rung=rung,
+                    component_ids=[s.target_id for s in batch if s.target_kind == "component"],
+                    relationship_keys=[s.target_id for s in batch if s.target_kind == "relationship"],
+                    terminal=terminal,
+                )
+                ctx.store.commit()
+                if any(issues.values()):
+                    batch_notes[index] = "compact coverage violation: " + json.dumps(issues, sort_keys=True)
+            if err:
+                batch_notes[index] = err
             ctx.progress.unit_end(
                 rung=display, unit_id=index, ok=obj is not None,
                 answered=answered, detail=err,
@@ -734,25 +954,9 @@ class LadderPhase:
         # "the call never happened". An honest gap is a claim about the CODE;
         # a failed call is a claim about the RUN, and they must never share a
         # label.
-        examined: set[tuple[str, str]] = set()
-        for index, batch in enumerate(batches):
-            if index not in payloads:
-                continue
-            if index in errors:
-                outcome.notes.append(f"rung {rung} batch {errors[index]}")
-            obj = payloads[index]
-            if obj is None:
-                continue
-            examined.update((s.target_kind, s.target_id) for s in batch)
-            self._absorb(
-                ctx, obj, validator, facts_by_id, outcome,
-                rung=rung,
-                component_ids=[s.target_id for s in batch if s.target_kind == "component"],
-                relationship_keys=[
-                    s.target_id for s in batch if s.target_kind == "relationship"
-                ],
-                terminal=terminal,
-            )
+        for index, _batch in enumerate(batches):
+            if index in batch_notes:
+                outcome.notes.append(f"rung {rung} batch {batch_notes[index]}")
         if skipped_batches:
             unattempted = sum(len(b) for b in batches[-skipped_batches:])
             outcome.notes.append(
@@ -778,8 +982,19 @@ class LadderPhase:
                 if state.state != "escalate":
                     continue
                 if (state.target_kind, state.target_id) in examined:
+                    previous = state.state
                     state.state = "honest_gap"
                     state.rung = "fable"
+                    outcome.transitions.append({
+                        "target_kind": state.target_kind,
+                        "target_id": state.target_id,
+                        "rung": "fable",
+                        "from_state": previous,
+                        "state": "honest_gap",
+                        "failed": [failure.to_dict() for failure in state.failed],
+                        "parser_first": list(state.parser_first),
+                        "resolution": "terminal rung examined the item but did not return a grounded repair",
+                    })
                     self._write_honest_gaps(ctx, state, outcome)
                 else:
                     unexamined += 1
@@ -790,6 +1005,20 @@ class LadderPhase:
                     f"launched; NOT recorded as honest gaps, because no model "
                     f"examined them. They will be re-targeted by a rerun."
                 )
+            # Terminal conversions mutate and stamp state after the per-batch
+            # commit.  Make those mutations durable too.
+            ctx.store.commit()
+
+    @staticmethod
+    def _evidence_reference(item: dict) -> str:
+        """One resolved citation as a short reference string, never the object."""
+        kind = str(item.get("kind") or "?")
+        locator = (
+            item.get("symbol") or item.get("field") or item.get("path")
+            or (f"{item.get('source')}->{item.get('target')}"
+                if item.get("source") or item.get("target") else "")
+        )
+        return f"{kind}:{locator}" if locator else kind
 
     def _escalation_item(
         self, ctx: RunContext, state: ContractState, facts_by_id: dict,
@@ -802,20 +1031,59 @@ class LadderPhase:
             facts = ctx.facts.component_facts(state.target_id)
         else:
             facts = ctx.facts.relationship_facts(state.target_id)
+        answers = (attempt.get("contract") or {}).get("answers", {})
+        failed_questions = {failure.question for failure in state.failed}
+        # Established answers travel as claims plus citation REFERENCES, never
+        # expanded evidence objects. The receiving rung only needs to see that
+        # a claim is grounded; re-shipping the resolved objects is the
+        # transcription this architecture removes, and 95.6% of the v2
+        # escalated rungs' output was exactly that class of re-emission
+        # (IMPLEMENTATION-DELTA-PROMPT.md section 3.3).
+        established = {
+            question: {
+                "claim": value.get("claim"),
+                "cited": [
+                    self._evidence_reference(item)
+                    for item in (value.get("evidence") or [])[:3]
+                    if isinstance(item, dict)
+                ],
+            }
+            for question, value in answers.items()
+            if question not in failed_questions and isinstance(value, dict)
+        }
+        failed = []
+        for failure in state.failed:
+            prior = answers.get(failure.question) if isinstance(answers, dict) else None
+            prior = prior if isinstance(prior, dict) else {}
+            failed.append({
+                "question": failure.question,
+                "trigger": failure.trigger,
+                "attempt_claim": str(prior.get("claim") or "")[:300],
+                "citations_tried": [
+                    self._evidence_reference(item)
+                    for item in (prior.get("evidence") or [])[:2]
+                    if isinstance(item, dict)
+                ],
+                "lacked": prior.get("lacked") or "unknown",
+                "need": prior.get("need"),
+                "note": str(failure.note or "")[:240] or failure.note,
+            })
+        previous_product = {
+            name: value for name, value in attempt.items()
+            if name != "contract" and value not in (None, "", [], {})
+        }
         return {
+            "wire": "escalation/v1",
             "target_kind": state.target_kind,
             "target_id": state.target_id,
             "facts": facts,
             "previous_attempt": {
-                "rung": state.rung,
-                "ai_enhance": {
-                    k: v for k, v in attempt.items() if k != "contract"
-                },
-                "contract_answers": (attempt.get("contract") or {}).get("answers", {}),
-                "self_declared_state": state.self_declared,
-                "declared_confusion": state.declared_confusion,
+                "product": previous_product,
+                "established": established,
             },
-            "failed_questions": [f.to_dict() for f in state.failed],
+            "failed_questions": failed,
+            "todo": sorted(failed_questions),
+            "declared_confusion": state.declared_confusion,
         }
 
     # --- absorbing a response ------------------------------------------------
@@ -907,10 +1175,34 @@ class LadderPhase:
                 state.state = "escalate"
                 state.failed = remaining + closed
 
+        # The routing record survives re-evaluation: class-at-entry is stamped
+        # once, at the first escalate, and carried forward even after the item
+        # grounds, so the run can measure its own routing populations (the v2
+        # run could not; resolved items had cleared their triggers).
+        if previous_state is not None:
+            state.entry_triggers = list(previous_state.entry_triggers)
+            state.entry_class = previous_state.entry_class
+            state.repair_attempted = previous_state.repair_attempted
+        state.record_entry_class()
+
         stored = dict(merged_product, contract=merged_contract)
         outcome.payloads[key] = stored
         outcome.states[key] = state
         outcome.rung_counts[rung] = outcome.rung_counts.get(rung, 0) + 1
+        outcome.transitions.append({
+            "target_kind": target_kind,
+            "target_id": target_id,
+            "rung": rung,
+            "from_state": previous_state.state if previous_state is not None else None,
+            "state": state.state,
+            "failed": [failure.to_dict() for failure in state.failed],
+            "parser_first": list(state.parser_first),
+            "resolution": (
+                "grounded" if state.state == "grounded" else
+                "declared honest gap" if state.state == "honest_gap" else
+                "requires escalation"
+            ),
+        })
 
         for finding in state.parser_first:
             entry = {
@@ -983,6 +1275,33 @@ class LadderPhase:
     # --- finish --------------------------------------------------------------
 
     def _finalize(self, ctx: RunContext, outcome: LadderOutcome) -> None:
+        # Terminal truth reconciliation. State transitions that carry no new
+        # payload never re-stamped their contract row: the honest-gap
+        # conversion returns early when an item has no gap prose, and an item
+        # grounded en route can leave its earlier escalate row standing. The
+        # 2026-08-26 v2 store diverged from its own census this way: 47 stale
+        # escalate rows and 88 stored honest gaps against the census's 0 and
+        # 102. The census is derived from in-memory states, the store is what
+        # every later phase and rerun reads, and they must agree (predicate P6).
+        stored_states = {
+            row["target_id"]: (row.get("payload") or {}).get("state")
+            for row in ctx.store.enrichment()
+            if row.get("target_kind") == CONTRACT_TARGET_KIND
+        }
+        restamped = 0
+        for state in outcome.states.values():
+            row_id = f"{state.target_kind}:{state.target_id}"
+            if row_id in stored_states and stored_states[row_id] == state.state:
+                continue
+            key = (state.target_kind, state.target_id)
+            payload = outcome.payloads.get(key) or {}
+            self._stamp(ctx, state.target_kind, state.target_id, payload, state)
+            restamped += 1
+        if restamped:
+            outcome.notes.append(
+                f"finalize: re-stamped {restamped} contract row(s) whose stored "
+                "state trailed the terminal census state"
+            )
         outcome.census = build_census(list(outcome.states.values()))
         outcome.honest_gaps = outcome.census.honest_gaps
         ctx.store.commit()

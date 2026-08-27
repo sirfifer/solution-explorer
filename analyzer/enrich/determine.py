@@ -37,6 +37,7 @@ from typing import Any, Optional
 from .engine import _parse_json_object
 from .orientation import Criterion, CriterionVerdict, universal_criteria
 from .pipeline import PhaseResult, RunContext
+from .prompts import _cached_prompt
 from .workorder import WorkOrder, WorkOrderOutcome, make_descender, parse_work_orders
 
 __all__ = [
@@ -235,27 +236,25 @@ def build_determination_prompt(
     rounds_so_far: list[dict],
     budget_note: str,
 ) -> str:
-    parts = [
+    # The prompt splits at the stable/variable seam. Everything identical
+    # across a run's determination calls (instructions, contract, brief,
+    # criteria, corpus digests) renders FIRST and travels as the cacheable
+    # prefix; everything round-specific (the forced-round policy, rounds so
+    # far, the budget note) renders in the user tail. The v2 run's three p5
+    # calls shipped a near-identical body at the 2x write rate three times
+    # because the forced-round block sat at position 3 and broke byte
+    # stability between call 1 and the rest (IMPLEMENTATION-DELTA-ORCH.md
+    # section 1.1 A3, step 3).
+    prefix_parts = [
         "You are deciding whether an automated map of a software system is good "
         "enough to publish, or whether there is room you know how to close.",
         "",
         _DETERMINATION_CONTRACT,
         "",
     ]
-    if forced_round:
-        parts += [
-            "POLICY: this run must carry out at least one improvement round even "
-            "if you judge the map done. That is deliberate, and it is how the "
-            "tuning that later decides 'iterate or not' gets learned. So give a "
-            "REAL improvement_target and a real work order: name the thing you "
-            "would most want better, not the cheapest thing to say. A round with "
-            "no genuine target is worse than no round, because it teaches nothing "
-            "and still costs the run.",
-            "",
-        ]
     if brief:
-        parts += ["THE SUBJECT BRIEF:", json.dumps(brief, indent=2, default=str), ""]
-    parts += [
+        prefix_parts += ["THE SUBJECT BRIEF:", json.dumps(brief, indent=2, default=str), ""]
+    prefix_parts += [
         "THE CRITERIA YOU MUST ANSWER (set by the orientation pass before any "
         "enrichment ran, so they are not shaped by what happened to be easy):",
         json.dumps([c.to_dict() for c in criteria], indent=2, default=str),
@@ -265,26 +264,120 @@ def build_determination_prompt(
         "",
     ]
     if adjudication:
-        parts += [
+        prefix_parts += [
             "WHAT INDEPENDENT ADJUDICATION FOUND:",
             json.dumps(adjudication, indent=2, default=str),
             "",
         ]
     if synthesis:
-        parts += [
+        prefix_parts += [
             "THE STORY AND THE LENSES:",
             json.dumps(synthesis, indent=2, default=str),
             "",
         ]
+    tail_parts = []
+    if forced_round:
+        tail_parts += [
+            "POLICY: this run must carry out at least one improvement round even "
+            "if you judge the map done. That is deliberate, and it is how the "
+            "tuning that later decides 'iterate or not' gets learned. So give a "
+            "REAL improvement_target and a real work order: name the thing you "
+            "would most want better, not the cheapest thing to say. A round with "
+            "no genuine target is worse than no round, because it teaches nothing "
+            "and still costs the run.",
+            "",
+        ]
     if rounds_so_far:
-        parts += [
+        tail_parts += [
             "IMPROVEMENT ROUNDS ALREADY RUN, and what they actually changed. A "
             "round that changed nothing is evidence about the next one:",
             json.dumps(rounds_so_far, indent=2, default=str),
             "",
         ]
-    parts += [budget_note, "", "Return the JSON object now."]
-    return "\n".join(parts)
+    tail_parts += [budget_note, "", "Return the JSON object now."]
+    return _cached_prompt("\n".join(prefix_parts), "\n".join(tail_parts))
+
+
+def _census_digest(census: dict) -> dict:
+    """Counts plus actionable exceptions, never every successful target."""
+    items = census.get("items") if isinstance(census, dict) else []
+    exceptions = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        state = str(item.get("state") or "")
+        if state == "grounded":
+            continue
+        exceptions.append({
+            "target_kind": item.get("target_kind"),
+            "target_id": item.get("target_id"),
+            "state": state,
+            "rung": item.get("rung"),
+            "failed": [
+                {"question": f.get("question"), "trigger": f.get("trigger"),
+                 "note": str(f.get("note") or "")[:240]}
+                for f in (item.get("failed") or []) if isinstance(f, dict)
+            ],
+        })
+    return {
+        "by_state": census.get("by_state", {}),
+        "total": census.get("total", 0),
+        "grounded": census.get("grounded", 0),
+        "grounded_fraction": census.get("grounded_fraction", 0.0),
+        "trigger_counts": census.get("trigger_counts", {}),
+        "exceptions": exceptions,
+    }
+
+
+def _adjudication_digest(adjudication: Optional[dict]) -> Optional[dict]:
+    if not isinstance(adjudication, dict):
+        return None
+
+    def pass_summary(value: Any) -> dict:
+        value = value if isinstance(value, dict) else {}
+        return {
+            key: value.get(key) for key in
+            ("pass", "target_count", "done", "failed", "verdicts", "total_cost_usd")
+            if key in value
+        }
+
+    unsupported = [
+        item for item in (adjudication.get("spot_checks") or [])
+        if isinstance(item, dict) and not item.get("supported", True)
+    ][:20]
+    substitutions = [
+        item for item in (adjudication.get("substitution_checks") or [])
+        if isinstance(item, dict) and item.get("confirmed_failure")
+    ][:20]
+    return {
+        "checked": adjudication.get("checked"),
+        "unsupported": adjudication.get("unsupported"),
+        "disagreement_rate": adjudication.get("disagreement_rate"),
+        "substitution_failure_rate": adjudication.get("substitution_failure_rate"),
+        "verification": {
+            name: pass_summary(adjudication.get(name))
+            for name in ("identity", "edges", "findings")
+        },
+        "unsupported_examples": unsupported,
+        "substitution_failures": substitutions,
+    }
+
+
+def _synthesis_digest(synthesis: Optional[dict]) -> Optional[dict]:
+    """Synthesis ships IN FULL, never digested.
+
+    The measured design is explicit (IMPLEMENTATION-DELTA-ORCH.md section
+    2.1): the recorded determination verdicts quote the tours by name and
+    content, so cutting tour prose would cut evidence the output demonstrably
+    uses. Synthesis is about 24k chars on the v2 subject and the p5 input
+    ceiling of 35,000 tokens already prices it in; the census and
+    adjudication digests carry the whole reduction. An earlier revision
+    trimmed tours to titles here, which the final QA pass flagged as a
+    story-versus-code contradiction in the quality-risk direction.
+    """
+    if not isinstance(synthesis, dict):
+        return None
+    return dict(synthesis)
 
 
 # --- the phase -----------------------------------------------------------------
@@ -409,9 +502,13 @@ class DeterminationPhase:
         )
         prompt = build_determination_prompt(
             criteria=criteria,
-            census=census.to_dict() if census is not None else {},
-            adjudication=adjudication.to_dict() if adjudication is not None else None,
-            synthesis=synthesis.to_dict() if synthesis is not None else None,
+            census=_census_digest(census.to_dict() if census is not None else {}),
+            adjudication=_adjudication_digest(
+                adjudication.to_dict() if adjudication is not None else None
+            ),
+            synthesis=_synthesis_digest(
+                synthesis.to_dict() if synthesis is not None else None
+            ),
             brief=brief.to_dict() if brief is not None else None,
             forced_round=forced_round,
             rounds_so_far=rounds_so_far or [],

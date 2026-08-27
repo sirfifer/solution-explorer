@@ -81,6 +81,36 @@ TRIGGERS: dict[str, str] = {
     "docs or naming",
 }
 
+# The trigger-class vocabulary: which failures mean "the tier lacked facts"
+# (context) and which mean "the tier lacked capability" (reasoning). One
+# import for the router and the run report; a second copy of this map is how
+# the three-role drift happens. E2/E3/E4 are context because their failure
+# mode is evidence that did not check out, contradicted, or could not
+# distinguish a sibling; E1/E5 are reasoning. An item's recorded ``lacked``
+# self-report refines this where present (fact -> context,
+# judgment -> reasoning); the trigger map is the fallback.
+CONTEXT_TRIGGERS: tuple[str, ...] = ("E2", "E3", "E4")
+REASONING_TRIGGERS: tuple[str, ...] = ("E1", "E5")
+
+
+def trigger_class(triggers) -> str:
+    """Deterministic class of a failed-item's trigger set.
+
+    Total over any iterable of trigger codes: pure context, pure reasoning,
+    or mixed. Mixed climbs with the reasoning class because its
+    reasoning-half needs the climb anyway and splitting one item across two
+    calls would give it two writers per rung.
+    """
+    seen = {str(t) for t in triggers}
+    if not seen:
+        return "reasoning"
+    if seen <= set(CONTEXT_TRIGGERS):
+        return "context"
+    if not (seen & set(CONTEXT_TRIGGERS)):
+        return "reasoning"
+    return "mixed"
+
+
 # Terminal contract states (4.4).
 TERMINAL_STATES: tuple[str, ...] = ("grounded", "escalate", "honest_gap")
 
@@ -126,14 +156,25 @@ class Answer:
     status: str = "answered"
     reason: Optional[str] = None
     evidence: list[dict] = field(default_factory=list)
+    # The tier's self-report of WHAT it lacked, only meaningful on an
+    # uncertain answer: "fact" (more deterministic context would settle it)
+    # or "judgment" (genuine difficulty). Deliberately ignored when deciding
+    # groundedness; consumed by routing classification and the exit report.
+    lacked: Optional[str] = None
+    need: Optional[str] = None
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "claim": self.claim,
             "status": self.status,
             "reason": self.reason,
             "evidence": [dict(item) for item in self.evidence],
         }
+        if self.lacked:
+            out["lacked"] = self.lacked
+        if self.need:
+            out["need"] = self.need
+        return out
 
     @classmethod
     def from_any(cls, raw: Any) -> Answer:
@@ -152,6 +193,7 @@ class Answer:
         if status not in ANSWER_STATUSES:
             status = "answered"
         evidence = raw.get("evidence")
+        lacked = raw.get("lacked")
         return cls(
             claim=str(raw.get("claim") or "").strip(),
             status=status,
@@ -159,6 +201,8 @@ class Answer:
             evidence=[item for item in evidence if isinstance(item, dict)]
             if isinstance(evidence, list)
             else [],
+            lacked=lacked if lacked in ("fact", "judgment") else None,
+            need=(str(raw["need"]).strip() if raw.get("need") else None),
         )
 
 
@@ -169,16 +213,25 @@ class FailedQuestion:
     question: str
     trigger: str
     note: str = ""
+    # The failing answer's own lacked self-report, where it gave one. This is
+    # what lets classification rest on what the tier SAID it was missing
+    # rather than on the trigger heuristic alone.
+    lacked: Optional[str] = None
 
     def to_dict(self) -> dict:
-        return {"question": self.question, "trigger": self.trigger, "note": self.note}
+        out = {"question": self.question, "trigger": self.trigger, "note": self.note}
+        if self.lacked:
+            out["lacked"] = self.lacked
+        return out
 
     @classmethod
     def from_dict(cls, data: dict) -> FailedQuestion:
+        lacked = data.get("lacked")
         return cls(
             question=str(data.get("question") or ""),
             trigger=str(data.get("trigger") or ""),
             note=str(data.get("note") or ""),
+            lacked=lacked if lacked in ("fact", "judgment") else None,
         )
 
 
@@ -198,6 +251,17 @@ class ContractState:
     declared_confusion: Optional[str] = None
     parser_first: list[str] = field(default_factory=list)
     history: list[str] = field(default_factory=list)
+    # The routing record, stamped the first time this item enters the escalate
+    # state and never overwritten. The v2 run could not measure its own
+    # routing populations because a resolved item clears its triggers, so
+    # class-at-entry was unrecoverable post hoc (the 48%-to-66% bound in
+    # IMPLEMENTATION-DELTA-ORCH.md section 3.4). These two fields make every
+    # later run self-measuring, and `repair_attempted` is the one-shot bound
+    # on the same-tier repair loop.
+    entry_triggers: list[str] = field(default_factory=list)
+    entry_class: Optional[str] = None
+    entry_class_basis: Optional[str] = None
+    repair_attempted: bool = False
 
     @property
     def terminal(self) -> str:
@@ -228,7 +292,44 @@ class ContractState:
             "declared_confusion": self.declared_confusion,
             "parser_first": list(self.parser_first),
             "history": list(self.history),
+            "entry_triggers": list(self.entry_triggers),
+            "entry_class": self.entry_class,
+            "entry_class_basis": self.entry_class_basis,
+            "repair_attempted": self.repair_attempted,
         }
+
+    def record_entry_class(self) -> None:
+        """Stamp class-at-entry once, at the moment the item first escalates.
+
+        The recorded ``lacked`` self-report supersedes the trigger heuristic
+        wherever a failing answer gave one: a tier saying "I lacked a fact"
+        is context class regardless of which trigger fired, and "judgment"
+        is reasoning class. Questions without a self-report fall back to the
+        trigger map, and the basis records how much of each was used.
+        """
+        if self.entry_class is not None or self.state != "escalate":
+            return
+        self.entry_triggers = list(self.triggers)
+        classes: list[str] = []
+        lacked_used = 0
+        for f in self.failed:
+            if f.lacked == "fact":
+                classes.append("context")
+                lacked_used += 1
+            elif f.lacked == "judgment":
+                classes.append("reasoning")
+                lacked_used += 1
+            else:
+                classes.append(trigger_class([f.trigger]))
+        if all(c == "context" for c in classes):
+            self.entry_class = "context"
+        elif all(c == "reasoning" for c in classes):
+            self.entry_class = "reasoning"
+        else:
+            self.entry_class = "mixed"
+        self.entry_class_basis = (
+            f"lacked:{lacked_used}/trigger:{len(classes) - lacked_used}"
+        )
 
     @classmethod
     def from_dict(cls, data: dict) -> ContractState:
@@ -247,6 +348,10 @@ class ContractState:
             declared_confusion=data.get("declared_confusion"),
             parser_first=list(data.get("parser_first") or []),
             history=list(data.get("history") or []),
+            entry_triggers=list(data.get("entry_triggers") or []),
+            entry_class=data.get("entry_class"),
+            entry_class_basis=data.get("entry_class_basis"),
+            repair_attempted=bool(data.get("repair_attempted", False)),
         )
 
 
@@ -391,6 +496,7 @@ def evaluate(
                     question,
                     "E2",
                     answer.reason or "the tier marked this answer uncertain",
+                    lacked=answer.lacked,
                 )
             )
             continue

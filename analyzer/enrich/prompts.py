@@ -35,6 +35,10 @@ __all__ = [
     "build_identity_verify_prompt",
     "build_identity_verify_batch_prompt",
     "build_contract_partition_prompt",
+    "build_compact_component_prompt",
+    "build_compact_relationship_prompt",
+    "build_compact_escalation_prompt",
+    "split_cached_prompt",
     "build_grounding_spotcheck_prompt",
     "build_substitution_prompt",
 ]
@@ -233,12 +237,21 @@ class StoreFacts:
         }
         self._inbound: dict[str, int] = {}
         self._outbound: dict[str, int] = {}
+        self._edges_by_component: dict[str, list[dict]] = {}
+        self._enriched_descriptions: dict[str, str] = {}
         for r in relationships:
             s, t = r.get("source", ""), r.get("target", "")
             if s:
                 self._outbound[s] = self._outbound.get(s, 0) + 1
+                self._edges_by_component.setdefault(s, []).append(r)
             if t:
                 self._inbound[t] = self._inbound.get(t, 0) + 1
+                self._edges_by_component.setdefault(t, []).append(r)
+        for rows in self._edges_by_component.values():
+            rows.sort(key=lambda r: (
+                str(r.get("source") or ""), str(r.get("target") or ""),
+                str(r.get("type") or ""),
+            ))
 
     def component_facts(self, comp_id: str) -> dict:
         """A compact, JSON-serializable fact block for one component.
@@ -324,6 +337,26 @@ class StoreFacts:
             "confidence": rel.get("confidence"),
             "evidence": (rel.get("evidence") or [])[:3],
         }
+
+    def component_edge_menu(self, comp_id: str) -> list[dict]:
+        """Stable citation menu: at most 8 outbound then 4 inbound edges."""
+        rows = self._edges_by_component.get(comp_id, [])
+        outbound = [r for r in rows if r.get("source") == comp_id][:8]
+        inbound = [r for r in rows if r.get("target") == comp_id][:4]
+        return [
+            {"source": r.get("source"), "target": r.get("target"), "type": r.get("type")}
+            for r in [*outbound, *inbound]
+        ]
+
+    def set_enriched_description(self, comp_id: str, description: Any) -> None:
+        """Publish a banked 2a-C one-liner for later relationship calls."""
+        value = str(description or "").strip()
+        if value:
+            self._enriched_descriptions[comp_id] = value
+
+    def best_description(self, comp_id: str) -> Optional[str]:
+        comp = self.component_index.get(comp_id, {})
+        return self._enriched_descriptions.get(comp_id) or comp.get("description") or None
 
 
 def build_partition_prompt(partition: Partition, facts: StoreFacts) -> str:
@@ -507,6 +540,21 @@ RULES:
   invent facts not present above. When unsure, say uncertain rather than
   guessing.
 """
+    # Each distinct endpoint ships ONCE per call and edges reference it by id.
+    # The v2 run's 19 batches shipped 916 endpoint-summary instances covering
+    # 133 distinct endpoints, a 6.9x repetition that was about 57% of the
+    # pass's input (IMPLEMENTATION-DELTA-ORCH.md section 2.4). Verdicts come
+    # back per edge id, so nothing downstream changes.
+    endpoints: dict[str, dict] = {}
+    for item in items:
+        for summary in (item.get("source"), item.get("target")):
+            if isinstance(summary, dict) and summary.get("id"):
+                # The map key IS the id; repeating it inside the entry is the
+                # duplication this diet removes.
+                endpoints.setdefault(
+                    str(summary["id"]),
+                    {k: v for k, v in summary.items() if k != "id"},
+                )
     payload = [
         {
             "id": item["id"],
@@ -517,8 +565,6 @@ RULES:
                 "confidence": (item.get("edge") or {}).get("confidence"),
                 "evidence": ((item.get("edge") or {}).get("evidence") or [])[:5],
             },
-            "source_component": item.get("source"),
-            "target_component": item.get("target"),
         }
         for item in items
     ]
@@ -526,9 +572,13 @@ RULES:
         "You are verifying INFERRED dependency edges in an architecture graph. "
         "Each was guessed by a static heuristic and may be a false positive. "
         "Using ONLY the evidence and endpoint summaries below, return a verdict "
-        "for each edge.",
+        "for each edge. Each edge's source and target name an entry in the "
+        "ENDPOINTS map; that entry is the endpoint's summary.",
         "",
         contract,
+        "",
+        "ENDPOINTS:",
+        json.dumps(endpoints, indent=2, default=str, sort_keys=True),
         "",
         "EDGES AND EVIDENCE:",
         json.dumps(payload, indent=2, default=str),
@@ -901,7 +951,7 @@ from reading code: how many files or lines a component has, how many components
 depend on it, its detected language or framework. Those numbers are in the
 facts you were given, and a file or an edge cannot carry a statement about
 seventeen of them. Cite the field you took the number from. Citable fields:
-file_count, line_count, inbound_edges, outbound_edges, language, framework,
+file_count, lines, inbound_edges, outbound_edges, language, framework,
 port, type, capabilities, data_entities, external_services, action_count,
 ai_surface, has_testing_data, testing.
 
@@ -1013,6 +1063,233 @@ def _context_only_components(partition: Partition, facts: StoreFacts) -> list[di
     if partition.answers_components:
         return []
     return [facts.component_facts(cid) for cid in partition.component_ids]
+
+
+# A marked prompt lets the production CLI put the stable instructions in an
+# appended system-prompt file while tests and injected invokers still receive a
+# plain string.  The provider can cache the identical prefix across calls; facts
+# remain the only per-call user message.
+_CACHE_PREFIX_START = "<solution-explorer-system-prefix>\n"
+_CACHE_PREFIX_END = "\n</solution-explorer-system-prefix>\n"
+
+
+def _cached_prompt(prefix: str, user_message: str) -> str:
+    return _CACHE_PREFIX_START + prefix.strip() + _CACHE_PREFIX_END + user_message.strip()
+
+
+def split_cached_prompt(prompt: str) -> tuple[Optional[str], str]:
+    """Return (stable prefix, user message), or (None, original prompt)."""
+    if not isinstance(prompt, str) or not prompt.startswith(_CACHE_PREFIX_START):
+        return None, prompt
+    end = prompt.find(_CACHE_PREFIX_END, len(_CACHE_PREFIX_START))
+    if end < 0:
+        return None, prompt
+    prefix = prompt[len(_CACHE_PREFIX_START):end]
+    user = prompt[end + len(_CACHE_PREFIX_END):]
+    return prefix, user
+
+
+_COMPACT_COMPONENT_PREFIX = """\
+ENRICHMENT TASK: components. Use ONLY the deterministic facts supplied. Never
+invent structure. Return ONLY one JSON object, no prose or markdown fences:
+COMPONENTS (produce one compact entry per requested id).
+
+{"components":[{"i":"<exact id>","label":"one short 8-15 word tree label",
+"purpose":{"t":"complete sentence: what job it does","e":[0]},
+"mechanism":{"t":"complete sentence: how it works","e":[[1,"Symbol"]]},
+"place":{"t":"complete sentence: how it connects","e":["E0"]},
+"why_matters":"complete sentence: why a reader should care",
+"next":{"t":"complete sentence: where to go next and why","e":[0]},
+"data":"specific data types","criticality":"critical|important|supporting"}],
+"relationships":[]}
+
+One entry per id. Generate each meaning ONCE. The coordinator constructs the
+3-5 sentence help_text from purpose + mechanism + place + why_matters, uses label
+as description, data as data_handled, and uses the same grounded atoms for the
+audit contract. Every atom must therefore be clear reader prose, not shorthand.
+Optional product fields are:
+architectural_role, tech_context, testing_assessment, testing_maturity,
+port_assessment, complexity_assessment, external_services_assessment,
+actions_summary, key_user_flows. Omit nulls, empties, defaults, and all fields not
+listed here.
+
+EVIDENCE uses the target's menus: 2 = file index 2; [2,"Symbol"] = symbol in
+that file; [2,120] = line; "E3" = edge index 3; ["F","inbound_edges"] = this
+component's own analyzer fact (fields: file_count, lines, inbound_edges,
+outbound_edges, language, framework, port, type, capabilities, data_entities,
+external_services, action_count, ai_surface, has_testing_data, testing). Use
+it for any claim about a count, an absence, or a detected attribute. A full
+evidence object is the escape hatch. An answer with t+e is answered by default. If it cannot be
+grounded, emit {"t":"best bounded claim","s":"u","r":"why"}; add
+"l":"fact","need":"specific missing fact" only when more deterministic context
+would settle it, otherwise "l":"judgment". Emit {"s":"d","r":"why"} only when
+nothing worth saying exists.
+
+Identity values are parser-owned. Emit only a contradiction as
+"id":{"framework":{"v":"correct value","e":[0],"r":"why"}}. Emit
+"confusion":"..." only for a real code/docs contradiction, "generic":true only
+when the answer fits any sibling, and at most two actionable parser findings as
+"pf":["what deterministic processing should learn"].
+
+Criticality: critical means the system cannot function without it; important
+means absence degrades it; supporting means leaf UI, tooling, utilities, or
+internal wiring. Architectural roles use exactly one of: api-gateway,
+auth-service, data-store, cache-layer, queue-processor, event-bus, orchestrator,
+worker, proxy, monitoring, logging, scheduler, notification-service,
+file-storage, search-engine, ml-pipeline, presentation-layer, business-logic,
+data-access.
+"""
+
+
+_COMPACT_RELATIONSHIP_PREFIX = """\
+ENRICHMENT TASK: relationships. Use ONLY the supplied edge facts and endpoint
+context. Return ONLY one JSON object, no prose or markdown fences:
+COMPONENTS (produce none); relationships carry the requested edge work.
+
+{"components":[],"relationships":[{"k":"<exact key>",
+"imp":"primary|secondary|internal","flow":{"t":"complete reader-facing
+sentence describing what crosses the edge","e":[0]},"why":{"t":"complete
+sentence explaining why the connection exists","e":[0]}}]}
+
+One entry per key. flow and why MUST use the compact answer form with one or two
+citations into that edge's evidence menu: {"t":"...","e":[0]}. When the
+evidence is insufficient, use {"t":"...","s":"u","r":"why",
+"l":"fact|judgment","need":"only with fact"}. Omit nulls, empties, status for
+answered claims, and fields not shown. The coordinator uses flow.t as both the
+reader-facing data_flow_description and the audit claim: generate the meaning
+once, then reuse it.
+"""
+
+
+def _brief_prefix(brief: Optional[dict]) -> str:
+    if not brief:
+        return ""
+    return "\nSUBJECT BRIEF:\n" + json.dumps(brief, separators=(",", ":"), default=str)
+
+
+def build_compact_component_prompt(
+    partition: Partition, facts: StoreFacts, *, brief: Optional[dict] = None,
+) -> str:
+    """Compact/v1 component call: stable instructions plus facts-only user data."""
+    components = []
+    for cid in partition.answered_component_ids:
+        block = facts.component_facts(cid)
+        block["edges"] = [
+            f"{r.get('source')}->{r.get('target')} ({r.get('type')})"
+            for r in facts.component_edge_menu(cid)
+        ]
+        components.append(block)
+    user = "COMPONENTS:\n" + json.dumps(components, separators=(",", ":"), default=str)
+    user += "\nReturn the JSON object now."
+    return _cached_prompt(_COMPACT_COMPONENT_PREFIX + _brief_prefix(brief), user)
+
+
+def build_compact_relationship_prompt(
+    partition: Partition, facts: StoreFacts, *, brief: Optional[dict] = None,
+) -> str:
+    """Compact/v1 relationship call with endpoint one-liners, never full facts."""
+    endpoint_ids = sorted({
+        endpoint
+        for key in partition.relationship_keys
+        for endpoint in (
+            facts.relationship_facts(key).get("source"),
+            facts.relationship_facts(key).get("target"),
+        )
+        if endpoint
+    })
+    context = []
+    for cid in endpoint_ids:
+        comp = facts.component_index.get(cid, {})
+        context.append({
+            key: value for key, value in {
+                "id": cid, "name": comp.get("name"), "type": comp.get("type"),
+                "language": comp.get("language"), "framework": comp.get("framework"),
+                "description": facts.best_description(cid),
+            }.items() if value not in (None, "")
+        })
+    relationships = [facts.relationship_facts(key) for key in partition.relationship_keys]
+    user = "CONTEXT:\n" + json.dumps(context, separators=(",", ":"), default=str)
+    user += "\nRELATIONSHIPS:\n" + json.dumps(relationships, separators=(",", ":"), default=str)
+    user += "\nReturn the JSON object now."
+    return _cached_prompt(_COMPACT_RELATIONSHIP_PREFIX + _brief_prefix(brief), user)
+
+
+_COMPACT_ESCALATION_PREFIX = """\
+ESCALATION REPAIR. A cheaper tier already worked every item below. A
+mechanical validator rejected specific answers; each item's "failed" list
+names which question failed, with a trigger code, the attempted claim, and
+the citations that did not check out. You have NO tools: everything you may
+use is already in this prompt.
+
+Repair ONLY what "todo" names. Work that passed is finished; re-emitting or
+rewording it spends the run's budget on something it already has.
+
+Trigger codes: E1 no usable answer was produced. E2 the evidence did not
+check out, or the tier was uncertain. E3 the claim contradicts a
+deterministic fact. E4 the answer would fit a sibling equally well. E5 the
+tier declared confusion.
+
+Return ONLY one JSON object, no prose, no fences:
+{"components":[{"i":"<id>","q":{"<failed question>":{"t":"<repaired claim>",
+"e":[<citation>]}}}],
+ "relationships":[{"k":"<key>","flow":...,"why":...}]}
+Always include both top-level arrays, using [] for the other kind.
+
+Rules:
+- Every question in an item's "todo" gets exactly one entry: a repaired claim
+  with a citation you can make from THIS item's material, or an honest
+  {"t":"best bounded claim","s":"u","r":"why this cannot be grounded at this
+  tier"}. On "s":"u" only, add "l":"fact" with "need":"<the concrete missing
+  fact: a file, a config, a build step>" when a fact absent from this prompt
+  would settle it, otherwise "l":"judgment".
+- Citations use the item's menus exactly as the bulk pass does: 2 = file
+  index 2; [2,"Symbol"] = that symbol in that file; [2,120] = that line;
+  "E3" = edge index 3; ["F","inbound_edges"] = this item's own analyzer
+  fact; a full evidence object is the escape hatch. Every citation is
+  checked mechanically.
+- "established" answers are settled. Do not re-emit them. If one is actually
+  WRONG, emit the corrected field or answer directly; the merge takes the
+  correction and keeps everything else. Corrections are rare and each one
+  needs evidence.
+- E3: correct the claim, or flag the detected value via
+  "id":{"<field>":{"v":<value or null>,"e":[<citation>],"r":"<one line>"}}.
+- E4: make the answer specific to THIS item: name the fact that could not be
+  true of a sibling. If you cannot, say so with "s":"u".
+- E5: the declared confusion is stated on the item. Resolve it from the
+  facts if they allow; otherwise restate it more precisely as
+  "confusion":"<one sentence>".
+"""
+
+
+def build_compact_escalation_prompt(
+    items: list[dict], *, terminal: bool, brief: Optional[dict] = None,
+    assignment: Optional[str] = None,
+) -> str:
+    # Keep these literal ladder-position markers.  Besides making saved prompts
+    # intelligible to an operator, the injectable scripted invokers used by the
+    # deterministic test harness distinguish the two escalation behaviours by
+    # these phrases.
+    prefix = (
+        "You are the LAST rung of an enrichment ladder.\n"
+        if terminal else
+        "You are a HIGHER RUNG of an enrichment ladder.\n"
+    ) + _COMPACT_ESCALATION_PREFIX
+    if assignment:
+        prefix += "\nSCOPED ASSIGNMENT:\n" + assignment.strip()
+    if terminal:
+        prefix += (
+            "\nThere is no rung after you and there is no loop. A TODO you "
+            "cannot ground becomes an honest gap:\n"
+            "\"gaps\":[{\"q\":\"<question>\",\"why\":\"<one sentence for the "
+            "READER of the map: what specifically defeated the attempts>\"}].\n"
+            "A gap declared honestly is a correct outcome. A gap papered over "
+            "with a plausible sentence is a lie the map tells with confidence. "
+            "Never write \"could not be grounded\" as the why; say what was "
+            "missing or contradictory."
+        )
+    user = "ITEMS:\n" + json.dumps(items, default=str)
+    user += "\nReturn the JSON object now."
+    return _cached_prompt(prefix + _brief_prefix(brief), user)
 
 
 def build_finding_verify_batch_prompt(findings: list[dict]) -> str:
@@ -1230,8 +1507,10 @@ Return ONLY a single JSON object, no prose and no fences:
 
 For each claim below, the cited evidence has ALREADY been verified to exist: the
 file is in the analyzed set, the line is inside it, the symbol is in that file,
-and a "fact" citation names a real field of the analyzer's own output for that
-component with the value shown.
+an "edge" citation names a real edge in the dependency graph, a "manifest" or
+"doc" citation points at a real file under the root, and a "fact" citation
+names a real field of the analyzer's own output for that component with the
+value shown.
 
 A "fact" citation is NOT a bare assertion. It points at the deterministic
 analyzer's own data, the same numbers the map is built from, and for a claim

@@ -1,6 +1,6 @@
 # Enrichment Run Report: polyglot
 
-Commit `762a684eab7bc341da3a68afdd1033624de02516`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
+Commit `a98479be31cf7447039ca59e65234f2ef4625e9a`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
 
 **Determination: DONE**
 
@@ -8,7 +8,7 @@ The census shows the map supports a reader orienting and finding the service bou
 
 ## What this run cost
 
-14 model invocation(s), $0.1400 API-equivalent.
+15 model invocation(s), $0.1500 API-equivalent.
 
 > Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent.
 
@@ -16,13 +16,19 @@ The census shows the map supports a reader orienting and finding the service bou
 
 | Model | Calls | Targets | Fresh in | Cached in | Out | Share | Wall | API-equiv |
 |---|---|---|---|---|---|---|---|---|
-| anthropic-claude-cli:fable | 6 | 5 | 7,200 | 0 | 1,800 | 43% | 0.0m | $0.06 |
-| anthropic-claude-cli:opus | 6 | 1 | 7,200 | 0 | 1,800 | 43% | 0.0m | $0.06 |
-| anthropic-claude-cli:sonnet | 2 | 11 | 2,400 | 0 | 600 | 14% | 0.0m | $0.02 |
+| anthropic-claude-cli:fable | 6 | 5 | 7,200 | 0 | 1,800 | 40% | 0.0m | $0.06 |
+| anthropic-claude-cli:opus | 6 | 1 | 7,200 | 0 | 1,800 | 40% | 0.0m | $0.06 |
+| anthropic-claude-cli:sonnet | 3 | 11 | 3,600 | 0 | 900 | 20% | 0.0m | $0.03 |
 
-14 invocation(s) moved 21,000 tokens in 0.0 minutes of model time.
+15 invocation(s) moved 22,500 tokens in 0.0 minutes of model time.
 
-**anthropic-claude-cli:fable** did the most of it, 43% of all tokens across p1_orientation, p2_ladder:fable, p4_synthesis:narrative, p4_synthesis:spine, p5_determination.
+Delivered response payload: 26,808 UTF-8 bytes total. 0 call(s) exercised the compact transport gate, with 0 violation(s).
+
+Prompt cache: 0 tokens read and 0 written (read/write 0.00). Only measured reads are counted as savings.
+
+Delivered JSON is schema- and byte-bounded. Billed output also includes hidden reasoning; the Claude CLI exposes no per-call max_tokens below its provider ceiling, so billed-token reduction is measured and gated against the baseline, not falsely called a transport guarantee.
+
+**anthropic-claude-cli:fable** did the most of it, 40% of all tokens across p1_orientation, p2_ladder:fable, p4_synthesis:narrative, p4_synthesis:spine, p5_determination.
 
 ### What this costs the account
 
@@ -105,12 +111,38 @@ This round produced **no measurable gain**. Recorded as such rather than as work
 
 - `libs/core`: libs/core's language was inferable from its manifest
 
+## Identity flags
+
+20 disagreement(s) with parser-owned identity values. Each is a candidate extraction fix; a flag with evidence outranks the parser until extraction learns the rule.
+
+- `apps/ios` framework: apps/ios: a specific answer for identity.framework
+- `apps/ios` language: apps/ios: a specific answer for identity.language
+- `apps/ios` type: apps/ios: a specific answer for identity.type
+- `libs/core` language: libs/core: a specific answer for identity.language
+- `libs/core` type: libs/core: a specific answer for identity.type
+- `libs/rubylib` language: libs/rubylib: a specific answer for identity.language
+- `libs/rubylib` type: libs/rubylib: a specific answer for identity.type
+- `root` language: root: a specific answer for identity.language
+- `root` port: root: a specific answer for identity.port
+- `root` type: root: a specific answer for identity.type
+- `services/api` framework: services/api: a specific answer for identity.framework
+- `services/api` language: services/api: a specific answer for identity.language
+- `services/api` port: services/api: a specific answer for identity.port
+- `services/api` type: services/api: a specific answer for identity.type
+- `services/web` language: services/web: a specific answer for identity.language
+- `services/web` type: services/web: a specific answer for identity.type
+- `services/web/src` language: services/web/src: a specific answer for identity.language
+- `services/web/src` type: services/web/src: a specific answer for identity.type
+- `services/worker` language: services/worker: a specific answer for identity.language
+- `services/worker` type: services/worker: a specific answer for identity.type
+
 ## Work ledger
 
 | Phase | Rung | Binding | Targets | Tokens in | Tokens out | Cost | Wall s | Retries |
 |---|---|---|---|---|---|---|---|---|
 | p1_orientation |  | anthropic-claude-cli:fable | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
-| p2_ladder | 2a | anthropic-claude-cli:sonnet | 9 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p2_ladder | 2a | anthropic-claude-cli:sonnet | 8 | 1200 | 300 | 0.0100 | 0.0 | 0 |
+| p2_ladder | 2a | anthropic-claude-cli:sonnet | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p2_ladder | opus | anthropic-claude-cli:opus | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p2_ladder | fable | anthropic-claude-cli:fable | 1 | 1200 | 300 | 0.0100 | 0.0 | 0 |
 | p3_adjudication | verify-identity | anthropic-claude-cli:opus | 0 | 1200 | 300 | 0.0100 | 0.0 | 0 |

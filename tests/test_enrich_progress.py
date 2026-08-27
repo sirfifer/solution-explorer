@@ -25,8 +25,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from analyzer.enrich.progress import NullProgress, ProgressStream  # noqa: E402
 from testboard_emit import LedgerWatch, _age  # noqa: E402
+
+from analyzer.enrich.progress import NullProgress, ProgressStream  # noqa: E402
 
 
 class FakeRun:

@@ -57,7 +57,13 @@ EVIDENCE_KINDS = ("file", "symbol", "edge", "manifest", "doc", "fact")
 # The analyzer-derived fields a claim may cite. An allow-list, so "fact"
 # evidence cannot become a free-text escape hatch that grounds anything.
 CITABLE_FACTS = (
-    "file_count", "line_count", "inbound_edges", "outbound_edges",
+    # Every name here MUST be a key StoreFacts.component_facts() actually
+    # emits; the vocabulary conformance test pins that. The original list
+    # said "line_count" while the fact block emits "lines", so a model
+    # following the prompt failed validation mechanically: the v2 build
+    # measured 8 terminal failures in exactly this class, and the
+    # cross-session review caught the mismatch surviving into this branch.
+    "file_count", "lines", "inbound_edges", "outbound_edges",
     "language", "framework", "port", "type", "capabilities",
     "data_entities", "external_services", "action_count", "ai_surface",
     "has_testing_data", "testing",

@@ -1,8 +1,8 @@
 {
   "identity": {
     "subject": "polyglot",
-    "root": "/Volumes/Studio/dev/solution-explorer/tests/fixtures/polyglot",
-    "commit": "762a684eab7bc341da3a68afdd1033624de02516",
+    "root": "/Volumes/Studio/dev/.worktrees/solution-explorer--enrichment-economics/tests/fixtures/polyglot",
+    "commit": "a98479be31cf7447039ca59e65234f2ef4625e9a",
     "snapshot_date": "2026-08-21T00:00:00+00:00",
     "analyzer_version": "",
     "engine_version": "1",
@@ -66,8 +66,8 @@
       "max_work_orders": 3
     },
     "totals": {
-      "invocations": 14,
-      "cost_usd": 0.14,
+      "invocations": 15,
+      "cost_usd": 0.15,
       "ceiling_hit": false,
       "failed_phases": []
     },
@@ -89,6 +89,12 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 526,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -99,7 +105,7 @@
       "phase": "p2_ladder",
       "rung": "2a",
       "model": "anthropic-claude-cli:sonnet",
-      "targets": 9,
+      "targets": 8,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
@@ -110,6 +116,39 @@
       "num_turns": 1,
       "partition_id": 0,
       "session_id": null,
+      "prefix_hash": "a5a838dc569ce8fb8dad5405135d0237058c550f112f4308a29c832c49997f94",
+      "prefix_tokens_est": 0,
+      "response_bytes": 11731,
+      "output_budget_bytes": 31656,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "2a",
+      "model": "anthropic-claude-cli:sonnet",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": 1,
+      "session_id": null,
+      "prefix_hash": "732fc554bae33e59bb93d8d4eca1a223dc740418134c53855036db31d56706c0",
+      "prefix_tokens_est": 0,
+      "response_bytes": 3663,
+      "output_budget_bytes": 1330,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -131,6 +170,12 @@
       "num_turns": 1,
       "partition_id": 0,
       "session_id": null,
+      "prefix_hash": "d5c0ee8ac32e48f169a5ce6c3851c25d0e0a86a73371781b77c01fc11f2c9a87",
+      "prefix_tokens_est": 0,
+      "response_bytes": 1305,
+      "output_budget_bytes": 4440,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -152,6 +197,12 @@
       "num_turns": 1,
       "partition_id": 0,
       "session_id": null,
+      "prefix_hash": "7927955cab9e72b8d3cefd89fa1b54940fb7fa0660ace180368edbb97e7240b4",
+      "prefix_tokens_est": 0,
+      "response_bytes": 1540,
+      "output_budget_bytes": 4440,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -173,6 +224,12 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 565,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -194,6 +251,12 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 112,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -215,6 +278,12 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 879,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -236,6 +305,12 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 575,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -257,6 +332,12 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 79,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -278,6 +359,12 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 221,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -299,6 +386,12 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 1121,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -320,6 +413,12 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
+      "prefix_hash": "1b7f3890b049c29498a3c91c472ea8419beb9f42e9d0d9d7db5c417921a78bc8",
+      "prefix_tokens_est": 0,
+      "response_bytes": 721,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -341,6 +440,12 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
+      "prefix_hash": "e8a1922175fcc4145e9d980401413b8ac54bf5cdb816761c0edfd7736d831c68",
+      "prefix_tokens_est": 0,
+      "response_bytes": 3049,
+      "output_budget_bytes": 8328,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -362,6 +467,12 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
+      "prefix_hash": "1b7f3890b049c29498a3c91c472ea8419beb9f42e9d0d9d7db5c417921a78bc8",
+      "prefix_tokens_est": 0,
+      "response_bytes": 721,
+      "output_budget_bytes": null,
+      "output_budget_ok": null,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -385,7 +496,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "honest_gap",
@@ -408,7 +523,13 @@
         "history": [
           "sonnet:escalate",
           "opus:escalate"
-        ]
+        ],
+        "entry_triggers": [
+          "E1"
+        ],
+        "entry_class": "reasoning",
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -420,7 +541,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -432,7 +557,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -444,7 +573,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -456,7 +589,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -468,7 +605,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -480,7 +621,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -492,7 +637,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       }
     ],
     "total": 9,
@@ -646,6 +795,188 @@
       "card": "how could deterministic processing have gotten this right?"
     }
   ],
+  "identity_flags": [
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "field": "framework",
+      "claim": "apps/ios: a specific answer for identity.framework",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "field": "language",
+      "claim": "apps/ios: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "field": "type",
+      "claim": "apps/ios: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "field": "language",
+      "claim": "libs/core: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "field": "type",
+      "claim": "libs/core: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/rubylib",
+      "field": "language",
+      "claim": "libs/rubylib: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/rubylib",
+      "field": "type",
+      "claim": "libs/rubylib: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "field": "language",
+      "claim": "root: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "field": "port",
+      "claim": "root: a specific answer for identity.port",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "field": "type",
+      "claim": "root: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "field": "framework",
+      "claim": "services/api: a specific answer for identity.framework",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "field": "language",
+      "claim": "services/api: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "field": "port",
+      "claim": "services/api: a specific answer for identity.port",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "field": "type",
+      "claim": "services/api: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "field": "language",
+      "claim": "services/web: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "field": "type",
+      "claim": "services/web: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "field": "language",
+      "claim": "services/web/src: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "field": "type",
+      "claim": "services/web/src: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/worker",
+      "field": "language",
+      "claim": "services/worker: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/worker",
+      "field": "type",
+      "claim": "services/worker: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    }
+  ],
   "criteria": [
     {
       "criterion_id": "s1",
@@ -735,6 +1066,7 @@
       "name": "p2_ladder",
       "status": "ok",
       "notes": [
+        "rung 2a call 1 compact coverage violation: {\"duplicate_components\": [], \"duplicate_relationships\": [], \"extra_components\": [\"services/api\", \"services/web/src\"], \"extra_relationships\": [], \"missing_components\": [], \"missing_relationships\": []}",
         "census: grounded@sonnet=8, honest-gap=1"
       ]
     },
@@ -1070,7 +1402,10 @@
         "targets": 5,
         "tokens_in": 7200,
         "tokens_cached": 0,
+        "tokens_cache_write": 0,
         "tokens_out": 1800,
+        "response_bytes": 4850,
+        "output_budget_violations": 0,
         "cost_usd": 0.06,
         "wall_seconds": 0.0,
         "retries": 0,
@@ -1083,8 +1418,8 @@
           "p5_determination"
         ],
         "tokens_total": 9000,
-        "token_share": 0.4286,
-        "cost_share": 0.4286
+        "token_share": 0.4,
+        "cost_share": 0.4
       },
       {
         "model": "anthropic-claude-cli:opus",
@@ -1092,7 +1427,10 @@
         "targets": 1,
         "tokens_in": 7200,
         "tokens_cached": 0,
+        "tokens_cache_write": 0,
         "tokens_out": 1800,
+        "response_bytes": 3515,
+        "output_budget_violations": 0,
         "cost_usd": 0.06,
         "wall_seconds": 0.0,
         "retries": 0,
@@ -1106,17 +1444,20 @@
           "p3_adjudication:verify-identity"
         ],
         "tokens_total": 9000,
-        "token_share": 0.4286,
-        "cost_share": 0.4286
+        "token_share": 0.4,
+        "cost_share": 0.4
       },
       {
         "model": "anthropic-claude-cli:sonnet",
-        "invocations": 2,
+        "invocations": 3,
         "targets": 11,
-        "tokens_in": 2400,
+        "tokens_in": 3600,
         "tokens_cached": 0,
-        "tokens_out": 600,
-        "cost_usd": 0.02,
+        "tokens_cache_write": 0,
+        "tokens_out": 900,
+        "response_bytes": 18443,
+        "output_budget_violations": 0,
+        "cost_usd": 0.03,
         "wall_seconds": 0.0,
         "retries": 0,
         "failures": 0,
@@ -1124,19 +1465,45 @@
           "p2_ladder:2a",
           "work_order:P5"
         ],
-        "tokens_total": 3000,
-        "token_share": 0.1429,
-        "cost_share": 0.1429
+        "tokens_total": 4500,
+        "token_share": 0.2,
+        "cost_share": 0.2
       }
     ],
     "totals": {
-      "invocations": 14,
-      "tokens_total": 21000,
-      "tokens_in": 16800,
+      "invocations": 15,
+      "tokens_total": 22500,
+      "tokens_in": 18000,
       "tokens_cached": 0,
-      "tokens_out": 4200,
-      "cost_usd": 0.14,
+      "tokens_cache_write": 0,
+      "tokens_out": 4500,
+      "response_bytes": 26808,
+      "output_budget_violations": 0,
+      "cost_usd": 0.15,
       "wall_seconds": 0.0
+    },
+    "output_efficiency": {
+      "billed_output_tokens": 4500,
+      "delivered_response_bytes": 26808,
+      "compact_budgeted_calls": 0,
+      "compact_budget_violations": 0,
+      "note": "Delivered JSON is schema- and byte-bounded. Billed output also includes hidden reasoning; the Claude CLI exposes no per-call max_tokens below its provider ceiling, so billed-token reduction is measured and gated against the baseline, not falsely called a transport guarantee."
+    },
+    "cache_efficiency": {
+      "writes": 0,
+      "reads": 0,
+      "read_write_ratio": 0.0,
+      "prefix_hashes": [
+        "1b7f3890b049c29498a3c91c472ea8419beb9f42e9d0d9d7db5c417921a78bc8",
+        "732fc554bae33e59bb93d8d4eca1a223dc740418134c53855036db31d56706c0",
+        "7927955cab9e72b8d3cefd89fa1b54940fb7fa0660ace180368edbb97e7240b4",
+        "a5a838dc569ce8fb8dad5405135d0237058c550f112f4308a29c832c49997f94",
+        "d5c0ee8ac32e48f169a5ce6c3851c25d0e0a86a73371781b77c01fc11f2c9a87",
+        "e8a1922175fcc4145e9d980401413b8ac54bf5cdb816761c0edfd7736d831c68"
+      ],
+      "mechanism_verified": true,
+      "budgeted_as_saving": false,
+      "note": "The F-9 live probe verified that the stable appended prefix is cache-read only when dynamic system sections are excluded. This report books no hypothetical saving: only cache reads measured in this run count."
     },
     "account_delta": null,
     "calibration_note": "To turn this into a share of the weekly allowance: take a /usage reading immediately before the run, keep hands off the account for its duration, take a second reading immediately after, and record the difference with scripts/usage-budget.py calibrate. Nothing else measures a subscription; the dollar figures here are API-equivalent prices for work that was never billed at API rates."
@@ -1154,10 +1521,11 @@
         "questions": [
           {
             "question": "mechanism",
-            "items": 1
+            "items": 3
           }
         ],
-        "class": "reasoning"
+        "class": "reasoning",
+        "class_basis": "lacked:0/trigger:3"
       }
     ],
     "deterministic_opportunities": [

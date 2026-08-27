@@ -10,8 +10,8 @@ recorded in TASKS.md P7-3 Evidence.
 from __future__ import annotations
 
 import json
-import re
 import os
+import re
 from pathlib import Path
 
 from analyzer.derive import derive_all

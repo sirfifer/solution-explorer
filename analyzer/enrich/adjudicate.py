@@ -213,11 +213,19 @@ def sample_by_importance(
     return picked[:quota]
 
 
-def build_digest(state: ContractState, answers: dict) -> dict:
+def build_digest(state: ContractState, answers: dict, facts: Optional[dict] = None) -> dict:
     """A compact digest: labels and evidence pointers, never the narrative payload.
 
     Sending the prose would invite grading the writing instead of the grounding,
     and it would cost input tokens on text nobody is being asked about.
+
+    A fact citation must reach the judge WITH its field and the analyzer's
+    value. The spot-check prompt promises the judge "a real field of the
+    analyzer's own output with the value shown"; the old key filter stripped a
+    fact citation down to a bare {"kind": "fact"}, which made commit f766208's
+    adjudicator fix inert for the exact evidence kind it described, and left
+    the 53.2% disagreement rate measuring a judge that was never shown the
+    evidence. ``facts`` is the same block the validator checks against.
     """
     claims = []
     for question, answer in sorted((answers or {}).items()):
@@ -225,15 +233,22 @@ def build_digest(state: ContractState, answers: dict) -> dict:
             continue
         if answer.get("status") != "answered":
             continue
+        evidence = []
+        for item in answer.get("evidence") or []:
+            if not isinstance(item, dict):
+                continue
+            kept = {k: v for k, v in item.items() if k in
+                    ("kind", "path", "line", "symbol", "source", "target",
+                     "edge_type", "component", "field")}
+            if item.get("kind") == "fact" and isinstance(facts, dict):
+                field_name = item.get("field")
+                if field_name in facts:
+                    kept["value"] = facts[field_name]
+            evidence.append(kept)
         claims.append({
             "question": question,
             "claim": str(answer.get("claim") or "")[:400],
-            "evidence": [
-                {k: v for k, v in item.items() if k in
-                 ("kind", "path", "line", "symbol", "source", "target", "edge_type")}
-                for item in (answer.get("evidence") or [])
-                if isinstance(item, dict)
-            ],
+            "evidence": evidence,
         })
     return {
         "target_kind": state.target_kind,
@@ -373,7 +388,13 @@ class AdjudicationPhase:
                 )
                 break
             answers = answers_by_key.get((state.target_kind, state.target_id), {})
-            digest = build_digest(state, answers)
+            digest = build_digest(
+                state, answers,
+                facts=(
+                    ctx.facts.component_facts(state.target_id)
+                    if state.target_kind == "component" else None
+                ),
+            )
             if not digest["claims"]:
                 continue
             result = invoker(build_grounding_spotcheck_prompt(digest))

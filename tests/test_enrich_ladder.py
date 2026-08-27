@@ -33,13 +33,16 @@ from analyzer.derive import derive_all
 from analyzer.enrich.contract import CONTRACT_KEY, required_questions
 from analyzer.enrich.engine import InvokeResult
 from analyzer.enrich.ladder import (
+    COMPONENT_CALL_CAP,
     CONTRACT_TARGET_KIND,
+    RELATIONSHIP_CALL_CAP,
     LadderPhase,
     build_escalation_prompt,
     merge_payloads,
     order_partitions,
+    plan_compact_chunks,
 )
-from analyzer.enrich.partition import flatten_components
+from analyzer.enrich.partition import Partition, flatten_components
 from analyzer.enrich.pipeline import (
     BudgetMeter,
     LadderConfig,
@@ -260,8 +263,8 @@ def test_a_higher_rung_receives_the_attempt_and_the_named_gaps(world):
     assert '"question": "mechanism"' in prompt
     assert '"trigger": "E1"' in prompt
     # The assignment says explicitly not to redo what already succeeded.
-    assert "Do not rewrite an answer that was" in prompt
-    assert "already right" in prompt
+    assert 'Repair ONLY what "todo" names' in prompt
+    assert "Work that passed is finished" in prompt
 
 
 def test_the_terminal_rung_is_told_to_declare_a_gap_rather_than_paper_over_it(world):
@@ -274,8 +277,10 @@ def test_the_terminal_rung_is_told_to_declare_a_gap_rather_than_paper_over_it(wo
     terminal = [p for p in invoker.prompts if "LAST rung" in p]
     assert terminal
     assert "There is no rung after you and there is no loop." in terminal[0]
-    assert "becomes a lie the map tells with confidence" in terminal[0]
-    assert "honest_gaps" in terminal[0]
+    assert "is a lie the map tells with confidence" in terminal[0]
+    # The addendum demands a reader-facing why, never the boilerplate phrase.
+    assert "A gap declared honestly is a correct outcome." in terminal[0]
+    assert 'Never write "could not be grounded" as the why' in terminal[0]
 
 
 def test_an_escalation_prompt_is_never_a_blank_assignment():
@@ -724,3 +729,68 @@ def test_an_examined_item_the_terminal_model_leaves_ungapped_still_gaps(world):
 
     _, outcome, _, _ = _run(world, plan)
     assert outcome.states[("component", stubborn)].state == "honest_gap"
+
+
+# --- the call plan and the store's terminal truth ------------------------------
+
+
+def test_the_call_plan_chunks_components_at_21_and_relationships_at_80():
+    # The G2 arithmetic prices a component call at targets x central block x
+    # dispersion against the output ceiling; 21 is the largest count that
+    # clears it at the 1.90 default. A 40-component partition must plan two
+    # calls, and no chunk may exceed the caps.
+    part = Partition(
+        id=0,
+        component_ids=tuple(f"c{i}" for i in range(40)),
+        relationship_keys=tuple(f"r{i}" for i in range(200)),
+        answers_components=True,
+    )
+    chunks = plan_compact_chunks([part])
+    component_chunks = [p for kind, p in chunks if kind == "component"]
+    relationship_chunks = [p for kind, p in chunks if kind == "relationship"]
+    assert [len(p.answered_component_ids) for p in component_chunks] == [21, 19]
+    assert [len(p.relationship_keys) for p in relationship_chunks] == [80, 80, 40]
+    for p in component_chunks:
+        assert len(p.answered_component_ids) <= COMPONENT_CALL_CAP
+    for p in relationship_chunks:
+        assert len(p.relationship_keys) <= RELATIONSHIP_CALL_CAP
+    # Every id appears exactly once across the plan: chunking never loses or
+    # duplicates a target.
+    planned_c = [cid for p in component_chunks for cid in p.answered_component_ids]
+    planned_r = [key for p in relationship_chunks for key in p.relationship_keys]
+    assert planned_c == [f"c{i}" for i in range(40)]
+    assert planned_r == [f"r{i}" for i in range(200)]
+
+
+def test_the_stored_contract_rows_agree_with_the_census(world):
+    # The census is derived from in-memory states; the store is what every
+    # later phase and rerun reads. The 2026-08-26 v2 build shipped a store
+    # that disagreed with its own census by 47 rows because state transitions
+    # carrying no new payload never re-stamped their contract row. _finalize
+    # now reconciles them, and this test holds that terminal truth forever
+    # (predicate P6).
+    stubborn = world["components"][0]
+    plan = {cid: ("ground",) for cid in world["components"]}
+    plan[stubborn] = ("gap", "gap", "gapdecl")
+
+    _, outcome, _, _ = _run(world, plan)
+
+    store = FactStore(str(world["db"]))
+    try:
+        stored = {}
+        for row in store.enrichment():
+            if row.get("target_kind") != CONTRACT_TARGET_KIND:
+                continue
+            state = (row.get("payload") or {}).get("state") or "?"
+            stored[state] = stored.get(state, 0) + 1
+    finally:
+        store.close()
+
+    census = {}
+    for key, count in outcome.census.by_state.items():
+        base = str(key).split("@")[0].replace("honest-gap", "honest_gap")
+        census[base] = census.get(base, 0) + count
+    assert stored == census, (
+        f"store {stored} disagrees with census {census}: the store is lying "
+        "about terminal states"
+    )
