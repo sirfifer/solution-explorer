@@ -1,0 +1,328 @@
+{
+  "identity": {
+    "pass": "verify-identity",
+    "mode": "full",
+    "dry_run": false,
+    "target_count": 3,
+    "done": 2,
+    "failed": [
+      "root"
+    ],
+    "verdicts": {
+      "confirmed": 1,
+      "uncertain": 1
+    },
+    "total_cost_usd": 0.136096,
+    "notes": [
+      "3 identity-bearing component(s); 3 to verify"
+    ],
+    "plan_preview": [],
+    "extra": {},
+    "outcomes": [
+      {
+        "id": "apps/ios",
+        "status": "done",
+        "verdict": "confirmed",
+        "cost_usd": 0.045365,
+        "errors": []
+      },
+      {
+        "id": "root",
+        "status": "failed",
+        "verdict": null,
+        "cost_usd": 0.045365,
+        "errors": [
+          "fields.port: corrected requires a value"
+        ]
+      },
+      {
+        "id": "services/api",
+        "status": "done",
+        "verdict": "uncertain",
+        "cost_usd": 0.045365,
+        "errors": []
+      }
+    ]
+  },
+  "edges": {
+    "pass": "verify-edges",
+    "mode": "full",
+    "dry_run": false,
+    "target_count": 1,
+    "done": 1,
+    "failed": [],
+    "verdicts": {
+      "confirmed": 1
+    },
+    "total_cost_usd": 0.033659,
+    "notes": [
+      "1 inferred edge(s); 1 to verify"
+    ],
+    "plan_preview": [],
+    "extra": {},
+    "outcomes": [
+      {
+        "id": "services/web/src|services/api|http",
+        "status": "done",
+        "verdict": "confirmed",
+        "cost_usd": 0.033659,
+        "errors": []
+      }
+    ]
+  },
+  "findings": {
+    "pass": "verify-findings",
+    "mode": "full",
+    "dry_run": false,
+    "target_count": 5,
+    "done": 5,
+    "failed": [],
+    "verdicts": {
+      "refuted": 4,
+      "uncertain": 1
+    },
+    "total_cost_usd": 0.062223,
+    "notes": [
+      "5 finding(s); 5 to verify"
+    ],
+    "plan_preview": [],
+    "extra": {},
+    "outcomes": [
+      {
+        "id": "finding:unreferenced:apps/ios",
+        "status": "done",
+        "verdict": "refuted",
+        "cost_usd": 0.012445,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:libs/core",
+        "status": "done",
+        "verdict": "refuted",
+        "cost_usd": 0.012445,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:libs/rubylib",
+        "status": "done",
+        "verdict": "refuted",
+        "cost_usd": 0.012445,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:services/web/src",
+        "status": "done",
+        "verdict": "uncertain",
+        "cost_usd": 0.012445,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:services/worker",
+        "status": "done",
+        "verdict": "refuted",
+        "cost_usd": 0.012445,
+        "errors": []
+      }
+    ]
+  },
+  "spot_checks": [
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "data_handled",
+      "claim": "No data entities detected; a 41-line, 2-file markdown/infrastructure component declaring db and cache services.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "The data_entity_count fact supports \"no data entities\" but nothing cited supports the 41-line, 2-file count or the db/cache service declaration."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "mechanism",
+      "claim": "A docker-compose.yml wires up db and cache services alongside the api, while README.md explains the fixture is meant to exercise the analyzer engine.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "file_count and an existing_description string do not show that docker-compose.yml wires the services or that README.md explains the fixture's purpose."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "next_step",
+      "claim": "Confirmed via docker-compose.yml: the port 8000 attribution traces to a service port declaration in the compose file, not to README.md or a root-level process.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "A bare file citation with no line or content shows the compose file exists but not that port 8000 is declared there rather than elsewhere."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "place",
+      "claim": "README.md and docker-compose.yml define the fixture's infrastructure; docker-compose.yml declares db and cache service port bindings, which is the source of the port attribution on this component rather than a root-level bind.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "The file citation alone cannot establish db/cache port bindings or that they are the source of the port attribution."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "purpose",
+      "claim": "Declares the fixture's services (api, db, cache) via docker-compose and documents the fixture's purpose in README.md.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": "existing_description names api/db/cache, though the README documentation half is uncited."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "why_matters",
+      "claim": "The port 8000 on this markdown/infrastructure component is sourced from docker-compose.yml's service port declarations (db/cache/api), confirmed against the compose file directly rather than inferred.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "Claiming confirmation \"against the compose file directly\" requires a line or content citation, not the file path alone."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "data_handled",
+      "claim": "One API capability, a GET /users/{user_id} endpoint; no data entities detected.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "mechanism",
+      "claim": "The read_user handler in server.py is registered with FastAPI and bound to port 8000, and pyproject.toml declares the Python package.",
+      "supported": false,
+      "confidence": "high",
+      "reason": "The capabilities and port facts support the FastAPI registration and port 8000, but nothing cited mentions pyproject.toml or a declared Python package."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "next_step",
+      "claim": "Confirm the GET /users/{user_id} capability and the inbound edge from services/web/src both appear correctly in the map, since together they are the fixture's only relationship signal.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "The cited facts show one capability and one global relationship but do not identify services/web/src as the source of an inbound edge."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "place",
+      "claim": "It is the target of the fixture's one declared relationship, receiving an HTTP call from services/web/src, making it the component with the highest inbound edge count in the fixture.",
+      "supported": false,
+      "confidence": "high",
+      "reason": "inbound_edges: 1 does not identify the caller as services/web/src, and a per-component count cannot establish that this is the highest inbound count in the fixture."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "purpose",
+      "claim": "Serves a single GET /users/{user_id} endpoint that gives the analyzer a real FastAPI capability to detect.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "why_matters",
+      "claim": "This is the only component with a detected capability and the only inbound edge in the fixture, making it the anchor for verifying the relationship and capability detection paths in the parity snapshot.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "The per-component facts show this component has one capability and one inbound edge, but they do not establish that it is the ONLY component in the fixture with a capability."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "data_handled",
+      "claim": "No data entities; a 44-line, 2-file TypeScript module with no detected capabilities.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "data_entity_count: 0 supports the no-entities part, but the 44-line/2-file counts and the 'no detected capabilities' assertion have no cited fact."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "mechanism",
+      "claim": "client.ts and format.js implement the request logic that targets services/api over HTTP.",
+      "supported": false,
+      "confidence": "high",
+      "reason": "file_count: 2 only shows there are two files; nothing cited names client.ts or format.js or shows HTTP request logic targeting services/api."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "next_step",
+      "claim": "Pair this component's one outbound edge with the inbound edge recorded on services/api to confirm the fixture's single declared relationship is detected consistently on both sides.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "place",
+      "claim": "It is the source of the fixture's one declared relationship, edging to services/api over HTTP, making it the only component with an outbound edge.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "outbound_edges: 1 and a global relationship count of 1 do not establish that the edge targets services/api over HTTP, nor that no other component has an outbound edge."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "purpose",
+      "claim": "Contains the client code that calls the api service, giving the analyzer a real outbound HTTP edge to detect.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "outbound_edges: 1 shows an edge exists but does not show it is HTTP, nor that the code calls the api service."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "why_matters",
+      "claim": "This is the only outbound edge in the entire fixture, so it is the client-side anchor for verifying the fixture's one relationship in the parity snapshot.",
+      "supported": false,
+      "confidence": "low",
+      "reason": "the two facts show one outbound edge here and one system relationship, but do not establish it is the only outbound edge in the fixture."
+    }
+  ],
+  "substitution_checks": [
+    {
+      "target_id": "root",
+      "distinctive": true,
+      "chose": "root",
+      "confirmed_failure": false,
+      "reason": "Only the root infrastructure component would contain the fixture's README.md and docker-compose.yml with db/cache/api port declarations."
+    },
+    {
+      "target_id": "services/api",
+      "distinctive": true,
+      "chose": "services/api",
+      "confirmed_failure": false,
+      "reason": "It is the FastAPI api-server exposing GET /users/{user_id} on port 8000 and the target of the inbound HTTP edge from services/web/src."
+    },
+    {
+      "target_id": "services/web/src",
+      "distinctive": true,
+      "chose": "services/web/src",
+      "confirmed_failure": false,
+      "reason": "The web src module holds client.ts/format.js making HTTP calls to services/api, the fixture's only outbound edge; the other candidates are ios/core/ruby packages without that client code."
+    }
+  ],
+  "checked": 18,
+  "unsupported": 14,
+  "disagreement_rate": 0.7778,
+  "substitution_failure_rate": 0.0,
+  "notes": [
+    "verify identity: 2 verified, confirmed=1, uncertain=1",
+    "verify edges: 1 verified, confirmed=1",
+    "verify findings: 5 verified, refuted=4, uncertain=1",
+    "grounding spot-checks: 4 of 6 claims not supported by their own evidence (disagreement rate 66.7%)",
+    "substitution checks: 0 of 1 descriptions did not identify their own subject (0.0%)",
+    "grounding spot-checks: 14 of 18 claims not supported by their own evidence (disagreement rate 77.8%)",
+    "substitution checks: 0 of 3 descriptions did not identify their own subject (0.0%)"
+  ]
+}

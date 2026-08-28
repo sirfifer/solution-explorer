@@ -1,0 +1,235 @@
+{
+  "tours": [
+    {
+      "id": "one-declared-edge",
+      "title": "The fixture's only relationship",
+      "description": "Follows the single web-to-API HTTP call end to end, so a maintainer can confirm the one cross-component edge the fixture declares was detected and nothing else was invented.",
+      "steps": [
+        {
+          "target": "root",
+          "title": "The spec is the README",
+          "narration": "Start at the fixture root: the README's layout list is the specification everything downstream is checked against, including the statement that the web client calls the API over HTTP. Read it first so every later stop is a verification, not a discovery.",
+          "evidence": {
+            "file": "README.md",
+            "line": 1
+          }
+        },
+        {
+          "target": "services/web",
+          "title": "The package that hosts the caller",
+          "narration": "The web client package is declared by package.json and carries no edges of its own; the HTTP relationship lives one level down in its src child. Knowing the parent is edge-free tells you the analyzer attributed the call to the right granularity.",
+          "evidence": {
+            "file": "services/web/package.json",
+            "line": 1
+          }
+        },
+        {
+          "target": "services/web/src",
+          "title": "Where the call originates",
+          "narration": "client.ts issues the outbound HTTP request. This module is the source of the map's single cross-component edge, and it is deliberately consumed by nothing \u2014 the mechanical 'zone of uselessness' finding here is the fixture's design, not dead code.",
+          "evidence": {
+            "file": "services/web/src/client.ts",
+            "line": 1
+          }
+        },
+        {
+          "target": "services/api",
+          "title": "Where the call lands",
+          "narration": "server.py binds a port and exposes GET /users/{user_id} via read_user, which is why the analyzer typed this as an api-server. It is the only component with an inbound edge; if the map shows any relationship other than this one, that is a parity-snapshot diff to explain.",
+          "evidence": {
+            "file": "services/api/api/server.py",
+            "line": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "seven-language-roll-call",
+      "title": "Language coverage roll call",
+      "description": "Walks every language-bearing component in manifest order so a maintainer can verify each tree-sitter integration produced a correctly typed, correctly attributed component.",
+      "steps": [
+        {
+          "target": "services/api",
+          "title": "Python via pyproject.toml",
+          "narration": "First language: Python, detected from pyproject.toml plus the port-binding server stub. Its type comes from the port bind, not the manifest, so it doubles as the api-server classifier check.",
+          "evidence": {
+            "file": "services/api/pyproject.toml",
+            "line": 1
+          }
+        },
+        {
+          "target": "services/web/src",
+          "title": "TypeScript and JavaScript together",
+          "narration": "client.ts and format.js sit in one module, so this stop checks both the TypeScript and JavaScript parsers in a single component. Language attribution should read typescript for the module.",
+          "evidence": {
+            "file": "services/web/src/format.js",
+            "line": 1
+          }
+        },
+        {
+          "target": "services/worker",
+          "title": "Go via main.go",
+          "narration": "A single 21-line main.go with no edges. Its whole job is to give the Go detection path something real to parse; presence with language=go is the pass condition.",
+          "evidence": {
+            "file": "services/worker/main.go",
+            "line": 1
+          }
+        },
+        {
+          "target": "libs/core",
+          "title": "Rust via Cargo.toml",
+          "narration": "Cargo.toml plus lib.rs exercise Rust manifest detection. The type should be package, from the manifest kind, not a service \u2014 a mistype here means a classifier crossed wires.",
+          "evidence": {
+            "file": "libs/core/Cargo.toml",
+            "line": 1
+          }
+        },
+        {
+          "target": "libs/rubylib",
+          "title": "Ruby via Gemfile",
+          "narration": "parser.rb under a Gemfile exercises the Ruby path. Same check as the Rust stop: present, language=ruby, typed as a package.",
+          "evidence": {
+            "file": "libs/rubylib/lib/parser.rb",
+            "line": 1
+          }
+        },
+        {
+          "target": "apps/ios",
+          "title": "Swift via Package.swift",
+          "narration": "The last code language: a Swift package with a Package.swift manifest and one source file. If this component is missing, a tree-sitter integration silently failed \u2014 the exact regression the fixture exists to catch.",
+          "evidence": {
+            "file": "apps/ios/Package.swift",
+            "line": 1
+          }
+        },
+        {
+          "target": "root",
+          "title": "Config formats close the loop",
+          "narration": "Back at root, docker-compose.yml and the Markdown README cover the config formats. With the two compose-derived services counted, the roll call is complete: ten components, every README layout entry accounted for.",
+          "evidence": {
+            "file": "docker-compose.yml",
+            "line": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "components-from-config-alone",
+      "title": "Components with no source files",
+      "description": "Shows how the analyzer manufactures typed components from a compose file alone, which is the detection path a code-centric reader is most likely to overlook.",
+      "steps": [
+        {
+          "target": "root",
+          "title": "The compose file as source of truth",
+          "narration": "docker-compose.yml declares api, db, and cache services with their ports. Note the idiom warning: root itself is listed as an entry point only because the compose file's port declarations get attributed to the root directory \u2014 there is no server at the repo root.",
+          "evidence": {
+            "file": "docker-compose.yml",
+            "line": 1
+          }
+        },
+        {
+          "target": "compose/db",
+          "title": "A database from a service block",
+          "narration": "This component has an empty file list: it exists purely because a compose service block named 'db' binds port 5432. Its type, database, was assigned with no code to read \u2014 the compose parser working alone.",
+          "evidence": {
+            "file": "docker-compose.yml",
+            "line": 1
+          }
+        },
+        {
+          "target": "compose/cache",
+          "title": "A cache, distinguished by signal",
+          "narration": "Same mechanism, different outcome: the 'cache' block binding port 6379 yields a component typed cache rather than database. Seeing the two side by side is the point \u2014 the same parser produced two distinct types from adjacent declarations.",
+          "evidence": {
+            "file": "docker-compose.yml",
+            "line": 1
+          }
+        }
+      ]
+    }
+  ],
+  "lenses": [
+    {
+      "name": "The seven-languages claim is asserted everywhere and grounded nowhere",
+      "observation": "Five separate component summaries justify their existence by appeal to 'the seven target languages', and adjudication struck every one of them for the same reason: no cited evidence establishes that a seven-language set exists. The claim is true \u2014 the brief and README say so \u2014 but the enrichment never captured the README's language list as a citable fact, so every per-component appeal to it failed independently.",
+      "why_it_matters": "For an analyzer maintainer, the coverage claim is the fixture's whole point; a map that cannot ground it forces them back to the README. One shared fact would rescue five disputed claims at once, which is cheaper than re-enriching any single component.",
+      "confidence": "high",
+      "work_order": {
+        "scope": [
+          "root",
+          "services/worker",
+          "libs/core",
+          "libs/rubylib",
+          "apps/ios"
+        ],
+        "lens": "Extract the README layout section's explicit language enumeration as a fact on root, then re-cite the four language-stub components' why_matters against it instead of against same-type component counts.",
+        "criteria": "The four struck why_matters claims about language coverage pass adjudication when re-checked, each citing the root README fact.",
+        "expected_effect": "truth: adjudicator disagreement rate drops by four component-level unsupported claims; grounded fraction rises correspondingly.",
+        "budget": {
+          "max_cost_usd": 0.5,
+          "max_targets": 5
+        }
+      }
+    },
+    {
+      "name": "Compose components carry image-flavor claims no one can check",
+      "observation": "compose/db and compose/cache are described as 'Postgres-style' and 'Redis-style', and adjudication rejected both because only the ports (5432, 6379) and service names were cited. The port numbers are conventional tells, but the map never states whether the compose file actually names an image \u2014 so a reader cannot tell if the flavor claim is read from the file or inferred from the port.",
+      "why_it_matters": "The parity snapshot diffs on these components; a flavor description that drifts between 'Redis-style' and 'cache on 6379' across runs is a spurious diff the P4-7 cutover would have to explain.",
+      "confidence": "medium",
+      "work_order": {
+        "scope": [
+          "compose/db",
+          "compose/cache"
+        ],
+        "lens": "Read the docker-compose.yml service blocks and record the literal image field (or its absence) as a fact; rewrite the two purpose claims to state only what the block declares.",
+        "criteria": "Both purpose claims pass adjudication citing the compose file's image field or explicitly noting no image is named, with no flavor adjective unsupported by the file.",
+        "expected_effect": "truth: two disputed purpose claims move to supported, and the descriptions become stable inputs to the parity diff.",
+        "budget": {
+          "max_cost_usd": 0.3,
+          "max_targets": 2
+        }
+      }
+    }
+  ],
+  "work_orders": [
+    {
+      "scope": [
+        "root",
+        "services/worker",
+        "libs/core",
+        "libs/rubylib",
+        "apps/ios"
+      ],
+      "lens": "Extract the README layout section's explicit language enumeration as a fact on root, then re-cite the four language-stub components' why_matters against it instead of against same-type component counts.",
+      "criteria": "The four struck why_matters claims about language coverage pass adjudication when re-checked, each citing the root README fact.",
+      "expected_effect": "truth: adjudicator disagreement rate drops by four component-level unsupported claims; grounded fraction rises correspondingly.",
+      "budget": {
+        "max_cost_usd": 0.5,
+        "max_targets": 5
+      },
+      "issued_by": "P4",
+      "outcome": null
+    },
+    {
+      "scope": [
+        "compose/db",
+        "compose/cache"
+      ],
+      "lens": "Read the docker-compose.yml service blocks and record the literal image field (or its absence) as a fact; rewrite the two purpose claims to state only what the block declares.",
+      "criteria": "Both purpose claims pass adjudication citing the compose file's image field or explicitly noting no image is named, with no flavor adjective unsupported by the file.",
+      "expected_effect": "truth: two disputed purpose claims move to supported, and the descriptions become stable inputs to the parity diff.",
+      "budget": {
+        "max_cost_usd": 0.3,
+        "max_targets": 2
+      },
+      "issued_by": "P4",
+      "outcome": null
+    }
+  ],
+  "rejected_orders": [],
+  "rejected_tours": [],
+  "narrative_written": true,
+  "notes": [
+    "3 tour(s) written, 2 lens(es) discovered, 2 work order(s) issued"
+  ]
+}

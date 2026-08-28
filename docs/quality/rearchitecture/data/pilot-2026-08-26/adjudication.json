@@ -1,0 +1,182 @@
+{
+  "identity": {
+    "pass": "verify-identity",
+    "mode": "full",
+    "dry_run": false,
+    "target_count": 3,
+    "done": 3,
+    "failed": [],
+    "verdicts": {
+      "confirmed": 1,
+      "uncertain": 2
+    },
+    "total_cost_usd": 0.125285,
+    "notes": [
+      "3 identity-bearing component(s); 3 to verify"
+    ],
+    "plan_preview": [],
+    "extra": {},
+    "outcomes": [
+      {
+        "id": "apps/ios",
+        "status": "done",
+        "verdict": "confirmed",
+        "cost_usd": 0.041762,
+        "errors": []
+      },
+      {
+        "id": "root",
+        "status": "done",
+        "verdict": "uncertain",
+        "cost_usd": 0.041762,
+        "errors": []
+      },
+      {
+        "id": "services/api",
+        "status": "done",
+        "verdict": "uncertain",
+        "cost_usd": 0.041762,
+        "errors": []
+      }
+    ]
+  },
+  "edges": {
+    "pass": "verify-edges",
+    "mode": "full",
+    "dry_run": false,
+    "target_count": 1,
+    "done": 1,
+    "failed": [],
+    "verdicts": {
+      "confirmed": 1
+    },
+    "total_cost_usd": 0.032237,
+    "notes": [
+      "1 inferred edge(s); 1 to verify"
+    ],
+    "plan_preview": [],
+    "extra": {},
+    "outcomes": [
+      {
+        "id": "services/web/src|services/api|http",
+        "status": "done",
+        "verdict": "confirmed",
+        "cost_usd": 0.032237,
+        "errors": []
+      }
+    ]
+  },
+  "findings": {
+    "pass": "verify-findings",
+    "mode": "full",
+    "dry_run": false,
+    "target_count": 5,
+    "done": 5,
+    "failed": [],
+    "verdicts": {
+      "refuted": 4,
+      "uncertain": 1
+    },
+    "total_cost_usd": 0.064839,
+    "notes": [
+      "5 finding(s); 5 to verify"
+    ],
+    "plan_preview": [],
+    "extra": {},
+    "outcomes": [
+      {
+        "id": "finding:unreferenced:apps/ios",
+        "status": "done",
+        "verdict": "refuted",
+        "cost_usd": 0.012968,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:libs/core",
+        "status": "done",
+        "verdict": "refuted",
+        "cost_usd": 0.012968,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:libs/rubylib",
+        "status": "done",
+        "verdict": "refuted",
+        "cost_usd": 0.012968,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:services/web/src",
+        "status": "done",
+        "verdict": "uncertain",
+        "cost_usd": 0.012968,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:services/worker",
+        "status": "done",
+        "verdict": "refuted",
+        "cost_usd": 0.012968,
+        "errors": []
+      }
+    ]
+  },
+  "spot_checks": [
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "mechanism",
+      "claim": "A Python package (pyproject.toml) whose server.py defines one FastAPI route, GET /users/{user_id} handled by read_user, served on port 8000 as declared in docker-compose.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "The capabilities and port facts support the route, handler, framework and port, but nothing cited backs the pyproject.toml packaging or the docker-compose declaration."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "next_step",
+      "claim": "No product work; verify the GET /users/{user_id} capability and the inbound web\u2192api edge keep appearing in analyzer output, as their absence signals an engine regression.",
+      "supported": true,
+      "confidence": "low",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "place",
+      "claim": "The only component with an inbound edge: the web client calls it over HTTP, which is the single relationship the fixture exists to test.",
+      "supported": false,
+      "confidence": "high",
+      "reason": "inbound_edges: 1 shows this component has one inbound edge but says nothing about other components being edgeless, and no edge citation identifies the web client or HTTP as the caller."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "purpose",
+      "claim": "FastAPI stub server that gives the fixture its api-server component type and the target end of its one real relationship (web client \u2192 api over HTTP).",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "framework and inbound_edges:1 support 'FastAPI' and 'one inbound relationship' but not the edge's source/protocol (web client over HTTP) or the api-server component typing."
+    }
+  ],
+  "substitution_checks": [
+    {
+      "target_id": "services/api",
+      "distinctive": true,
+      "chose": "services/api",
+      "confirmed_failure": false,
+      "reason": "It is the only api-server candidate, matching the FastAPI stub with the inbound HTTP edge from the web client."
+    }
+  ],
+  "checked": 4,
+  "unsupported": 3,
+  "disagreement_rate": 0.75,
+  "substitution_failure_rate": 0.0,
+  "notes": [
+    "verify identity: 3 verified, confirmed=1, uncertain=2",
+    "verify edges: 1 verified, confirmed=1",
+    "verify findings: 5 verified, refuted=4, uncertain=1",
+    "grounding spot-checks: 3 of 4 claims not supported by their own evidence (disagreement rate 75.0%)",
+    "substitution checks: 0 of 1 descriptions did not identify their own subject (0.0%)"
+  ]
+}

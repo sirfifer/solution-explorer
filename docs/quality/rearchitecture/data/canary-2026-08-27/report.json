@@ -1,0 +1,3304 @@
+{
+  "identity": {
+    "subject": "polyglot",
+    "root": "/Volumes/Studio/dev/solution-explorer/tests/fixtures/polyglot",
+    "commit": "2c01ee0398acf1be95c38ab6082d6b194a6ab53c",
+    "snapshot_date": "2026-08-27T18:06:52.204214+00:00",
+    "analyzer_version": "",
+    "engine_version": "1",
+    "policy": {
+      "models": {
+        "p1_orientation": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p2a_bulk": {
+          "source": "anthropic-claude-cli",
+          "model": "sonnet",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p2b_escalated": {
+          "source": "anthropic-claude-cli",
+          "model": "opus",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p2c_residue": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p3_adjudication": {
+          "source": "anthropic-claude-cli",
+          "model": "opus",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p4_synthesis": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true,
+          "effort": "low"
+        },
+        "p5_determination": {
+          "source": "anthropic-claude-cli",
+          "model": "fable",
+          "pinned": true,
+          "effort": "low"
+        },
+        "workorder": {
+          "source": "anthropic-claude-cli",
+          "model": "sonnet",
+          "pinned": true,
+          "effort": "low"
+        }
+      },
+      "iteration": {
+        "min_rounds": 1,
+        "max_rounds": 1
+      },
+      "max_cost_usd": 20.0,
+      "pause_at_cost_usd": 10.0,
+      "spot_check_fraction": 1.0,
+      "max_work_orders": 3
+    },
+    "totals": {
+      "invocations": 48,
+      "cost_usd": 3.781031,
+      "cost_ceiling_usd": 20.0,
+      "cost_ceiling_exceeded": false,
+      "ceiling_hit": false,
+      "failed_phases": []
+    },
+    "dry_run": false
+  },
+  "ledger": [
+    {
+      "phase": "p1_orientation",
+      "rung": null,
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 2,
+      "tokens_cached": 9316,
+      "tokens_out": 2125,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "4e6cabd4-2c50-464f-8d8b-07c2fce178f5",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 6638,
+      "output_budget_bytes": 12000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.11882,
+      "wall_seconds": 34.196,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "2a",
+      "model": "anthropic-claude-cli:sonnet",
+      "targets": 10,
+      "tokens_in": 16827,
+      "tokens_cached": 7241,
+      "tokens_out": 3706,
+      "tokens_cache_write": 16825,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": 0,
+      "session_id": "7928491c-378d-40bf-baa6-89e455640834",
+      "prefix_hash": "d376855dafb86f640318b414d736eea8c53424adc208d7b84ba8e487ffa487a1",
+      "prefix_tokens_est": 3394,
+      "response_bytes": 9697,
+      "output_budget_bytes": 39432,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.167001,
+      "wall_seconds": 30.863,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "2a",
+      "model": "anthropic-claude-cli:sonnet",
+      "targets": 1,
+      "tokens_in": 5877,
+      "tokens_cached": 7241,
+      "tokens_out": 136,
+      "tokens_cache_write": 5875,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": 1,
+      "session_id": "a5ddc819-b434-458d-b502-b9c4b4128adf",
+      "prefix_hash": "0632fffc1d6edd8174a86a500a0b58cc3831fa4969f214babfc2fc5d32cc87b4",
+      "prefix_tokens_est": 1877,
+      "response_bytes": 337,
+      "output_budget_bytes": 1330,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.04053,
+      "wall_seconds": 3.565,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "opus",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 2,
+      "tokens_in": 10756,
+      "tokens_cached": 0,
+      "tokens_out": 193,
+      "tokens_cache_write": 10754,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": 0,
+      "session_id": "c7a406c0-f57d-42b3-b2e3-f6ef564593ae",
+      "prefix_hash": "40191ffa04903ddcb672631f9fd764ca3d6003dc80587d17e2d16c34c80bac23",
+      "prefix_tokens_est": 2912,
+      "response_bytes": 460,
+      "output_budget_bytes": 8328,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.115061,
+      "wall_seconds": 4.534,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-identity",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 5,
+      "tokens_in": 4412,
+      "tokens_cached": 4137,
+      "tokens_out": 3209,
+      "tokens_cache_write": 4410,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "c6ed24af-3b7d-4377-a8cb-bce73529d8a6",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 6506,
+      "output_budget_bytes": 26000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.12921,
+      "wall_seconds": 35.076,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-edges",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2721,
+      "tokens_cached": 4137,
+      "tokens_out": 88,
+      "tokens_cache_write": 2719,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "d4049792-98a5-4638-b090-1680d3d531b9",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 220,
+      "output_budget_bytes": 15000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.032871,
+      "wall_seconds": 2.78,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "verify-findings",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 5,
+      "tokens_in": 4232,
+      "tokens_cached": 4137,
+      "tokens_out": 469,
+      "tokens_cache_write": 4230,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "edadc4ec-d29d-40a1-b545-c2a9e00173dd",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 1354,
+      "output_budget_bytes": 20000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.058841,
+      "wall_seconds": 7.537,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4197,
+      "tokens_cached": 4137,
+      "tokens_out": 184,
+      "tokens_cache_write": 4195,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "1b99c021-1d3b-4280-8ca9-5e7f809398f4",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 501,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.051255,
+      "wall_seconds": 3.477,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4371,
+      "tokens_cached": 4137,
+      "tokens_out": 465,
+      "tokens_cache_write": 4369,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "6762bd67-9d01-4ebf-b6d0-e640b728aee7",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 702,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.060174,
+      "wall_seconds": 7.368,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4220,
+      "tokens_cached": 4137,
+      "tokens_out": 256,
+      "tokens_cache_write": 4218,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "1b8138f8-c398-4ffa-96cd-6461feda7260",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 769,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.053368,
+      "wall_seconds": 4.903,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4153,
+      "tokens_cached": 4137,
+      "tokens_out": 196,
+      "tokens_cache_write": 4151,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "ec710b65-5f48-4277-91f8-9ee14db9ecd9",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 561,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.051111,
+      "wall_seconds": 3.95,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4401,
+      "tokens_cached": 4137,
+      "tokens_out": 182,
+      "tokens_cache_write": 4399,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "d6b89ef9-08dd-4521-94fe-13c8b0dbe4de",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 495,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.053415,
+      "wall_seconds": 3.534,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 6267,
+      "tokens_cached": 4137,
+      "tokens_out": 473,
+      "tokens_cache_write": 6265,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "2e907662-9cf0-4e5b-8edc-10bfb8fc6ab6",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 557,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.08078,
+      "wall_seconds": 7.748,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4835,
+      "tokens_cached": 4137,
+      "tokens_out": 415,
+      "tokens_cache_write": 4833,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "b55ac94d-aa39-45a8-b902-3108b45a3249",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 387,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.064019,
+      "wall_seconds": 5.844,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4558,
+      "tokens_cached": 4137,
+      "tokens_out": 354,
+      "tokens_cache_write": 4556,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "ac95b737-1ac4-4018-ad6a-808f598f9882",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 1033,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.059501,
+      "wall_seconds": 5.874,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4524,
+      "tokens_cached": 4137,
+      "tokens_out": 195,
+      "tokens_cache_write": 4522,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "372ccbbc-e365-4b62-a63c-b5b4cf5e7af0",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 538,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.055122,
+      "wall_seconds": 4.164,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4054,
+      "tokens_cached": 4137,
+      "tokens_out": 187,
+      "tokens_cache_write": 4052,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "f219c949-2cf8-4041-8db8-982efbb9ea74",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 517,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.049831,
+      "wall_seconds": 3.617,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 3309,
+      "tokens_cached": 4137,
+      "tokens_out": 405,
+      "tokens_cache_write": 3307,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "910c13b4-869e-40c2-bbab-ad21a32b7a60",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 563,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.047147,
+      "wall_seconds": 7.014,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2109,
+      "tokens_cached": 4137,
+      "tokens_out": 54,
+      "tokens_cache_write": 2107,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "f24d6763-a554-474b-bdde-f3d3eba26ab0",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 149,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.024498,
+      "wall_seconds": 2.519,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2131,
+      "tokens_cached": 4137,
+      "tokens_out": 68,
+      "tokens_cache_write": 2129,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "0702dc35-0a5f-4e0f-b54a-5bd893292e2d",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 193,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.02605,
+      "wall_seconds": 2.607,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2161,
+      "tokens_cached": 4137,
+      "tokens_out": 65,
+      "tokens_cache_write": 2159,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "a541207c-a8c9-41cb-98b0-b1d2639f62a2",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 168,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.026301,
+      "wall_seconds": 2.658,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2109,
+      "tokens_cached": 4137,
+      "tokens_out": 111,
+      "tokens_cache_write": 2107,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "a6231e39-8eae-4d51-86e1-883b021f26ad",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 194,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.026892,
+      "wall_seconds": 3.176,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2097,
+      "tokens_cached": 4137,
+      "tokens_out": 89,
+      "tokens_cache_write": 2095,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "ecd8cc88-1c4d-4529-90c2-2c18e3305642",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 261,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.026205,
+      "wall_seconds": 3.316,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p4_synthesis",
+      "rung": "narrative",
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 2307,
+      "tokens_cached": 4448,
+      "tokens_out": 794,
+      "tokens_cache_write": 2305,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "19264bb8-cc2c-4b69-a889-fb86516db9ef",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 2336,
+      "output_budget_bytes": 12000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.091396,
+      "wall_seconds": 11.902,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p4_synthesis",
+      "rung": "spine",
+      "model": "anthropic-claude-cli:fable",
+      "targets": 0,
+      "tokens_in": 10499,
+      "tokens_cached": 4448,
+      "tokens_out": 3228,
+      "tokens_cache_write": 10497,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "d1d91442-6758-4804-999f-c48246479e97",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 9745,
+      "output_budget_bytes": 24000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.383242,
+      "wall_seconds": 41.533,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p5_determination",
+      "rung": null,
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 22282,
+      "tokens_cached": 0,
+      "tokens_out": 2467,
+      "tokens_cache_write": 22280,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "2778c979-e328-4b3a-99ef-d02223ee3843",
+      "prefix_hash": "c48e3db636afe5c789bd205d8f7059d286268f8ff8ce566f44ca4a88ba28a5ba",
+      "prefix_tokens_est": 12335,
+      "response_bytes": 5614,
+      "output_budget_bytes": 12000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.574214,
+      "wall_seconds": 32.796,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "work_order",
+      "rung": "P5",
+      "model": "anthropic-claude-cli:sonnet",
+      "targets": 10,
+      "tokens_in": 17713,
+      "tokens_cached": 9474,
+      "tokens_out": 1257,
+      "tokens_cache_write": 17711,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "5849bf20-d2d2-4d54-93b4-287c3cf5b987",
+      "prefix_hash": "de692b608f4a6af90188a2a328292cbe46bb14f49445bce3ea4612217e86222f",
+      "prefix_tokens_est": 1480,
+      "response_bytes": 3431,
+      "output_budget_bytes": 36322,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.139726,
+      "wall_seconds": 11.31,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "work_order",
+      "rung": "P5",
+      "model": "anthropic-claude-cli:sonnet",
+      "targets": 2,
+      "tokens_in": 6294,
+      "tokens_cached": 9474,
+      "tokens_out": 345,
+      "tokens_cache_write": 6292,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "f656d036-abc5-421f-9a12-51a7af386ada",
+      "prefix_hash": "de692b608f4a6af90188a2a328292cbe46bb14f49445bce3ea4612217e86222f",
+      "prefix_tokens_est": 1480,
+      "response_bytes": 949,
+      "output_budget_bytes": 8328,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.048998,
+      "wall_seconds": 5.189,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4407,
+      "tokens_cached": 4137,
+      "tokens_out": 214,
+      "tokens_cache_write": 4405,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "957eb215-7644-49db-a62e-75e28aa5ea8e",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 566,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.054274,
+      "wall_seconds": 3.719,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4220,
+      "tokens_cached": 4137,
+      "tokens_out": 151,
+      "tokens_cache_write": 4218,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "21746347-2c21-4f50-8216-e5dffccf4a9b",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 387,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.050709,
+      "wall_seconds": 3.213,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4061,
+      "tokens_cached": 4137,
+      "tokens_out": 195,
+      "tokens_cache_write": 4059,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "b572b28f-1c78-4c3b-a90d-a21fb0782d0e",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 519,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.050116,
+      "wall_seconds": 3.845,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4252,
+      "tokens_cached": 4137,
+      "tokens_out": 188,
+      "tokens_cache_write": 4250,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "2a2681f9-73ac-4dde-84d3-8a5a423a9b90",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 509,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.051981,
+      "wall_seconds": 3.651,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4551,
+      "tokens_cached": 4137,
+      "tokens_out": 196,
+      "tokens_cache_write": 4549,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "219c5ecc-d410-42ce-932d-c9299f5f91a7",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 542,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.055379,
+      "wall_seconds": 4.038,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 7401,
+      "tokens_cached": 4137,
+      "tokens_out": 388,
+      "tokens_cache_write": 7399,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "49cd3953-a775-42a5-9eda-f2c9bd8c8b08",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 391,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.090901,
+      "wall_seconds": 6.712,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4915,
+      "tokens_cached": 4137,
+      "tokens_out": 150,
+      "tokens_cache_write": 4913,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "3fe072a2-f907-428a-9a0c-026310d0b8a5",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 385,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.058272,
+      "wall_seconds": 3.251,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4523,
+      "tokens_cached": 4137,
+      "tokens_out": 655,
+      "tokens_cache_write": 4521,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "9623f07e-d9ce-4a70-a1d6-b492909aa7d6",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 667,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.066609,
+      "wall_seconds": 9.675,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 4192,
+      "tokens_cached": 4137,
+      "tokens_out": 191,
+      "tokens_cache_write": 4190,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "6dc5e250-29f5-4c2a-a3f1-a1121fc861a3",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 532,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.051419,
+      "wall_seconds": 3.63,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 3248,
+      "tokens_cached": 4137,
+      "tokens_out": 99,
+      "tokens_cache_write": 3246,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "261a9537-65b0-4e81-8073-3fdc84b2e241",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 264,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.038837,
+      "wall_seconds": 3.061,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2157,
+      "tokens_cached": 4137,
+      "tokens_out": 64,
+      "tokens_cache_write": 2155,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "d7bd3e68-3748-4d22-ba8e-46e97ca1ac77",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 159,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.026221,
+      "wall_seconds": 2.608,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2129,
+      "tokens_cached": 4137,
+      "tokens_out": 65,
+      "tokens_cache_write": 2127,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "9dcc69e8-adcf-4311-a751-846ec2120191",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 175,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.025966,
+      "wall_seconds": 2.457,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2132,
+      "tokens_cached": 4137,
+      "tokens_out": 70,
+      "tokens_cache_write": 2130,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "2f698057-c7b0-404e-bc40-2a1539253e5b",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 205,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.026129,
+      "wall_seconds": 2.623,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2127,
+      "tokens_cached": 4137,
+      "tokens_out": 73,
+      "tokens_cache_write": 2125,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "47e38af3-d0ba-4851-9498-eda6db88b11e",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 192,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.026134,
+      "wall_seconds": 2.514,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2130,
+      "tokens_cached": 4137,
+      "tokens_out": 59,
+      "tokens_cache_write": 2128,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "b913876d-eb8a-4012-8337-30ef8d7c4935",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 135,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.025809,
+      "wall_seconds": 3.275,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2184,
+      "tokens_cached": 4137,
+      "tokens_out": 55,
+      "tokens_cache_write": 2182,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "ef1e0be5-5161-4908-9e65-4a6c6f339a67",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 161,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.026297,
+      "wall_seconds": 2.645,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2235,
+      "tokens_cached": 9224,
+      "tokens_out": 51,
+      "tokens_cache_write": 2233,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "0b4b9066-20ad-41d8-91d9-7aafed781b24",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 158,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.029244,
+      "wall_seconds": 3.19,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2120,
+      "tokens_cached": 4137,
+      "tokens_out": 55,
+      "tokens_cache_write": 2118,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "aa140694-e0e3-4f5b-8df3-97784f8237af",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 168,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.025613,
+      "wall_seconds": 2.611,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 2106,
+      "tokens_cached": 4137,
+      "tokens_out": 59,
+      "tokens_cache_write": 2104,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "4a3434cf-bfa2-4a38-8aa6-32fa539c1950",
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 177,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.025555,
+      "wall_seconds": 2.506,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p5_determination",
+      "rung": null,
+      "model": "anthropic-claude-cli:fable",
+      "targets": 1,
+      "tokens_in": 9587,
+      "tokens_cached": 12306,
+      "tokens_out": 2218,
+      "tokens_cache_write": 9585,
+      "tokens_fresh_in": 2,
+      "effort": "low",
+      "stop_reason": "end_turn",
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": "7a7ed929-8807-494b-984e-4fae60ca5457",
+      "prefix_hash": "c48e3db636afe5c789bd205d8f7059d286268f8ff8ce566f44ca4a88ba28a5ba",
+      "prefix_tokens_est": 12335,
+      "response_bytes": 5091,
+      "output_budget_bytes": 12000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.319986,
+      "wall_seconds": 29.989,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    }
+  ],
+  "census": {
+    "by_state": {
+      "grounded@opus": 1,
+      "grounded@sonnet": 10
+    },
+    "items": [
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:grounded"
+        ],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "compose/cache",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:grounded",
+          "sonnet:grounded"
+        ],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "compose/db",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:grounded",
+          "sonnet:grounded"
+        ],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "libs/core",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:grounded"
+        ],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "libs/rubylib",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:grounded"
+        ],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "root",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:grounded"
+        ],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "opus",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "services/api",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:escalate"
+        ],
+        "entry_triggers": [
+          "E3"
+        ],
+        "entry_class": "context",
+        "entry_class_basis": "lacked:0/trigger:1",
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "services/web",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:escalate",
+          "opus:grounded"
+        ],
+        "entry_triggers": [
+          "E3"
+        ],
+        "entry_class": "context",
+        "entry_class_basis": "lacked:0/trigger:1",
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "services/web/src",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:grounded"
+        ],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "services/worker",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:grounded"
+        ],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "relationship",
+        "target_id": "services/web/src|services/api|http",
+        "self_declared": null,
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [
+          "sonnet:grounded"
+        ],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
+      }
+    ],
+    "total": 11,
+    "grounded": 11,
+    "grounded_fraction": 1.0,
+    "trigger_counts": {},
+    "unresolved": []
+  },
+  "escalations": [
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "climbed_from": [
+        "sonnet:escalate"
+      ],
+      "resolved_at": "opus",
+      "terminal": "grounded@opus",
+      "triggers": [],
+      "failed_questions": []
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "climbed_from": [
+        "sonnet:escalate",
+        "opus:grounded"
+      ],
+      "resolved_at": "sonnet",
+      "terminal": "grounded@sonnet",
+      "triggers": [],
+      "failed_questions": []
+    }
+  ],
+  "work_orders": [
+    {
+      "scope": [
+        "root",
+        "services/worker",
+        "libs/core",
+        "libs/rubylib",
+        "apps/ios"
+      ],
+      "lens": "Extract the README layout section's explicit language enumeration as a fact on root, then re-cite the four language-stub components' why_matters against it instead of against same-type component counts.",
+      "criteria": "The four struck why_matters claims about language coverage pass adjudication when re-checked, each citing the root README fact.",
+      "expected_effect": "truth: adjudicator disagreement rate drops by four component-level unsupported claims; grounded fraction rises correspondingly.",
+      "budget": {
+        "max_cost_usd": 0.5,
+        "max_targets": 5
+      },
+      "issued_by": "P4",
+      "outcome": null,
+      "executed": false
+    },
+    {
+      "scope": [
+        "compose/db",
+        "compose/cache"
+      ],
+      "lens": "Read the docker-compose.yml service blocks and record the literal image field (or its absence) as a fact; rewrite the two purpose claims to state only what the block declares.",
+      "criteria": "Both purpose claims pass adjudication citing the compose file's image field or explicitly noting no image is named, with no flavor adjective unsupported by the file.",
+      "expected_effect": "truth: two disputed purpose claims move to supported, and the descriptions become stable inputs to the parity diff.",
+      "budget": {
+        "max_cost_usd": 0.3,
+        "max_targets": 2
+      },
+      "issued_by": "P4",
+      "outcome": null,
+      "executed": false
+    },
+    {
+      "scope": [
+        "apps/ios",
+        "compose/cache",
+        "compose/db",
+        "libs/core",
+        "libs/rubylib",
+        "root",
+        "services/web",
+        "services/web/src",
+        "services/web/src|services/api|http",
+        "services/worker"
+      ],
+      "lens": "Extract the README layout section's explicit language enumeration as a citable fact on root, then re-cite the language-stub components' why_matters claims against that fact instead of against same-type component counts. Repair only the independently unsupported claims. Narrow each claim until every clause is carried by this target's supplied evidence; do not add replacement detail. The replacement must not repeat any phrase the independent judge explicitly named unsupported unless you attach the exact missing evidence. For an unsupported negative or uniqueness clause (no, none, only, sole), remove that clause unless a supplied deterministic fact directly establishes it. Targets/questions: apps/ios:why_matters, compose/cache:purpose/why_matters, compose/db:purpose/why_matters, libs/core:why_matters, libs/rubylib:why_matters, root:place, services/web:next_step/purpose/why_matters, services/web/src:purpose, services/web/src|services/api|http:why, services/worker:why_matters",
+      "criteria": "The struck why_matters claims about seven-language coverage pass adjudication when re-checked, each citing the root README fact. Re-adjudication marks every named target/question supported, with no regression in the other established answers.",
+      "expected_effect": "truth: the unsupported-claim count for the scoped targets decreases to zero",
+      "budget": {
+        "max_cost_usd": 2.0,
+        "max_targets": 10
+      },
+      "issued_by": "P5",
+      "outcome": {
+        "executed": true,
+        "targets_attempted": 10,
+        "state_changes": {},
+        "payload_changes": [
+          "apps/ios",
+          "compose/cache",
+          "compose/db",
+          "libs/core",
+          "libs/rubylib",
+          "root",
+          "services/web",
+          "services/web/src",
+          "services/web/src|services/api|http",
+          "services/worker"
+        ],
+        "cost_usd": 0.139726,
+        "changed_anything": true,
+        "notes": []
+      },
+      "executed": true
+    },
+    {
+      "scope": [
+        "compose/db",
+        "compose/cache"
+      ],
+      "lens": "Read the docker-compose.yml service blocks and record the literal image field (or its absence) as a fact; rewrite the two purpose claims to state only what the block declares, dropping 'Postgres-style'/'Redis-style' unless the image field supports them.",
+      "criteria": "Both purpose claims (and the two why_matters claims) pass adjudication citing the compose file's image field or its explicit absence.",
+      "expected_effect": "truth: up to four disputed compose claims move to supported and the descriptions become stable inputs to the P4-7 parity diff.",
+      "budget": {
+        "max_cost_usd": 0.3,
+        "max_targets": 2
+      },
+      "issued_by": "P5",
+      "outcome": {
+        "executed": true,
+        "targets_attempted": 2,
+        "state_changes": {},
+        "payload_changes": [
+          "compose/cache",
+          "compose/db"
+        ],
+        "cost_usd": 0.048998,
+        "changed_anything": true,
+        "notes": []
+      },
+      "executed": true
+    },
+    {
+      "scope": [
+        "apps/ios",
+        "compose/db",
+        "libs/core",
+        "libs/rubylib",
+        "services/web/src",
+        "services/worker"
+      ],
+      "lens": "Repair only the independently unsupported claims. Narrow each claim until every clause is carried by this target's supplied evidence; do not add replacement detail. The replacement must not repeat any phrase the independent judge explicitly named unsupported unless you attach the exact missing evidence. For an unsupported negative or uniqueness clause (no, none, only, sole), remove that clause unless a supplied deterministic fact directly establishes it. Targets/questions: apps/ios:why_matters, compose/db:why_matters, libs/core:why_matters, libs/rubylib:why_matters, services/web/src:next_step, services/worker:why_matters",
+      "criteria": "Re-adjudication marks every named target/question supported, with no regression in the other established answers.",
+      "expected_effect": "truth: the unsupported-claim count for the scoped targets decreases to zero",
+      "budget": {
+        "max_cost_usd": 2.0,
+        "max_targets": 6
+      },
+      "issued_by": "P5-deterministic-repair",
+      "outcome": null,
+      "executed": false
+    }
+  ],
+  "iterations": [
+    {
+      "number": 1,
+      "forced": true,
+      "target": "Reduce the adjudicator's unsupported-claim count from 14 to at most 6 by grounding the seven-language coverage claim in a citable README fact on root and replacing the compose flavor adjectives with the literal compose-file image declarations \u2014 measurable by re-running the spot-check and seeing the disagreement rate fall below 10%.",
+      "ran": true,
+      "work_orders": [
+        {
+          "scope": [
+            "apps/ios",
+            "compose/cache",
+            "compose/db",
+            "libs/core",
+            "libs/rubylib",
+            "root",
+            "services/web",
+            "services/web/src",
+            "services/web/src|services/api|http",
+            "services/worker"
+          ],
+          "lens": "Extract the README layout section's explicit language enumeration as a citable fact on root, then re-cite the language-stub components' why_matters claims against that fact instead of against same-type component counts. Repair only the independently unsupported claims. Narrow each claim until every clause is carried by this target's supplied evidence; do not add replacement detail. The replacement must not repeat any phrase the independent judge explicitly named unsupported unless you attach the exact missing evidence. For an unsupported negative or uniqueness clause (no, none, only, sole), remove that clause unless a supplied deterministic fact directly establishes it. Targets/questions: apps/ios:why_matters, compose/cache:purpose/why_matters, compose/db:purpose/why_matters, libs/core:why_matters, libs/rubylib:why_matters, root:place, services/web:next_step/purpose/why_matters, services/web/src:purpose, services/web/src|services/api|http:why, services/worker:why_matters",
+          "criteria": "The struck why_matters claims about seven-language coverage pass adjudication when re-checked, each citing the root README fact. Re-adjudication marks every named target/question supported, with no regression in the other established answers.",
+          "expected_effect": "truth: the unsupported-claim count for the scoped targets decreases to zero",
+          "budget": {
+            "max_cost_usd": 2.0,
+            "max_targets": 10
+          },
+          "issued_by": "P5",
+          "outcome": {
+            "executed": true,
+            "targets_attempted": 10,
+            "state_changes": {},
+            "payload_changes": [
+              "apps/ios",
+              "compose/cache",
+              "compose/db",
+              "libs/core",
+              "libs/rubylib",
+              "root",
+              "services/web",
+              "services/web/src",
+              "services/web/src|services/api|http",
+              "services/worker"
+            ],
+            "cost_usd": 0.139726,
+            "changed_anything": true,
+            "notes": []
+          }
+        },
+        {
+          "scope": [
+            "compose/db",
+            "compose/cache"
+          ],
+          "lens": "Read the docker-compose.yml service blocks and record the literal image field (or its absence) as a fact; rewrite the two purpose claims to state only what the block declares, dropping 'Postgres-style'/'Redis-style' unless the image field supports them.",
+          "criteria": "Both purpose claims (and the two why_matters claims) pass adjudication citing the compose file's image field or its explicit absence.",
+          "expected_effect": "truth: up to four disputed compose claims move to supported and the descriptions become stable inputs to the P4-7 parity diff.",
+          "budget": {
+            "max_cost_usd": 0.3,
+            "max_targets": 2
+          },
+          "issued_by": "P5",
+          "outcome": {
+            "executed": true,
+            "targets_attempted": 2,
+            "state_changes": {},
+            "payload_changes": [
+              "compose/cache",
+              "compose/db"
+            ],
+            "cost_usd": 0.048998,
+            "changed_anything": true,
+            "notes": []
+          }
+        }
+      ],
+      "measured_delta": {
+        "changed": 0,
+        "targets": [],
+        "state_changes": {},
+        "rung_moves": [
+          "services/web"
+        ],
+        "payload_changes": [
+          "apps/ios",
+          "compose/cache",
+          "compose/db",
+          "libs/core",
+          "libs/rubylib",
+          "root",
+          "services/web",
+          "services/web/src",
+          "services/web/src|services/api|http",
+          "services/worker"
+        ],
+        "grounded_before": 11,
+        "grounded_after": 11,
+        "cost_usd": 0.994186,
+        "adjudication_cost_usd": 0.805462,
+        "adjudication_disagreement_before": 0.225806,
+        "adjudication_disagreement_after": 0.096774
+      },
+      "perceived_delta": "Reduce the adjudicator's unsupported-claim count from 14 to at most 6 by grounding the seven-language coverage claim in a citable README fact on root and replacing the compose flavor adjectives with the literal compose-file image declarations \u2014 measurable by re-running the spot-check and seeing the disagreement rate fall below 10%.",
+      "perceived_delta_is_judgment": true,
+      "gained": true,
+      "notes": []
+    }
+  ],
+  "parser_findings": [],
+  "identity_flags": [],
+  "criteria": [
+    {
+      "criterion_id": "s1",
+      "statement": "The map names every language-bearing component the README lists (api, web, worker, core, rubylib, ios, compose db and cache) and assigns each its correct language and manifest, because each one exists solely to prove a parser path works.",
+      "verdict": "met",
+      "evidence": [
+        "Mechanical inventory lists all ten components: services/api (python/FastAPI), services/web + src (typescript), services/worker (go), libs/core (rust), libs/rubylib (ruby), apps/ios (swift), compose/db, compose/cache, root",
+        "Language-coverage tour walks each manifest (pyproject.toml, package.json, go.mod, Cargo.toml, Gemfile, Package.swift, docker-compose.yml)"
+      ],
+      "reasoning": "Every README layout entry appears with the correct language and manifest; no tree-sitter path is missing."
+    },
+    {
+      "criterion_id": "s2",
+      "statement": "The web-to-API HTTP call is represented as the system's one inter-service relationship, and no invented relationships appear alongside it.",
+      "verdict": "met",
+      "evidence": [
+        "relationships list contains exactly one edge: services/web/src \u2192 services/api, HTTP, port 8000",
+        "Edge verifier: 1 checked, 1 confirmed"
+      ],
+      "reasoning": "The one declared cross-component edge is present and independently confirmed, with no hallucinated extras."
+    },
+    {
+      "criterion_id": "s3",
+      "statement": "Every component's map entry describes it as a fixture exercising a detection path, never as a real product capability (no invented business purpose for the worker, the Rust lib, or the iOS app).",
+      "verdict": "met",
+      "evidence": [
+        "Purpose claims read as fixture framing (e.g. 'provides a minimal Rust library so the analyzer's detection path has a real fixture to parse') and all purpose claims passed adjudication",
+        "Compose flavor adjectives ('Postgres-style', 'Redis-style') were removed in round 1; descriptions now state only what the compose blocks declare"
+      ],
+      "reasoning": "No component description invents business behaviour beyond the stub source."
+    },
+    {
+      "criterion_id": "s4",
+      "statement": "Component types match their triggering signal: services/api is typed by its port bind, compose/db and compose/cache by their docker-compose declarations, services/worker by main.go, the libraries by their manifests.",
+      "verdict": "met",
+      "evidence": [
+        "services/api typed api-server with port 8000 from the FastAPI bind; compose/db typed database (5432) and compose/cache typed cache (6379) from compose blocks; worker typed module from main.go; core, rubylib, ios typed package from manifests",
+        "All mechanism and type-check claims for these components adjudicated as supported"
+      ],
+      "reasoning": "Each type traces to its intended triggering signal."
+    },
+    {
+      "criterion_id": "s5",
+      "statement": "The map states, prominently, that this is a CI test fixture rather than a deployable system, and its overview does not read like a startup's architecture.",
+      "verdict": "met",
+      "evidence": [
+        "Brief identity and the README fact open with the test-fixture framing and the P4-1 parity-snapshot role; root's purpose claim ('the README specification the whole fixture is built from') passed adjudication",
+        "Tour narration frames the zone-of-uselessness finding as fixture design, not dead code"
+      ],
+      "reasoning": "The map's top-level framing presents a CI test fixture anchoring the parity snapshot, not a product architecture."
+    },
+    {
+      "criterion_id": "u1",
+      "statement": "Every enrichment target reached a terminal contract state.",
+      "verdict": "met",
+      "evidence": [
+        "0 item(s) still in the escalate state"
+      ],
+      "reasoning": "every enrichment target reached a terminal contract state"
+    },
+    {
+      "criterion_id": "u2",
+      "statement": "Claims are grounded in evidence that checks out.",
+      "verdict": "met",
+      "evidence": [
+        "grounded fraction 100.0%",
+        "adjudication disagreement rate 9.7%"
+      ],
+      "reasoning": "100.0% of items grounded; adjudication would not stand behind 9.7% of the claims it sampled"
+    },
+    {
+      "criterion_id": "u3",
+      "statement": "What could not be established is visible as an honest gap, with a reason a reader can act on.",
+      "verdict": "met",
+      "evidence": [
+        "0 honest gap(s)"
+      ],
+      "reasoning": "all 0 honest gap(s) carry a reason a reader can act on"
+    }
+  ],
+  "determination": {
+    "verdict": "done",
+    "reasoning": "The map now serves its test-oracle purpose: an analyzer maintainer can confirm every README layout entry was detected with the right language, manifest, and type, that the single web-to-API HTTP edge exists with no invented companions, and that every description stays inside what the stub files actually contain. The census is fully grounded (11/11) and round 1 met its stated target, cutting adjudicator disagreement from 22.6% to 9.7% and unsupported claims from 14 to 6. The residual 6 unsupported claims are all the same benign citation-scope defect: why_matters sentences saying a component is listed 'alongside the other six fixture components' while citing only that component's own README line (plus one over-cautious next_step on services/web/src). The enumeration itself is established and supported on root's place claim, so no reader is misled \u2014 the evidence pointer is merely narrower than the sentence. A further round rewriting those four sentences would polish the disagreement number but not change what the map supports a reader doing, and the brief explicitly warns that extra enrichment on this fixture is fabrication risk, not value. What the map does not settle: the independent identity verifier returned 'uncertain' for three components and failed on root, and three findings were refuted \u2014 those are verifier-owned verdicts a work order cannot repair, and they are visible rather than papered over.",
+    "rounds_run": 1,
+    "rounds_recorded": 1,
+    "criteria_met": 8,
+    "criteria_unmet": 0,
+    "criteria_unknown": 0,
+    "notes": [
+      "P5's work order omitted independently unsupported claims; expanded its first-round scope to include every named failure",
+      "P5 named no executable repair despite independently unsupported claims; issued one deterministic claim-narrowing work order"
+    ]
+  },
+  "lessons": [
+    {
+      "kind": "escalation-trigger",
+      "pattern": "E3",
+      "count": 2,
+      "of_total": 11
+    },
+    {
+      "kind": "inter-tier-disagreement",
+      "pattern": "claims adjudication would not stand behind",
+      "rate": 0.0968,
+      "sampled": 62
+    }
+  ],
+  "phases": [
+    {
+      "name": "p1_orientation",
+      "status": "ok",
+      "notes": [
+        "subject brief written: 5 subject criteria plus 3 universal gates",
+        "5 idiom warning(s) declared up front, so confusion on them is expected rather than shameful"
+      ]
+    },
+    {
+      "name": "p2_ladder",
+      "status": "ok",
+      "notes": [
+        "census: grounded@opus=2, grounded@sonnet=9"
+      ]
+    },
+    {
+      "name": "p3_adjudication",
+      "status": "ok",
+      "notes": [
+        "verify identity: 4 verified, confirmed=1, uncertain=3",
+        "verify edges: 1 verified, confirmed=1",
+        "verify findings: 5 verified, refuted=3, uncertain=2",
+        "grounding spot-checks: 14 of 62 claims not supported by their own evidence (disagreement rate 22.6%)",
+        "substitution checks: 1 of 5 descriptions did not identify their own subject (20.0%)"
+      ]
+    },
+    {
+      "name": "p4_synthesis",
+      "status": "ok",
+      "notes": [
+        "3 tour(s) written, 2 lens(es) discovered, 2 work order(s) issued"
+      ]
+    },
+    {
+      "name": "p5_determination",
+      "status": "ok",
+      "notes": [
+        "P5's work order omitted independently unsupported claims; expanded its first-round scope to include every named failure",
+        "P5 named no executable repair despite independently unsupported claims; issued one deterministic claim-narrowing work order"
+      ]
+    }
+  ],
+  "adjudication": {
+    "identity": {
+      "pass": "verify-identity",
+      "mode": "full",
+      "dry_run": false,
+      "target_count": 5,
+      "done": 4,
+      "failed": [
+        "root"
+      ],
+      "verdicts": {
+        "confirmed": 1,
+        "uncertain": 3
+      },
+      "total_cost_usd": 0.12921,
+      "notes": [
+        "5 identity-bearing component(s); 5 to verify"
+      ],
+      "plan_preview": [],
+      "extra": {},
+      "outcomes": [
+        {
+          "id": "apps/ios",
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.025842,
+          "errors": []
+        },
+        {
+          "id": "compose/cache",
+          "status": "done",
+          "verdict": "uncertain",
+          "cost_usd": 0.025842,
+          "errors": []
+        },
+        {
+          "id": "compose/db",
+          "status": "done",
+          "verdict": "uncertain",
+          "cost_usd": 0.025842,
+          "errors": []
+        },
+        {
+          "id": "root",
+          "status": "failed",
+          "verdict": null,
+          "cost_usd": 0.025842,
+          "errors": [
+            "fields.port: corrected requires a value"
+          ]
+        },
+        {
+          "id": "services/api",
+          "status": "done",
+          "verdict": "uncertain",
+          "cost_usd": 0.025842,
+          "errors": []
+        }
+      ]
+    },
+    "edges": {
+      "pass": "verify-edges",
+      "mode": "full",
+      "dry_run": false,
+      "target_count": 1,
+      "done": 1,
+      "failed": [],
+      "verdicts": {
+        "confirmed": 1
+      },
+      "total_cost_usd": 0.032871,
+      "notes": [
+        "1 inferred edge(s); 1 to verify"
+      ],
+      "plan_preview": [],
+      "extra": {},
+      "outcomes": [
+        {
+          "id": "services/web/src|services/api|http",
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.032871,
+          "errors": []
+        }
+      ]
+    },
+    "findings": {
+      "pass": "verify-findings",
+      "mode": "full",
+      "dry_run": false,
+      "target_count": 5,
+      "done": 5,
+      "failed": [],
+      "verdicts": {
+        "uncertain": 2,
+        "refuted": 3
+      },
+      "total_cost_usd": 0.058841,
+      "notes": [
+        "5 finding(s); 5 to verify"
+      ],
+      "plan_preview": [],
+      "extra": {},
+      "outcomes": [
+        {
+          "id": "finding:unreferenced:apps/ios",
+          "status": "done",
+          "verdict": "uncertain",
+          "cost_usd": 0.011768,
+          "errors": []
+        },
+        {
+          "id": "finding:unreferenced:libs/core",
+          "status": "done",
+          "verdict": "refuted",
+          "cost_usd": 0.011768,
+          "errors": []
+        },
+        {
+          "id": "finding:unreferenced:libs/rubylib",
+          "status": "done",
+          "verdict": "refuted",
+          "cost_usd": 0.011768,
+          "errors": []
+        },
+        {
+          "id": "finding:unreferenced:services/web/src",
+          "status": "done",
+          "verdict": "uncertain",
+          "cost_usd": 0.011768,
+          "errors": []
+        },
+        {
+          "id": "finding:unreferenced:services/worker",
+          "status": "done",
+          "verdict": "refuted",
+          "cost_usd": 0.011768,
+          "errors": []
+        }
+      ]
+    },
+    "spot_checks": [
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "data_handled",
+        "claim": "No data entities are modeled despite the README noting a Postgres driver.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "mechanism",
+        "claim": "Holds two files, server.py and pyproject.toml, totaling 49 lines; the FastAPI route GET /users/{user_id} is detected in server.py via the read_user symbol.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "next_step",
+        "claim": "Confirm the read_user symbol and its GET /users/{user_id} route were correctly attributed to FastAPI.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "place",
+        "claim": "Receives the fixture's one declared relationship, an inbound HTTP call from services/web/src.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "purpose",
+        "claim": "Provides a minimal FastAPI service so the analyzer detects a port-bound API server and its endpoint capability.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "why_matters",
+        "claim": "It is the only component with an inbound edge and a detected capability, making it the anchor for testing relationship and API-capability detection together.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "data_handled",
+        "claim": "No data entities are defined for this component.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "mechanism",
+        "claim": "Consists of a Package.swift manifest and a single ContentView.swift source file totaling 40 lines.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "next_step",
+        "claim": "Check that the parser correctly typed this as a package with language swift and framework SwiftUI.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "place",
+        "claim": "Stands alone with no inbound or outbound edges to other fixture components.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "purpose",
+        "claim": "Provides a minimal Swift package so the analyzer's Swift/Package.swift detection path has a real fixture to parse.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "why_matters",
+        "claim": "Its presence matches the root README's layout, which lists apps/ios as a Swift package alongside services/api, services/web, services/worker, libs/core, libs/rubylib, and docker-compose infrastructure.",
+        "supported": false,
+        "confidence": "high",
+        "reason": "The cited README excerpt only lists apps/ios; it does not show services/api, services/web, services/worker, libs/core, libs/rubylib, or docker-compose infrastructure."
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/cache",
+        "question": "data_handled",
+        "claim": "No data entities are modeled; this is a service declaration only.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/cache",
+        "question": "mechanism",
+        "claim": "Detected purely from a docker-compose service block named 'cache' binding port 6379, with no source files.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/cache",
+        "question": "next_step",
+        "claim": "Verify the port value 6379 was extracted correctly from the compose file.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/cache",
+        "question": "place",
+        "claim": "Isolated in the graph with no inbound or outbound edges.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/cache",
+        "question": "purpose",
+        "claim": "Represents the cache service declared in docker-compose.yml; the service block has no image field cited among facts, so no image-based identity (e.g. Redis) is established.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/cache",
+        "question": "why_matters",
+        "claim": "Its presence matches the root README's mention of docker-compose.yml infrastructure covering db and cache services.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/db",
+        "question": "data_handled",
+        "claim": "No data entities are modeled; this is a service declaration only.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/db",
+        "question": "mechanism",
+        "claim": "Detected purely from a docker-compose service block named 'db' binding port 5432, with no source files.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/db",
+        "question": "next_step",
+        "claim": "Verify the port value 5432 was extracted correctly from the compose file.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/db",
+        "question": "place",
+        "claim": "Isolated in the graph with no inbound or outbound edges.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/db",
+        "question": "purpose",
+        "claim": "Represents the database service declared in docker-compose.yml; the service block has no image field cited among facts, so no image-based identity (e.g. Postgres) is established.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "compose/db",
+        "question": "why_matters",
+        "claim": "Its presence matches the root README's mention of docker-compose.yml infrastructure, without further parser-correctness claim.",
+        "supported": false,
+        "confidence": "high",
+        "reason": "The cited README excerpt says nothing about docker-compose.yml or infrastructure, so it cannot support a claimed match."
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/core",
+        "question": "data_handled",
+        "claim": "No data entities are defined for this component.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/core",
+        "question": "mechanism",
+        "claim": "Consists of a Cargo.toml manifest and a single lib.rs source file totaling 30 lines.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/core",
+        "question": "next_step",
+        "claim": "Check that the parser correctly typed this as a package with language rust.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/core",
+        "question": "place",
+        "claim": "Stands alone with no inbound or outbound edges to other fixture components.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/core",
+        "question": "purpose",
+        "claim": "Provides a minimal Rust library so the analyzer's Cargo.toml/Rust detection path has a real fixture to parse.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/core",
+        "question": "why_matters",
+        "claim": "Its presence matches the root README layout, which lists libs/core as a Rust library alongside the other six fixture components.",
+        "supported": false,
+        "confidence": "high",
+        "reason": "The excerpt confirms libs/core is listed as a Rust library but says nothing about six other fixture components."
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/rubylib",
+        "question": "data_handled",
+        "claim": "No data entities are defined for this component.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/rubylib",
+        "question": "mechanism",
+        "claim": "Consists of a Gemfile manifest and a single parser.rb source file totaling 21 lines.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/rubylib",
+        "question": "next_step",
+        "claim": "Check that the parser correctly typed this as a package with language ruby.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/rubylib",
+        "question": "place",
+        "claim": "Stands alone with no inbound or outbound edges to other fixture components.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/rubylib",
+        "question": "purpose",
+        "claim": "Provides a minimal Ruby package so the analyzer's Gemfile/Ruby detection path has a real fixture to parse.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "libs/rubylib",
+        "question": "why_matters",
+        "claim": "Its presence matches the root README layout, which lists libs/rubylib as a Ruby package alongside the other six fixture components.",
+        "supported": false,
+        "confidence": "high",
+        "reason": "The README excerpt shows only the libs/rubylib line, so it does not support the claim that six other fixture components are listed alongside it."
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "data_handled",
+        "claim": "No data entities are modeled at the root; it only declares infrastructure services.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "mechanism",
+        "claim": "Consists of README.md and docker-compose.yml, with the compose file declaring api, db, and cache services and their ports.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "next_step",
+        "claim": "Compare the README's declared layout against the detected components to confirm full coverage.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "place",
+        "claim": "Records no direct inbound or outbound edges itself, and its README layout list enumerates every other fixture component (services/api, services/web, services/worker, libs/core, libs/rubylib, apps/ios, docker-compose infrastructure).",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "purpose",
+        "claim": "Serves as the top-level directory declaring the docker-compose infrastructure and the README specification the whole fixture is built from.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "why_matters",
+        "claim": "Its README layout list is the fixture's own specification, so drift between this component and the rest of the tree signals a real detection regression.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web",
+        "question": "data_handled",
+        "claim": "No data entities are modeled for this package.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web",
+        "question": "mechanism",
+        "claim": "Holds one file, package.json, and one child component, services/web/src.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web",
+        "question": "next_step",
+        "claim": "Check that the parser correctly nests services/web/src as a child of services/web.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web",
+        "question": "place",
+        "claim": "Has no direct edges of its own; the fixture's sole HTTP relationship is carried by its child services/web/src.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web",
+        "question": "purpose",
+        "claim": "Represents the web client package declared by package.json, matching the root README layout's description of services/web as the TypeScript + JavaScript web client that calls the API over HTTP.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web",
+        "question": "why_matters",
+        "claim": "Has no direct inbound or outbound edges itself; the fixture's HTTP relationship is carried by its child services/web/src, matching the README layout's description of services/web calling the API over HTTP.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web/src",
+        "question": "data_handled",
+        "claim": "No data entities are modeled for this module.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web/src",
+        "question": "mechanism",
+        "claim": "Two files, client.ts and format.js, total 44 lines and produce one outbound HTTP edge to services/api.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web/src",
+        "question": "next_step",
+        "claim": "Verify the HTTP edge target resolves to services/api rather than to services/web.",
+        "supported": false,
+        "confidence": "medium",
+        "reason": "The cited edge fact already shows the target as services/api, so the evidence gives no basis for suspecting it resolves to services/web instead."
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web/src",
+        "question": "place",
+        "claim": "Connects to services/api via the fixture's single declared HTTP relationship.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web/src",
+        "question": "purpose",
+        "claim": "Implements the client code that calls the API over HTTP, matching the root README layout's description of services/web calling the API over HTTP.",
+        "supported": true,
+        "confidence": "low",
+        "reason": "README excerpt describes the parent services/web rather than this src module, and the other citation is invalid."
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/web/src",
+        "question": "why_matters",
+        "claim": "It is the source of the fixture's only cross-component edge, making it essential for validating relationship detection.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/worker",
+        "question": "data_handled",
+        "claim": "No data entities are defined for this component.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/worker",
+        "question": "mechanism",
+        "claim": "Consists of a single main.go file totaling 21 lines with no other files.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/worker",
+        "question": "next_step",
+        "claim": "Check that the parser correctly typed this as a module with language go.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/worker",
+        "question": "place",
+        "claim": "Stands alone with no inbound or outbound edges to other fixture components.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/worker",
+        "question": "purpose",
+        "claim": "Provides a minimal Go module so the analyzer's go.mod/Go detection path has a real fixture to parse.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "services/worker",
+        "question": "why_matters",
+        "claim": "Its presence matches the root README layout, which lists services/worker as a Go module alongside the other six fixture components.",
+        "supported": false,
+        "confidence": "medium",
+        "reason": "The excerpt confirms services/worker is listed as a Go module but does not show the other six fixture components or the total count."
+      },
+      {
+        "target_kind": "relationship",
+        "target_id": "services/web/src|services/api|http",
+        "question": "flow",
+        "claim": "The TypeScript web client issues an HTTP call to the FastAPI service at api:8000.",
+        "supported": true,
+        "confidence": "medium",
+        "reason": "Cited client.ts line is the plausible HTTP call site for the edge, though the api:8000 host detail rests on that single line."
+      },
+      {
+        "target_kind": "relationship",
+        "target_id": "services/web/src|services/api|http",
+        "question": "why",
+        "claim": "The root README's layout declares that services/web calls the API over HTTP, matching this edge from services/web/src to services/api.",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      }
+    ],
+    "substitution_checks": [
+      {
+        "target_id": "services/api",
+        "distinctive": true,
+        "chose": "services/api",
+        "confirmed_failure": false,
+        "reason": "Only candidate that is an api-server with FastAPI endpoints and an inbound HTTP edge from services/web/src."
+      },
+      {
+        "target_id": "apps/ios",
+        "distinctive": true,
+        "chose": "apps/ios",
+        "confirmed_failure": false,
+        "reason": "Only candidate that is the Swift package fixture with Package.swift and ContentView.swift at apps/ios."
+      },
+      {
+        "target_id": "compose/cache",
+        "distinctive": true,
+        "chose": "compose/cache",
+        "confirmed_failure": false,
+        "reason": "The description names a docker-compose service 'cache' on port 6379, matching the cache-typed candidate uniquely."
+      },
+      {
+        "target_id": "compose/db",
+        "distinctive": true,
+        "chose": "compose/db",
+        "confirmed_failure": false,
+        "reason": "The description names a docker-compose service 'db' on port 5432 typed as a database, matching compose/db and not the cache or package candidates."
+      },
+      {
+        "target_id": "libs/core",
+        "distinctive": true,
+        "chose": "libs/core",
+        "confirmed_failure": false,
+        "reason": "The description explicitly names libs/core as the Rust library fixture with Cargo.toml and lib.rs, matching the polyglot-core package."
+      },
+      {
+        "target_id": "libs/rubylib",
+        "distinctive": true,
+        "chose": "libs/rubylib",
+        "confirmed_failure": false,
+        "reason": "The description names the Ruby Gemfile fixture at libs/rubylib explicitly."
+      },
+      {
+        "target_id": "root",
+        "distinctive": true,
+        "chose": "root",
+        "confirmed_failure": false,
+        "reason": "Only the root component holds README.md and docker-compose.yml and enumerates every other fixture component."
+      },
+      {
+        "target_id": "services/web",
+        "distinctive": true,
+        "chose": "services/web",
+        "confirmed_failure": false,
+        "reason": "Only this candidate is the web client package holding package.json with a services/web/src child."
+      },
+      {
+        "target_id": "services/web/src",
+        "distinctive": true,
+        "chose": "services/web/src",
+        "confirmed_failure": false,
+        "reason": "Only candidate under services/web, which the description names as the HTTP client calling services/api."
+      },
+      {
+        "target_id": "services/worker",
+        "distinctive": true,
+        "chose": "services/worker",
+        "confirmed_failure": false,
+        "reason": "The description explicitly names services/worker as the Go module fixture, and no other candidate is a Go module."
+      }
+    ],
+    "checked": 62,
+    "unsupported": 6,
+    "disagreement_rate": 0.0968,
+    "substitution_failure_rate": 0.0,
+    "notes": [
+      "verify identity: 4 verified, confirmed=1, uncertain=3",
+      "verify edges: 1 verified, confirmed=1",
+      "verify findings: 5 verified, refuted=3, uncertain=2",
+      "grounding spot-checks: 14 of 62 claims not supported by their own evidence (disagreement rate 22.6%)",
+      "substitution checks: 1 of 5 descriptions did not identify their own subject (20.0%)",
+      "grounding spot-checks: 6 of 62 claims not supported by their own evidence (disagreement rate 9.7%)",
+      "substitution checks: 0 of 10 descriptions did not identify their own subject (0.0%)"
+    ]
+  },
+  "synthesis": {
+    "tours": [
+      {
+        "id": "one-declared-edge",
+        "title": "The fixture's only relationship",
+        "description": "Follows the single web-to-API HTTP call end to end, so a maintainer can confirm the one cross-component edge the fixture declares was detected and nothing else was invented.",
+        "steps": [
+          {
+            "target": "root",
+            "title": "The spec is the README",
+            "narration": "Start at the fixture root: the README's layout list is the specification everything downstream is checked against, including the statement that the web client calls the API over HTTP. Read it first so every later stop is a verification, not a discovery.",
+            "evidence": {
+              "file": "README.md",
+              "line": 1
+            }
+          },
+          {
+            "target": "services/web",
+            "title": "The package that hosts the caller",
+            "narration": "The web client package is declared by package.json and carries no edges of its own; the HTTP relationship lives one level down in its src child. Knowing the parent is edge-free tells you the analyzer attributed the call to the right granularity.",
+            "evidence": {
+              "file": "services/web/package.json",
+              "line": 1
+            }
+          },
+          {
+            "target": "services/web/src",
+            "title": "Where the call originates",
+            "narration": "client.ts issues the outbound HTTP request. This module is the source of the map's single cross-component edge, and it is deliberately consumed by nothing \u2014 the mechanical 'zone of uselessness' finding here is the fixture's design, not dead code.",
+            "evidence": {
+              "file": "services/web/src/client.ts",
+              "line": 1
+            }
+          },
+          {
+            "target": "services/api",
+            "title": "Where the call lands",
+            "narration": "server.py binds a port and exposes GET /users/{user_id} via read_user, which is why the analyzer typed this as an api-server. It is the only component with an inbound edge; if the map shows any relationship other than this one, that is a parity-snapshot diff to explain.",
+            "evidence": {
+              "file": "services/api/api/server.py",
+              "line": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "seven-language-roll-call",
+        "title": "Language coverage roll call",
+        "description": "Walks every language-bearing component in manifest order so a maintainer can verify each tree-sitter integration produced a correctly typed, correctly attributed component.",
+        "steps": [
+          {
+            "target": "services/api",
+            "title": "Python via pyproject.toml",
+            "narration": "First language: Python, detected from pyproject.toml plus the port-binding server stub. Its type comes from the port bind, not the manifest, so it doubles as the api-server classifier check.",
+            "evidence": {
+              "file": "services/api/pyproject.toml",
+              "line": 1
+            }
+          },
+          {
+            "target": "services/web/src",
+            "title": "TypeScript and JavaScript together",
+            "narration": "client.ts and format.js sit in one module, so this stop checks both the TypeScript and JavaScript parsers in a single component. Language attribution should read typescript for the module.",
+            "evidence": {
+              "file": "services/web/src/format.js",
+              "line": 1
+            }
+          },
+          {
+            "target": "services/worker",
+            "title": "Go via main.go",
+            "narration": "A single 21-line main.go with no edges. Its whole job is to give the Go detection path something real to parse; presence with language=go is the pass condition.",
+            "evidence": {
+              "file": "services/worker/main.go",
+              "line": 1
+            }
+          },
+          {
+            "target": "libs/core",
+            "title": "Rust via Cargo.toml",
+            "narration": "Cargo.toml plus lib.rs exercise Rust manifest detection. The type should be package, from the manifest kind, not a service \u2014 a mistype here means a classifier crossed wires.",
+            "evidence": {
+              "file": "libs/core/Cargo.toml",
+              "line": 1
+            }
+          },
+          {
+            "target": "libs/rubylib",
+            "title": "Ruby via Gemfile",
+            "narration": "parser.rb under a Gemfile exercises the Ruby path. Same check as the Rust stop: present, language=ruby, typed as a package.",
+            "evidence": {
+              "file": "libs/rubylib/lib/parser.rb",
+              "line": 1
+            }
+          },
+          {
+            "target": "apps/ios",
+            "title": "Swift via Package.swift",
+            "narration": "The last code language: a Swift package with a Package.swift manifest and one source file. If this component is missing, a tree-sitter integration silently failed \u2014 the exact regression the fixture exists to catch.",
+            "evidence": {
+              "file": "apps/ios/Package.swift",
+              "line": 1
+            }
+          },
+          {
+            "target": "root",
+            "title": "Config formats close the loop",
+            "narration": "Back at root, docker-compose.yml and the Markdown README cover the config formats. With the two compose-derived services counted, the roll call is complete: ten components, every README layout entry accounted for.",
+            "evidence": {
+              "file": "docker-compose.yml",
+              "line": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "components-from-config-alone",
+        "title": "Components with no source files",
+        "description": "Shows how the analyzer manufactures typed components from a compose file alone, which is the detection path a code-centric reader is most likely to overlook.",
+        "steps": [
+          {
+            "target": "root",
+            "title": "The compose file as source of truth",
+            "narration": "docker-compose.yml declares api, db, and cache services with their ports. Note the idiom warning: root itself is listed as an entry point only because the compose file's port declarations get attributed to the root directory \u2014 there is no server at the repo root.",
+            "evidence": {
+              "file": "docker-compose.yml",
+              "line": 1
+            }
+          },
+          {
+            "target": "compose/db",
+            "title": "A database from a service block",
+            "narration": "This component has an empty file list: it exists purely because a compose service block named 'db' binds port 5432. Its type, database, was assigned with no code to read \u2014 the compose parser working alone.",
+            "evidence": {
+              "file": "docker-compose.yml",
+              "line": 1
+            }
+          },
+          {
+            "target": "compose/cache",
+            "title": "A cache, distinguished by signal",
+            "narration": "Same mechanism, different outcome: the 'cache' block binding port 6379 yields a component typed cache rather than database. Seeing the two side by side is the point \u2014 the same parser produced two distinct types from adjacent declarations.",
+            "evidence": {
+              "file": "docker-compose.yml",
+              "line": 1
+            }
+          }
+        ]
+      }
+    ],
+    "lenses": [
+      {
+        "name": "The seven-languages claim is asserted everywhere and grounded nowhere",
+        "observation": "Five separate component summaries justify their existence by appeal to 'the seven target languages', and adjudication struck every one of them for the same reason: no cited evidence establishes that a seven-language set exists. The claim is true \u2014 the brief and README say so \u2014 but the enrichment never captured the README's language list as a citable fact, so every per-component appeal to it failed independently.",
+        "why_it_matters": "For an analyzer maintainer, the coverage claim is the fixture's whole point; a map that cannot ground it forces them back to the README. One shared fact would rescue five disputed claims at once, which is cheaper than re-enriching any single component.",
+        "confidence": "high",
+        "work_order": {
+          "scope": [
+            "root",
+            "services/worker",
+            "libs/core",
+            "libs/rubylib",
+            "apps/ios"
+          ],
+          "lens": "Extract the README layout section's explicit language enumeration as a fact on root, then re-cite the four language-stub components' why_matters against it instead of against same-type component counts.",
+          "criteria": "The four struck why_matters claims about language coverage pass adjudication when re-checked, each citing the root README fact.",
+          "expected_effect": "truth: adjudicator disagreement rate drops by four component-level unsupported claims; grounded fraction rises correspondingly.",
+          "budget": {
+            "max_cost_usd": 0.5,
+            "max_targets": 5
+          }
+        }
+      },
+      {
+        "name": "Compose components carry image-flavor claims no one can check",
+        "observation": "compose/db and compose/cache are described as 'Postgres-style' and 'Redis-style', and adjudication rejected both because only the ports (5432, 6379) and service names were cited. The port numbers are conventional tells, but the map never states whether the compose file actually names an image \u2014 so a reader cannot tell if the flavor claim is read from the file or inferred from the port.",
+        "why_it_matters": "The parity snapshot diffs on these components; a flavor description that drifts between 'Redis-style' and 'cache on 6379' across runs is a spurious diff the P4-7 cutover would have to explain.",
+        "confidence": "medium",
+        "work_order": {
+          "scope": [
+            "compose/db",
+            "compose/cache"
+          ],
+          "lens": "Read the docker-compose.yml service blocks and record the literal image field (or its absence) as a fact; rewrite the two purpose claims to state only what the block declares.",
+          "criteria": "Both purpose claims pass adjudication citing the compose file's image field or explicitly noting no image is named, with no flavor adjective unsupported by the file.",
+          "expected_effect": "truth: two disputed purpose claims move to supported, and the descriptions become stable inputs to the parity diff.",
+          "budget": {
+            "max_cost_usd": 0.3,
+            "max_targets": 2
+          }
+        }
+      }
+    ],
+    "work_orders": [
+      {
+        "scope": [
+          "root",
+          "services/worker",
+          "libs/core",
+          "libs/rubylib",
+          "apps/ios"
+        ],
+        "lens": "Extract the README layout section's explicit language enumeration as a fact on root, then re-cite the four language-stub components' why_matters against it instead of against same-type component counts.",
+        "criteria": "The four struck why_matters claims about language coverage pass adjudication when re-checked, each citing the root README fact.",
+        "expected_effect": "truth: adjudicator disagreement rate drops by four component-level unsupported claims; grounded fraction rises correspondingly.",
+        "budget": {
+          "max_cost_usd": 0.5,
+          "max_targets": 5
+        },
+        "issued_by": "P4",
+        "outcome": null
+      },
+      {
+        "scope": [
+          "compose/db",
+          "compose/cache"
+        ],
+        "lens": "Read the docker-compose.yml service blocks and record the literal image field (or its absence) as a fact; rewrite the two purpose claims to state only what the block declares.",
+        "criteria": "Both purpose claims pass adjudication citing the compose file's image field or explicitly noting no image is named, with no flavor adjective unsupported by the file.",
+        "expected_effect": "truth: two disputed purpose claims move to supported, and the descriptions become stable inputs to the parity diff.",
+        "budget": {
+          "max_cost_usd": 0.3,
+          "max_targets": 2
+        },
+        "issued_by": "P4",
+        "outcome": null
+      }
+    ],
+    "rejected_orders": [],
+    "rejected_tours": [],
+    "narrative_written": true,
+    "notes": [
+      "3 tour(s) written, 2 lens(es) discovered, 2 work order(s) issued"
+    ]
+  },
+  "accounting": {
+    "by_model": [
+      {
+        "model": "anthropic-claude-cli:opus",
+        "invocations": 39,
+        "targets": 48,
+        "tokens_in": 146707,
+        "tokens_cached": 162293,
+        "tokens_cache_write": 146629,
+        "tokens_out": 10636,
+        "response_bytes": 22420,
+        "output_budget_violations": 0,
+        "cost_usd": 1.897117,
+        "wall_seconds": 190.9,
+        "retries": 0,
+        "failures": 0,
+        "phases": [
+          "p2_ladder:opus",
+          "p3_adjudication:grounding-spot-check",
+          "p3_adjudication:substitution-check",
+          "p3_adjudication:verify-edges",
+          "p3_adjudication:verify-findings",
+          "p3_adjudication:verify-identity"
+        ],
+        "tokens_total": 319636,
+        "token_share": 0.6507,
+        "cost_share": 0.5017
+      },
+      {
+        "model": "anthropic-claude-cli:fable",
+        "invocations": 5,
+        "targets": 4,
+        "tokens_in": 44677,
+        "tokens_cached": 30518,
+        "tokens_cache_write": 44667,
+        "tokens_out": 10832,
+        "response_bytes": 29424,
+        "output_budget_violations": 0,
+        "cost_usd": 1.487658,
+        "wall_seconds": 150.4,
+        "retries": 0,
+        "failures": 0,
+        "phases": [
+          "p1_orientation",
+          "p4_synthesis:narrative",
+          "p4_synthesis:spine",
+          "p5_determination"
+        ],
+        "tokens_total": 86027,
+        "token_share": 0.1751,
+        "cost_share": 0.3935
+      },
+      {
+        "model": "anthropic-claude-cli:sonnet",
+        "invocations": 4,
+        "targets": 23,
+        "tokens_in": 46711,
+        "tokens_cached": 33430,
+        "tokens_cache_write": 46703,
+        "tokens_out": 5444,
+        "response_bytes": 14414,
+        "output_budget_violations": 0,
+        "cost_usd": 0.396256,
+        "wall_seconds": 50.9,
+        "retries": 0,
+        "failures": 0,
+        "phases": [
+          "p2_ladder:2a",
+          "work_order:P5"
+        ],
+        "tokens_total": 85585,
+        "token_share": 0.1742,
+        "cost_share": 0.1048
+      }
+    ],
+    "totals": {
+      "invocations": 48,
+      "tokens_total": 491248,
+      "tokens_in": 238095,
+      "tokens_cached": 226241,
+      "tokens_cache_write": 237999,
+      "tokens_out": 26912,
+      "response_bytes": 66258,
+      "output_budget_violations": 0,
+      "cost_usd": 3.781031,
+      "wall_seconds": 392.2
+    },
+    "output_efficiency": {
+      "billed_output_tokens": 26912,
+      "delivered_response_bytes": 66258,
+      "compact_budgeted_calls": 48,
+      "compact_budget_violations": 0,
+      "note": "Delivered JSON is schema- and byte-bounded. Billed output also includes hidden reasoning; the Claude CLI exposes no per-call max_tokens below its provider ceiling, so billed-token reduction is measured and gated against the baseline, not falsely called a transport guarantee."
+    },
+    "cache_efficiency": {
+      "writes": 237999,
+      "reads": 226241,
+      "read_write_ratio": 0.9506,
+      "prefix_hashes": [
+        "0632fffc1d6edd8174a86a500a0b58cc3831fa4969f214babfc2fc5d32cc87b4",
+        "40191ffa04903ddcb672631f9fd764ca3d6003dc80587d17e2d16c34c80bac23",
+        "c48e3db636afe5c789bd205d8f7059d286268f8ff8ce566f44ca4a88ba28a5ba",
+        "d376855dafb86f640318b414d736eea8c53424adc208d7b84ba8e487ffa487a1",
+        "de692b608f4a6af90188a2a328292cbe46bb14f49445bce3ea4612217e86222f"
+      ],
+      "mechanism_verified": true,
+      "budgeted_as_saving": true,
+      "note": "The F-9 live probe verified that the stable appended prefix is cache-read only when dynamic system sections are excluded. This report books no hypothetical saving: only cache reads measured in this run count."
+    },
+    "account_delta": null,
+    "calibration_note": "To turn this into a share of the weekly allowance: take a /usage reading immediately before the run, keep hands off the account for its duration, take a second reading immediately after, and record the difference with scripts/usage-budget.py calibrate. Nothing else measures a subscription; the dollar figures here are API-equivalent prices for work that was never billed at API rates."
+  },
+  "escalation_economics": {
+    "climbed": 2,
+    "escalated_cost_usd": 0.115061,
+    "escalated_tokens": 10949,
+    "cost_per_climb_usd": 0.05753,
+    "by_trigger": [
+      {
+        "trigger": "E3",
+        "meaning": "contradiction: evidence contradicts a deterministic fact or another claim",
+        "items": 2,
+        "questions": [
+          {
+            "question": "mechanism",
+            "items": 2
+          }
+        ],
+        "class": "context",
+        "class_basis": "lacked:0/trigger:2"
+      }
+    ],
+    "deterministic_opportunities": []
+  },
+  "cost_note": "Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent.",
+  "quality": {
+    "status": "incomplete",
+    "complete": false,
+    "issues": [
+      "enrichment audit verdict is 'fail'"
+    ]
+  },
+  "audit": {
+    "run_dir": "/private/tmp/enrichment-postfix-polyglot16.JuAUR6/run",
+    "spend_usd": 3.781,
+    "calls": 48,
+    "calls_failed": 0,
+    "tokens": {
+      "fresh_in": 96,
+      "cache_write": 237999,
+      "cache_read": 226241,
+      "out": 26912,
+      "ladder_out": 4035,
+      "output_share_of_billed": 0.1016,
+      "cache_hit_share": 0.4872
+    },
+    "work": {
+      "planned_targets": 11,
+      "answered": 11,
+      "units_done": 3,
+      "bulk_attempted_targets": 11,
+      "bulk_unique_targets": 11,
+      "usd_per_target": 0.34373,
+      "out_tokens_per_target": 2446.5
+    },
+    "output_gate": {
+      "baseline_output_tokens": null,
+      "target_ratio": null,
+      "allowed_output_tokens": null,
+      "compact_calls": 48,
+      "compact_budget_violations": 0,
+      "non_warm_cache_misses": 0,
+      "prefix_read_shortfalls": 1,
+      "stable_prefix_fragmentations": 0,
+      "bulk_tokens_per_target": 349.3,
+      "ladder_tokens_per_unique_target": 366.8,
+      "escalation_tokens_per_attempt": 96.5,
+      "escalation_attempts": 2,
+      "escalation_release_sample_min": 5
+    },
+    "by_rung": {
+      "2a": {
+        "calls": 2,
+        "cost_usd": 0.2075,
+        "targets": 11,
+        "out_tokens": 3842,
+        "usd_per_target": 0.01887
+      },
+      "P5": {
+        "calls": 2,
+        "cost_usd": 0.1887,
+        "targets": 12,
+        "out_tokens": 1602,
+        "usd_per_target": 0.01573
+      },
+      "grounding-spot-check": {
+        "calls": 21,
+        "cost_usd": 1.1942,
+        "targets": 21,
+        "out_tokens": 5739,
+        "usd_per_target": 0.05687
+      },
+      "narrative": {
+        "calls": 1,
+        "cost_usd": 0.0914,
+        "targets": 1,
+        "out_tokens": 794,
+        "usd_per_target": 0.0914
+      },
+      "opus": {
+        "calls": 1,
+        "cost_usd": 0.1151,
+        "targets": 2,
+        "out_tokens": 193,
+        "usd_per_target": 0.05753
+      },
+      "p1_orientation": {
+        "calls": 1,
+        "cost_usd": 0.1188,
+        "targets": 1,
+        "out_tokens": 2125,
+        "usd_per_target": 0.11882
+      },
+      "p5_determination": {
+        "calls": 2,
+        "cost_usd": 0.8942,
+        "targets": 2,
+        "out_tokens": 4685,
+        "usd_per_target": 0.4471
+      },
+      "spine": {
+        "calls": 1,
+        "cost_usd": 0.3832,
+        "targets": 0,
+        "out_tokens": 3228,
+        "usd_per_target": null
+      },
+      "substitution-check": {
+        "calls": 14,
+        "cost_usd": 0.3669,
+        "targets": 14,
+        "out_tokens": 938,
+        "usd_per_target": 0.02621
+      },
+      "verify-edges": {
+        "calls": 1,
+        "cost_usd": 0.0329,
+        "targets": 1,
+        "out_tokens": 88,
+        "usd_per_target": 0.03287
+      },
+      "verify-findings": {
+        "calls": 1,
+        "cost_usd": 0.0588,
+        "targets": 5,
+        "out_tokens": 469,
+        "usd_per_target": 0.01177
+      },
+      "verify-identity": {
+        "calls": 1,
+        "cost_usd": 0.1292,
+        "targets": 5,
+        "out_tokens": 3209,
+        "usd_per_target": 0.02584
+      }
+    },
+    "findings": [
+      {
+        "level": "fail",
+        "check": "cache-boundary",
+        "detail": "1 non-warm cacheable call(s) read fewer cached tokens than their own prefix; the stable block was rewritten, not reused"
+      }
+    ],
+    "verdict": "fail"
+  }
+}

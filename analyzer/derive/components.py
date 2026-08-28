@@ -74,6 +74,71 @@ def discover_components(d: Deriver) -> None:
                     d._component_map[rel] = comp
                 break
 
+    # Docker Compose services are architectural units even when they have no
+    # source directory of their own. The config parser already extracted their
+    # names and ports; collapsing db/cache into the repository root throws away
+    # deterministic information and asks enrichment prose to compensate for a
+    # component the map cannot address. Materialize only services that do not
+    # already correspond to a discovered source component (for example the
+    # fixture's ``api`` service is already ``services/api``).
+    existing_service_names = {
+        name
+        for comp in d._component_map.values()
+        for name in (
+            comp.name.lower(),
+            os.path.basename(comp.path).lower() if comp.path else "",
+            comp.id.rsplit("/", 1)[-1].lower(),
+        )
+        if name
+    }
+    compose_components: list[tuple[str, Component]] = []
+    for rel, owner in list(d._component_map.items()):
+        for config in owner.config_files:
+            if config.get("type") != "docker-compose":
+                continue
+            ports = {
+                str(item.get("service") or ""): item.get("host")
+                for item in (config.get("ports") or [])
+                if isinstance(item, dict)
+            }
+            for service in config.get("services") or []:
+                service = str(service).strip()
+                if not service or service.lower() in existing_service_names:
+                    continue
+                base = os.path.join(rel, "compose") if rel else "compose"
+                path = os.path.join(base, service)
+                if path in d._component_map:
+                    continue
+                lowered = service.lower()
+                if lowered in {
+                    "db", "database", "postgres", "postgresql", "mysql",
+                    "mariadb", "mongodb", "mongo",
+                }:
+                    comp_type = "database"
+                elif lowered in {"cache", "redis", "memcached"}:
+                    comp_type = "cache"
+                else:
+                    comp_type = "infrastructure"
+                port = ports.get(service)
+                compose_components.append((path, Component(
+                    id=d._make_component_id(path),
+                    name=service,
+                    type=comp_type,
+                    path=path,
+                    description=(
+                        f"Docker Compose service '{service}' declared in "
+                        f"{config.get('path') or 'compose config'}"
+                    ),
+                    port=port if isinstance(port, int) else None,
+                    config_files=[{
+                        "type": "docker-compose-service",
+                        "path": config.get("path"),
+                        "service_name": service,
+                    }],
+                )))
+                existing_service_names.add(lowered)
+    d._component_map.update(compose_components)
+
     # Pass 2: intermediate module directories with >= 2 code files.
     for rel in dirs:
         if not rel:

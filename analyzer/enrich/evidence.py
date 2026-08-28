@@ -37,13 +37,45 @@ from typing import Any, Optional
 
 __all__ = [
     "EVIDENCE_KINDS",
+    "CITABLE_FACTS",
     "EvidenceCheck",
     "EvidenceValidator",
     "normalize_path",
 ]
 
 # The evidence kinds a tier may cite (build plan, canonical data shapes).
-EVIDENCE_KINDS = ("file", "symbol", "edge", "manifest", "doc")
+# "fact" cites the analyzer's OWN fact block for a component: the counts and
+# attributes the deterministic pass produced and the prompt hands over. Without
+# it a claim taken straight from those facts is unciteable, because a file or an
+# edge cannot carry a statement about seventeen of them. On the 2026-08-25
+# unamentis-ios cycle that gap produced a 64.1% grounding disagreement rate
+# whose largest cause was TRUE claims with no legal way to cite their source,
+# and it drove ungrounded (E2) escalations to a more expensive tier that could
+# not fix them either.
+EVIDENCE_KINDS = ("file", "symbol", "edge", "manifest", "doc", "fact")
+
+# The analyzer-derived fields a claim may cite. An allow-list, so "fact"
+# evidence cannot become a free-text escape hatch that grounds anything.
+CITABLE_FACTS = (
+    # Every name here MUST be a key StoreFacts.component_facts() actually
+    # emits; the vocabulary conformance test pins that. The original list
+    # said "line_count" while the fact block emits "lines", so a model
+    # following the prompt failed validation mechanically: the v2 build
+    # measured 8 terminal failures in exactly this class, and the
+    # cross-session review caught the mismatch surviving into this branch.
+    "file_count", "lines", "inbound_edges", "outbound_edges",
+    "language", "framework", "port", "type", "capabilities",
+    "data_entities", "external_services", "action_count", "ai_surface",
+    "has_testing_data", "testing", "path", "existing_description",
+    "capability_count", "data_entity_count",
+    "same_language_component_count", "same_type_component_count",
+    "system_relationship_count", "system_capability_count",
+    "system_capability_component_count", "system_max_inbound_edges",
+    "system_max_outbound_edges", "files", "edges", "config_files",
+    "documentation", "subject_documentation", "child_components",
+    "peer_components", "descendant_edges",
+    "source_declarations", "source_references", "outbound_dependency_evidence",
+)
 
 
 @dataclass
@@ -97,7 +129,15 @@ class EvidenceValidator:
         self.root = Path(root).resolve() if root is not None else None
         self._lines_by_path: dict[str, Optional[int]] = {}
         self._symbols_by_path: dict[str, set[str]] = {}
+        # Where a symbol is USED, as opposed to where it is defined. The parser
+        # already records this as a `symbol_reference` signal per file, so the
+        # index costs one more pass over the store and no filesystem reads.
+        self._references_by_path: dict[str, set[str]] = {}
         self._symbol_names: set[str] = set()
+        # Component fact blocks, injected by the caller that builds them. Empty
+        # when absent, which makes every "fact" citation fail closed rather
+        # than pass unchecked.
+        self._facts_by_id: dict[str, dict] = {}
         self._edges: set[tuple[str, str, str]] = set()
         self._edge_pairs: set[tuple[str, str]] = set()
         if store is not None:
@@ -123,12 +163,30 @@ class EvidenceValidator:
             path = file_paths.get(row.get("file_id"))
             if path:
                 self._symbols_by_path.setdefault(path, set()).add(name)
+        for row in store.signals():
+            if (row.get("kind") or "") != "symbol_reference":
+                continue
+            path = file_paths.get(row.get("file_id"))
+            if not path:
+                continue
+            value = row.get("value")
+            name = ""
+            if isinstance(value, dict):
+                name = str(value.get("name") or "").strip()
+            elif value is not None:
+                name = str(value).strip()
+            if name:
+                self._references_by_path.setdefault(path, set()).add(name)
         for row in store.edges():
             source = row.get("source_id") or ""
             target = row.get("target_id") or ""
             kind = row.get("type") or ""
             self._edges.add((source, target, kind))
             self._edge_pairs.add((source, target))
+
+    def attach_facts(self, facts_by_id: dict) -> None:
+        """Give the validator the fact blocks the prompts were built from."""
+        self._facts_by_id = dict(facts_by_id or {})
 
     # --- individual checks ----------------------------------------------------
 
@@ -149,6 +207,8 @@ class EvidenceValidator:
             )
         if kind == "edge":
             return self._check_edge(item)
+        if kind == "fact":
+            return self._check_fact(item)
         return self._check_path_evidence(kind, item)
 
     def _check_edge(self, item: dict) -> EvidenceCheck:
@@ -233,17 +293,81 @@ class EvidenceValidator:
             )
         return EvidenceCheck(True, kind, detail={"path": path, "line": line})
 
+    def _check_fact(self, item: dict) -> EvidenceCheck:
+        """Validate a citation of the analyzer's own fact block.
+
+        The validator's job here is the same as for a file citation: confirm
+        the thing pointed at exists and is what the analyzer actually produced.
+        Whether the CLAIM matches the value stays with adjudication, which can
+        read the prose; a component whose fact block says file_count 0 while
+        the claim says eighteen files is a real disagreement and must remain
+        findable rather than being waved through by a citation that checks out.
+        """
+        component = str(item.get("component") or item.get("id") or "").strip()
+        field = str(item.get("field") or "").strip()
+        if not component or not field:
+            return EvidenceCheck(
+                False, "fact", "fact evidence needs both a component and a field"
+            )
+        if field not in CITABLE_FACTS:
+            return EvidenceCheck(
+                False, "fact",
+                f"{field!r} is not an analyzer-derived fact; citable facts are "
+                + ", ".join(CITABLE_FACTS),
+            )
+        facts = self._facts_by_id.get(component)
+        if facts is None:
+            return EvidenceCheck(
+                False, "fact", f"no component {component!r} in the analyzed set"
+            )
+        if field not in facts:
+            return EvidenceCheck(
+                False, "fact",
+                f"the analyzer produced no {field!r} for {component!r}",
+            )
+        return EvidenceCheck(
+            True, "fact",
+            detail={"component": component, "field": field, "value": facts[field]},
+        )
+
     def _check_symbol(self, path: str, item: dict) -> EvidenceCheck:
+        """Accept a symbol the cited file DEFINES or demonstrably REFERENCES.
+
+        The enrichment task is mostly about relationships: "X uses Y". The
+        natural citation, and the one the prompt invites, is Y at its use site
+        inside X. Accepting only definitions rejected 1,162 of 1,270 symbol
+        citations in the 2026-08-25 run, all with the same reason, which drove
+        the relationship escalation rate to 47% where the true figure is 12%
+        and sent roughly a third of the graph to the most expensive rung for no
+        reason at all.
+
+        This is not a loosened check. A citation still has to name a symbol the
+        parser saw in that exact file; a symbol that exists elsewhere in the
+        index, or nowhere, is still refused. What changes is that "seen" now
+        includes the use site, and ``site`` records which kind of sighting it
+        was so a reader can still tell a definition from a reference.
+        """
         symbol = str(item.get("symbol") or "").strip()
         if not symbol:
             return EvidenceCheck(False, "symbol", "symbol evidence has no symbol name")
         if symbol in self._symbols_by_path.get(path, ()):
-            return EvidenceCheck(True, "symbol", detail={"path": path, "symbol": symbol})
+            return EvidenceCheck(
+                True,
+                "symbol",
+                detail={"path": path, "symbol": symbol, "site": "defined"},
+            )
+        if symbol in self._references_by_path.get(path, ()):
+            return EvidenceCheck(
+                True,
+                "symbol",
+                detail={"path": path, "symbol": symbol, "site": "referenced"},
+            )
         if symbol in self._symbol_names:
             return EvidenceCheck(
                 False,
                 "symbol",
-                f"symbol {symbol!r} exists in the index but not in {path}",
+                f"symbol {symbol!r} exists in the index but is neither defined "
+                f"nor referenced in {path}",
             )
         return EvidenceCheck(
             False, "symbol", f"symbol {symbol!r} is not in the symbol index"

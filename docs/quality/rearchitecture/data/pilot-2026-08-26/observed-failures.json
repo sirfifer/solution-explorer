@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "source": "bounded polyglot pilot, 2026-08-26",
+  "raw_transcripts_committed": false,
+  "reason": "Raw provider transcripts can contain environment and account context. This fixture preserves only the boundary behavior needed for deterministic replay tests.",
+  "cases": [
+    {
+      "id": "sonnet-extra-property",
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "",
+      "session_id_available_in_process_output": false,
+      "observation": "The model produced all eight requested component entries, but StructuredOutput rejected an additional cosmetic name property and discarded the response. One evidence value also used an invalid bare F token."
+    },
+    {
+      "id": "opus-plain-json",
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "",
+      "session_id_available_in_process_output": false,
+      "observation": "The model authored a JSON response as ordinary assistant text instead of completing the StructuredOutput handoff, so the CLI discarded it."
+    },
+    {
+      "id": "opus-placeholder-root",
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "",
+      "session_id_available_in_process_output": false,
+      "observation": "The StructuredOutput handoff used a placeholder root property and the CLI discarded it."
+    },
+    {
+      "id": "fable-valid-structured-output",
+      "exit_code": 0,
+      "observation": "The CLI reported two internal turns for successful schema-bound calls despite tools being disabled and max-turns set to one; this was StructuredOutput plumbing, not an external agent loop."
+    }
+  ]
+}

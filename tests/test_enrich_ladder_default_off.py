@@ -47,6 +47,8 @@ def test_the_ladder_defaults_off():
     assert args.model_source is None
     assert args.min_rounds is None
     assert args.max_rounds is None
+    assert args.spot_check_fraction is None
+    assert args.max_spot_checks is None
 
 
 def test_the_existing_flags_keep_their_defaults():
@@ -64,6 +66,10 @@ def test_the_existing_flags_keep_their_defaults():
     assert args.max_parallel == 4
     assert args.report is None
     assert args.retry_attempts is None
+    # The parser leaves this unspecified so the classic path can retain its
+    # historical $10 default while a quality-first ladder does not silently
+    # stop halfway through a subject projected above $10.
+    assert args.max_cost_usd is None
 
 
 # --- 2 and 3. the two paths never cross ---------------------------------------
@@ -112,6 +118,7 @@ def test_without_the_flag_main_reaches_run_enhance_with_the_usual_config(
     assert config.dry_run is True
     assert config.threshold == 85.0
     assert config.model == "sonnet"
+    assert config.max_cost_usd == 10.0
     # Nothing about the ladder leaked into the bulk config.
     assert not hasattr(config, "ladder")
     assert not hasattr(config, "policy")
@@ -144,11 +151,17 @@ def test_with_the_flag_run_enhance_is_never_called(store, monkeypatch, tmp_path)
     code = enhance_cli.main([
         POLYGLOT, "--store", str(store), "--ladder",
         "--run-dir", str(tmp_path / "run"),
+        "--retry-attempts", "1",
+        "--spot-check-fraction", "1.0",
+        "--max-spot-checks", "12",
     ])
 
     assert code == 0
     assert called["ladder"] == 1
     assert called["config"].policy.iteration.min_rounds == 1
+    assert called["config"].policy.retry_attempts == 1
+    assert called["config"].policy.spot_check_fraction == 1.0
+    assert called["config"].policy.max_spot_checks == 12
 
 
 def test_an_unknown_binding_stops_the_run_before_anything_happens(

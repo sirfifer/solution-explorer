@@ -24,7 +24,7 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
-from .contract import TRIGGERS
+from .contract import TRIGGERS, trigger_class
 
 __all__ = [
     "REQUIRED_SECTIONS",
@@ -46,6 +46,7 @@ REQUIRED_SECTIONS = (
     "parser_findings",
     "criteria",
     "determination",
+    "run_analysis",
     "lessons",
 )
 
@@ -84,8 +85,10 @@ def build_report(ctx, result, *, engine_version: str = "1") -> dict:
         "work_orders": _work_orders(synthesis, determination),
         "iterations": _iterations(determination),
         "parser_findings": _parser_findings(ladder),
+        "identity_flags": _identity_flags(ladder),
         "criteria": _criteria(determination, brief),
         "determination": _determination(determination, result),
+        "run_analysis": _run_analysis(determination),
         "lessons": _lessons(ladder, adjudication, determination),
         "phases": [p.to_dict() for p in (result.phases or [])],
         "adjudication": adjudication.to_dict() if adjudication is not None else None,
@@ -93,6 +96,12 @@ def build_report(ctx, result, *, engine_version: str = "1") -> dict:
         "accounting": _accounting(ctx, result),
         "escalation_economics": _escalation_economics(ctx, result),
         "cost_note": COST_NOTE,
+        "quality": {
+            "status": result.quality_status,
+            "complete": result.quality_ok,
+            "issues": list(result.quality_issues),
+        },
+        "audit": result.audit,
     }
     missing = [key for key in REQUIRED_SECTIONS if key not in report]
     if missing:  # pragma: no cover - guards a future edit, not a runtime path
@@ -134,28 +143,75 @@ def _escalation_economics(ctx, result) -> dict:
         return {"climbed": 0, "by_trigger": [], "deterministic_opportunities": [], "note":
                 "the ladder did not run, so there is nothing to learn from it"}
 
+    transitions = list(getattr(ladder, "transitions", None) or [])
+    climbed_keys = {
+        (str(event.get("target_kind")), str(event.get("target_id")))
+        for event in transitions
+        if event.get("state") in ("escalate", "honest_gap")
+    }
+    # Backward compatibility for reports loaded from runs created before the
+    # append-only transition ledger existed.
     climbed_states = [
         st for st in ladder.states.values()
         if any(":escalate" in entry for entry in st.history) or st.state == "honest_gap"
     ]
+    if not climbed_keys:
+        climbed_keys = {(st.target_kind, st.target_id) for st in climbed_states}
 
     by_trigger: dict[str, dict] = {}
-    parser_first: dict[str, int] = {}
-    for st in climbed_states:
-        for failed in st.failed:
-            trig = failed.trigger or "unknown"
+    parser_first_targets: dict[str, set[tuple[str, str]]] = {}
+    trigger_targets: dict[str, set[tuple[str, str]]] = {}
+    attempts = transitions or [
+        {
+            "target_kind": st.target_kind,
+            "target_id": st.target_id,
+            "state": st.state,
+            "failed": [failed.to_dict() for failed in st.failed],
+            "parser_first": list(st.parser_first),
+        }
+        for st in climbed_states
+    ]
+    for attempt in attempts:
+        if attempt.get("state") not in ("escalate", "honest_gap"):
+            continue
+        target_key = (str(attempt.get("target_kind")), str(attempt.get("target_id")))
+        for failed in attempt.get("failed") or []:
+            trig = str(failed.get("trigger") or "unknown")
             bucket = by_trigger.setdefault(trig, {
                 "trigger": trig,
                 "meaning": TRIGGERS.get(trig, "unrecorded trigger"),
                 "items": 0,
                 "questions": {},
+                "_classes": {"context": 0, "reasoning": 0},
+                "_lacked_used": 0,
+                "_fallback_used": 0,
             })
-            bucket["items"] += 1
-            bucket["questions"][failed.question] = (
-                bucket["questions"].get(failed.question, 0) + 1
+            trigger_targets.setdefault(trig, set()).add(target_key)
+            question = str(failed.get("question") or "unknown")
+            bucket["questions"][question] = (
+                bucket["questions"].get(question, 0) + 1
             )
-        for question in st.parser_first or []:
-            parser_first[question] = parser_first.get(question, 0) + 1
+            # The recorded lacked self-report is the primary class basis; the
+            # trigger map is the fallback for records without one. A tier
+            # saying "I lacked a fact" is a context failure whatever trigger
+            # fired, and "judgment" is reasoning.
+            lacked = failed.get("lacked")
+            if lacked == "fact":
+                bucket["_classes"]["context"] += 1
+                bucket["_lacked_used"] += 1
+            elif lacked == "judgment":
+                bucket["_classes"]["reasoning"] += 1
+                bucket["_lacked_used"] += 1
+            else:
+                fallback = trigger_class([trig])
+                bucket["_classes"][
+                    "context" if fallback == "context" else "reasoning"
+                ] += 1
+                bucket["_fallback_used"] += 1
+        for question in attempt.get("parser_first") or []:
+            parser_first_targets.setdefault(str(question), set()).add(target_key)
+    for trigger, targets in trigger_targets.items():
+        by_trigger[trigger]["items"] = len(targets)
 
     # What the climbing itself consumed. Ledger rows carry their rung, so the
     # rungs above the bulk tier are exactly the cost of escalation.
@@ -173,18 +229,34 @@ def _escalation_economics(ctx, result) -> dict:
             ({"question": q, "items": n} for q, n in bucket["questions"].items()),
             key=lambda r: r["items"], reverse=True,
         )
-        bucket["class"] = "context" if bucket["trigger"] in ("E2", "E3", "E4") else "reasoning"
+        # One vocabulary for router and report; a local copy of this map is
+        # how the three-role drift happens (contract.py owns it). The class
+        # is the majority of per-record classifications, lacked-first with
+        # trigger fallback, and the basis says how much of each was used.
+        classes = bucket.pop("_classes")
+        lacked_used = bucket.pop("_lacked_used")
+        fallback_used = bucket.pop("_fallback_used")
+        if classes["context"] > classes["reasoning"]:
+            bucket["class"] = "context"
+        elif classes["reasoning"] > classes["context"]:
+            bucket["class"] = "reasoning"
+        else:
+            bucket["class"] = trigger_class([bucket["trigger"]])
+        bucket["class_basis"] = f"lacked:{lacked_used}/trigger:{fallback_used}"
 
     return {
-        "climbed": len(climbed_states),
+        "climbed": len(climbed_keys),
         "escalated_cost_usd": round(escalated_cost, 6),
         "escalated_tokens": escalated_tokens,
         "cost_per_climb_usd": (
-            round(escalated_cost / len(climbed_states), 6) if climbed_states else 0.0
+            round(escalated_cost / len(climbed_keys), 6) if climbed_keys else 0.0
         ),
         "by_trigger": triggers,
         "deterministic_opportunities": sorted(
-            ({"question": q, "items": n} for q, n in parser_first.items()),
+            (
+                {"question": question, "items": len(targets)}
+                for question, targets in parser_first_targets.items()
+            ),
             key=lambda r: r["items"], reverse=True,
         ),
     }
@@ -218,7 +290,10 @@ def _accounting(ctx, result) -> dict:
             "targets": 0,
             "tokens_in": 0,
             "tokens_cached": 0,
+            "tokens_cache_write": 0,
             "tokens_out": 0,
+            "response_bytes": 0,
+            "output_budget_violations": 0,
             "cost_usd": 0.0,
             "wall_seconds": 0.0,
             "retries": 0,
@@ -229,7 +304,11 @@ def _accounting(ctx, result) -> dict:
         bucket["targets"] += row.targets or 0
         bucket["tokens_in"] += row.tokens_in or 0
         bucket["tokens_cached"] += row.tokens_cached or 0
+        bucket["tokens_cache_write"] += row.tokens_cache_write or 0
         bucket["tokens_out"] += row.tokens_out or 0
+        bucket["response_bytes"] += row.response_bytes or 0
+        if row.output_budget_ok is False:
+            bucket["output_budget_violations"] += 1
         bucket["cost_usd"] += float(row.cost_usd or 0.0)
         bucket["wall_seconds"] += float(row.wall_seconds or 0.0)
         bucket["retries"] += row.retries or 0
@@ -268,9 +347,50 @@ def _accounting(ctx, result) -> dict:
             "tokens_total": grand_tokens,
             "tokens_in": sum(b["tokens_in"] for b in models),
             "tokens_cached": sum(b["tokens_cached"] for b in models),
+            "tokens_cache_write": sum(b["tokens_cache_write"] for b in models),
             "tokens_out": sum(b["tokens_out"] for b in models),
+            "response_bytes": sum(b["response_bytes"] for b in models),
+            "output_budget_violations": sum(
+                b["output_budget_violations"] for b in models
+            ),
             "cost_usd": round(grand_cost, 6),
             "wall_seconds": round(sum(b["wall_seconds"] for b in models), 1),
+        },
+        "output_efficiency": {
+            "billed_output_tokens": sum(b["tokens_out"] for b in models),
+            "delivered_response_bytes": sum(b["response_bytes"] for b in models),
+            "compact_budgeted_calls": sum(
+                1 for row in rows if row.output_budget_ok is not None
+            ),
+            "compact_budget_violations": sum(
+                1 for row in rows if row.output_budget_ok is False
+            ),
+            "note": (
+                "Delivered JSON is schema- and byte-bounded. Billed output also "
+                "includes hidden reasoning; the Claude CLI exposes no per-call "
+                "max_tokens below its provider ceiling, so billed-token reduction "
+                "is measured and gated against the baseline, not falsely called "
+                "a transport guarantee."
+            ),
+        },
+        "cache_efficiency": {
+            "writes": sum(b["tokens_cache_write"] for b in models),
+            "reads": sum(b["tokens_cached"] for b in models),
+            "read_write_ratio": round(
+                sum(b["tokens_cached"] for b in models)
+                / max(1, sum(b["tokens_cache_write"] for b in models)), 4
+            ),
+            "prefix_hashes": sorted({
+                row.prefix_hash for row in rows if row.prefix_hash
+            }),
+            "mechanism_verified": True,
+            "budgeted_as_saving": any(b["tokens_cached"] for b in models),
+            "note": (
+                "The F-9 live probe verified that the stable appended prefix is "
+                "cache-read only when dynamic system sections are excluded. "
+                "This report books no hypothetical saving: only cache reads "
+                "measured in this run count."
+            ),
         },
         # Filled in by hand after an isolated run. There is no API that reports
         # Claude subscription usage (Claude Code exposes it only through /usage
@@ -308,12 +428,18 @@ def _identity(ctx, result, engine_version: str) -> dict:
                 "max_rounds": policy.iteration.max_rounds,
             },
             "max_cost_usd": policy.max_cost_usd,
+            "pause_at_cost_usd": policy.pause_at_cost_usd,
             "spot_check_fraction": policy.spot_check_fraction,
             "max_work_orders": policy.max_work_orders,
         },
         "totals": {
             "invocations": len(result.ledger or []),
             "cost_usd": round(result.total_cost_usd, 6),
+            "cost_ceiling_usd": result.cost_ceiling_usd,
+            "cost_ceiling_exceeded": (
+                result.cost_ceiling_usd is not None
+                and result.total_cost_usd > result.cost_ceiling_usd + 1e-9
+            ),
             "ceiling_hit": result.ceiling_hit,
             "failed_phases": result.failed_phases,
         },
@@ -322,8 +448,13 @@ def _identity(ctx, result, engine_version: str) -> dict:
 
 
 def _census(census, ladder) -> dict:
-    if census is None and ladder is not None:
-        census = ladder.census
+    if ladder is not None:
+        # Work orders mutate the shared ladder after P2's original PhaseResult
+        # was recorded. Rebuild from current states so the published census
+        # cannot disagree with the determination that just judged it.
+        from .contract import build_census
+
+        census = build_census(list(ladder.states.values()))
     if census is None:
         return {
             "by_state": {},
@@ -427,6 +558,35 @@ def _parser_findings(ladder) -> list[dict]:
     return list(cards.values())
 
 
+def _identity_flags(ladder) -> list[dict]:
+    """Every identity disagreement a tier raised against a parser-owned value.
+
+    Identity restatement is dead by contract: a tier emits identity ONLY when
+    it disagrees with the parser (the UIKit-versus-SwiftUI catch, the
+    misnamed nested view). Those catches are the enhancement's most
+    transferable output, and until this section existed they had no reader:
+    a channel nobody reads is a channel that dies.
+    """
+    if ladder is None:
+        return []
+    flags = []
+    for (target_kind, target_id), payload in sorted(ladder.payloads.items()):
+        answers = ((payload or {}).get("contract") or {}).get("answers") or {}
+        for question, answer in sorted(answers.items()):
+            if not str(question).startswith("identity.") or not isinstance(answer, dict):
+                continue
+            flags.append({
+                "target_kind": target_kind,
+                "target_id": target_id,
+                "field": str(question).split(".", 1)[1],
+                "claim": answer.get("claim"),
+                "reason": answer.get("reason"),
+                "evidence_count": len(answer.get("evidence") or []),
+                "card": "is the parser wrong here, and can extraction learn the rule?",
+            })
+    return flags
+
+
 def _criteria(determination, brief) -> list[dict]:
     if determination is not None and determination.verdicts:
         return [v.to_dict() for v in determination.verdicts]
@@ -459,6 +619,33 @@ def _determination(determination, result) -> dict:
     return determination.verdict_dict(result)
 
 
+def _run_analysis(determination) -> dict:
+    """Fable's evidence-bound interpretation of measured run operations.
+
+    Accounting and the raw ledger remain deterministic. This section records
+    what the terminal model concluded from their compact pre-exit digest, so the
+    process can improve without asking the model to regenerate the measurements.
+    """
+    if determination is None:
+        return {
+            "status": "unavailable",
+            "summary": "P5 did not run, so no model analyzed the run logistics.",
+            "deterministic_transfers": [],
+            "improvements": [],
+            "watch_next_run": [],
+        }
+    analysis = getattr(determination, "run_analysis", None)
+    if isinstance(analysis, dict) and analysis:
+        return dict(analysis)
+    return {
+        "status": "missing",
+        "summary": "P5 returned no run analysis; the deterministic accounting remains available.",
+        "deterministic_transfers": [],
+        "improvements": [],
+        "watch_next_run": [],
+    }
+
+
 def _lessons(ladder, adjudication, determination) -> list[dict]:
     """Scrub-safe abstractions for the licensed phone-home.
 
@@ -469,8 +656,25 @@ def _lessons(ladder, adjudication, determination) -> list[dict]:
     """
     lessons: list[dict] = []
     if ladder is not None and ladder.census.total:
-        counts = ladder.census.trigger_counts()
-        for trigger, count in counts.items():
+        transitions = list(getattr(ladder, "transitions", None) or [])
+        trigger_targets: dict[str, set[tuple[str, str]]] = {}
+        for event in transitions:
+            if event.get("state") not in ("escalate", "honest_gap"):
+                continue
+            target = (
+                str(event.get("target_kind") or ""),
+                str(event.get("target_id") or ""),
+            )
+            for failure in event.get("failed") or []:
+                if not isinstance(failure, dict):
+                    continue
+                trigger = str(failure.get("trigger") or "unknown")
+                trigger_targets.setdefault(trigger, set()).add(target)
+        counts = (
+            {trigger: len(targets) for trigger, targets in trigger_targets.items()}
+            or ladder.census.trigger_counts()
+        )
+        for trigger, count in sorted(counts.items()):
             lessons.append({
                 "kind": "escalation-trigger",
                 "pattern": trigger,
@@ -575,6 +779,7 @@ def _escalation_economics_section(report: dict) -> list:
         "than it is a capability question.",
         "",
     ]
+
     lines += _table(
         [
             [
@@ -642,6 +847,24 @@ def _accounting_section(report: dict) -> list:
         f"{totals.get('invocations', 0)} invocation(s) moved "
         f"{totals.get('tokens_total', 0):,} tokens in "
         f"{totals.get('wall_seconds', 0.0) / 60:.1f} minutes of model time.",
+        "",
+    ]
+
+    output = acct.get("output_efficiency") or {}
+    cache = acct.get("cache_efficiency") or {}
+    lines += [
+        f"Delivered response payload: {output.get('delivered_response_bytes', 0):,} "
+        "UTF-8 bytes total. "
+        f"{output.get('compact_budgeted_calls', 0)} call(s) exercised the compact "
+        f"transport gate, with {output.get('compact_budget_violations', 0)} "
+        "violation(s).",
+        "",
+        f"Prompt cache: {cache.get('reads', 0):,} tokens read and "
+        f"{cache.get('writes', 0):,} written "
+        f"(read/write {cache.get('read_write_ratio', 0.0):.2f}). "
+        "Only measured reads are counted as savings.",
+        "",
+        output.get("note", ""),
         "",
     ]
 
@@ -725,6 +948,12 @@ def render_markdown(report: dict) -> str:
         lines += [
             "**The run cost ceiling was reached.** Work below was left undone and "
             "is recorded as skipped, not as complete.",
+            "",
+        ]
+    if totals.get("cost_ceiling_exceeded"):
+        lines += [
+            "**The provider exceeded the configured run allowance.** Measured "
+            "cost is above the requested ceiling; this run is not publishable.",
             "",
         ]
     if totals.get("failed_phases"):
@@ -872,6 +1101,31 @@ def render_markdown(report: dict) -> str:
         lines.append("_No parser-first findings were raised._")
     lines.append("")
 
+    # Identity flags: places a tier disagreed with a parser-owned value.
+    flags = report.get("identity_flags") or []
+    lines += ["## Identity flags", ""]
+    if flags:
+        lines.append(
+            f"{len(flags)} disagreement(s) with parser-owned identity values. "
+            "Each is a candidate extraction fix; a flag with evidence "
+            "outranks the parser until extraction learns the rule."
+        )
+        lines.append("")
+        for flag in flags[:40]:
+            reason = flag.get("reason") or ""
+            lines.append(
+                f"- `{flag.get('target_id')}` {flag.get('field')}: "
+                f"{flag.get('claim')}" + (f" ({reason})" if reason else "")
+            )
+        if len(flags) > 40:
+            lines.append(f"- _{len(flags) - 40} more in report.json._")
+    else:
+        lines.append(
+            "_No identity flags: the tiers found no parser-owned value worth "
+            "disputing._"
+        )
+    lines.append("")
+
     # Work ledger.
     ledger = report.get("ledger") or []
     lines += ["## Work ledger", ""]
@@ -897,6 +1151,35 @@ def render_markdown(report: dict) -> str:
     else:
         lines.append("_Nothing was invoked._")
     lines.append("")
+
+    # Fable's exit analysis. Measurements stay in accounting/the ledger; this
+    # section explains what they imply and what should be validated next.
+    analysis = report.get("run_analysis") or {}
+    lines += ["## Run analysis", ""]
+    lines.append(f"**Status:** {analysis.get('status') or 'missing'}")
+    lines.append("")
+    lines.append(analysis.get("summary") or "_No analysis summary was returned._")
+    lines.append("")
+    for title, key in (
+        ("Deterministic-transfer candidates", "deterministic_transfers"),
+        ("Process improvements", "improvements"),
+        ("Watch on the next run", "watch_next_run"),
+    ):
+        lines += [f"### {title}", ""]
+        items = analysis.get(key) or []
+        if not items:
+            lines.append("_None established._")
+            lines.append("")
+            continue
+        for item in items:
+            if isinstance(item, dict):
+                detail = "; ".join(
+                    f"{name}: {value}" for name, value in item.items() if value
+                )
+            else:
+                detail = str(item)
+            lines.append(f"- {detail}")
+        lines.append("")
 
     # Lessons.
     lessons = report.get("lessons") or []

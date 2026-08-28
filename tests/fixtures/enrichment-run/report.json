@@ -2,7 +2,7 @@
   "identity": {
     "subject": "polyglot",
     "root": "/Volumes/Studio/dev/solution-explorer/tests/fixtures/polyglot",
-    "commit": "4f6ef44ff277534ceb2d8007d92f57fc123fa8d1",
+    "commit": "2c01ee0398acf1be95c38ab6082d6b194a6ab53c",
     "snapshot_date": "2026-08-21T00:00:00+00:00",
     "analyzer_version": "",
     "engine_version": "1",
@@ -11,42 +11,50 @@
         "p1_orientation": {
           "source": "anthropic-claude-cli",
           "model": "fable",
-          "pinned": true
+          "pinned": true,
+          "effort": "low"
         },
         "p2a_bulk": {
           "source": "anthropic-claude-cli",
           "model": "sonnet",
-          "pinned": true
+          "pinned": true,
+          "effort": "low"
         },
         "p2b_escalated": {
           "source": "anthropic-claude-cli",
           "model": "opus",
-          "pinned": true
+          "pinned": true,
+          "effort": "low"
         },
         "p2c_residue": {
           "source": "anthropic-claude-cli",
           "model": "fable",
-          "pinned": true
+          "pinned": true,
+          "effort": "low"
         },
         "p3_adjudication": {
           "source": "anthropic-claude-cli",
           "model": "opus",
-          "pinned": true
+          "pinned": true,
+          "effort": "low"
         },
         "p4_synthesis": {
           "source": "anthropic-claude-cli",
           "model": "fable",
-          "pinned": true
+          "pinned": true,
+          "effort": "low"
         },
         "p5_determination": {
           "source": "anthropic-claude-cli",
           "model": "fable",
-          "pinned": true
+          "pinned": true,
+          "effort": "low"
         },
         "workorder": {
           "source": "anthropic-claude-cli",
           "model": "sonnet",
-          "pinned": true
+          "pinned": true,
+          "effort": "low"
         }
       },
       "iteration": {
@@ -54,12 +62,15 @@
         "max_rounds": 2
       },
       "max_cost_usd": null,
+      "pause_at_cost_usd": null,
       "spot_check_fraction": 0.1,
       "max_work_orders": 3
     },
     "totals": {
-      "invocations": 26,
-      "cost_usd": 0.26,
+      "invocations": 19,
+      "cost_usd": 0.19,
+      "cost_ceiling_usd": null,
+      "cost_ceiling_exceeded": false,
       "ceiling_hit": false,
       "failed_phases": []
     },
@@ -74,6 +85,19 @@
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 526,
+      "output_budget_bytes": 12000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -84,10 +108,50 @@
       "phase": "p2_ladder",
       "rung": "2a",
       "model": "anthropic-claude-cli:sonnet",
-      "targets": 8,
+      "targets": 10,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": 0,
+      "session_id": null,
+      "prefix_hash": "28b7fafb2dfd7e7c7afdb570e5bd7b0915e0b340d0afb7c4f2b77a00aa8e7d24",
+      "prefix_tokens_est": 0,
+      "response_bytes": 14505,
+      "output_budget_bytes": 39432,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p2_ladder",
+      "rung": "2a",
+      "model": "anthropic-claude-cli:sonnet",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": 1,
+      "session_id": null,
+      "prefix_hash": "63640291628f471c53a24acea03ecd1e3c28d1d45b9050096631184489fa3087",
+      "prefix_tokens_est": 0,
+      "response_bytes": 481,
+      "output_budget_bytes": 1330,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -102,6 +166,19 @@
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": 0,
+      "session_id": null,
+      "prefix_hash": "7434cee98cd8cd384951a7edbb8f7db74b3b5fc387f03b2794a6838a9fc4e996",
+      "prefix_tokens_est": 0,
+      "response_bytes": 1337,
+      "output_budget_bytes": 4440,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -116,6 +193,19 @@
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": 0,
+      "session_id": null,
+      "prefix_hash": "7b261c08b07dfc20860fcb193099c64f8fc2b95f3852cf67452c05562af0cac5",
+      "prefix_tokens_est": 0,
+      "response_bytes": 1572,
+      "output_budget_bytes": 4440,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -126,38 +216,23 @@
       "phase": "p3_adjudication",
       "rung": "verify-identity",
       "model": "anthropic-claude-cli:opus",
-      "targets": 0,
+      "targets": 5,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-identity",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-identity",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 938,
+      "output_budget_bytes": 26000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -168,38 +243,23 @@
       "phase": "p3_adjudication",
       "rung": "verify-edges",
       "model": "anthropic-claude-cli:opus",
-      "targets": 0,
+      "targets": 1,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-edges",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-findings",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 112,
+      "output_budget_bytes": 15000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -210,122 +270,23 @@
       "phase": "p3_adjudication",
       "rung": "verify-findings",
       "model": "anthropic-claude-cli:opus",
-      "targets": 0,
+      "targets": 5,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-findings",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-findings",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-findings",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-findings",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-findings",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-findings",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-findings",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
-      "cost_usd": 0.01,
-      "wall_seconds": 0.0,
-      "retries": 0,
-      "ok": true,
-      "error": null
-    },
-    {
-      "phase": "p3_adjudication",
-      "rung": "verify-findings",
-      "model": "anthropic-claude-cli:opus",
-      "targets": 0,
-      "tokens_in": 1200,
-      "tokens_cached": 0,
-      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 879,
+      "output_budget_bytes": 20000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -336,10 +297,23 @@
       "phase": "p3_adjudication",
       "rung": "grounding-spot-check",
       "model": "anthropic-claude-cli:opus",
-      "targets": 0,
+      "targets": 1,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": "67921f353cd5a70051a997681f2814f00148923a1f2f5f198052991446d7036a",
+      "prefix_tokens_est": 0,
+      "response_bytes": 575,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -350,10 +324,23 @@
       "phase": "p3_adjudication",
       "rung": "substitution-check",
       "model": "anthropic-claude-cli:opus",
-      "targets": 0,
+      "targets": 1,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": "7a13091aa7163a88b9d6ffc35e7037d2bf37535eab49fff2c189a478972f71e2",
+      "prefix_tokens_est": 0,
+      "response_bytes": 79,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -368,6 +355,19 @@
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 221,
+      "output_budget_bytes": 12000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -382,6 +382,19 @@
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": null,
+      "prefix_tokens_est": 0,
+      "response_bytes": 1133,
+      "output_budget_bytes": 24000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -396,6 +409,19 @@
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": "689c9442300a50689eef6365744468170a7011c65652a808a623c1ee41cfe102",
+      "prefix_tokens_est": 0,
+      "response_bytes": 1314,
+      "output_budget_bytes": 20000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -410,6 +436,127 @@
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": "733698024c1c01a8659c33f089844a6b3dc99ef8e4889d27b9fb489ec5feda23",
+      "prefix_tokens_est": 0,
+      "response_bytes": 3049,
+      "output_budget_bytes": 8328,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": "67921f353cd5a70051a997681f2814f00148923a1f2f5f198052991446d7036a",
+      "prefix_tokens_est": 0,
+      "response_bytes": 503,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "grounding-spot-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": "67921f353cd5a70051a997681f2814f00148923a1f2f5f198052991446d7036a",
+      "prefix_tokens_est": 0,
+      "response_bytes": 498,
+      "output_budget_bytes": 8000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": "7a13091aa7163a88b9d6ffc35e7037d2bf37535eab49fff2c189a478972f71e2",
+      "prefix_tokens_est": 0,
+      "response_bytes": 79,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
+      "cost_usd": 0.01,
+      "wall_seconds": 0.0,
+      "retries": 0,
+      "ok": true,
+      "error": null
+    },
+    {
+      "phase": "p3_adjudication",
+      "rung": "substitution-check",
+      "model": "anthropic-claude-cli:opus",
+      "targets": 1,
+      "tokens_in": 1200,
+      "tokens_cached": 0,
+      "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": "7a13091aa7163a88b9d6ffc35e7037d2bf37535eab49fff2c189a478972f71e2",
+      "prefix_tokens_est": 0,
+      "response_bytes": 79,
+      "output_budget_bytes": 2000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -424,6 +571,19 @@
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
+      "tokens_cache_write": 0,
+      "tokens_fresh_in": 1200,
+      "effort": "low",
+      "stop_reason": null,
+      "num_turns": 1,
+      "partition_id": null,
+      "session_id": null,
+      "prefix_hash": "689c9442300a50689eef6365744468170a7011c65652a808a623c1ee41cfe102",
+      "prefix_tokens_est": 0,
+      "response_bytes": 1314,
+      "output_budget_bytes": 20000,
+      "output_budget_ok": true,
+      "structured_output_enforced": false,
       "cost_usd": 0.01,
       "wall_seconds": 0.0,
       "retries": 0,
@@ -433,7 +593,7 @@
   ],
   "census": {
     "by_state": {
-      "grounded@sonnet": 8,
+      "grounded@sonnet": 10,
       "honest-gap": 1
     },
     "items": [
@@ -447,7 +607,13 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [
+          "sonnet:grounded"
+        ],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "honest_gap",
@@ -455,22 +621,60 @@
         "failed": [
           {
             "question": "mechanism",
-            "trigger": "E1",
+            "trigger": "E2",
             "note": "the dispatch table is generated at build time and no source file in the repository contains it"
           }
         ],
         "attempt_ref": null,
         "target_kind": "component",
-        "target_id": "libs/core",
+        "target_id": "compose/cache",
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [
-          "libs/core's language was inferable from its manifest"
+          "compose/cache's language was inferable from its manifest"
         ],
         "history": [
           "sonnet:escalate",
           "opus:escalate"
-        ]
+        ],
+        "entry_triggers": [
+          "E1"
+        ],
+        "entry_class": "reasoning",
+        "entry_class_basis": "lacked:0/trigger:1",
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "compose/db",
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "libs/core",
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -482,7 +686,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -494,7 +702,13 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [
+          "sonnet:grounded"
+        ],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -506,7 +720,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -518,7 +736,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -530,7 +752,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -542,7 +768,11 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       },
       {
         "state": "grounded",
@@ -554,21 +784,25 @@
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [],
-        "history": []
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
       }
     ],
-    "total": 9,
-    "grounded": 8,
-    "grounded_fraction": 0.8889,
+    "total": 11,
+    "grounded": 10,
+    "grounded_fraction": 0.9091,
     "trigger_counts": {
-      "E1": 1
+      "E2": 1
     },
     "unresolved": []
   },
   "escalations": [
     {
       "target_kind": "component",
-      "target_id": "libs/core",
+      "target_id": "compose/cache",
       "climbed_from": [
         "sonnet:escalate",
         "opus:escalate"
@@ -576,12 +810,12 @@
       "resolved_at": "fable",
       "terminal": "honest-gap",
       "triggers": [
-        "E1"
+        "E2"
       ],
       "failed_questions": [
         {
           "question": "mechanism",
-          "trigger": "E1",
+          "trigger": "E2",
           "note": "the dispatch table is generated at build time and no source file in the repository contains it"
         }
       ]
@@ -621,10 +855,11 @@
         "executed": true,
         "targets_attempted": 2,
         "state_changes": {},
+        "payload_changes": [],
         "cost_usd": 0.01,
         "changed_anything": false,
         "notes": [
-          "executed and changed no contract state; the order cost budget and moved nothing"
+          "executed and changed neither contract state nor payload; the order cost budget and moved nothing"
         ]
       },
       "executed": true
@@ -670,10 +905,11 @@
             "executed": true,
             "targets_attempted": 2,
             "state_changes": {},
+            "payload_changes": [],
             "cost_usd": 0.01,
             "changed_anything": false,
             "notes": [
-              "executed and changed no contract state; the order cost budget and moved nothing"
+              "executed and changed neither contract state nor payload; the order cost budget and moved nothing"
             ]
           }
         }
@@ -683,9 +919,13 @@
         "targets": [],
         "state_changes": {},
         "rung_moves": [],
-        "grounded_before": 8,
-        "grounded_after": 8,
-        "cost_usd": 0.01
+        "payload_changes": [],
+        "grounded_before": 10,
+        "grounded_after": 10,
+        "cost_usd": 0.05,
+        "adjudication_cost_usd": 0.04,
+        "adjudication_disagreement_before": 0.0,
+        "adjudication_disagreement_after": 0.0
       },
       "perceived_delta": "deepen the boundary descriptions on the two services that face outward",
       "perceived_delta_is_judgment": true,
@@ -698,14 +938,232 @@
   "parser_findings": [
     {
       "target_kind": "component",
-      "target_id": "libs/core",
-      "finding": "libs/core's language was inferable from its manifest",
+      "target_id": "compose/cache",
+      "finding": "compose/cache's language was inferable from its manifest",
       "raised_at_rungs": [
         "sonnet",
         "opus",
         "fable"
       ],
       "card": "how could deterministic processing have gotten this right?"
+    }
+  ],
+  "identity_flags": [
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "field": "framework",
+      "claim": "apps/ios: a specific answer for identity.framework",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "field": "language",
+      "claim": "apps/ios: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "field": "type",
+      "claim": "apps/ios: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/cache",
+      "field": "port",
+      "claim": "compose/cache: a specific answer for identity.port",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/cache",
+      "field": "type",
+      "claim": "compose/cache: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/db",
+      "field": "port",
+      "claim": "compose/db: a specific answer for identity.port",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/db",
+      "field": "type",
+      "claim": "compose/db: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "field": "language",
+      "claim": "libs/core: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "field": "type",
+      "claim": "libs/core: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/rubylib",
+      "field": "language",
+      "claim": "libs/rubylib: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/rubylib",
+      "field": "type",
+      "claim": "libs/rubylib: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "field": "language",
+      "claim": "root: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "field": "port",
+      "claim": "root: a specific answer for identity.port",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "field": "type",
+      "claim": "root: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "field": "framework",
+      "claim": "services/api: a specific answer for identity.framework",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "field": "language",
+      "claim": "services/api: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "field": "port",
+      "claim": "services/api: a specific answer for identity.port",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "field": "type",
+      "claim": "services/api: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "field": "language",
+      "claim": "services/web: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "field": "type",
+      "claim": "services/web: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "field": "language",
+      "claim": "services/web/src: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "field": "type",
+      "claim": "services/web/src: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/worker",
+      "field": "language",
+      "claim": "services/worker: a specific answer for identity.language",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/worker",
+      "field": "type",
+      "claim": "services/worker: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
     }
   ],
   "criteria": [
@@ -732,10 +1190,10 @@
       "statement": "Claims are grounded in evidence that checks out.",
       "verdict": "met",
       "evidence": [
-        "grounded fraction 88.9%",
+        "grounded fraction 90.9%",
         "adjudication disagreement rate 0.0%"
       ],
-      "reasoning": "88.9% of items grounded; adjudication would not stand behind 0.0% of the claims it sampled"
+      "reasoning": "90.9% of items grounded; adjudication would not stand behind 0.0% of the claims it sampled"
     },
     {
       "criterion_id": "u3",
@@ -759,24 +1217,51 @@
       "round 1 produced no measurable change to the census"
     ]
   },
+  "run_analysis": {
+    "status": "model-analyzed",
+    "summary": "The measured ledger shows a clean bounded run; the parser-first card is the transferable lesson.",
+    "deterministic_transfers": [
+      {
+        "finding": "The fixture framework is inferable from its manifest.",
+        "basis": "The same parser-first card survived every rung.",
+        "validation": "Add a real manifest extraction regression."
+      }
+    ],
+    "improvements": [
+      {
+        "area": "parser",
+        "recommendation": "Teach extraction the repeated manifest rule.",
+        "basis": "The exit digest contains one distinct parser-first card."
+      }
+    ],
+    "watch_next_run": [
+      "Compare parser-first cards and escalation count."
+    ]
+  },
   "lessons": [
     {
       "kind": "escalation-trigger",
       "pattern": "E1",
       "count": 1,
-      "of_total": 9
+      "of_total": 11
+    },
+    {
+      "kind": "escalation-trigger",
+      "pattern": "E2",
+      "count": 1,
+      "of_total": 11
     },
     {
       "kind": "parser-first",
       "pattern": "deterministic processing could have answered this",
       "count": 3,
-      "of_total": 9
+      "of_total": 11
     },
     {
       "kind": "inter-tier-disagreement",
       "pattern": "claims adjudication would not stand behind",
       "rate": 0.0,
-      "sampled": 8
+      "sampled": 22
     },
     {
       "kind": "forced-iteration",
@@ -797,16 +1282,16 @@
       "name": "p2_ladder",
       "status": "ok",
       "notes": [
-        "census: grounded@sonnet=8, honest-gap=1"
+        "census: grounded@sonnet=10, honest-gap=1"
       ]
     },
     {
       "name": "p3_adjudication",
       "status": "ok",
       "notes": [
-        "verify identity: 3 verified, confirmed=3",
-        "verify edges: 0 verified, no verdicts",
-        "verify findings: 0 verified, no verdicts",
+        "verify identity: 5 verified, confirmed=5",
+        "verify edges: 1 verified, confirmed=1",
+        "verify findings: 5 verified, verified=5",
         "grounding spot-checks: 0 of 8 claims not supported by their own evidence (disagreement rate 0.0%)",
         "substitution checks: 1 of 1 descriptions did not identify their own subject (100.0%)"
       ]
@@ -831,15 +1316,15 @@
       "pass": "verify-identity",
       "mode": "full",
       "dry_run": false,
-      "target_count": 3,
-      "done": 3,
+      "target_count": 5,
+      "done": 5,
       "failed": [],
       "verdicts": {
-        "confirmed": 3
+        "confirmed": 5
       },
-      "total_cost_usd": 0.03,
+      "total_cost_usd": 0.01,
       "notes": [
-        "3 identity-bearing component(s); 3 to verify"
+        "5 identity-bearing component(s); 5 to verify"
       ],
       "plan_preview": [],
       "extra": {},
@@ -848,21 +1333,35 @@
           "id": "apps/ios",
           "status": "done",
           "verdict": "confirmed",
-          "cost_usd": 0.01,
+          "cost_usd": 0.002,
+          "errors": []
+        },
+        {
+          "id": "compose/cache",
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.002,
+          "errors": []
+        },
+        {
+          "id": "compose/db",
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.002,
           "errors": []
         },
         {
           "id": "root",
           "status": "done",
           "verdict": "confirmed",
-          "cost_usd": 0.01,
+          "cost_usd": 0.002,
           "errors": []
         },
         {
           "id": "services/api",
           "status": "done",
           "verdict": "confirmed",
-          "cost_usd": 0.01,
+          "cost_usd": 0.002,
           "errors": []
         }
       ]
@@ -872,12 +1371,12 @@
       "mode": "full",
       "dry_run": false,
       "target_count": 1,
-      "done": 0,
-      "failed": [
-        "services/web/src|services/api|http"
-      ],
-      "verdicts": {},
-      "total_cost_usd": 0.02,
+      "done": 1,
+      "failed": [],
+      "verdicts": {
+        "confirmed": 1
+      },
+      "total_cost_usd": 0.01,
       "notes": [
         "1 inferred edge(s); 1 to verify"
       ],
@@ -886,12 +1385,10 @@
       "outcomes": [
         {
           "id": "services/web/src|services/api|http",
-          "status": "failed",
-          "verdict": null,
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be a non-empty sentence"
-          ]
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.01,
+          "errors": []
         }
       ]
     },
@@ -900,16 +1397,12 @@
       "mode": "full",
       "dry_run": false,
       "target_count": 5,
-      "done": 0,
-      "failed": [
-        "finding:unreferenced:apps/ios",
-        "finding:unreferenced:libs/core",
-        "finding:unreferenced:libs/rubylib",
-        "finding:unreferenced:services/web/src",
-        "finding:unreferenced:services/worker"
-      ],
-      "verdicts": {},
-      "total_cost_usd": 0.1,
+      "done": 5,
+      "failed": [],
+      "verdicts": {
+        "verified": 5
+      },
+      "total_cost_usd": 0.01,
       "notes": [
         "5 finding(s); 5 to verify"
       ],
@@ -918,48 +1411,38 @@
       "outcomes": [
         {
           "id": "finding:unreferenced:apps/ios",
-          "status": "failed",
-          "verdict": null,
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be non-empty"
-          ]
+          "status": "done",
+          "verdict": "verified",
+          "cost_usd": 0.002,
+          "errors": []
         },
         {
           "id": "finding:unreferenced:libs/core",
-          "status": "failed",
-          "verdict": null,
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be non-empty"
-          ]
+          "status": "done",
+          "verdict": "verified",
+          "cost_usd": 0.002,
+          "errors": []
         },
         {
           "id": "finding:unreferenced:libs/rubylib",
-          "status": "failed",
-          "verdict": null,
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be non-empty"
-          ]
+          "status": "done",
+          "verdict": "verified",
+          "cost_usd": 0.002,
+          "errors": []
         },
         {
           "id": "finding:unreferenced:services/web/src",
-          "status": "failed",
-          "verdict": null,
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be non-empty"
-          ]
+          "status": "done",
+          "verdict": "verified",
+          "cost_usd": 0.002,
+          "errors": []
         },
         {
           "id": "finding:unreferenced:services/worker",
-          "status": "failed",
-          "verdict": null,
-          "cost_usd": 0.02,
-          "errors": [
-            "reason must be non-empty"
-          ]
+          "status": "done",
+          "verdict": "verified",
+          "cost_usd": 0.002,
+          "errors": []
         }
       ]
     },
@@ -1035,6 +1518,132 @@
         "supported": true,
         "confidence": "high",
         "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "identity.framework",
+        "claim": "apps/ios: a specific answer for identity.framework",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "identity.language",
+        "claim": "apps/ios: a specific answer for identity.language",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "identity.type",
+        "claim": "apps/ios: a specific answer for identity.type",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "mechanism",
+        "claim": "apps/ios: a specific answer for mechanism",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "next_step",
+        "claim": "apps/ios: a specific answer for next_step",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "place",
+        "claim": "apps/ios: a specific answer for place",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "apps/ios",
+        "question": "purpose",
+        "claim": "apps/ios: a specific answer for purpose",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "identity.language",
+        "claim": "root: a specific answer for identity.language",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "identity.port",
+        "claim": "root: a specific answer for identity.port",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "identity.type",
+        "claim": "root: a specific answer for identity.type",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "mechanism",
+        "claim": "root: a specific answer for mechanism",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "next_step",
+        "claim": "root: a specific answer for next_step",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "place",
+        "claim": "root: a specific answer for place",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
+      },
+      {
+        "target_kind": "component",
+        "target_id": "root",
+        "question": "purpose",
+        "claim": "root: a specific answer for purpose",
+        "supported": true,
+        "confidence": "high",
+        "reason": ""
       }
     ],
     "substitution_checks": [
@@ -1044,18 +1653,34 @@
         "chose": "apps/ios",
         "confirmed_failure": true,
         "reason": "it names its own files"
+      },
+      {
+        "target_id": "apps/ios",
+        "distinctive": true,
+        "chose": "apps/ios",
+        "confirmed_failure": false,
+        "reason": "it names its own files"
+      },
+      {
+        "target_id": "root",
+        "distinctive": true,
+        "chose": "apps/ios",
+        "confirmed_failure": true,
+        "reason": "it names its own files"
       }
     ],
-    "checked": 8,
+    "checked": 22,
     "unsupported": 0,
     "disagreement_rate": 0.0,
-    "substitution_failure_rate": 1.0,
+    "substitution_failure_rate": 0.6667,
     "notes": [
-      "verify identity: 3 verified, confirmed=3",
-      "verify edges: 0 verified, no verdicts",
-      "verify findings: 0 verified, no verdicts",
+      "verify identity: 5 verified, confirmed=5",
+      "verify edges: 1 verified, confirmed=1",
+      "verify findings: 5 verified, verified=5",
       "grounding spot-checks: 0 of 8 claims not supported by their own evidence (disagreement rate 0.0%)",
-      "substitution checks: 1 of 1 descriptions did not identify their own subject (100.0%)"
+      "substitution checks: 1 of 1 descriptions did not identify their own subject (100.0%)",
+      "grounding spot-checks: 0 of 22 claims not supported by their own evidence (disagreement rate 0.0%)",
+      "substitution checks: 2 of 3 descriptions did not identify their own subject (66.7%)"
     ]
   },
   "synthesis": {
@@ -1084,9 +1709,9 @@
             }
           },
           {
-            "target": "libs/core",
-            "title": "Stop at libs/core",
-            "narration": "What libs/core contributes to the request path.",
+            "target": "compose/cache",
+            "title": "Stop at compose/cache",
+            "narration": "What compose/cache contributes to the request path.",
             "evidence": {
               "file": "README.md",
               "line": 1
@@ -1144,12 +1769,15 @@
     "by_model": [
       {
         "model": "anthropic-claude-cli:opus",
-        "invocations": 18,
-        "targets": 1,
-        "tokens_in": 21600,
+        "invocations": 10,
+        "targets": 18,
+        "tokens_in": 12000,
         "tokens_cached": 0,
-        "tokens_out": 5400,
-        "cost_usd": 0.18,
+        "tokens_cache_write": 0,
+        "tokens_out": 3000,
+        "response_bytes": 5079,
+        "output_budget_violations": 0,
+        "cost_usd": 0.1,
         "wall_seconds": 0.0,
         "retries": 0,
         "failures": 0,
@@ -1161,9 +1789,9 @@
           "p3_adjudication:verify-findings",
           "p3_adjudication:verify-identity"
         ],
-        "tokens_total": 27000,
-        "token_share": 0.6923,
-        "cost_share": 0.6923
+        "tokens_total": 15000,
+        "token_share": 0.5263,
+        "cost_share": 0.5263
       },
       {
         "model": "anthropic-claude-cli:fable",
@@ -1171,7 +1799,10 @@
         "targets": 5,
         "tokens_in": 7200,
         "tokens_cached": 0,
+        "tokens_cache_write": 0,
         "tokens_out": 1800,
+        "response_bytes": 6080,
+        "output_budget_violations": 0,
         "cost_usd": 0.06,
         "wall_seconds": 0.0,
         "retries": 0,
@@ -1184,17 +1815,20 @@
           "p5_determination"
         ],
         "tokens_total": 9000,
-        "token_share": 0.2308,
-        "cost_share": 0.2308
+        "token_share": 0.3158,
+        "cost_share": 0.3158
       },
       {
         "model": "anthropic-claude-cli:sonnet",
-        "invocations": 2,
-        "targets": 10,
-        "tokens_in": 2400,
+        "invocations": 3,
+        "targets": 13,
+        "tokens_in": 3600,
         "tokens_cached": 0,
-        "tokens_out": 600,
-        "cost_usd": 0.02,
+        "tokens_cache_write": 0,
+        "tokens_out": 900,
+        "response_bytes": 18035,
+        "output_budget_violations": 0,
+        "cost_usd": 0.03,
         "wall_seconds": 0.0,
         "retries": 0,
         "failures": 0,
@@ -1202,19 +1836,47 @@
           "p2_ladder:2a",
           "work_order:P5"
         ],
-        "tokens_total": 3000,
-        "token_share": 0.0769,
-        "cost_share": 0.0769
+        "tokens_total": 4500,
+        "token_share": 0.1579,
+        "cost_share": 0.1579
       }
     ],
     "totals": {
-      "invocations": 26,
-      "tokens_total": 39000,
-      "tokens_in": 31200,
+      "invocations": 19,
+      "tokens_total": 28500,
+      "tokens_in": 22800,
       "tokens_cached": 0,
-      "tokens_out": 7800,
-      "cost_usd": 0.26,
+      "tokens_cache_write": 0,
+      "tokens_out": 5700,
+      "response_bytes": 29194,
+      "output_budget_violations": 0,
+      "cost_usd": 0.19,
       "wall_seconds": 0.0
+    },
+    "output_efficiency": {
+      "billed_output_tokens": 5700,
+      "delivered_response_bytes": 29194,
+      "compact_budgeted_calls": 19,
+      "compact_budget_violations": 0,
+      "note": "Delivered JSON is schema- and byte-bounded. Billed output also includes hidden reasoning; the Claude CLI exposes no per-call max_tokens below its provider ceiling, so billed-token reduction is measured and gated against the baseline, not falsely called a transport guarantee."
+    },
+    "cache_efficiency": {
+      "writes": 0,
+      "reads": 0,
+      "read_write_ratio": 0.0,
+      "prefix_hashes": [
+        "28b7fafb2dfd7e7c7afdb570e5bd7b0915e0b340d0afb7c4f2b77a00aa8e7d24",
+        "63640291628f471c53a24acea03ecd1e3c28d1d45b9050096631184489fa3087",
+        "67921f353cd5a70051a997681f2814f00148923a1f2f5f198052991446d7036a",
+        "689c9442300a50689eef6365744468170a7011c65652a808a623c1ee41cfe102",
+        "733698024c1c01a8659c33f089844a6b3dc99ef8e4889d27b9fb489ec5feda23",
+        "7434cee98cd8cd384951a7edbb8f7db74b3b5fc387f03b2794a6838a9fc4e996",
+        "7a13091aa7163a88b9d6ffc35e7037d2bf37535eab49fff2c189a478972f71e2",
+        "7b261c08b07dfc20860fcb193099c64f8fc2b95f3852cf67452c05562af0cac5"
+      ],
+      "mechanism_verified": true,
+      "budgeted_as_saving": false,
+      "note": "The F-9 live probe verified that the stable appended prefix is cache-read only when dynamic system sections are excluded. This report books no hypothetical saving: only cache reads measured in this run count."
     },
     "account_delta": null,
     "calibration_note": "To turn this into a share of the weekly allowance: take a /usage reading immediately before the run, keep hands off the account for its duration, take a second reading immediately after, and record the difference with scripts/usage-budget.py calibrate. Nothing else measures a subscription; the dollar figures here are API-equivalent prices for work that was never billed at API rates."
@@ -1232,18 +1894,186 @@
         "questions": [
           {
             "question": "mechanism",
+            "items": 2
+          }
+        ],
+        "class": "reasoning",
+        "class_basis": "lacked:0/trigger:2"
+      },
+      {
+        "trigger": "E2",
+        "meaning": "ungrounded: an answer whose evidence the tier could not cite",
+        "items": 1,
+        "questions": [
+          {
+            "question": "mechanism",
             "items": 1
           }
         ],
-        "class": "reasoning"
+        "class": "context",
+        "class_basis": "lacked:0/trigger:1"
       }
     ],
     "deterministic_opportunities": [
       {
-        "question": "libs/core's language was inferable from its manifest",
+        "question": "compose/cache's language was inferable from its manifest",
         "items": 1
       }
     ]
   },
-  "cost_note": "Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent."
+  "cost_note": "Costs are API-equivalent units reported by the `claude` CLI, metered against the owner's Claude Max subscription. They are a truthful measure of how much subscription usage this run consumed. They are not money spent.",
+  "quality": {
+    "status": "incomplete",
+    "complete": false,
+    "issues": [
+      "enrichment audit verdict is 'fail'"
+    ]
+  },
+  "audit": {
+    "run_dir": "/private/var/folders/j1/f88bws916px1k7zn1bltx2j00000gn/T/pytest-of-ramerman/pytest-625/test_the_committed_reference_r0/run",
+    "spend_usd": 0.19,
+    "calls": 19,
+    "calls_failed": 0,
+    "tokens": {
+      "fresh_in": 22800,
+      "cache_write": 0,
+      "cache_read": 0,
+      "out": 5700,
+      "ladder_out": 1200,
+      "output_share_of_billed": 0.2,
+      "cache_hit_share": 0.0
+    },
+    "work": {
+      "planned_targets": 11,
+      "answered": 11,
+      "units_done": 4,
+      "bulk_attempted_targets": 11,
+      "bulk_unique_targets": 11,
+      "usd_per_target": 0.01727,
+      "out_tokens_per_target": 518.2
+    },
+    "output_gate": {
+      "baseline_output_tokens": null,
+      "target_ratio": null,
+      "allowed_output_tokens": null,
+      "compact_calls": 19,
+      "compact_budget_violations": 0,
+      "non_warm_cache_misses": 5,
+      "prefix_read_shortfalls": 0,
+      "stable_prefix_fragmentations": 0,
+      "bulk_tokens_per_target": 54.5,
+      "ladder_tokens_per_unique_target": 109.1,
+      "escalation_tokens_per_attempt": 300.0,
+      "escalation_attempts": 2,
+      "escalation_release_sample_min": 5,
+      "work_order_tokens_per_attempt": 150.0,
+      "work_order_attempts": 2
+    },
+    "by_rung": {
+      "2a": {
+        "calls": 2,
+        "cost_usd": 0.02,
+        "targets": 11,
+        "out_tokens": 600,
+        "usd_per_target": 0.00182
+      },
+      "P5": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 2,
+        "out_tokens": 300,
+        "usd_per_target": 0.005
+      },
+      "fable": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 1,
+        "out_tokens": 300,
+        "usd_per_target": 0.01
+      },
+      "grounding-spot-check": {
+        "calls": 3,
+        "cost_usd": 0.03,
+        "targets": 3,
+        "out_tokens": 900,
+        "usd_per_target": 0.01
+      },
+      "narrative": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 1,
+        "out_tokens": 300,
+        "usd_per_target": 0.01
+      },
+      "opus": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 1,
+        "out_tokens": 300,
+        "usd_per_target": 0.01
+      },
+      "p1_orientation": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 1,
+        "out_tokens": 300,
+        "usd_per_target": 0.01
+      },
+      "p5_determination": {
+        "calls": 2,
+        "cost_usd": 0.02,
+        "targets": 2,
+        "out_tokens": 600,
+        "usd_per_target": 0.01
+      },
+      "spine": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 0,
+        "out_tokens": 300,
+        "usd_per_target": null
+      },
+      "substitution-check": {
+        "calls": 3,
+        "cost_usd": 0.03,
+        "targets": 3,
+        "out_tokens": 900,
+        "usd_per_target": 0.01
+      },
+      "verify-edges": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 1,
+        "out_tokens": 300,
+        "usd_per_target": 0.01
+      },
+      "verify-findings": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 5,
+        "out_tokens": 300,
+        "usd_per_target": 0.002
+      },
+      "verify-identity": {
+        "calls": 1,
+        "cost_usd": 0.01,
+        "targets": 5,
+        "out_tokens": 300,
+        "usd_per_target": 0.002
+      }
+    },
+    "findings": [
+      {
+        "level": "fail",
+        "check": "cache-boundary",
+        "detail": "5 non-warm cacheable call(s) read zero cached tokens"
+      },
+      {
+        "level": "info",
+        "check": "escalation-output-density",
+        "detail": "escalations emitted 300.0 billed tokens per attempt; limit is 260; INCONCLUSIVE: only 2 attempt(s), fewer than the 5-attempt release sample"
+      }
+    ],
+    "verdict": "fail"
+  }
 }

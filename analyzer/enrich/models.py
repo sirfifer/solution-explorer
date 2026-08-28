@@ -37,7 +37,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from .engine import ClaudeCliInvoker, Invoker
+from .engine import DEFAULT_EFFORT, KNOWN_EFFORTS, ClaudeCliInvoker, Invoker
 
 __all__ = [
     "ModelSpec",
@@ -60,12 +60,24 @@ DEFAULT_SOURCE = ANTHROPIC_CLAUDE_CLI
 UNPINNED = "auto"
 
 
+# Reasoning effort is a property of the TIER, not of the machine the run
+# happens to start on. The 2026-08-25 run inherited "xhigh" from the operator's
+# interactive settings: 67.8% of every billed output token was thinking, the
+# answer ran out of room inside the shared max_tokens budget, and 35% of
+# completed partitions truncated mid-JSON. A tier therefore always carries an
+# effort, and DEFAULT_EFFORT is what an unstated binding means. Measured across
+# four real prompts replayed at each level: low produced 73% fewer output
+# tokens, zero overflows, and equal or better coverage. Effort buys citation
+# count and prose length, not answers.
+
+
 @dataclass(frozen=True)
 class ModelSpec:
-    """One tier binding: a source, and optionally a pinned model on that source."""
+    """One tier binding: a source, a pinned model, and the effort it runs at."""
 
     source: str = DEFAULT_SOURCE
     model: Optional[str] = None
+    effort: str = DEFAULT_EFFORT
 
     @property
     def pinned(self) -> bool:
@@ -77,7 +89,12 @@ class ModelSpec:
         return f"{self.source}:{self.model or UNPINNED}"
 
     def to_dict(self) -> dict:
-        return {"source": self.source, "model": self.model, "pinned": self.pinned}
+        return {
+            "source": self.source,
+            "model": self.model,
+            "pinned": self.pinned,
+            "effort": self.effort,
+        }
 
     @classmethod
     def parse(cls, raw: Any, *, default_source: str = DEFAULT_SOURCE) -> ModelSpec:
@@ -86,34 +103,67 @@ class ModelSpec:
         Accepted forms, in the order a human is likely to write them::
 
             "sonnet"                     the default source, pinned to sonnet
+            "sonnet@low"                 the same, at an explicit effort
             "anthropic-claude-cli:opus"  an explicit source, pinned
             "openrouter:auto"            an explicit source, unpinned, it routes
             {"source": "...", "model": "..."}   the registry form
             {"source": "...", "model": null}    the registry form, unpinned
+            {"source": "...", "model": "...", "effort": "low"}
 
         A bare model name keeps working because that is what every existing
         caller, flag and registry entry writes today, and changing their meaning
-        would silently repoint work at a different source.
+        would silently repoint work at a different source. An unstated effort
+        reads as :data:`DEFAULT_EFFORT` rather than as "whatever the machine is
+        set to", which is the whole point: see the module comment above.
         """
         if isinstance(raw, ModelSpec):
             return raw
         if isinstance(raw, dict):
             source = str(raw.get("source") or default_source).strip() or default_source
+            effort = cls._parse_effort(raw.get("effort"))
             model = raw.get("model")
             if model is None or str(model).strip().lower() in ("", UNPINNED, "null", "none"):
-                return cls(source=source, model=None)
-            return cls(source=source, model=str(model).strip())
+                return cls(source=source, model=None, effort=effort)
+            model, at_effort = cls._split_effort(str(model).strip())
+            return cls(source=source, model=model, effort=at_effort or effort)
         text = str(raw or "").strip()
         if not text:
             return cls(source=default_source, model=None)
+        text, at_effort = cls._split_effort(text)
+        effort = at_effort or DEFAULT_EFFORT
         if ":" in text:
             source, _, model = text.partition(":")
             source = source.strip() or default_source
             model = model.strip()
             if not model or model.lower() == UNPINNED:
-                return cls(source=source, model=None)
-            return cls(source=source, model=model)
-        return cls(source=default_source, model=text)
+                return cls(source=source, model=None, effort=effort)
+            return cls(source=source, model=model, effort=effort)
+        return cls(source=default_source, model=text, effort=effort)
+
+    @staticmethod
+    def _split_effort(text: str) -> tuple[str, Optional[str]]:
+        """Split a trailing ``@effort`` suffix off a binding string."""
+        if "@" not in text:
+            return text, None
+        head, _, tail = text.rpartition("@")
+        effort = tail.strip().lower()
+        if not head.strip() or effort not in KNOWN_EFFORTS:
+            return text, None
+        return head.strip(), effort
+
+    @staticmethod
+    def _parse_effort(raw: Any) -> str:
+        """An unrecognised effort is refused, never silently downgraded."""
+        if raw is None:
+            return DEFAULT_EFFORT
+        text = str(raw).strip().lower()
+        if not text:
+            return DEFAULT_EFFORT
+        if text not in KNOWN_EFFORTS:
+            raise ValueError(
+                f"unknown effort {raw!r}; expected one of " + ", ".join(KNOWN_EFFORTS)
+            )
+        return text
 
 
 # An invoker builder turns a binding into something the ladder can call.
@@ -166,9 +216,10 @@ def _claude_cli_builder(spec: ModelSpec) -> Invoker:
 
     An unpinned binding omits the model flag, so the CLI routes the call the way
     a routing aggregator would. Cost comes back as the API-equivalent figure the
-    CLI reports.
+    CLI reports. Effort is always passed explicitly, so the call never inherits
+    the reasoning budget of whatever machine launched it.
     """
-    return ClaudeCliInvoker(model=spec.model)
+    return ClaudeCliInvoker(model=spec.model, effort=spec.effort)
 
 
 register_provider(ANTHROPIC_CLAUDE_CLI, _claude_cli_builder)

@@ -1,0 +1,19 @@
+# unamentis-ios architecture (solution-explorer projection)
+
+> Machine-readable architecture enumeration of this codebase. Answer questions about the code by fetching the small JSON files below instead of reading the raw repository. Start with ai.json for the full endpoint map, walk orders, and the token-economy contract.
+
+_generated_at: 2026-08-28T01:51:28.574686+00:00; analyzer_version: 1.2.0; front_door_version: 1; mode: monolith_
+
+## Start here
+
+- [ai.json](./ai.json): endpoint map, sharding schemes, walk orders, token-economy contract (read this first).
+
+## Endpoints
+
+- [architecture.json](./architecture.json): the whole dataset in one file (components, relationships, stats, inline symbols/files, embedded coverage/activity/supply_chain). Small-repo layout with no separate shards.
+- [sbom.json](./sbom.json): CycloneDX 1.5 SBOM beside the monolith; a quick dependency summary is in its .supply_chain section.
+- [cra-readiness.json](./cra-readiness.json): repo-observable CRA readiness checklist beside the monolith (presence/absence items with evidence; not a conformity assessment).
+
+## Token economy
+
+Fetch the smallest set of files that answers the question. Never crawl the whole tree. The point of this projection is to answer questions about the codebase in a fraction of the tokens that reading the raw source would cost.

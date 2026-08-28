@@ -6,15 +6,14 @@ against billed prompt-side tokens, max residual 1.95%).
 """
 import json
 import sys
-import hashlib
 from pathlib import Path
 
 sys.path.insert(0, "/Volumes/Studio/dev/solution-explorer")
 import tiktoken
 
-from analyzer.enrich.partition import plan_partitions
-from analyzer.enrich.prompts import StoreFacts, build_contract_partition_prompt, ROLE_VOCABULARY
 from analyzer.enrich.contract import _is_substitution_failure
+from analyzer.enrich.partition import plan_partitions
+from analyzer.enrich.prompts import StoreFacts, build_contract_partition_prompt
 
 ENC = tiktoken.get_encoding("o200k_base")
 SCALE = 1.5829164598680414

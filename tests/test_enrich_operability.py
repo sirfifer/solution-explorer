@@ -37,6 +37,7 @@ from analyzer.enrich.pipeline import (
     BudgetMeter,
     LadderConfig,
     LadderPolicy,
+    PhaseResult,
     build_run_context,
     policy_invoker_factory,
     run_pipeline,
@@ -249,6 +250,117 @@ def test_budget_meter_charging_is_thread_safe():
     assert abs(meter.spent - 8.0) < 1e-6
 
 
+def test_operator_checkpoint_pauses_then_resumes_without_losing_the_run(tmp_path):
+    control = tmp_path / "control.json"
+    meter = BudgetMeter()
+    meter.configure_control(control, 1.0, poll_s=0.01)
+    meter.charge(1.05)
+    answers = []
+    waiter = threading.Thread(target=lambda: answers.append(meter.under()))
+    waiter.start()
+
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        packet = json.loads(control.read_text())
+        if packet["state"] == "paused":
+            break
+        time.sleep(0.01)
+    else:
+        raise AssertionError("checkpoint never persisted the pause")
+    assert waiter.is_alive(), "pause must block new work, not return a partial run"
+    assert packet["spent_usd"] == 1.05
+    assert "Review the live phase" in packet["recommendation"]
+
+    packet.update({"state": "running", "pause_at_usd": 2.0})
+    control.write_text(json.dumps(packet))
+    waiter.join(timeout=2)
+    assert answers == [True]
+    assert meter.pause_at_usd == 2.0
+
+
+def test_operator_cancel_releases_a_paused_waiter_as_a_cancelled_run(tmp_path):
+    control = tmp_path / "control.json"
+    meter = BudgetMeter()
+    meter.configure_control(control, 1.0, poll_s=0.01)
+    meter.charge(1.0)
+    answers = []
+    waiter = threading.Thread(target=lambda: answers.append(meter.under()))
+    waiter.start()
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        packet = json.loads(control.read_text())
+        if packet["state"] == "paused":
+            break
+        time.sleep(0.01)
+    packet["state"] = "cancelled"
+    control.write_text(json.dumps(packet))
+    waiter.join(timeout=2)
+    assert answers == [False]
+    assert "cancelled by the operator" in meter.stop_reason()
+
+
+def test_cancelled_pipeline_without_cost_ceiling_skips_cleanly(world, tmp_path):
+    """Cancellation is a stop reason of its own; a None ceiling must not format."""
+    invoker = InstrumentedLadder(
+        _plan(world), world["real_file"], world["components"],
+        world["relationships"], world["facts_by_id"],
+    )
+    ctx = build_run_context(
+        LadderConfig(
+            store_path=world["db"], root=POLYGLOT, run_dir=tmp_path / "run",
+            policy=LadderPolicy(pause_at_cost_usd=50.0),
+        ),
+        invoker_factory=lambda spec: invoker, clock=FIXED_CLOCK,
+    )
+    packet = json.loads((tmp_path / "run" / "control.json").read_text())
+    packet["state"] = "cancelled"
+    (tmp_path / "run" / "control.json").write_text(json.dumps(packet))
+
+    class Phase:
+        def __init__(self, name):
+            self.name = name
+
+        def run(self, _ctx):
+            return PhaseResult(self.name, "ok")
+
+    try:
+        result = run_pipeline(ctx, [Phase("first"), Phase("terminal")])
+    finally:
+        ctx.store.close()
+
+    assert result.phases[0].status == "skipped"
+    assert "cancelled by the operator" in result.phases[0].notes[0]
+    assert result.phases[1].status == "ok"
+
+
+def test_operator_pause_and_checkpoint_survive_process_reconstruction(tmp_path):
+    control = tmp_path / "control.json"
+    first = BudgetMeter()
+    first.configure_control(control, 10.0, poll_s=0.01)
+    packet = json.loads(control.read_text())
+    packet.update({"state": "paused", "pause_at_usd": 12.0, "revision": 9})
+    control.write_text(json.dumps(packet))
+
+    reconstructed = BudgetMeter()
+    reconstructed.configure_control(control, 99.0, poll_s=0.01)
+
+    persisted = json.loads(control.read_text())
+    assert persisted["state"] == "paused"
+    assert persisted["revision"] == 9
+    assert reconstructed.pause_at_usd == 12.0
+
+
+def test_cost_reservations_cannot_sum_past_the_run_ceiling():
+    meter = BudgetMeter(ceiling=2.0)
+    reservations = [meter.reserve(slots=4) for _ in range(4)]
+    assert reservations == [0.5, 0.5, 0.5, 0.5]
+    assert meter.remaining() == 0.0
+    assert meter.under() is False
+    meter.settle(reservations[0], 0.1)
+    assert abs(meter.spent - 0.1) < 1e-9
+    assert abs(meter.reserve(slots=4) - 0.4) < 1e-9
+
+
 # --- 4. the ledger streams ------------------------------------------------------
 
 
@@ -325,10 +437,13 @@ def test_dry_run_projects_wall_time_and_names_the_armed_limits(world, tmp_path):
 
 
 def test_the_retry_budget_scales_with_the_invoke_timeout():
-    factory = policy_invoker_factory(LadderPolicy(invoke_timeout_s=1200))
+    factory = policy_invoker_factory(
+        LadderPolicy(invoke_timeout_s=1200, retry_attempts=2)
+    )
     invoker = factory("anthropic-claude-cli:sonnet")
     # The per-attempt timeout reached the transport, and the retry budget
     # exceeds it, so a single full timeout no longer exhausts the budget and
     # one recovery attempt is actually possible.
     assert invoker._base.timeout == 1200
+    assert invoker._policy.max_attempts == 2
     assert invoker._policy.total_budget_s > 1200

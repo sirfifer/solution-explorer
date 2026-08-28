@@ -29,6 +29,7 @@ for the record because a tier that consistently overclaims is itself a finding.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -70,6 +71,7 @@ COMPONENT_QUESTIONS: tuple[str, ...] = (
 
 # Relationships carry a reduced form: what flows, and why it exists (4.1).
 RELATIONSHIP_QUESTIONS: tuple[str, ...] = ("flow", "why")
+AUDITED_OPTIONAL_QUESTIONS: tuple[str, ...] = ("why_matters", "data_handled")
 
 # Mechanical escalation triggers (4.3). The trigger travels with the item.
 TRIGGERS: dict[str, str] = {
@@ -80,6 +82,36 @@ TRIGGERS: dict[str, str] = {
     "E5": "declared confusion: the tier cannot reconcile the code with its comments, "
     "docs or naming",
 }
+
+# The trigger-class vocabulary: which failures mean "the tier lacked facts"
+# (context) and which mean "the tier lacked capability" (reasoning). One
+# import for the router and the run report; a second copy of this map is how
+# the three-role drift happens. E2/E3/E4 are context because their failure
+# mode is evidence that did not check out, contradicted, or could not
+# distinguish a sibling; E1/E5 are reasoning. An item's recorded ``lacked``
+# self-report refines this where present (fact -> context,
+# judgment -> reasoning); the trigger map is the fallback.
+CONTEXT_TRIGGERS: tuple[str, ...] = ("E2", "E3", "E4")
+REASONING_TRIGGERS: tuple[str, ...] = ("E1", "E5")
+
+
+def trigger_class(triggers) -> str:
+    """Deterministic class of a failed-item's trigger set.
+
+    Total over any iterable of trigger codes: pure context, pure reasoning,
+    or mixed. Mixed climbs with the reasoning class because its
+    reasoning-half needs the climb anyway and splitting one item across two
+    calls would give it two writers per rung.
+    """
+    seen = {str(t) for t in triggers}
+    if not seen:
+        return "reasoning"
+    if seen <= set(CONTEXT_TRIGGERS):
+        return "context"
+    if not (seen & set(CONTEXT_TRIGGERS)):
+        return "reasoning"
+    return "mixed"
+
 
 # Terminal contract states (4.4).
 TERMINAL_STATES: tuple[str, ...] = ("grounded", "escalate", "honest_gap")
@@ -126,14 +158,25 @@ class Answer:
     status: str = "answered"
     reason: Optional[str] = None
     evidence: list[dict] = field(default_factory=list)
+    # The tier's self-report of WHAT it lacked, only meaningful on an
+    # uncertain answer: "fact" (more deterministic context would settle it)
+    # or "judgment" (genuine difficulty). Deliberately ignored when deciding
+    # groundedness; consumed by routing classification and the exit report.
+    lacked: Optional[str] = None
+    need: Optional[str] = None
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "claim": self.claim,
             "status": self.status,
             "reason": self.reason,
             "evidence": [dict(item) for item in self.evidence],
         }
+        if self.lacked:
+            out["lacked"] = self.lacked
+        if self.need:
+            out["need"] = self.need
+        return out
 
     @classmethod
     def from_any(cls, raw: Any) -> Answer:
@@ -152,6 +195,7 @@ class Answer:
         if status not in ANSWER_STATUSES:
             status = "answered"
         evidence = raw.get("evidence")
+        lacked = raw.get("lacked")
         return cls(
             claim=str(raw.get("claim") or "").strip(),
             status=status,
@@ -159,6 +203,8 @@ class Answer:
             evidence=[item for item in evidence if isinstance(item, dict)]
             if isinstance(evidence, list)
             else [],
+            lacked=lacked if lacked in ("fact", "judgment") else None,
+            need=(str(raw["need"]).strip() if raw.get("need") else None),
         )
 
 
@@ -169,16 +215,25 @@ class FailedQuestion:
     question: str
     trigger: str
     note: str = ""
+    # The failing answer's own lacked self-report, where it gave one. This is
+    # what lets classification rest on what the tier SAID it was missing
+    # rather than on the trigger heuristic alone.
+    lacked: Optional[str] = None
 
     def to_dict(self) -> dict:
-        return {"question": self.question, "trigger": self.trigger, "note": self.note}
+        out = {"question": self.question, "trigger": self.trigger, "note": self.note}
+        if self.lacked:
+            out["lacked"] = self.lacked
+        return out
 
     @classmethod
     def from_dict(cls, data: dict) -> FailedQuestion:
+        lacked = data.get("lacked")
         return cls(
             question=str(data.get("question") or ""),
             trigger=str(data.get("trigger") or ""),
             note=str(data.get("note") or ""),
+            lacked=lacked if lacked in ("fact", "judgment") else None,
         )
 
 
@@ -198,6 +253,17 @@ class ContractState:
     declared_confusion: Optional[str] = None
     parser_first: list[str] = field(default_factory=list)
     history: list[str] = field(default_factory=list)
+    # The routing record, stamped the first time this item enters the escalate
+    # state and never overwritten. The v2 run could not measure its own
+    # routing populations because a resolved item clears its triggers, so
+    # class-at-entry was unrecoverable post hoc (the 48%-to-66% bound in
+    # IMPLEMENTATION-DELTA-ORCH.md section 3.4). These two fields make every
+    # later run self-measuring, and `repair_attempted` is the one-shot bound
+    # on the same-tier repair loop.
+    entry_triggers: list[str] = field(default_factory=list)
+    entry_class: Optional[str] = None
+    entry_class_basis: Optional[str] = None
+    repair_attempted: bool = False
 
     @property
     def terminal(self) -> str:
@@ -228,7 +294,44 @@ class ContractState:
             "declared_confusion": self.declared_confusion,
             "parser_first": list(self.parser_first),
             "history": list(self.history),
+            "entry_triggers": list(self.entry_triggers),
+            "entry_class": self.entry_class,
+            "entry_class_basis": self.entry_class_basis,
+            "repair_attempted": self.repair_attempted,
         }
+
+    def record_entry_class(self) -> None:
+        """Stamp class-at-entry once, at the moment the item first escalates.
+
+        The recorded ``lacked`` self-report supersedes the trigger heuristic
+        wherever a failing answer gave one: a tier saying "I lacked a fact"
+        is context class regardless of which trigger fired, and "judgment"
+        is reasoning class. Questions without a self-report fall back to the
+        trigger map, and the basis records how much of each was used.
+        """
+        if self.entry_class is not None or self.state != "escalate":
+            return
+        self.entry_triggers = list(self.triggers)
+        classes: list[str] = []
+        lacked_used = 0
+        for f in self.failed:
+            if f.lacked == "fact":
+                classes.append("context")
+                lacked_used += 1
+            elif f.lacked == "judgment":
+                classes.append("reasoning")
+                lacked_used += 1
+            else:
+                classes.append(trigger_class([f.trigger]))
+        if all(c == "context" for c in classes):
+            self.entry_class = "context"
+        elif all(c == "reasoning" for c in classes):
+            self.entry_class = "reasoning"
+        else:
+            self.entry_class = "mixed"
+        self.entry_class_basis = (
+            f"lacked:{lacked_used}/trigger:{len(classes) - lacked_used}"
+        )
 
     @classmethod
     def from_dict(cls, data: dict) -> ContractState:
@@ -247,6 +350,10 @@ class ContractState:
             declared_confusion=data.get("declared_confusion"),
             parser_first=list(data.get("parser_first") or []),
             history=list(data.get("history") or []),
+            entry_triggers=list(data.get("entry_triggers") or []),
+            entry_class=data.get("entry_class"),
+            entry_class_basis=data.get("entry_class_basis"),
+            repair_attempted=bool(data.get("repair_attempted", False)),
         )
 
 
@@ -302,6 +409,25 @@ def _contradiction_notes(facts: Optional[dict], answers: dict[str, Answer]) -> l
     return out
 
 
+def _parser_settles(question: str, facts: Optional[dict]) -> bool:
+    """True when a required identity question is already answered by the parser.
+
+    Only identity attributes qualify, and only when the store actually carries a
+    concrete value. `purpose`, `mechanism`, `place` and `next_step` are never
+    settled this way: no deterministic pass produces them, so a model failing
+    one is a real gap and must still climb.
+    """
+    if not question.startswith("identity."):
+        return False
+    if not isinstance(facts, dict):
+        return False
+    attribute = question.split(".", 1)[1]
+    if attribute not in ("type", "framework", "port", "language"):
+        return False
+    value = facts.get(attribute)
+    return value is not None and str(value).strip() not in ("", "None", "unknown")
+
+
 def evaluate(
     *,
     target_kind: str,
@@ -332,9 +458,27 @@ def evaluate(
     required = required_questions(target_kind, facts)
     failed: list[FailedQuestion] = []
 
-    for question in required:
+    questions = [
+        *required,
+        *(q for q in AUDITED_OPTIONAL_QUESTIONS if q in parsed and q not in required),
+    ]
+    for question in questions:
+        # An identity attribute the PARSER already determined is settled before
+        # a model is consulted. The question is only asked at all because the
+        # analyzer detected the attribute, the prompt hands the detected value
+        # over, and `strict_identity` is off by default so nothing ever checks
+        # the model's restatement of it. Letting such a question fail therefore
+        # escalates a fact we already hold to a more expensive tier to be
+        # re-derived and then discarded: on the 2026-08-25 unamentis-ios run,
+        # identity.framework climbed to Opus twice on exactly that path, at
+        # roughly 17.5x the cost per item of the rung that already knew.
+        #
+        # Deterministic-first: where the parser has the answer, the parser IS
+        # the answer, and the model's version cannot make it a gap.
+        if _parser_settles(question, facts):
+            continue
         answer = parsed.get(question)
-        if answer is None or not answer.claim:
+        if answer is None:
             failed.append(
                 FailedQuestion(
                     question,
@@ -343,6 +487,12 @@ def evaluate(
                 )
             )
             continue
+        # An explicit uncertain/dropped answer intentionally carries no claim:
+        # its reason is the result.  Check status before the answered-claim
+        # shape or the evaluator replaces a useful, specific reason with the
+        # generic "no answer" fallback.  That ordering defect made the stored
+        # answer and census disagree and erased the learning value of terminal
+        # gaps during the live UnaMentis canary.
         if answer.status == "dropped":
             failed.append(
                 FailedQuestion(
@@ -358,6 +508,16 @@ def evaluate(
                     question,
                     "E2",
                     answer.reason or "the tier marked this answer uncertain",
+                    lacked=answer.lacked,
+                )
+            )
+            continue
+        if not answer.claim:
+            failed.append(
+                FailedQuestion(
+                    question,
+                    "E1",
+                    "no answer was produced for a required question",
                 )
             )
             continue
@@ -378,6 +538,68 @@ def evaluate(
                     "no citation checked out: " + "; ".join(r for r in reasons if r)[:300],
                 )
             )
+            continue
+        # A local count is not evidence for a corpus-wide uniqueness claim.
+        # Keep this deliberately typed and narrow: ordinary prose is untouched;
+        # explicit uniqueness words fail only when their factual support is
+        # exclusively component-local.
+        uniqueness_claim = re.search(
+            r"\b(?:(?:the|its|fixture's|system's|suite's)\s+"
+            r"(?:only|sole|unique|single|one)|(?:only|sole|unique|single|one)\s+"
+            r"(?:\w+[\s/-]+){0,3}(?:component|representative|sample|target|"
+            r"file|edge|relationship|capability|endpoint|source|route|type))\b",
+            answer.claim,
+            re.I,
+        )
+        if uniqueness_claim:
+            globally_scoped = [
+                item for item in answer.evidence
+                if isinstance(item, dict) and item.get("scope") == "global"
+            ]
+            local_singletons = {
+                "file_count": r"\b(?:only|sole|single|one)\s+(?:source\s+)?files?\b",
+                "inbound_edges": r"\b(?:only|sole|single|one)\s+inbound\s+(?:edge|relationship)\b",
+                "outbound_edges": r"\b(?:only|sole|single|one)\s+outbound\s+(?:edge|relationship)\b",
+                "capability_count": r"\b(?:only|sole|single|one)\s+(?:route|capability|endpoint)\b",
+                "data_entity_count": r"\b(?:only|sole|single|one)\s+data\s+entit(?:y|ies)\b",
+            }
+            cited_fields = {
+                str(item.get("field") or "") for item in answer.evidence
+                if isinstance(item, dict) and item.get("kind") == "fact"
+            }
+            locally_supported = any(
+                field in cited_fields
+                and (facts or {}).get(field) == 1
+                and re.search(pattern, answer.claim, re.I)
+                for field, pattern in local_singletons.items()
+            )
+            if not globally_scoped and not locally_supported:
+                failed.append(FailedQuestion(
+                    question, "E3",
+                    "a local analyzer fact cannot support a global uniqueness claim",
+                ))
+                continue
+        # Count atoms are deterministic enough to check without model judgment.
+        labels = {
+            "inbound_edges": "inbound", "outbound_edges": "outbound",
+            "file_count": "files", "lines": "lines", "action_count": "actions",
+        }
+        for item in answer.evidence:
+            if not isinstance(item, dict) or item.get("kind") != "fact":
+                continue
+            field = str(item.get("field") or "")
+            label = labels.get(field)
+            value = (facts or {}).get(field)
+            if label and isinstance(value, int):
+                match = re.search(
+                    rf"\b(\d[\d,]*)\s+{re.escape(label)}\b", answer.claim, re.I
+                )
+                if match and int(match.group(1).replace(",", "")) != value:
+                    failed.append(FailedQuestion(
+                        question, "E3",
+                        f"claim says {match.group(1)} {label}; analyzer fact is {value}",
+                    ))
+                    break
 
     if strict_identity:
         for question, note in _contradiction_notes(facts, parsed):

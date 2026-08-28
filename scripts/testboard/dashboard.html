@@ -122,6 +122,26 @@ header h1 {
 .dot.bad { background: var(--fail); box-shadow: 0 0 0 3px var(--fail-bg); }
 .dot.wait { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-bg); }
 
+.enrich-control {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 5px;
+  background: var(--panel-2);
+  font-size: 12px;
+}
+.enrich-control.paused { border-left-color: var(--warn); background: var(--warn-bg); }
+.enrich-control.cancelled { border-left-color: var(--fail); background: var(--fail-bg); }
+.enrich-control .control-head { font-weight: 700; color: var(--fg-strong); }
+.enrich-control .control-detail { margin-top: 4px; color: var(--muted); line-height: 1.45; }
+.enrich-control .control-actions { display: flex; gap: 7px; margin-top: 8px; }
+.enrich-control button {
+  font: inherit; border: 1px solid var(--border); border-radius: 4px;
+  padding: 4px 9px; color: var(--fg); background: var(--panel); cursor: pointer;
+}
+.enrich-control button:hover { border-color: var(--accent); }
+
 /* Tabs. Tests, processing, and the fleet answer three different questions, so
    they get three different rooms rather than one long scroll. */
 .tabs {
@@ -1866,6 +1886,7 @@ function liveCard(run) {
   h.push(liveHead(run, id));
   h.push(liveProgress(run, s, percent));
   h.push(liveNow(run, s, id));
+  h.push(enrichmentControl(run, id));
   h.push(liveMetrics(run, s));
   h.push(liveContext(run));
 
@@ -1878,6 +1899,64 @@ function liveCard(run) {
   h.push("</div>");
   return h.join("");
 }
+
+function enrichmentControl(run, id) {
+  var c = run.enrichment_control;
+  if (!c) return "";
+  var stateName = String(c.state || "running");
+  var h = [];
+  h.push('<div class="enrich-control ' + esc(stateName) + '">');
+  h.push('<div class="control-head">Enrichment control: ' + esc(stateName.toUpperCase()) +
+    ' · $' + Number(c.spent_usd || 0).toFixed(2) + ' spent' +
+    (c.pause_at_usd ? ' · next checkpoint $' + Number(c.pause_at_usd).toFixed(2) : '') + '</div>');
+  h.push('<div class="control-detail">' + esc(c.reason || '') +
+    (c.recommendation ? '<br>' + esc(c.recommendation) : '') + '</div>');
+  if (stateName !== "cancelled") {
+    h.push('<div class="control-actions">');
+    if (stateName === "paused") {
+      h.push('<button type="button" data-enrich-action="resume" data-run-id="' + esc(id) +
+        '" data-current-checkpoint="' + esc(c.pause_at_usd || '') + '">Resume with higher checkpoint</button>');
+    } else {
+      h.push('<button type="button" data-enrich-action="pause" data-run-id="' + esc(id) +
+        '">Pause now</button>');
+    }
+    h.push('<button type="button" data-enrich-action="cancel" data-run-id="' + esc(id) +
+      '">Cancel run</button></div>');
+  }
+  h.push('</div>');
+  return h.join('');
+}
+
+document.addEventListener("click", function (event) {
+  var button = event.target && event.target.closest
+    ? event.target.closest("[data-enrich-action]") : null;
+  if (!button) return;
+  var action = button.getAttribute("data-enrich-action");
+  var runId = button.getAttribute("data-run-id");
+  var body = {};
+  if (action === "resume") {
+    var current = Number(button.getAttribute("data-current-checkpoint") || 0);
+    var entered = window.prompt(
+      "New API-equivalent cost checkpoint (must be above completed and reserved spend):",
+      String(Math.max(current + 5, Math.ceil(current * 1.5)))
+    );
+    if (entered === null) return;
+    body.pause_at_usd = Number(entered);
+    if (!isFinite(body.pause_at_usd)) { window.alert("Enter a numeric checkpoint."); return; }
+  } else if (action === "cancel") {
+    if (!window.confirm("Cancel this enrichment run after banking completed calls?")) return;
+  }
+  button.disabled = true;
+  fetch("/api/enrichment/" + encodeURIComponent(runId) + "/" + action, {
+    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)
+  }).then(function (res) { return res.json().then(function (data) {
+    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+    poll();
+  }); }).catch(function (err) {
+    window.alert("Control action failed: " + (err.message || String(err)));
+    button.disabled = false;
+  });
+});
 
 function liveHead(run, id) {
   var h = [];

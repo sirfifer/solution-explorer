@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
+from types import SimpleNamespace
 
 import pytest
 
@@ -35,8 +37,13 @@ from analyzer.enrich.contract import (
     required_questions,
 )
 from analyzer.enrich.determine import (
+    DeterminationOutcome,
     DeterminationPhase,
     IterationRound,
+    _adjudication_digest,
+    _normalize_run_analysis,
+    _operations_digest,
+    build_determination_prompt,
     evaluate_universal,
 )
 from analyzer.enrich.engine import InvokeResult
@@ -46,18 +53,208 @@ from analyzer.enrich.pipeline import (
     IterationPolicy,
     LadderConfig,
     LadderPolicy,
+    LedgerRow,
     build_phases,
     build_run_context,
     run_ladder,
     run_pipeline,
 )
+from analyzer.enrich.prompts import split_cached_prompt
 from analyzer.enrich.runreport import REQUIRED_SECTIONS, build_report, render_markdown
+from analyzer.enrich.workorder import WorkOrder
 from analyzer.extract import extract_repo
 from analyzer.store import FactStore
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 POLYGLOT = os.path.join(FIXTURES, "polyglot")
 FIXED_CLOCK = lambda: "2026-08-21T00:00:00+00:00"  # noqa: E731
+
+
+def test_determination_census_changes_only_the_uncached_tail():
+    common = dict(
+        criteria=universal_criteria(), adjudication={"checked": 1},
+        synthesis={"tours": []}, brief={"subject": "fixture"},
+        forced_round=False, rounds_so_far=[], budget_note="BUDGET: bounded",
+    )
+    first = build_determination_prompt(
+        census={"total": 2, "grounded": 1}, **common
+    )
+    second = build_determination_prompt(
+        census={"total": 2, "grounded": 2}, **common
+    )
+    first_prefix, first_tail = split_cached_prompt(first)
+    second_prefix, second_tail = split_cached_prompt(second)
+    assert first_prefix == second_prefix
+    assert first_tail != second_tail
+    assert '"grounded":1' in first_tail
+    assert '"grounded":2' in second_tail
+
+
+def test_bounded_canary_scope_is_stable_and_forbids_full_repo_claims():
+    prompt = build_determination_prompt(
+        criteria=universal_criteria(), census={"total": 2}, adjudication=None,
+        synthesis=None, brief={"subject": "fixture"}, forced_round=False,
+        rounds_so_far=[], budget_note="BUDGET: bounded",
+        scope_note=(
+            "This is a bounded validation canary. Judge the attempted slice at "
+            "full quality and do not claim the full repository is complete."
+        ),
+    )
+    prefix, tail = split_cached_prompt(prompt)
+    assert "RUN SCOPE" in prefix
+    assert "full repository is complete" in prefix
+    assert "RUN SCOPE" not in tail
+
+
+def test_determination_adjudication_changes_only_the_uncached_tail():
+    common = dict(
+        criteria=universal_criteria(), census={"total": 2, "grounded": 2},
+        synthesis={"tours": []}, brief={"subject": "fixture"},
+        forced_round=False, rounds_so_far=[], budget_note="BUDGET: bounded",
+    )
+    first = build_determination_prompt(
+        adjudication={"checked": 1, "unsupported": 1}, **common,
+    )
+    second = build_determination_prompt(
+        adjudication={"checked": 2, "unsupported": 0}, **common,
+    )
+    first_prefix, first_tail = split_cached_prompt(first)
+    second_prefix, second_tail = split_cached_prompt(second)
+
+    assert first_prefix == second_prefix
+    assert first_tail != second_tail
+    assert '"unsupported":1' in first_tail
+    assert '"unsupported":0' in second_tail
+
+
+def test_determination_receives_measured_operations_in_the_uncached_tail():
+    common = dict(
+        criteria=universal_criteria(), census={"total": 2}, adjudication=None,
+        synthesis=None, brief={"subject": "fixture"}, forced_round=False,
+        rounds_so_far=[], budget_note="BUDGET: bounded",
+    )
+    first = build_determination_prompt(
+        operations={"totals": {"calls": 4, "tokens_out": 900}}, **common
+    )
+    second = build_determination_prompt(
+        operations={"totals": {"calls": 6, "tokens_out": 1200}}, **common
+    )
+    first_prefix, first_tail = split_cached_prompt(first)
+    second_prefix, second_tail = split_cached_prompt(second)
+
+    assert first_prefix == second_prefix
+    assert first_tail != second_tail
+    assert "MEASURED RUN OPERATIONS" in first_tail
+    assert '"calls":4' in first_tail
+    assert "run_analysis is the learning channel" in first_prefix
+
+
+def test_operations_digest_preserves_exact_totals_and_bounds_only_prompt_examples():
+    rows = [
+        LedgerRow(
+            phase="p2_ladder", rung="2a", model="sonnet", targets=3,
+            tokens_in=100, tokens_cached=80, tokens_cache_write=90,
+            tokens_out=40, response_bytes=120, cost_usd=0.2,
+            wall_seconds=2.5,
+        ),
+        LedgerRow(
+            phase="p3_adjudication", rung="check", model="opus", targets=1,
+            tokens_in=30, tokens_out=10, response_bytes=50, cost_usd=0.1,
+            wall_seconds=1.0, retries=1, ok=False,
+        ),
+    ]
+    findings = [
+        {"target_kind": "component", "target_id": f"c{i}",
+         "finding": f"mechanical rule {i}"}
+        for i in range(41)
+    ]
+    ladder = SimpleNamespace(
+        transitions=[{
+            "state": "escalate", "target_kind": "component", "target_id": "c0",
+            "failed": [{"trigger": "E2"}],
+        }],
+        parser_findings=findings,
+    )
+    digest = _operations_digest(SimpleNamespace(ledger=rows), ladder)
+
+    assert digest["totals"] == {
+        "calls": 2, "targets": 4, "tokens_in": 130, "tokens_cached": 80,
+        "tokens_cache_write": 90, "tokens_out": 50, "response_bytes": 170,
+        "cost_usd": 0.3, "wall_seconds": 3.5, "retries": 1, "failures": 1,
+        "output_budget_violations": 0, "cache_read_write_ratio": 0.8889,
+    }
+    assert digest["escalation"] == {
+        "climbed_targets": 1, "failure_records_by_trigger": {"E2": 1},
+    }
+    assert digest["parser_first"]["distinct_count"] == 41
+    assert len(digest["parser_first"]["examples"]) == 40
+    assert digest["parser_first"]["examples_are_bounded"] is True
+
+
+def test_run_analysis_is_bounded_without_dropping_the_learning_channel():
+    analysis = _normalize_run_analysis({
+        "summary": "measured conclusion",
+        "deterministic_transfers": [
+            {"finding": f"f{i}", "basis": f"b{i}", "validation": f"v{i}"}
+            for i in range(8)
+        ],
+        "improvements": [{"area": "routing", "recommendation": "test E2",
+                          "basis": "three E2 climbs"}],
+        "watch_next_run": [f"signal {i}" for i in range(8)],
+    })
+
+    assert analysis["status"] == "model-analyzed"
+    assert analysis["summary"] == "measured conclusion"
+    assert len(analysis["deterministic_transfers"]) == 5
+    assert len(analysis["watch_next_run"]) == 5
+    assert analysis["improvements"][0]["basis"] == "three E2 climbs"
+
+
+def test_determination_digest_carries_supported_claims_needed_by_criteria():
+    digest = _adjudication_digest({
+        "checked": 2,
+        "unsupported": 1,
+        "spot_checks": [
+            {
+                "target_kind": "component", "target_id": "services/api",
+                "question": "data_handled",
+                "claim": "The README names the API's Postgres driver.",
+                "supported": True,
+            },
+            {
+                "target_kind": "component", "target_id": "root",
+                "question": "place", "claim": "Unsupported gloss.",
+                "supported": False, "reason": "No exact evidence.",
+            },
+        ],
+    })
+
+    assert digest["checked_claims"][0] == {
+        "target_kind": "component",
+        "target_id": "services/api",
+        "question": "data_handled",
+        "claim": "The README names the API's Postgres driver.",
+        "supported": True,
+    }
+    assert digest["unsupported_examples"][0]["target_id"] == "root"
+
+
+def test_determination_receives_parser_owned_inventory_in_the_stable_prefix():
+    prompt = build_determination_prompt(
+        criteria=universal_criteria(), census={"total": 2}, adjudication=None,
+        synthesis=None, brief={"subject": "fixture"}, forced_round=False,
+        rounds_so_far=[], budget_note="BUDGET: bounded",
+        mechanical_map={
+            "stats": {"total_components": 2, "languages": {"python": 1}},
+            "components": [{"id": "api", "type": "api-server", "language": "python"}],
+            "relationships": [], "readme": "Layout: api",
+        },
+    )
+    prefix, _ = split_cached_prompt(prompt)
+    assert prefix is not None
+    assert "THE MECHANICAL MAP INVENTORY" in prefix
+    assert '"total_components":2' in prefix
+    assert '"id":"api"' in prefix
 
 
 # --- 1. the universal gates are answered by code ------------------------------
@@ -137,6 +334,14 @@ def test_u3_rejects_an_honest_gap_with_no_reason():
     assert verdict.verdict == "unmet"
     assert "silence dressed as a disclosure" in verdict.reasoning
 
+    generic = ContractState("component", "c", state="honest_gap")
+    generic.failed.append(FailedQuestion(
+        "mechanism", "E1", "no answer was produced for a required question"
+    ))
+    verdict = evaluate_universal(u3, census=_census_of(generic), adjudication=None)
+    assert verdict.verdict == "unmet"
+    assert "no specific reason" in verdict.reasoning
+
 
 # --- the full pipeline, end to end, on canned responses -----------------------
 
@@ -184,6 +389,21 @@ class FullPipelineInvoker:
                     "evidence": ["every component carries a language claim"],
                     "reasoning": "the census grounded identity.language throughout",
                 }],
+                "run_analysis": {
+                    "summary": "The measured ledger shows a clean bounded run; "
+                               "the parser-first card is the transferable lesson.",
+                    "deterministic_transfers": [{
+                        "finding": "The fixture framework is inferable from its manifest.",
+                        "basis": "The same parser-first card survived every rung.",
+                        "validation": "Add a real manifest extraction regression.",
+                    }],
+                    "improvements": [{
+                        "area": "parser",
+                        "recommendation": "Teach extraction the repeated manifest rule.",
+                        "basis": "The exit digest contains one distinct parser-first card.",
+                    }],
+                    "watch_next_run": ["Compare parser-first cards and escalation count."],
+                },
                 "improvement_target": self.target,
             }
             if self.orders:
@@ -250,7 +470,30 @@ class FullPipelineInvoker:
             or "LAST rung" in prompt
         ):
             return self._ok(self._enrichment(prompt))
-        # A verify pass.
+        # A verify pass. The edge and identity passes are BATCHED: one call
+        # carries many independent items and answers each by its own id, so a
+        # fake model has to speak that protocol or every item reads as
+        # unanswered. Per-item calls were 99% of a real run's invocations.
+        ids = re.findall(r'"id":\s*"([^"]+)"', prompt)
+        if "FINDINGS AND EVIDENCE:" in prompt:
+            return self._ok({"verdicts": {
+                i: {"verdict": "verified", "reason": "the evidence holds up"}
+                for i in ids
+            }})
+        if "EDGES AND EVIDENCE:" in prompt:
+            return self._ok({"verdicts": {
+                i: {"status": "confirmed", "reason": "the evidence shows it"}
+                for i in ids
+            }})
+        if "COMPONENTS AND FACTS:" in prompt:
+            return self._ok({"components": {
+                i: {
+                    "fields": {f: {"status": "confirmed"} for f in
+                               ("name", "type", "framework", "port")},
+                    "prose_issues": [],
+                }
+                for i in ids
+            }})
         return self._ok({
             "fields": {f: {"status": "confirmed"} for f in
                        ("name", "type", "framework", "port")},
@@ -259,7 +502,10 @@ class FullPipelineInvoker:
         })
 
     def _enrichment(self, prompt):
-        ids = [cid for cid in self.world["components"] if f'"{cid}"' in prompt]
+        relationship_call = "ENRICHMENT TASK: relationships" in prompt
+        ids = [] if relationship_call else [
+            cid for cid in self.world["components"] if f'"{cid}"' in prompt
+        ]
         if "HIGHER RUNG" in prompt or "LAST rung" in prompt:
             # An escalation prompt names its items explicitly; answer only those,
             # the way a real higher rung would.
@@ -308,6 +554,7 @@ class FullPipelineInvoker:
                     "claim": "", "status": "dropped",
                     "reason": "generated at build time",
                 }
+        relationship_work = relationship_call or '"target_kind": "relationship"' in prompt
         relationships = {
             key: {
                 "data_flow_description": "identifiers and request payloads",
@@ -323,7 +570,7 @@ class FullPipelineInvoker:
                     "self_state": "grounded",
                 },
             }
-            for key in self.world["relationships"] if key in prompt
+            for key in self.world["relationships"] if relationship_work and key in prompt
         }
         return {"components": components, "relationships": relationships}
 
@@ -397,6 +644,8 @@ def test_the_whole_pipeline_runs_end_to_end_and_writes_a_complete_report(world):
         "done", "done-with-reservations", "not-done"
     )
     assert report["determination"]["reasoning"]
+    assert report["run_analysis"]["status"] == "model-analyzed"
+    assert report["run_analysis"]["deterministic_transfers"]
     assert report["iterations"], "the forced round must be recorded"
     assert report["parser_findings"], "the parser-first findings must be carried"
     assert report["lessons"]
@@ -406,6 +655,8 @@ def test_the_whole_pipeline_runs_end_to_end_and_writes_a_complete_report(world):
     assert "## Item census" in markdown
     assert "## Criteria" in markdown
     assert "## Work ledger" in markdown
+    assert "## Run analysis" in markdown
+    assert "### Deterministic-transfer candidates" in markdown
     assert "API-equivalent" in markdown
     assert "not money spent" in markdown
 
@@ -494,6 +745,82 @@ def test_the_round_cap_bounds_a_run_that_keeps_saying_not_done(world):
     assert len(report["iterations"]) <= 2
 
 
+def test_claims_still_rejected_at_round_bound_are_quarantined_before_verdict(world):
+    class RejectingJudge(FullPipelineInvoker):
+        def __call__(self, prompt):
+            if "auditing whether claims" in prompt:
+                body = json.loads(
+                    prompt[prompt.index("CLAIMS AND THEIR EVIDENCE:") + 26:]
+                    .split("\n\nReturn the JSON")[0]
+                )
+                return self._ok({"checks": [
+                    {
+                        "question": claim["question"],
+                        "supported": claim["question"] != "purpose",
+                        "confidence": "high",
+                        "reason": (
+                            "the evidence does not carry this purpose clause"
+                            if claim["question"] == "purpose" else ""
+                        ),
+                    }
+                    for claim in body["claims"]
+                ]})
+            return super().__call__(prompt)
+
+    invoker = RejectingJudge(world, verdict="done", orders=False)
+    _full_run(world, invoker, min_rounds=0, max_rounds=0)
+    report = json.loads((world["run_dir"] / "report.json").read_text())
+
+    assert report["adjudication"]["unsupported"] == 0
+    assert report["census"]["by_state"].get("honest-gap", 0) > 0
+    assert any(
+        "deterministically quarantined" in note
+        for note in report["determination"]["notes"]
+    )
+    assert not any(
+        "independently unsupported" in str(order.get("lens") or "")
+        for order in report["work_orders"]
+    ), "the round bound must not leave a cosmetic unexecuted repair order"
+
+
+def test_final_quarantine_reaches_a_fixed_point_when_recheck_exposes_a_sibling(world):
+    class LayeredRejectingJudge(FullPipelineInvoker):
+        def __call__(self, prompt):
+            if "auditing whether claims" in prompt:
+                body = json.loads(
+                    prompt[prompt.index("CLAIMS AND THEIR EVIDENCE:") + 26:]
+                    .split("\n\nReturn the JSON")[0]
+                )
+                questions = {claim["question"] for claim in body["claims"]}
+                rejected = "purpose" if "purpose" in questions else (
+                    "mechanism" if "mechanism" in questions else None
+                )
+                return self._ok({"checks": [
+                    {
+                        "question": claim["question"],
+                        "supported": claim["question"] != rejected,
+                        "confidence": "high",
+                        "reason": (
+                            "the cited evidence does not carry this clause"
+                            if claim["question"] == rejected else ""
+                        ),
+                    }
+                    for claim in body["claims"]
+                ]})
+            return super().__call__(prompt)
+
+    invoker = LayeredRejectingJudge(world, verdict="done", orders=False)
+    _full_run(world, invoker, min_rounds=0, max_rounds=0)
+    report = json.loads((world["run_dir"] / "report.json").read_text())
+
+    assert report["adjudication"]["unsupported"] == 0
+    note = next(
+        note for note in report["determination"]["notes"]
+        if "adjudication fixed point" in note
+    )
+    assert "quarantined 2" in note
+
+
 def test_the_forced_round_prompt_asks_for_a_real_target_not_the_cheapest_one(world):
     invoker = FullPipelineInvoker(world)
     _full_run(world, invoker, min_rounds=1)
@@ -523,6 +850,10 @@ def test_the_determination_prompt_forbids_look_again(world):
     prompt = next(p for p in invoker.prompts if "deciding whether an automated map" in p)
     assert '"not-done" is only a legal verdict' in prompt
     assert "are not work orders" in prompt
+    assert "cannot change parser facts" in prompt
+    assert "Never issue a work order" in prompt
+    assert "cover every subject criterion you mark" in prompt
+    assert "aggregate disagreement rate" in prompt
 
 
 def test_an_unmet_criterion_qualifies_a_done_verdict(world):
@@ -543,6 +874,48 @@ def test_an_unmet_criterion_qualifies_a_done_verdict(world):
     report = json.loads((world["run_dir"] / "report.json").read_text())
     assert report["determination"]["verdict"] == "done-with-reservations"
     assert any("qualified" in n for n in report["determination"]["notes"])
+
+
+def test_an_unknown_criterion_qualifies_a_done_verdict(world):
+    class UnknownInvoker(FullPipelineInvoker):
+        def __call__(self, prompt):
+            result = super().__call__(prompt)
+            if "deciding whether an automated map" in prompt:
+                body = json.loads(result.text)
+                body["criteria"] = [{
+                    "criterion_id": "s1", "verdict": "unknown",
+                    "evidence": ["one sampled claim remains unsupported"],
+                    "reasoning": "the universal quality claim is not settled",
+                }]
+                return InvokeResult(
+                    ok=True, text=json.dumps(body), cost_usd=0.01
+                )
+            return result
+
+    _full_run(world, UnknownInvoker(world, verdict="done"), min_rounds=0)
+    report = json.loads((world["run_dir"] / "report.json").read_text())
+    assert report["determination"]["verdict"] == "done-with-reservations"
+    assert any("s1:unknown" in n for n in report["determination"]["notes"])
+
+
+def test_all_met_after_a_real_round_settles_done_and_retains_follow_up():
+    outcome = DeterminationOutcome(
+        verdict="not-done",
+        verdicts=[SimpleNamespace(verdict="met") for _ in range(8)],
+        rounds=[IterationRound(number=1, forced=True, ran=True)],
+        pending_orders=[WorkOrder(
+            scope=["api"], lens="Polish one residual claim.",
+            criteria="The residual claim is supported.",
+            expected_effect="truth: residual disagreement falls",
+            budget={"max_cost_usd": 1.0, "max_targets": 1},
+        )],
+    )
+
+    DeterminationPhase()._settle(outcome, census=None)
+
+    assert outcome.verdict == "done"
+    assert len(outcome.pending_orders) == 1
+    assert any("predeclared criterion is met" in note for note in outcome.notes)
 
 
 # --- 4. a no-gain round is recorded as one ------------------------------------
@@ -576,6 +949,56 @@ def test_measured_and_perceived_deltas_are_kept_apart():
     assert data["gained"] is False, "judgment does not get a vote on the measurement"
     assert data["perceived_delta_is_judgment"] is True
     assert data["measured_delta"]["changed"] == 0
+
+
+def test_a_rung_move_or_lower_disagreement_is_a_measured_gain():
+    rung_move = IterationRound(number=1, forced=True)
+    rung_move.measured_delta = {"changed": 0, "rung_moves": ["services/api"]}
+    assert rung_move.gained is True
+
+    quality = IterationRound(number=1, forced=True)
+    quality.measured_delta = {
+        "changed": 0,
+        "rung_moves": [],
+        "adjudication_disagreement_before": 0.333333,
+        "adjudication_disagreement_after": 0.0,
+    }
+    assert quality.gained is True
+
+
+def test_first_round_order_is_expanded_to_every_independently_failed_claim():
+    """One forced round must repair the judge's list, not a convenient subset."""
+    existing = WorkOrder(
+        scope=["services/api"],
+        lens="Repair the API purpose.",
+        criteria="The API purpose is supported.",
+        expected_effect="truth: API purpose disagreement falls",
+        budget={"max_cost_usd": 0.5, "max_targets": 1},
+    )
+    outcome = DeterminationOutcome(pending_orders=[existing])
+    adjudication = SimpleNamespace(unsupported=[
+        SimpleNamespace(target_id="services/api", question="mechanism"),
+        SimpleNamespace(target_id="root", question="place"),
+    ])
+    ctx = SimpleNamespace(policy=SimpleNamespace(max_work_orders=3))
+
+    DeterminationPhase()._ensure_adjudication_repair(
+        outcome, adjudication, ctx
+    )
+
+    assert len(outcome.pending_orders) == 1, "do not buy a duplicate target pass"
+    order = outcome.pending_orders[0]
+    assert order.scope == ["root", "services/api"]
+    assert "root:place" in order.lens
+    assert "services/api:mechanism" in order.lens
+    assert "must not repeat any phrase" in order.lens
+    assert "exact missing evidence" in order.lens
+    assert order.max_targets == 2
+    assert order.max_cost_usd == 2.0
+    assert any("expanded its first-round scope" in note for note in outcome.notes)
+    assert sum(
+        "expanded its first-round scope" in note for note in outcome.notes
+    ) == 1
 
 
 # --- 5. the report survives partial failure -----------------------------------
@@ -788,8 +1211,10 @@ def test_the_committed_reference_report_matches_what_the_engine_produces(world):
         accounting = report.get("accounting") or {}
         for bucket in accounting.get("by_model") or []:
             bucket["wall_seconds"] = 0.0
-        if accounting.get("totals"):
-            accounting["totals"]["wall_seconds"] = 0.0
+            if accounting.get("totals"):
+                accounting["totals"]["wall_seconds"] = 0.0
+            if report.get("audit"):
+                report["audit"]["run_dir"] = "<run-dir>"
 
     assert produced == reference, (
         "the committed reference report no longer matches what the engine "

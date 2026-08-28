@@ -21,10 +21,12 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable
+import uuid
+from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -56,12 +58,21 @@ __all__ = [
     "run_enhance",
     "load_scorer",
     "DEFAULT_MODEL",
+    "DEFAULT_EFFORT",
+    "KNOWN_EFFORTS",
     "DEFAULT_MAX_PARALLEL",
     "DEFAULT_MAX_COST_USD",
 ]
 
 DEFAULT_MODEL = "sonnet"
 DEFAULT_MAX_PARALLEL = 4
+
+# Reasoning effort lives here, beside the model, because both are properties of
+# how a call is made rather than of what it asks. See ClaudeCliInvoker for why
+# the flag is never omitted. models.ModelSpec re-exports these as the tier-level
+# binding; the import runs that way round because models imports the invoker.
+DEFAULT_EFFORT = "low"
+KNOWN_EFFORTS = ("low", "medium", "high", "xhigh")
 
 
 # --- scorer wiring (single source of truth: the existing gate script) --------
@@ -118,6 +129,12 @@ class InvokeResult:
     usage: dict = field(default_factory=dict)
     error: Optional[str] = None
     status_code: Optional[int] = None
+    # The transport's own identifier for this call. Recorded so a ledger row can
+    # be joined to its transcript later without guessing from timestamps: the
+    # 2026-08-25 forensics had to match sessions on token triples because no row
+    # carried one, and a phrase-based match collided with the operator's own
+    # interactive session.
+    session_id: Optional[str] = None
     # Which model the rung BOUND. Not the same thing as what answered.
     model: Optional[str] = None
     # What actually answered, from the CLI's own `modelUsage` map: canonical
@@ -128,11 +145,81 @@ class InvokeResult:
     # Max plan the Sonnet and Opus buckets are separate. This is ground truth
     # from the process that did the metering; the binding is only our intent.
     model_usage: dict = field(default_factory=dict)
+    # Historical transport marker. New compact calls validate in-process so a
+    # CLI-side schema rejection cannot destroy paid output; old run artifacts
+    # retain this bit so their two-turn StructuredOutput handoff is auditable.
+    structured_output_enforced: bool = False
+    # Characters of the cacheable prefix this call actually sent as an appended
+    # system prompt; 0 when the prompt carried no marker and the legacy argv
+    # ran. The ledger turns it into a token estimate so the cache audit can
+    # require a warm call to read back at least its own prefix. Counting
+    # zero-read calls alone passes a call that read some small unrelated entry.
+    prefix_chars: int = 0
 
 
 # An invoker takes a prompt and returns an InvokeResult. Injectable so tests can
 # mock the model without shelling out.
 Invoker = Callable[[str], InvokeResult]
+
+
+def _recover_transcript_usage(session_id: str) -> tuple[dict, dict]:
+    """Best-effort usage recovery when the CLI exits without an envelope.
+
+    Claude's transcript repeats one assistant message as its content evolves
+    (thinking, then tool handoff), so message ids are deduplicated before token
+    counts are summed. Raw transcript content never leaves the provider-owned
+    directory and is never copied into a run artifact.
+    """
+    usage = {
+        "input_tokens": 0, "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0, "output_tokens": 0,
+    }
+    by_model: dict[str, dict] = {}
+    try:
+        matches = list(
+            (Path.home() / ".claude" / "projects").glob(f"*/{session_id}.jsonl")
+        )
+        if not matches:
+            return {}, {}
+        seen: set[str] = set()
+        turns = 0
+        stop_reason = None
+        for line in matches[0].read_text(encoding="utf-8").splitlines():
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            message = record.get("message") or {}
+            if record.get("type") != "assistant" or not isinstance(message, dict):
+                continue
+            message_id = str(message.get("id") or record.get("uuid") or "")
+            if not message_id or message_id in seen:
+                continue
+            seen.add(message_id)
+            turns += 1
+            block = message.get("usage") or {}
+            model = str(message.get("model") or "unknown")
+            model_block = by_model.setdefault(model, {
+                "inputTokens": 0, "cacheCreationInputTokens": 0,
+                "cacheReadInputTokens": 0, "outputTokens": 0,
+            })
+            for source, aggregate, model_key in (
+                ("input_tokens", "input_tokens", "inputTokens"),
+                ("cache_creation_input_tokens", "cache_creation_input_tokens", "cacheCreationInputTokens"),
+                ("cache_read_input_tokens", "cache_read_input_tokens", "cacheReadInputTokens"),
+                ("output_tokens", "output_tokens", "outputTokens"),
+            ):
+                value = int(block.get(source) or 0)
+                usage[aggregate] += value
+                model_block[model_key] += value
+            stop_reason = message.get("stop_reason") or stop_reason
+        if not seen:
+            return {}, {}
+        usage["num_turns"] = turns
+        usage["stop_reason"] = stop_reason
+        return usage, by_model
+    except (OSError, TypeError, ValueError):
+        return {}, {}
 
 
 class ClaudeCliInvoker:
@@ -143,6 +230,10 @@ class ClaudeCliInvoker:
     the JSON envelope's ``result`` (model text), ``total_cost_usd``, and
     ``usage``. The Python Agent SDK is not installed in this environment; the CLI
     is the simplest available headless path and reports cost per call.
+
+    Compact JSON is deliberately not forced with the CLI's ``--json-schema``:
+    the ladder validates the same bounded schema after delivery and can repair
+    or salvage a malformed item without discarding the whole response.
 
     ``model`` is optional. A model name pins the call to that model, which is
     what every caller does today. ``model=None`` OMITS the flag entirely and lets
@@ -158,12 +249,33 @@ class ClaudeCliInvoker:
         *,
         claude_bin: str = "claude",
         timeout: int = 600,
+        effort: str = DEFAULT_EFFORT,
+        max_budget_usd: Optional[float] = None,
     ):
         self.model = model
         self.claude_bin = claude_bin
         self.timeout = timeout
+        self.effort = effort
+        self.max_budget_usd = max_budget_usd
+
+    def set_max_budget_usd(self, value: Optional[float]) -> None:
+        """Set the CLI's best-effort allowance for the next invocation.
+
+        The shared run meter assigns this immediately before launch.  Keeping
+        it mutable avoids rebuilding the provider stack for every call while
+        still letting each call see the run's exact remaining reservation. The
+        CLI may exceed this value for a single response, so callers must treat
+        it as a launch allowance and validate measured cost afterwards.
+        """
+        self.max_budget_usd = value
 
     def __call__(self, prompt: str) -> InvokeResult:
+        structured_output_enforced = False
+        prefix_chars = 0
+        # Allocate the id before spawning. A CLI-side validation or transport
+        # failure can exit without an envelope, which used to leave the ledger
+        # with no way to locate the provider transcript.
+        session_id = str(uuid.uuid4())
         try:
             # A None model omits the flag entirely, which lets the CLI route the
             # call itself instead of being pinned to one model. That is the
@@ -179,22 +291,67 @@ class ClaudeCliInvoker:
             # --tools "" disables every tool; --setting-sources user keeps
             # the project's .claude settings out of a call that must not
             # depend on which directory launched it.
+            #
+            # --effort is passed ALWAYS and explicitly. --setting-sources user
+            # was keeping project settings out while still letting the user's
+            # own settings.json decide the reasoning budget: on 2026-08-25 that
+            # meant every call in a 173-partition run inherited "xhigh" from an
+            # interactive session, spent two thirds of each response on
+            # thinking, and truncated the answer at the shared output ceiling.
+            # An unstated effort is a decision nobody made, so there is no code
+            # path here that omits the flag.
             argv = [
                 self.claude_bin, "-p", "--output-format", "json",
                 "--tools", "", "--setting-sources", "user",
+                "--effort", self.effort,
+                "--session-id", session_id,
             ]
             if self.model:
                 argv += ["--model", self.model]
-            proc = subprocess.run(
-                argv,
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-            )
+            if self.max_budget_usd is not None:
+                argv += ["--max-budget-usd", f"{max(0.01, self.max_budget_usd):.6f}"]
+            # Compact ladder prompts mark a byte-stable instruction prefix.
+            # Put that prefix in the CLI's appended system prompt and send only
+            # facts on stdin.  Repeated calls can now read the same provider
+            # cache entry instead of writing every unique full prompt at the 1h
+            # creation rate.  Unmarked callers retain the exact legacy argv.
+            from .prompts import split_cached_prompt
+
+            prefix, user_prompt = split_cached_prompt(prompt)
+            if prefix is None:
+                proc = subprocess.run(
+                    argv, input=user_prompt, capture_output=True, text=True,
+                    timeout=self.timeout,
+                )
+            else:
+                prefix_chars = len(prefix)
+                with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", suffix=".prompt", delete=True
+                ) as prefix_file:
+                    prefix_file.write(prefix)
+                    prefix_file.flush()
+                    proc = subprocess.run(
+                        [
+                            *argv,
+                            # Verified by the F-9 live probe: without this flag
+                            # cwd/git/environment text changes ahead of the
+                            # appended prefix, so every otherwise identical call
+                            # writes a new cache entry.  Relocating those dynamic
+                            # sections makes the base+prefix byte-stable; later
+                            # calls then read the full entry at cache-read rates.
+                            "--exclude-dynamic-system-prompt-sections",
+                            "--append-system-prompt-file", prefix_file.name,
+                            "--max-turns", "1",
+                        ],
+                        input=user_prompt, capture_output=True, text=True,
+                        timeout=self.timeout,
+                    )
         except (OSError, subprocess.SubprocessError) as exc:
             # Spawn failure or subprocess timeout: a bounded transient (R2).
-            return InvokeResult(ok=False, text="", error=f"invocation failed: {exc}")
+            return InvokeResult(
+                ok=False, text="", error=f"invocation failed: {exc}",
+                session_id=session_id,
+            )
         if proc.returncode != 0:
             # A nonzero exit can still carry a structured JSON error envelope on
             # stdout: a real claude CLI run returns exit 1 for an API error WITH
@@ -203,23 +360,46 @@ class ClaudeCliInvoker:
             # retry layer can tell a transient (429/5xx) from a deterministic
             # (4xx) failure; fall back to stderr only when there is no envelope.
             status, detail = _envelope_error(proc.stdout)
+            recovered_usage, recovered_models = _recover_transcript_usage(session_id)
+            try:
+                error_envelope = json.loads(proc.stdout)
+                if not isinstance(error_envelope, dict):
+                    error_envelope = {}
+            except (json.JSONDecodeError, TypeError):
+                error_envelope = {}
+            envelope_usage = error_envelope.get("usage") or recovered_usage
+            envelope_models = error_envelope.get("modelUsage") or recovered_models
+            envelope_cost = float(error_envelope.get("total_cost_usd", 0.0) or 0.0)
             if status is not None or detail is not None:
                 return InvokeResult(
                     ok=False,
-                    text=detail or "",
+                    text=proc.stdout or proc.stderr or detail or "",
+                    cost_usd=envelope_cost,
                     error=f"claude exited {proc.returncode}: {(detail or proc.stderr).strip()[:400]}",
                     status_code=status,
+                    session_id=session_id,
+                    usage=envelope_usage,
+                    model_usage=envelope_models,
+                    model=self.model,
                 )
             return InvokeResult(
-                ok=False, text="",
+                ok=False, text=proc.stdout or proc.stderr or "",
+                cost_usd=envelope_cost,
                 error=f"claude exited {proc.returncode}: {proc.stderr.strip()[:400]}",
+                session_id=session_id,
+                usage=envelope_usage,
+                model_usage=envelope_models,
+                model=self.model,
             )
         try:
             envelope = json.loads(proc.stdout)
         except json.JSONDecodeError as exc:
             # Well-formed run (exit 0) that returned non-JSON: a deterministic
             # parse failure. NEVER retried at the transport layer (R2).
-            return InvokeResult(ok=False, text="", error=f"unparseable envelope: {exc}")
+            return InvokeResult(
+                ok=False, text=proc.stdout,
+                error=f"unparseable envelope: {exc}", session_id=session_id,
+            )
         if envelope.get("is_error"):
             return InvokeResult(
                 ok=False, text=str(envelope.get("result", "")),
@@ -232,14 +412,31 @@ class ClaudeCliInvoker:
                 status_code=_coerce_status(envelope.get("api_error_status")),
                 model=self.model,
                 model_usage=envelope.get("modelUsage", {}) or {},
+                session_id=envelope.get("session_id") or session_id,
             )
+        # The success path carries the envelope's own account of HOW the answer
+        # was produced, not just the answer. num_turns feeds the agentic-drift
+        # alarm in MeteredInvoker, which was built, wired and then starved: it
+        # never fired across twelve multi-turn calls in the 2026-08-25 run
+        # because this branch returned the bare usage block while only the
+        # is_error branch folded the field in. stop_reason is how a truncated
+        # response announces itself; discarding it is what let 35% of that run's
+        # partitions overflow the output ceiling silently, get auto-continued,
+        # and bill the re-ingested text at the 2x cache-creation rate.
         return InvokeResult(
             ok=True,
             text=str(envelope.get("result", "")),
             cost_usd=float(envelope.get("total_cost_usd", 0.0) or 0.0),
-            usage=envelope.get("usage", {}) or {},
+            usage=dict(
+                envelope.get("usage", {}) or {},
+                num_turns=envelope.get("num_turns", 1),
+                stop_reason=envelope.get("stop_reason"),
+            ),
             model=self.model,
             model_usage=envelope.get("modelUsage", {}) or {},
+            session_id=envelope.get("session_id") or session_id,
+            structured_output_enforced=structured_output_enforced,
+            prefix_chars=prefix_chars,
         )
 
 
@@ -465,27 +662,209 @@ class EnhanceReport:
 # --- response parsing, cleaning, validation ----------------------------------
 
 
-def _parse_json_object(text: str) -> Optional[dict]:
-    """Parse a JSON object from model text, tolerating markdown fences."""
-    s = text.strip()
-    if s.startswith("```"):
-        # Strip a leading ```json / ``` fence and the trailing fence.
-        s = s.split("\n", 1)[1] if "\n" in s else s
-        if s.rstrip().endswith("```"):
-            s = s.rsplit("```", 1)[0]
-    s = s.strip()
-    # Fall back to the first {...} span if there is leading/trailing chatter.
-    if not s.startswith("{"):
-        start = s.find("{")
-        end = s.rfind("}")
-        if start == -1 or end == -1 or end <= start:
-            return None
-        s = s[start : end + 1]
+_FENCE_RE = re.compile(r"^[ \t]*```[A-Za-z0-9_+-]*[ \t]*\r?\n?", re.MULTILINE)
+
+
+def _strip_fences(text: str) -> str:
+    """Remove markdown fences ANYWHERE, taking each fence's own newline with it.
+
+    A fence is not always at the edges. When a response overflows the output
+    ceiling the transport continues it, and the continuation frequently reopens
+    a ```json fence in the middle of the object it was halfway through writing.
+    Stripping only a leading and trailing fence leaves those in place and the
+    parse fails on text that is otherwise complete.
+
+    Taking the trailing newline with the fence matters and is not cosmetic: a
+    line-based strip that leaves the blank line behind recovers 7 of the 10
+    discarded partitions from the 2026-08-25 run, while this recovers 10.
+    """
+    return _FENCE_RE.sub("", text)
+
+
+def _brace_span(text: str) -> Optional[str]:
+    """The outermost ``{...}`` span, ignoring leading and trailing chatter."""
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    return text[start : end + 1]
+
+
+def _repair_truncated(text: str) -> Optional[dict]:
+    """Salvage the complete entries out of an object that stops mid-write.
+
+    A response cut off at the output ceiling is not worthless: it is a valid
+    object followed by a partial one. Walking back to the last balanced point
+    and closing the structure there keeps the blocks that finished. On the
+    2026-08-25 run the alternative was throwing away whole partitions, which is
+    how $18.82 of $40.43 was paid for and then discarded.
+
+    Deliberately conservative: it only ever CLOSES open structures, never
+    invents a value, so a salvaged object contains nothing the model did not
+    actually write.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    # The last index at which the object can be closed WITHOUT keeping a
+    # half-written entry. Only a closer that returns to depth 2 or shallower
+    # qualifies, which for the response shape {"components": {...}} means the
+    # cut lands where a whole component block just ended. Allowing deeper cut
+    # points salvages a block that has a description but never got its
+    # contract, and a half-block absorbed as if whole is worse than a dropped
+    # one: it records an answer nobody gave.
+    safe_end: Optional[int] = None
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+            if depth <= 0:
+                break
+            if depth <= 2:
+                safe_end = i
+        elif ch == "," and 0 < depth <= 2:
+            safe_end = i - 1
+    if safe_end is None:
+        return None
+    candidate = text[start : safe_end + 1]
+    # Close whatever is still open, innermost first. Which closer to use is
+    # decided by the actual unclosed openers, not guessed.
+    openers: list[str] = []
+    in_string = False
+    escaped = False
+    for ch in candidate:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            openers.append(ch)
+        elif ch in "}]":
+            if openers:
+                openers.pop()
+    if in_string:
+        return None
+    closed = candidate + "".join("}" if c == "{" else "]" for c in reversed(openers))
     try:
-        obj = json.loads(s)
+        obj = json.loads(closed, strict=False)
     except json.JSONDecodeError:
         return None
     return obj if isinstance(obj, dict) else None
+
+
+def _parse_json_object(
+    text: str, *, expect_keys: Sequence[str] = ()
+) -> Optional[dict]:
+    """Parse a JSON object from model text, tolerating fences and truncation.
+
+    Three escalating attempts, each strictly more forgiving than the last and
+    none of them inventing content: parse it, parse its brace span with fences
+    removed, then salvage the complete entries out of a truncated object.
+
+    ``expect_keys`` is a shape guard, and salvage without one is dangerous. A
+    response that begins mid-object, which is exactly what the transport
+    returns when it hands back only the final turn of a continued overflow,
+    has its first ``{`` somewhere deep inside a nested value. Repairing from
+    there yields a perfectly valid object that happens to be a single evidence
+    item, and absorbing it would record a partition as answered while storing
+    nothing. When ``expect_keys`` is given, a salvaged object must carry at
+    least one of them or it is treated as the failure it is.
+    """
+    s = _strip_fences(text).strip()
+    span = s if s.startswith("{") else _brace_span(s)
+    if span is None:
+        return None
+    try:
+        # strict=False permits literal control characters INSIDE string values,
+        # which is not laxness about structure: a model writing multi-line prose
+        # emits a real newline inside a help_text rather than the \n escape,
+        # and strict JSON then rejects an otherwise perfect 114KB response over
+        # one character. That cost a whole partition (22 components and 40
+        # relationships) on the 2026-08-26 full build before it was found.
+        # Structure is still parsed strictly; only the character class inside
+        # strings is relaxed.
+        obj = json.loads(span, strict=False)
+    except json.JSONDecodeError:
+        # Models occasionally emit otherwise-complete JSON with a comma after
+        # the final array/object member. The live UnaMentis P5 response did
+        # exactly this after spending 4,471 output tokens; treating it as an
+        # unparseable determination skipped both quality-improvement rounds.
+        # Delete only commas that are structurally followed by a closer while
+        # outside a string. This invents no value and cannot alter prose.
+        repaired = _remove_trailing_commas(span)
+        try:
+            obj = json.loads(repaired, strict=False)
+        except json.JSONDecodeError:
+            obj = _repair_truncated(repaired)
+    if not isinstance(obj, dict):
+        return None
+    if expect_keys and not any(key in obj for key in expect_keys):
+        return None
+    return obj
+
+
+def _remove_trailing_commas(text: str) -> str:
+    """Remove JSON trailing commas outside strings, and nothing else."""
+    out: list[str] = []
+    in_string = False
+    escaped = False
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            out.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            out.append(char)
+            index += 1
+            continue
+        if char == ",":
+            following = index + 1
+            while following < len(text) and text[following].isspace():
+                following += 1
+            previous = index - 1
+            while previous >= 0 and text[previous].isspace():
+                previous -= 1
+            if (
+                previous >= 0
+                and text[previous] not in "{[:,"
+                and following < len(text)
+                and text[following] in "]}"
+            ):
+                index += 1
+                continue
+        out.append(char)
+        index += 1
+    return "".join(out)
 
 
 def _clean_component_payload(scorer: Any, ai: dict, clock: Clock) -> dict:
@@ -689,6 +1068,7 @@ def run_enhance(
             store.data_entities(),
             store.rules(),
             arch.get("relationships", []),
+            root=config.root,
         )
 
         include_ids: Optional[set[str]] = None

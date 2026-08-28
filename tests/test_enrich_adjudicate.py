@@ -39,11 +39,22 @@ from analyzer.enrich.adjudicate import (
 from analyzer.enrich.contract import ContractState
 from analyzer.enrich.engine import InvokeResult
 from analyzer.enrich.ladder import CONTRACT_TARGET_KIND
+from analyzer.enrich.orientation import (
+    BRIEF_TARGET_ID,
+    BRIEF_TARGET_KIND,
+    Criterion,
+    SubjectBrief,
+)
 from analyzer.enrich.pipeline import (
     LadderConfig,
     LadderPolicy,
     build_run_context,
     run_pipeline,
+)
+from analyzer.enrich.prompts import (
+    build_grounding_spotcheck_prompt,
+    build_substitution_prompt,
+    split_cached_prompt,
 )
 from analyzer.enrich.provenance import stamp_enrichment
 from analyzer.extract import extract_repo
@@ -260,9 +271,91 @@ def test_the_digest_carries_evidence_pointers_and_not_the_narrative():
     # Only answered claims are audited; an uncertain one already failed the
     # contract and is not adjudication's business.
     assert [c["question"] for c in digest["claims"]] == ["purpose"]
-    evidence = digest["claims"][0]["evidence"][0]
+    refs = digest["claims"][0]["evidence_refs"]
+    evidence = digest["evidence_menu"][refs[0]]
     assert evidence == {"kind": "file", "path": "a.py", "line": 3}
     assert "help_text" not in json.dumps(digest)
+
+
+def test_digest_deduplicates_and_bounds_large_fact_values():
+    state = ContractState("component", "svc", state="grounded", rung="sonnet")
+    evidence = {"kind": "fact", "component": "svc", "field": "testing"}
+    digest = build_digest(state, {
+        "purpose": {"claim": "one", "status": "answered", "evidence": [evidence]},
+        "mechanism": {"claim": "two", "status": "answered", "evidence": [evidence]},
+    }, facts={"testing": "x" * 100_000})
+
+    assert len(digest["evidence_menu"]) == 1
+    assert digest["claims"][0]["evidence_refs"] == [0]
+    assert digest["claims"][1]["evidence_refs"] == [0]
+    assert len(json.dumps(digest)) < 6_000
+    assert "chars omitted" in digest["evidence_menu"][0]["value"]
+
+
+def test_digest_gives_the_judge_the_declaration_preview_behind_a_symbol():
+    state = ContractState("component", "view", state="grounded", rung="sonnet")
+    digest = build_digest(state, {
+        "mechanism": {
+            "claim": "The view presents Settings as a sheet.",
+            "status": "answered",
+            "evidence": [{
+                "kind": "symbol", "path": "UI/View.swift", "symbol": "View",
+            }],
+        },
+    }, facts={"source_declarations": [{
+        "file": "UI/View.swift", "line": 10, "end_line": 40,
+        "name": "View", "kind": "struct",
+        "code_preview": "struct View: SwiftUI.View { .sheet { SettingsView() } }",
+    }]})
+
+    context = digest["evidence_menu"][0]["source_context"]
+    assert context["line"] == 10
+    assert ".sheet" in context["code_preview"]
+
+
+def test_digest_gives_the_judge_the_exact_relationship_callsite():
+    state = ContractState(
+        "relationship", "a|b|navigation", state="grounded", rung="sonnet",
+    )
+    digest = build_digest(state, {
+        "flow": {
+            "claim": "A navigates to B with the selected region.",
+            "status": "answered",
+            "evidence": [{"kind": "file", "path": "A.swift", "line": 24}],
+        },
+    }, facts={"evidence": [{
+        "file": "A.swift", "line": 24, "snippet": "B(region: selectedRegion)",
+        "context": ".sheet(isPresented: $showingB) {\n"
+                   "  B(region: selectedRegion)\n}",
+    }]})
+
+    context = digest["evidence_menu"][0]["source_context"]
+    assert context == {
+        "line": 24,
+        "code_preview": ".sheet(isPresented: $showingB) {\n"
+                        "  B(region: selectedRegion)\n}",
+    }
+
+
+def test_digest_uses_the_source_resolver_for_a_method_outside_the_short_menu():
+    state = ContractState("component", "view", state="grounded", rung="sonnet")
+    digest = build_digest(state, {
+        "mechanism": {
+            "claim": "It loads records in a background context.",
+            "status": "answered",
+            "evidence": [{
+                "kind": "symbol", "path": "View.swift", "symbol": "loadRecords",
+            }],
+        },
+    }, facts={"source_declarations": []}, source_context_resolver=lambda item: {
+        "line": 90,
+        "symbol": item["symbol"],
+        "code_preview": "func loadRecords() { persistence.newBackgroundContext() }",
+    })
+
+    context = digest["evidence_menu"][0]["source_context"]
+    assert context["symbol"] == "loadRecords"
+    assert "newBackgroundContext" in context["code_preview"]
 
 
 def test_nothing_sampled_means_undefined_not_zero(tmp_path):
@@ -321,6 +414,30 @@ def test_the_substitution_prompt_makes_null_the_right_answer_when_ambiguous(enri
     prompt = next(p for p in invoker.prompts if "candidate components" in p)
     assert "Answer null" in prompt
     assert "That is not a failure to answer: it is the finding" in prompt
+
+
+def test_repeated_adjudication_calls_share_stable_prefixes_not_dynamic_claims():
+    first = build_grounding_spotcheck_prompt({
+        "target_id": "api", "claims": [{"question": "purpose", "claim": "A"}],
+    })
+    second = build_grounding_spotcheck_prompt({
+        "target_id": "db", "claims": [{"question": "mechanism", "claim": "B"}],
+    })
+    first_prefix, first_tail = split_cached_prompt(first)
+    second_prefix, second_tail = split_cached_prompt(second)
+    assert first_prefix == second_prefix
+    assert first_tail != second_tail
+    assert "CLAIMS AND THEIR EVIDENCE" in first_tail
+    assert '"target_id": "api"' in first_tail
+
+    first = build_substitution_prompt("API description", [{"id": "api"}])
+    second = build_substitution_prompt("DB description", [{"id": "db"}])
+    first_prefix, first_tail = split_cached_prompt(first)
+    second_prefix, second_tail = split_cached_prompt(second)
+    assert first_prefix == second_prefix
+    assert first_tail != second_tail
+    assert "DESCRIPTION:\nAPI description" in first_tail
+    assert '"id": "api"' in first_tail
 
 
 # --- 5. it rewrites nothing ---------------------------------------------------
@@ -424,6 +541,38 @@ def test_the_spot_check_cap_is_respected(enriched):
     outcome = result.data["adjudication"]
     sampled_targets = {c.target_id for c in outcome.spot_checks}
     assert len(sampled_targets) <= 2
+
+
+def test_a_target_named_by_a_release_criterion_gets_first_use_of_the_sample(enriched):
+    criterion_target = enriched["components"][-1]
+    store = FactStore(str(enriched["db"]))
+    try:
+        from analyzer.enrich.digest import DigestIndex
+
+        stamp_enrichment(
+            store, BRIEF_TARGET_KIND, BRIEF_TARGET_ID,
+            SubjectBrief(
+                identity="fixture",
+                criteria=[Criterion(
+                    id="s1",
+                    statement=f"The map explains {criterion_target} precisely.",
+                    how_to_check=f"Adjudicate {criterion_target}.",
+                )],
+                generated=True,
+            ).to_dict(),
+            digest_index=DigestIndex.from_store(store),
+            commit_sha=None, clock=FIXED_CLOCK,
+        )
+        store.commit()
+    finally:
+        store.close()
+
+    policy = LadderPolicy(spot_check_fraction=1.0, max_spot_checks=1)
+    result, _ = _adjudicate(enriched, ScriptedAdjudicator(), policy=policy)
+    sampled_targets = {
+        check.target_id for check in result.data["adjudication"].spot_checks
+    }
+    assert sampled_targets == {criterion_target}
 
 
 # --- dry run ------------------------------------------------------------------

@@ -323,10 +323,17 @@ test.describe("depth", () => {
       description: `dataset enrichment share ${(share * 100).toFixed(1)}%`,
     });
     expect(
-      share === 0 || share === 1,
+      share === 0 || share === 1 || contract.disclosedPartialEvaluation,
       `enrichment is partial (${(share * 100).toFixed(1)}% of components); the UI cannot ` +
-        `report a coherent posture for a dataset that is neither enriched nor plain`,
+        `report a coherent posture unless a non-public evaluation banner discloses the exact scope`,
     ).toBe(true);
+
+    if (contract.disclosedPartialEvaluation) {
+      await gotoState(crawlPage, {});
+      const banner = crawlPage.locator('[data-testid="publication-banner"]');
+      await expect(banner).toBeVisible();
+      await expect(banner).toContainText(contract.publicationBanner);
+    }
 
     const budget = componentBudget() || 25;
     const { chosen } = sampleComponents(contract, Math.min(budget, 25));

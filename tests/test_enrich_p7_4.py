@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -253,15 +254,25 @@ def test_intent_proposals_are_advisory_only(tmp_path):
 # ---------------------------------------------------------------------------
 
 def _finding_verify_mock(mapping):
-    """mapping: finding-id-substring -> (verdict, reason)."""
+    """mapping: finding-id-substring -> (verdict, reason).
+
+    Finding verification is BATCHED: one call carries many findings and returns
+    a verdict per id. Per-finding calls were 84 invocations and $5.66 on a real
+    run for answers that are a verdict and one sentence.
+    """
     def invoker(prompt):
-        body = prompt[prompt.index("FINDING:") + len("FINDING:"):].strip()
-        obj, _ = json.JSONDecoder().raw_decode(body)
-        fid = obj["finding"]["id"]
-        for sub, (verdict, reason) in mapping.items():
-            if sub in fid:
-                return InvokeResult(ok=True, text=json.dumps({"verdict": verdict, "reason": reason}), cost_usd=0.01)
-        return InvokeResult(ok=True, text=json.dumps({"verdict": "uncertain", "reason": "thin"}), cost_usd=0.01)
+        ids = re.findall(r'"id":\s*"([^"]+)"', prompt)
+        verdicts = {}
+        for fid in ids:
+            chosen = ("uncertain", "thin")
+            for sub, pair in mapping.items():
+                if sub in fid:
+                    chosen = pair
+                    break
+            verdicts[fid] = {"verdict": chosen[0], "reason": chosen[1]}
+        return InvokeResult(
+            ok=True, text=json.dumps({"verdicts": verdicts}), cost_usd=0.01
+        )
     return invoker
 
 

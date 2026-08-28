@@ -154,12 +154,12 @@ def test_no_ceiling_enriches_everything_unbounded(tmp_path):
         _small_partition_config(tmp_path, db, max_cost_usd=None),
         invoker=inv, clock=FIXED_CLOCK,
     )
-    assert report.partition_count == 6
+    assert report.partition_count == 8
     assert all(p.status == "enriched" for p in report.partitions)
     assert not [p for p in report.partitions if p.status == "skipped"]
-    assert report.components_enriched == 8  # every component enriched
-    # 6 partitions + the architecture narrative, each $1.
-    assert report.total_cost_usd >= 6.0
+    assert report.components_enriched == 10  # every component enriched
+    # 8 partitions + the architecture narrative, each $1.
+    assert report.total_cost_usd >= 8.0
     # No partition failed. (report.ok also folds in the separate quality gate,
     # which the deliberately-minimal canned payloads do not clear; R2 is about
     # partition success and cost, not enrichment quality.)
@@ -171,7 +171,7 @@ def test_ceiling_stops_launching_and_records_skips(tmp_path):
     inv = CannedInvoker(_canned_text(arch), cost=1.0)
     # max_parallel=1 makes submission strictly sequential, so the ceiling triggers
     # at a deterministic point: p1 (running 1) p2 (running 2) p3 (running 3 >= 2.5),
-    # then no new launches -> p4,p5,p6 skipped.
+    # then no new launches -> the remaining five partitions are skipped.
     report = run_enhance(
         _small_partition_config(tmp_path, db, max_cost_usd=2.5, max_parallel=1),
         invoker=inv, clock=FIXED_CLOCK,
@@ -179,7 +179,7 @@ def test_ceiling_stops_launching_and_records_skips(tmp_path):
     enriched = [p for p in report.partitions if p.status == "enriched"]
     skipped = [p for p in report.partitions if p.status == "skipped"]
     assert len(enriched) == 3
-    assert len(skipped) == 3
+    assert len(skipped) == 5
     # Skipped partitions carry an honest reason and were never stamped.
     for p in skipped:
         assert p.errors and "cost ceiling reached" in p.errors[0]
@@ -246,7 +246,7 @@ def test_retried_success_stamps_byte_identically(tmp_path):
 
     # Both runs enriched the same amount, and the stamped rows are byte-identical:
     # retry is invisible in the projection.
-    assert report_a.components_enriched == report_b.components_enriched == 8
+    assert report_a.components_enriched == report_b.components_enriched == 10
     assert report_a.architecture_enriched and report_b.architecture_enriched
     assert _enrichment_rows(db_a) == _enrichment_rows(db_b)
 
@@ -263,7 +263,7 @@ def test_transient_without_retry_fails_the_partition(tmp_path):
         invoker=raw_flaky, clock=FIXED_CLOCK,
     )
     assert report.failed_partitions  # at least one partition failed without retry
-    assert report.components_enriched < 8
+    assert report.components_enriched < 10
 
 
 def test_retry_reaches_success_across_transient_failures(tmp_path):
@@ -282,4 +282,4 @@ def test_retry_reaches_success_across_transient_failures(tmp_path):
         invoker=retrying, clock=FIXED_CLOCK,
     )
     assert not report.failed_partitions
-    assert report.components_enriched == 8
+    assert report.components_enriched == 10

@@ -39,8 +39,11 @@ from .overlay import apply_enrichment_overlay
 from .partition import flatten_components
 from .prompts import (
     build_concern_name_prompt,
+    build_edge_verify_batch_prompt,
     build_edge_verify_prompt,
+    build_finding_verify_batch_prompt,
     build_finding_verify_prompt,
+    build_identity_verify_batch_prompt,
     build_identity_verify_prompt,
     build_intent_conformance_prompt,
     build_intent_proposal_prompt,
@@ -74,6 +77,18 @@ class VerifyConfig:
     report_path: Optional[Path] = None
     intents_path: Optional[Path] = None
     propose_intents: bool = False
+    # How many independent verdicts share one call. A verify answer is a status
+    # and one sentence, so a per-item call spends nearly all of its cost on the
+    # prompt it repeats: measured on 2026-08-25, 754 per-edge calls cost $10.50
+    # and returned 21 output tokens each. Batching amortizes the fixed overhead
+    # across items that were always judged independently anyway.
+    verify_batch: int = 25
+    # Exact bounded-run scope. max_targets merely truncates the global list and
+    # can verify unrelated rows from a pre-existing store; these sets name the
+    # targets the current ladder actually attempted.
+    component_scope: Optional[frozenset[str]] = None
+    relationship_scope: Optional[frozenset[str]] = None
+    finding_scope: Optional[frozenset[str]] = None
 
 
 @dataclass
@@ -143,6 +158,35 @@ class PassReport:
 
 
 # --- shared harness ----------------------------------------------------------
+
+
+# A verify batch is bounded by BYTES as well as by count. Counting items alone
+# is the same mistake the fact blocks made: one oversized member makes the whole
+# request impossible. A batch of twelve identity payloads exceeded the context
+# window on the 2026-08-26 rebuild and the pass failed twice before giving up.
+MAX_VERIFY_BATCH_CHARS = 200_000
+
+
+def _batches(items: list, size: int, sizer=None) -> list[list]:
+    """Split items into batches bounded by count AND serialized size.
+
+    An item larger than the whole budget still gets its own batch rather than
+    being dropped: a target that cannot be batched is still a target that must
+    be verified.
+    """
+    out: list[list] = []
+    current: list = []
+    used = 0
+    for item in items:
+        cost = len(json.dumps(sizer(item) if sizer else item, default=str))
+        if current and (len(current) >= size or used + cost > MAX_VERIFY_BATCH_CHARS):
+            out.append(current)
+            current, used = [], 0
+        current.append(item)
+        used += cost
+    if current:
+        out.append(current)
+    return out
 
 
 def _invoke_json(
@@ -270,6 +314,8 @@ def verify_edges(
             key = relationship_target_id(
                 rel.get("source", ""), rel.get("target", ""), rel.get("type", "")
             )
+            if config.relationship_scope is not None and key not in config.relationship_scope:
+                continue
             if config.update and not _missing_or_stale(store, index, "edge-verdict", key):
                 continue
             targets.append((key, rel))
@@ -301,25 +347,58 @@ def verify_edges(
                 report.plan_preview.append({"id": key, "prompt_chars": len(prompt)})
             return _finalize(report, config)
 
-        for key, rel in targets:
-            prompt = build_edge_verify_prompt(
-                rel,
-                _endpoint_summary(comp_index, rel.get("source", "")),
-                _endpoint_summary(comp_index, rel.get("target", "")),
-            )
-            obj, cost, errs = _invoke_json(invoker, prompt, validate)
-            outcome = TargetOutcome(id=key, status="failed", cost_usd=cost)
-            if obj is None:
-                outcome.errors = errs
-            else:
-                payload = {"status": obj["status"], "reason": obj["reason"].strip()}
-                stamp_enrichment(
-                    store, "edge-verdict", key, payload,
-                    digest_index=index, commit_sha=commit_sha, clock=clock,
-                )
-                outcome.status = "done"
-                outcome.verdict = obj["status"]
-            report.outcomes.append(outcome)
+        def validate_batch(obj: dict) -> list[str]:
+            verdicts = obj.get("verdicts")
+            if not isinstance(verdicts, dict) or not verdicts:
+                return ["verdicts must be a non-empty object keyed by edge id"]
+            return []
+
+        batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1))
+        for chunk in _batches(targets, batch_size, sizer=lambda t: t[1]):
+            if hasattr(invoker, "set_targets"):
+                invoker.set_targets(len(chunk))
+            prompt = build_edge_verify_batch_prompt([
+                {
+                    "id": key,
+                    "edge": rel,
+                    "source": _endpoint_summary(comp_index, rel.get("source", "")),
+                    "target": _endpoint_summary(comp_index, rel.get("target", "")),
+                }
+                for key, rel in chunk
+            ])
+            obj, cost, errs = _invoke_json(invoker, prompt, validate_batch)
+            verdicts = (obj or {}).get("verdicts") or {}
+            # Cost is attributed evenly across the batch so per-target
+            # accounting stays meaningful; the batch is one billable call.
+            share = cost / max(1, len(chunk))
+            for key, _rel in chunk:
+                outcome = TargetOutcome(id=key, status="failed", cost_usd=share)
+                entry = verdicts.get(key) if isinstance(verdicts, dict) else None
+                # An edge the model did not answer for stays unverified. It is
+                # never given a neighbour's verdict, and never defaulted to
+                # confirmed: an unasked question has no answer.
+                if not isinstance(entry, dict):
+                    outcome.errors = errs or [
+                        "no verdict returned for this edge in its batch"
+                    ]
+                elif entry.get("status") not in _EDGE_STATUSES:
+                    outcome.errors = [
+                        f"status must be one of {sorted(_EDGE_STATUSES)}"
+                    ]
+                elif not str(entry.get("reason") or "").strip():
+                    outcome.errors = ["reason must be a non-empty sentence"]
+                else:
+                    payload = {
+                        "status": entry["status"],
+                        "reason": str(entry["reason"]).strip(),
+                    }
+                    stamp_enrichment(
+                        store, "edge-verdict", key, payload,
+                        digest_index=index, commit_sha=commit_sha, clock=clock,
+                    )
+                    outcome.status = "done"
+                    outcome.verdict = entry["status"]
+                report.outcomes.append(outcome)
         report.total_cost_usd = sum(o.cost_usd for o in report.outcomes)
         store.commit()
         return _finalize(report, config)
@@ -641,6 +720,23 @@ def verify_findings(
             f for f in findings
             if _missing_or_stale(store, index, "finding-verdict", f["id"])
         ]
+        if config.finding_scope is not None:
+            targets = [f for f in targets if f.get("id") in config.finding_scope]
+        elif config.component_scope is not None:
+            def _member_ids(finding: dict) -> set[str]:
+                out = set()
+                for member in finding.get("members") or []:
+                    if isinstance(member, str):
+                        out.add(member)
+                    elif isinstance(member, dict):
+                        value = member.get("component_id") or member.get("id")
+                        if value:
+                            out.add(str(value))
+                return out
+
+            targets = [
+                f for f in targets if _member_ids(f) & set(config.component_scope)
+            ]
         # On a full run, verify every finding lacking a verdict; on --update also
         # re-verify stale ones (both captured by _missing_or_stale, which returns
         # True for missing always and for stale only matters when a row exists).
@@ -668,12 +764,36 @@ def verify_findings(
             return _finalize(report, config)
 
         status_map = {"verified": "verified", "refuted": "refuted", "uncertain": "unverified"}
-        for f in targets:
-            obj, cost, errs = _invoke_json(invoker, build_finding_verify_prompt(f), validate)
-            outcome = TargetOutcome(id=f["id"], status="failed", cost_usd=cost)
-            if obj is None:
-                outcome.errors = errs
-            else:
+
+        def validate_batch(obj: dict) -> list[str]:
+            verdicts = obj.get("verdicts")
+            if not isinstance(verdicts, dict) or not verdicts:
+                return ["verdicts must be a non-empty object keyed by finding id"]
+            return []
+
+        batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1))
+        for chunk in _batches(targets, batch_size):
+            if hasattr(invoker, "set_targets"):
+                invoker.set_targets(len(chunk))
+            prompt = build_finding_verify_batch_prompt(chunk)
+            batch_obj, cost, errs = _invoke_json(invoker, prompt, validate_batch)
+            verdicts = (batch_obj or {}).get("verdicts") or {}
+            share = cost / max(1, len(chunk))
+            for f in chunk:
+                obj = verdicts.get(f["id"]) if isinstance(verdicts, dict) else None
+                outcome = TargetOutcome(id=f["id"], status="failed", cost_usd=share)
+                # A finding with no verdict stays unverified. It is never marked
+                # verified by omission: the whole point of this pass is that only
+                # findings which SURVIVE a refutation attempt pass it.
+                problems = (
+                    [errs and errs[0] or "no verdict returned for this finding in its batch"]
+                    if not isinstance(obj, dict)
+                    else validate(obj)
+                )
+                if problems:
+                    outcome.errors = problems
+                    report.outcomes.append(outcome)
+                    continue
                 verdict = obj["verdict"]
                 new_status = status_map[verdict]
                 payload = {"verification_status": new_status, "reason": obj["reason"].strip()}
@@ -687,7 +807,7 @@ def verify_findings(
                 store.set_finding_verification(f["id"], new_status)
                 outcome.status = "done"
                 outcome.verdict = verdict
-            report.outcomes.append(outcome)
+                report.outcomes.append(outcome)
         report.total_cost_usd = sum(o.cost_usd for o in report.outcomes)
         store.commit()
         return _finalize(report, config)
@@ -726,7 +846,37 @@ def _identity_targets(comp_index: dict[str, dict]) -> list[dict]:
     return out
 
 
-def _identity_facts(comp: dict) -> dict:
+def _framework_evidence(store: FactStore) -> dict[str, dict]:
+    """Per-component framework signals: name, file count, one path exemplar.
+
+    The v2 run's identity pass returned uncertain for 98 of 99 components, 97
+    of them on the framework field alone, and the judge's own reasons said the
+    same thing every time: no framework evidence in the supplied facts. The
+    store held 101 framework signal rows the prompt never shipped. This is
+    that evidence, aggregated small (about 300 chars per component), built
+    once per run (IMPLEMENTATION-DELTA-ORCH.md section 2.3).
+    """
+    paths = {row["id"]: row["path"] for row in store.files()}
+    path_components: dict[str, list[str]] = {}
+    for row in store.component_files():
+        path_components.setdefault(row["path"], []).append(row["component_id"])
+    out: dict[str, dict] = {}
+    for signal in store.signals():
+        if signal.get("kind") != "framework":
+            continue
+        name = (signal.get("value") or {}).get("name")
+        path = paths.get(signal.get("file_id"))
+        if not name or not path:
+            continue
+        for comp_id in path_components.get(path, []):
+            per_name = out.setdefault(comp_id, {}).setdefault(
+                name, {"files": 0, "example": path}
+            )
+            per_name["files"] += 1
+    return out
+
+
+def _identity_facts(comp: dict, framework_evidence: Optional[dict] = None) -> dict:
     """Compact evidence block for the identity prompt, from projected facts."""
     docs = comp.get("docs") or {}
     ai = comp.get("ai_enhance") or {}
@@ -740,6 +890,7 @@ def _identity_facts(comp: dict) -> dict:
         "env_vars": (docs.get("env_vars") or [])[:10],
         "purpose": docs.get("purpose") or None,
         "patterns": docs.get("patterns") or [],
+        "framework_signals": (framework_evidence or {}).get(comp.get("id"), {}),
         "prose": {
             "help_text": ai.get("help_text"),
             "description": ai.get("description"),
@@ -812,12 +963,15 @@ def verify_identity(
         comp_index = _component_index(arch)
         commit_sha = current_commit_sha(str(config.root))
 
+        framework_evidence = _framework_evidence(store)
         candidates = _identity_targets(comp_index)
         mode = "update" if config.update else "full"
         targets = [
             comp for comp in candidates
             if _missing_or_stale(store, index, "identity-verdict", comp["id"])
         ]
+        if config.component_scope is not None:
+            targets = [comp for comp in targets if comp["id"] in config.component_scope]
         if config.max_targets is not None:
             targets = targets[: config.max_targets]
 
@@ -832,19 +986,57 @@ def verify_identity(
 
         if config.dry_run:
             for comp in targets:
-                prompt = build_identity_verify_prompt(comp, _identity_facts(comp))
+                prompt = build_identity_verify_prompt(comp, _identity_facts(comp, framework_evidence))
                 report.plan_preview.append(
                     {"id": comp["id"], "prompt_chars": len(prompt)}
                 )
             return _finalize(report, config)
 
-        for comp in targets:
-            prompt = build_identity_verify_prompt(comp, _identity_facts(comp))
-            obj, cost, errs = _invoke_json(invoker, prompt, _validate_identity)
-            outcome = TargetOutcome(id=comp["id"], status="failed", cost_usd=cost)
-            if obj is None:
-                outcome.errors = errs
-            else:
+        def _validate_identity_batch(obj: dict) -> list[str]:
+            comps = obj.get("components")
+            if not isinstance(comps, dict) or not comps:
+                return ["components must be a non-empty object keyed by component id"]
+            return []
+
+        # Identity answers are ~14x larger per item than an edge verdict, so
+        # they take a smaller batch. Still one call for a dozen components
+        # instead of a dozen calls.
+        batch_size = max(1, int(getattr(config, "verify_batch", 25) or 1) // 2)
+        for chunk in _batches(
+            targets, batch_size,
+            sizer=lambda c: _identity_facts(c, framework_evidence),
+        ):
+            if hasattr(invoker, "set_targets"):
+                invoker.set_targets(len(chunk))
+            prompt = build_identity_verify_batch_prompt([
+                {
+                    "id": comp["id"],
+                    "component": comp,
+                    "facts": _identity_facts(comp, framework_evidence),
+                }
+                for comp in chunk
+            ])
+            obj, cost, errs = _invoke_json(invoker, prompt, _validate_identity_batch)
+            answers = (obj or {}).get("components") or {}
+            share = cost / max(1, len(chunk))
+            for comp in chunk:
+                entry = answers.get(comp["id"]) if isinstance(answers, dict) else None
+                outcome = TargetOutcome(id=comp["id"], status="failed", cost_usd=share)
+                # A component the model skipped stays unverified. Identity is a
+                # published claim; leaving it unchecked is honest, inventing a
+                # confirmation is not.
+                if not isinstance(entry, dict):
+                    outcome.errors = errs or [
+                        "no verdict returned for this component in its batch"
+                    ]
+                    report.outcomes.append(outcome)
+                    continue
+                field_errors = _validate_identity(entry)
+                if field_errors:
+                    outcome.errors = field_errors
+                    report.outcomes.append(outcome)
+                    continue
+                obj = entry
                 payload = {
                     "fields": obj["fields"],
                     "prose_issues": obj.get("prose_issues") or [],
@@ -864,7 +1056,7 @@ def verify_identity(
                 else:
                     outcome.verdict = "confirmed"
                 outcome.status = "done"
-            report.outcomes.append(outcome)
+                report.outcomes.append(outcome)
         report.total_cost_usd = sum(o.cost_usd for o in report.outcomes)
         store.commit()
         return _finalize(report, config)

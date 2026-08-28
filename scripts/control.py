@@ -138,6 +138,7 @@ class Job:
 # somewhere nobody looks for it. An allowlist rather than a blocklist, because
 # the character nobody thought to ban is the one that turns up.
 _SLUG_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+_RUN_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,191}")
 
 
 def _arch_dir_for(slug: str) -> Path:
@@ -381,6 +382,88 @@ class JobRunner:
 RUNNER = JobRunner()
 
 
+def _atomic_json(path: Path, payload: dict) -> None:
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        tmp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def enrichment_control(run_id: str, action: str, params: dict) -> dict:
+    """Apply one owner decision to a dashboard-published enrichment run."""
+    if not _RUN_ID_RE.fullmatch(run_id):
+        return {"status": 400, "error": "invalid run id"}
+    record_path = testboard.RUNS_DIR / run_id / "run.json"
+    try:
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        if record.get("kind") != "enhance":
+            raise ValueError("not an enrichment run")
+        advertised = (record.get("enrichment_control") or {}).get("path")
+        control_path = Path(str(advertised)).resolve()
+        control = json.loads(control_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return {
+            "status": 404,
+            "error": f"run '{run_id}' has no live enrichment control record",
+        }
+    if control_path.name != "control.json" or not isinstance(control, dict):
+        return {"status": 400, "error": "invalid enrichment control record"}
+
+    now = time.time()
+    if action == "resume":
+        raw = params.get("pause_at_usd")
+        try:
+            checkpoint = float(raw)
+        except (TypeError, ValueError):
+            return {
+                "status": 400,
+                "error": "resume requires a numeric pause_at_usd checkpoint",
+            }
+        committed = float(control.get("spent_usd") or 0) + float(
+            control.get("reserved_usd") or 0
+        )
+        if checkpoint <= committed:
+            return {
+                "status": 400,
+                "error": (
+                    f"new checkpoint ${checkpoint:.2f} must exceed the "
+                    f"${committed:.2f} already spent or reserved"
+                ),
+            }
+        control.update({
+            "state": "running",
+            "pause_at_usd": checkpoint,
+            "reason": f"operator resumed with a ${checkpoint:.2f} checkpoint",
+            "recommendation": "No action required; the run is proceeding.",
+        })
+    elif action == "cancel":
+        control.update({
+            "state": "cancelled",
+            "reason": "operator cancelled after reviewing the decision packet",
+            "recommendation": "The engine will bank completed calls and publish an honest partial report.",
+        })
+    elif action == "pause":
+        control.update({
+            "state": "paused",
+            "reason": "operator requested a manual pause",
+            "recommendation": "Review live telemetry, then resume with a higher checkpoint or cancel.",
+        })
+    else:
+        return {"status": 404, "error": f"unknown enrichment action '{action}'"}
+    control["revision"] = int(control.get("revision") or 0) + 1
+    control["updated_at"] = now
+    try:
+        _atomic_json(control_path, control)
+    except OSError as exc:
+        return {"status": 500, "error": f"could not persist decision: {exc}"}
+    return {"status": 202, "run_id": run_id, "control": control}
+
+
 class ControlHandler(testboard.Handler):
     """The board's read endpoints, plus the job control surface."""
 
@@ -417,6 +500,10 @@ class ControlHandler(testboard.Handler):
             return
 
         parts = [p for p in self.path.split("?")[0].strip("/").split("/") if p]
+        # /api/enrichment/<testboard-run-id>/<pause|resume|cancel>
+        if len(parts) == 4 and parts[:2] == ["api", "enrichment"]:
+            self._json(enrichment_control(parts[2], parts[3], params))
+            return
         # /api/jobs/<name>            start
         # /api/jobs/<id>/cancel       stop
         if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "cancel":

@@ -9,6 +9,7 @@ entries. The Claude invocation is mocked so these tests are hermetic.
 from __future__ import annotations
 
 import json
+import re
 
 from analyzer.derive import derive_all
 from analyzer.enrich import apply_verdict_overlay
@@ -55,11 +56,27 @@ def _fields(**overrides):
     return fields
 
 
+def _ids_in(prompt):
+    """The component ids a batched identity prompt is asking about."""
+    return re.findall(r'"id":\s*"([^"]+)"', prompt)
+
+
+def _batch(prompt, answer):
+    """Give every component in the batch the same answer."""
+    return json.dumps({"components": {cid: answer for cid in _ids_in(prompt)}})
+
+
 def _mock(fields, prose_issues=None):
+    """A model that answers every component in the batch it was handed.
+
+    Identity verification is batched: one call carries several components and
+    returns a verdict per id. Per-component calls cost $8.54 across 111 calls
+    on one real run for answers averaging 292 tokens.
+    """
     def invoker(prompt):
         return InvokeResult(
             ok=True,
-            text=json.dumps({"fields": fields, "prose_issues": prose_issues or []}),
+            text=_batch(prompt, {"fields": fields, "prose_issues": prose_issues or []}),
             cost_usd=0.01,
         )
     return invoker
@@ -145,7 +162,7 @@ def test_invalid_payload_writes_no_row(tmp_path):
         # corrected without value/evidence: must fail validation (both tries).
         return InvokeResult(
             ok=True,
-            text=json.dumps({"fields": _fields(type={"status": "corrected"})}),
+            text=_batch(prompt, {"fields": _fields(type={"status": "corrected"})}),
             cost_usd=0.01,
         )
 
@@ -208,7 +225,7 @@ def test_update_mode_skips_fresh_verdicts(tmp_path):
 
     def counting(prompt):
         calls["n"] += 1
-        return InvokeResult(ok=True, text=json.dumps({"fields": _fields()}), cost_usd=0.01)
+        return InvokeResult(ok=True, text=_batch(prompt, {"fields": _fields()}), cost_usd=0.01)
 
     again = verify_identity(
         VerifyConfig(store_path=db, root=repo, update=True),

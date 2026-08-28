@@ -677,6 +677,9 @@ def run_enhance(
         wall = corpus.get("budget", {}).get("max_wall_minutes")
         if wall is not None:
             cmd += ["--max-wall-minutes", str(wall)]
+        pause_at = corpus.get("budget", {}).get("pause_at_cost_usd")
+        if pause_at is not None:
+            cmd += ["--pause-at-cost-usd", str(pause_at)]
         if enrichment.get("max_parallel") is not None:
             cmd += ["--max-parallel", str(enrichment["max_parallel"])]
         if enrichment.get("invoke_timeout_seconds") is not None:
@@ -690,6 +693,12 @@ def run_enhance(
             cmd += ["--min-rounds", str(iteration["min_rounds"])]
         if iteration.get("max_rounds") is not None:
             cmd += ["--max-rounds", str(iteration["max_rounds"])]
+        if enrichment.get("spot_check_fraction") is not None:
+            cmd += [
+                "--spot-check-fraction", str(enrichment["spot_check_fraction"])
+            ]
+        if enrichment.get("max_spot_checks") is not None:
+            cmd += ["--max-spot-checks", str(enrichment["max_spot_checks"])]
 
     if max_partitions is not None:
         cmd += ["--max-partitions", str(max_partitions)]
@@ -2078,7 +2087,13 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
 def _cmd_enhance(args: argparse.Namespace) -> int:
     corpus = load_registry(args.slug)
     mode = "dry run" if args.dry_run else "live, spends real usage"
-    with _published("enhance", args.slug, total=1, note=mode) as run:
+    # total=0 means "denominator not known yet", which the board renders as a
+    # count rather than a percentage. The engine publishes the real one (every
+    # component and relationship it plans to enhance, thousands of them) on its
+    # progress stream as soon as the ladder has a plan, and the watcher adopts
+    # it. Declaring total=1 here was what made an hours-long run over thousands
+    # of items render as a progress bar reading "0 of 1".
+    with _published("enhance", args.slug, total=0, note=mode) as run:
         if run:
             run.step("ladder", f"enrichment ladder ({mode})")
         rc = run_enhance(

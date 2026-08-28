@@ -267,7 +267,7 @@ def test_full_run_writes_provenance_stamped_rows_and_passes_gate(tmp_path):
     report = run_enhance(
         _config(tmp_path, db, threshold=85.0), invoker=invoker, clock=FIXED_CLOCK
     )
-    assert report.components_enriched == 8
+    assert report.components_enriched == 10
     assert report.relationships_enriched == 1
     assert report.architecture_enriched is True
     assert not report.failed_partitions
@@ -276,7 +276,7 @@ def test_full_run_writes_provenance_stamped_rows_and_passes_gate(tmp_path):
     try:
         rows = store.enrichment()
         comp_rows = [r for r in rows if r["target_kind"] == "component"]
-        assert len(comp_rows) == 8
+        assert len(comp_rows) == 10
         assert all(r["derived_from_hash"] for r in comp_rows)
         assert all(r["created_at"] == FIXED_CLOCK() for r in comp_rows)
     finally:
@@ -310,7 +310,7 @@ def test_update_scopes_to_stale_plus_neighbours_then_zero(tmp_path):
     db = _build_fixture_store(tmp_path)
     # 1. Full enhancement.
     full = run_enhance(_config(tmp_path, db), invoker=RecordingInvoker(), clock=FIXED_CLOCK)
-    assert full.components_enriched == 8
+    assert full.components_enriched == 10
 
     # 2. Force services/api stale by corrupting its stored digest, then update.
     store = FactStore(str(db))

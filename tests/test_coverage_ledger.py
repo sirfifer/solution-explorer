@@ -133,6 +133,11 @@ def test_ledger_accounts_for_every_file_on_this_repo():
 def test_pruned_directory_row_stands_in_for_its_contents():
     # Directly assert the ruling: a pruned directory contributes ONE row, not one
     # per contained file, and that row's rule names the directory pruning cause.
+    if not os.path.isdir(os.path.join(REPO_ROOT, ".git")):
+        # In a linked git worktree .git is a pointer FILE, so the directory row
+        # this test asserts on cannot exist. The assertion keeps its full
+        # strength in the main checkout.
+        pytest.skip(".git is not a directory here (linked worktree)")
     store = _extract(REPO_ROOT)
     rows = store.coverage()
     git_dir_rows = [

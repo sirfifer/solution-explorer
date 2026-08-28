@@ -150,14 +150,17 @@ def test_absent_symbol_fails_and_distinguishes_wrong_file_from_no_such_symbol(
     assert "not in the symbol index" in invented.reason
 
     # A real symbol cited against the wrong file is a different, more useful
-    # failure than a symbol that does not exist at all.
+    # failure than a symbol that does not exist at all. "Wrong file" now means
+    # the symbol is neither defined nor referenced there: citing a symbol at
+    # its USE site is legitimate and is how a relationship contract grounds
+    # "X uses Y", so only a file that never mentions it at all is a failure.
     other = next(
         (f["path"] for f in fixture_store.files() if f["path"] != path), None
     )
     if other:
         misplaced = validator.check({"kind": "symbol", "path": other, "symbol": symbol})
         if not misplaced.ok:
-            assert "exists in the index but not in" in misplaced.reason
+            assert "is neither defined nor referenced in" in misplaced.reason
 
 
 def test_unknown_edge_fails(validator):
@@ -313,6 +316,129 @@ def test_an_answer_whose_citations_all_fail_validation_is_e2(validator, a_real_f
     assert "not in the analyzed file set" in state.failed[0].note
 
 
+def test_local_fact_cannot_ground_a_global_uniqueness_claim():
+    answers = _grounded_answers("unused.py")
+    answers["place"] = {
+        "claim": "This is the only inbound route.",
+        "status": "answered",
+        "evidence": [{
+            "kind": "fact", "component": "c1", "field": "inbound_edges",
+        }],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={"inbound_edges": 1}, validator=None,
+    )
+    failure = next(item for item in state.failed if item.question == "place")
+    assert failure.trigger == "E3"
+    assert "local analyzer fact" in failure.note
+
+
+def test_only_as_a_modifier_is_not_misread_as_global_uniqueness():
+    answers = _grounded_answers("unused.py")
+    answers["purpose"] = {
+        "claim": "This manifest-only package exists only to be parsed.",
+        "status": "answered",
+        "evidence": [{"kind": "file", "path": "unused.py"}],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={}, validator=None,
+    )
+    assert not any(
+        failure.question == "purpose" and failure.trigger == "E3"
+        for failure in state.failed
+    )
+
+
+def test_global_count_can_ground_a_real_uniqueness_claim():
+    answers = _grounded_answers("unused.py")
+    answers["purpose"] = {
+        "claim": "This is the only Swift component in the fixture.",
+        "status": "answered",
+        "evidence": [{
+            "kind": "fact", "component": "c1",
+            "field": "same_language_component_count", "scope": "global",
+        }],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={"same_language_component_count": 1},
+        validator=None,
+    )
+    assert not any(failure.question == "purpose" for failure in state.failed)
+
+
+def test_word_one_still_requires_global_support_for_global_uniqueness():
+    answers = _grounded_answers("unused.py")
+    answers["purpose"] = {
+        "claim": "This provides the fixture's one cross-component relationship.",
+        "status": "answered",
+        "evidence": [{
+            "kind": "fact", "component": "c1", "field": "outbound_edges",
+        }],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={"outbound_edges": 1}, validator=None,
+    )
+    failure = next(item for item in state.failed if item.question == "purpose")
+    assert failure.trigger == "E3"
+
+
+def test_labeled_count_claim_must_equal_the_analyzer_atom():
+    answers = _grounded_answers("unused.py")
+    answers["place"] = {
+        "claim": "The analyzer records 7 inbound relationships.",
+        "status": "answered",
+        "evidence": [{
+            "kind": "fact", "component": "c1", "field": "inbound_edges",
+        }],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={"inbound_edges": 1}, validator=None,
+    )
+    failure = next(item for item in state.failed if item.question == "place")
+    assert failure.trigger == "E3"
+    assert "analyzer fact is 1" in failure.note
+
+
+def test_optional_reader_claims_are_audited_not_smuggled_into_product_prose():
+    answers = _grounded_answers("unused.py")
+    answers["why_matters"] = {
+        "claim": "It is the only mobile surface.",
+        "status": "answered",
+        "evidence": [{"kind": "file", "path": "unused.py"}],
+    }
+    answers["data_handled"] = {
+        "claim": "User records.", "status": "answered", "evidence": [],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={}, validator=None,
+    )
+    by_question = {failure.question: failure for failure in state.failed}
+    assert by_question["why_matters"].trigger == "E3"
+    assert by_question["data_handled"].trigger == "E2"
+
+
+def test_local_singleton_is_allowed_when_the_matching_count_atom_is_one():
+    answers = _grounded_answers("unused.py")
+    answers["mechanism"] = {
+        "claim": "A single file contains the implementation.",
+        "status": "answered",
+        "evidence": [{
+            "kind": "fact", "component": "c1", "field": "file_count",
+        }],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={"file_count": 1}, validator=None,
+    )
+    assert state.state == "grounded"
+
+
 def test_uncertain_becomes_e2_and_dropped_becomes_e1(validator, a_real_file):
     path, _, _ = a_real_file
     answers = _grounded_answers(path)
@@ -326,6 +452,27 @@ def test_uncertain_becomes_e2_and_dropped_becomes_e1(validator, a_real_file):
     assert by_q["purpose"].trigger == "E2"
     assert by_q["purpose"].note == "no docs"
     assert by_q["next_step"].trigger == "E1"
+    assert by_q["next_step"].note == "nothing to point at"
+
+
+def test_an_empty_uncertain_claim_preserves_its_specific_gap_reason(
+    validator, a_real_file,
+):
+    path, _, _ = a_real_file
+    answers = _grounded_answers(path)
+    answers["mechanism"] = {
+        "claim": "", "status": "uncertain",
+        "reason": "the generated dispatch table is absent from the supplied facts",
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="fable",
+        answers=answers, facts={}, validator=validator,
+    )
+    failure = next(item for item in state.failed if item.question == "mechanism")
+    assert failure.trigger == "E2"
+    assert failure.note == (
+        "the generated dispatch table is absent from the supplied facts"
+    )
 
 
 def test_declared_confusion_is_e5_with_the_confusion_named(validator, a_real_file):
@@ -457,3 +604,199 @@ def test_a_contract_state_round_trips_through_its_dict():
     state.failed.append(FailedQuestion("purpose", "E2", "no citation"))
     restored = ContractState.from_dict(state.to_dict())
     assert restored.to_dict() == state.to_dict()
+
+
+# --- deterministic-first: the parser's answers are not the model's to fail -----
+
+
+def test_a_parser_known_identity_attribute_cannot_escalate():
+    """identity.* the analyzer already detected never climbs the ladder.
+
+    The question exists only because the parser found the attribute, the prompt
+    hands the value over, and strict_identity is off by default so nothing
+    checks the model's restatement. On the 2026-08-25 unamentis-ios run this
+    path sent identity.framework to Opus twice, at ~17.5x the per-item cost of
+    the rung that already had the answer, to re-derive a fact and discard it.
+    """
+    from analyzer.enrich.contract import evaluate
+
+    facts = {"framework": "SwiftUI", "language": "swift", "type": "module"}
+    # The model says nothing useful about any of them.
+    state = evaluate(
+        target_kind="component",
+        target_id="c1",
+        rung="sonnet",
+        answers={
+            "purpose": {"claim": "does a thing", "status": "answered",
+                        "evidence": [{"kind": "file", "path": "a.swift"}]},
+            "mechanism": {"claim": "via a thing", "status": "answered",
+                          "evidence": [{"kind": "file", "path": "a.swift"}]},
+            "place": {"claim": "in the app", "status": "answered",
+                      "evidence": [{"kind": "file", "path": "a.swift"}]},
+            "next_step": {"claim": "read a.swift", "status": "answered",
+                          "evidence": [{"kind": "file", "path": "a.swift"}]},
+            "identity.framework": {"claim": "", "status": "uncertain"},
+            "identity.language": {"claim": "", "status": "uncertain"},
+            "identity.type": {"claim": "", "status": "uncertain"},
+        },
+        facts=facts,
+        validator=None,
+    )
+    climbed = {str(f) for f in state.failed_questions}
+    assert not any(q.startswith("identity.") for q in climbed), (
+        f"a parser-known identity attribute escalated: {climbed}"
+    )
+    assert state.state == "grounded"
+
+
+def test_a_real_question_still_escalates_when_the_parser_cannot_help():
+    """The exemption is narrow: only identity, only when the parser has it."""
+    from analyzer.enrich.contract import evaluate
+
+    state = evaluate(
+        target_kind="component",
+        target_id="c1",
+        rung="sonnet",
+        answers={"purpose": {"claim": "", "status": "uncertain"}},
+        facts={"framework": "SwiftUI"},
+        validator=None,
+    )
+    assert state.state == "escalate"
+    assert "purpose" in {str(f) for f in state.failed_questions}
+    # The narrowness matters: identity.framework is settled by the parser and
+    # must be absent, while identity.type is not in facts and must still climb.
+    climbed = {str(f) for f in state.failed_questions}
+    assert "identity.framework" not in climbed
+    assert "identity.type" in climbed
+
+
+def test_an_identity_attribute_the_parser_lacks_is_not_exempt():
+    from analyzer.enrich.contract import _parser_settles
+
+    assert _parser_settles("identity.framework", {"framework": "SwiftUI"}) is True
+    assert _parser_settles("identity.framework", {"framework": ""}) is False
+    assert _parser_settles("identity.framework", {"framework": "unknown"}) is False
+    assert _parser_settles("identity.framework", {}) is False
+    assert _parser_settles("purpose", {"purpose": "anything"}) is False
+    assert _parser_settles("mechanism", {"mechanism": "x"}) is False
+
+
+# --- citing the analyzer's own facts ------------------------------------------
+
+
+def test_a_claim_from_the_analyzers_own_numbers_can_be_cited(fixture_store):
+    """The gap that produced a 64.1% grounding disagreement rate.
+
+    A component's fact block says inbound_edges: 17. A tier that reports "17
+    components depend on this" is stating something TRUE and taken from the
+    prompt it was given, but before "fact" evidence existed the only citable
+    things were files, symbols and edges, and two edges cannot support a claim
+    about seventeen. The claim was correct and unciteable, so it read as
+    ungrounded, escalated to a more expensive tier that could not fix it
+    either, and was then counted as a disagreement.
+    """
+    from analyzer.enrich.evidence import EvidenceValidator
+
+    v = EvidenceValidator(fixture_store, root=POLYGLOT)
+    v.attach_facts({"svc": {"inbound_edges": 17, "file_count": 4}})
+
+    ok = v.check({"kind": "fact", "component": "svc", "field": "inbound_edges"})
+    assert ok.ok is True
+    assert ok.detail["value"] == 17
+
+
+def test_fact_evidence_is_not_a_free_text_escape_hatch(fixture_store):
+    """It must be able to fail, or it grounds everything and checks nothing."""
+    from analyzer.enrich.evidence import EvidenceValidator
+
+    v = EvidenceValidator(fixture_store, root=POLYGLOT)
+    v.attach_facts({"svc": {"inbound_edges": 17}})
+
+    # A field the analyzer never produces.
+    assert v.check({"kind": "fact", "component": "svc", "field": "vibes"}).ok is False
+    # A field not present for THIS component.
+    missing = v.check({"kind": "fact", "component": "svc", "field": "framework"})
+    assert missing.ok is False
+    assert "produced no" in missing.reason
+    # A component that does not exist.
+    assert v.check({"kind": "fact", "component": "ghost", "field": "file_count"}).ok is False
+    # Malformed.
+    assert v.check({"kind": "fact", "component": "svc"}).ok is False
+    assert v.check({"kind": "fact", "field": "file_count"}).ok is False
+
+
+def test_fact_evidence_fails_closed_when_no_facts_were_attached(fixture_store):
+    """A validator with no fact blocks must reject, never wave through."""
+    from analyzer.enrich.evidence import EvidenceValidator
+
+    v = EvidenceValidator(fixture_store, root=POLYGLOT)
+    assert v.check({"kind": "fact", "component": "svc", "field": "file_count"}).ok is False
+
+
+def test_the_validator_still_leaves_sufficiency_to_adjudication(fixture_store):
+    """Citing a real fact does not make a wrong claim right.
+
+    The component below reports file_count 0. A tier claiming "18 Swift files"
+    while citing that field produces a VALID citation and a false claim, which
+    is exactly the split the design asks for: the validator proves the pointer
+    is real, adjudication judges whether the prose matches it.
+    """
+    from analyzer.enrich.evidence import EvidenceValidator
+
+    v = EvidenceValidator(fixture_store, root=POLYGLOT)
+    v.attach_facts({"audio": {"file_count": 0}})
+    check = v.check({"kind": "fact", "component": "audio", "field": "file_count"})
+    assert check.ok is True
+    assert check.detail["value"] == 0, (
+        "the real value must travel with the check so adjudication can compare"
+    )
+
+
+def test_the_validator_checks_the_same_blocks_the_prompt_showed(fixture_store):
+    """The two dictionaries are not interchangeable, and confusing them is silent.
+
+    The prompt shows a model `StoreFacts.component_facts()`, which carries
+    COMPUTED fields the raw arch component dict never had: inbound_edges,
+    outbound_edges, file_count. Attaching the arch dicts to the validator
+    instead made every citation of a computed field fail as "the analyzer
+    produced no 'inbound_edges'". The model had answered correctly and cited
+    correctly; the check was looking somewhere else.
+
+    On the 2026-08-26 full build that alone produced 94 false honest gaps on
+    the `place` question, escalated the items to more expensive tiers that
+    could not fix them, and inflated the grounding disagreement rate.
+    """
+    from analyzer.enrich.evidence import EvidenceValidator
+    from analyzer.enrich.prompts import StoreFacts
+
+    rows = fixture_store.components()
+    by_id = {r["id"]: dict(r, children=[]) for r in rows}
+    roots = []
+    for r in rows:
+        parent = r.get("parent_id")
+        target = by_id[parent]["children"] if parent and parent in by_id else roots
+        target.append(by_id[r["id"]])
+    rels = [
+        {"source": e.get("source_id"), "target": e.get("target_id"), "type": e.get("type")}
+        for e in fixture_store.edges()
+    ]
+    facts = StoreFacts(
+        {"components": roots}, fixture_store.capabilities(),
+        fixture_store.data_entities(), fixture_store.rules(), rels,
+    )
+    if not rows:
+        return
+    cid = rows[0]["id"]
+    block = facts.component_facts(cid)
+    # The computed fields exist in the prompt's block...
+    assert "inbound_edges" in block and "outbound_edges" in block
+    assert "system_relationship_count" in block
+    assert "system_capability_count" in block
+    # ...and are absent from the raw arch dict the ladder flattens.
+    assert "inbound_edges" not in by_id[cid]
+
+    v = EvidenceValidator(fixture_store, root=POLYGLOT)
+    v.attach_facts({cid: block})
+    check = v.check({"kind": "fact", "component": cid, "field": "inbound_edges"})
+    assert check.ok is True, "a citation of a computed fact must validate"
+    assert check.detail["value"] == block["inbound_edges"]
