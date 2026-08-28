@@ -1,0 +1,18 @@
+{"at": 1787853619.76705, "event": "phase_start", "phase": "p1_orientation", "seq": 1, "started_at": 1787853619.76705}
+{"at": 1787853653.975428, "ended_at": 1787853653.975426, "event": "phase_end", "phase": "p1_orientation", "seq": 2, "spent_usd": 0.1188, "status": "ok"}
+{"at": 1787853653.9755762, "event": "phase_start", "phase": "p2_ladder", "seq": 3, "started_at": 1787853653.9755762}
+{"at": 1787853653.978039, "components": 10, "event": "plan", "partitions": 2, "relationships": 1, "rung": "2a", "seq": 4, "targets": 11}
+{"at": 1787853653.978375, "components": 10, "event": "unit_start", "label": "apps/ios [component] +9", "relationships": 0, "rung": "2a", "sample": ["apps/ios", "compose/cache", "compose/db", "libs/core", "libs/rubylib", "root"], "seq": 5, "started_at": 1787853653.978374, "unit_id": 0}
+{"answered": 10, "at": 1787853684.8485591, "detail": null, "ended_at": 1787853684.848557, "escalated": 0, "event": "unit_end", "ok": true, "rung": "2a", "seq": 6, "unit_id": 0}
+{"at": 1787853684.8537118, "components": 0, "event": "unit_start", "label": "apps/ios [relationship] +9", "relationships": 1, "rung": "2a", "sample": ["apps/ios", "compose/cache", "compose/db", "libs/core", "libs/rubylib", "root"], "seq": 7, "started_at": 1787853684.8537111, "unit_id": 1}
+{"answered": 1, "at": 1787853688.4196322, "detail": null, "ended_at": 1787853688.41963, "escalated": 0, "event": "unit_end", "ok": true, "rung": "2a", "seq": 8, "unit_id": 1}
+{"at": 1787853688.422763, "components": 2, "event": "plan", "partitions": 1, "relationships": 0, "rung": "2b", "seq": 9, "targets": 2}
+{"at": 1787853688.4230149, "components": 2, "event": "unit_start", "label": "services/api +1", "relationships": 0, "rung": "2b", "sample": ["services/api", "services/web"], "seq": 10, "started_at": 1787853688.423014, "unit_id": 0}
+{"answered": 2, "at": 1787853692.960202, "detail": null, "ended_at": 1787853692.9601998, "escalated": 0, "event": "unit_end", "ok": true, "rung": "2b", "seq": 11, "unit_id": 0}
+{"at": 1787853692.9606662, "ended_at": 1787853692.9606662, "event": "phase_end", "phase": "p2_ladder", "seq": 12, "spent_usd": 0.4414, "status": "ok"}
+{"at": 1787853692.965091, "event": "phase_start", "phase": "p3_adjudication", "seq": 13, "started_at": 1787853692.96509}
+{"at": 1787853810.2063649, "ended_at": 1787853810.206364, "event": "phase_end", "phase": "p3_adjudication", "seq": 14, "spent_usd": 1.418, "status": "ok"}
+{"at": 1787853810.206506, "event": "phase_start", "phase": "p4_synthesis", "seq": 15, "started_at": 1787853810.206505}
+{"at": 1787853863.657401, "ended_at": 1787853863.6574001, "event": "phase_end", "phase": "p4_synthesis", "seq": 16, "spent_usd": 1.8926, "status": "ok"}
+{"at": 1787853863.657512, "event": "phase_start", "phase": "p5_determination", "seq": 17, "started_at": 1787853863.657512}
+{"at": 1787854012.19602, "ended_at": 1787854012.196019, "event": "phase_end", "phase": "p5_determination", "seq": 18, "spent_usd": 3.781, "status": "ok"}

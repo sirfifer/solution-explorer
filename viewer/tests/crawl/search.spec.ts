@@ -238,6 +238,14 @@ test.describe("search", () => {
           return "nothing";
         };
 
+        // Closing the search overlay and resolving a symbol shard are separate
+        // React updates.  Reading immediately after the overlay disappears can
+        // catch the intentional between-views frame: the previous detail has
+        // cleared but the routed symbol/file/component has not mounted yet.
+        // Poll the product outcome rather than treating that transient frame as
+        // a wrong landing (the failure screenshot showed the correct symbol
+        // panel a moment after the assertion had already recorded "nothing").
+        await expect.poll(landedOn, { timeout: 10_000 }).not.toBe("nothing");
         const landed = await landedOn();
         if (landed === "nothing") {
           wrongLanding.push(`${target.kind} "${target.query}" opened no detail view at all`);

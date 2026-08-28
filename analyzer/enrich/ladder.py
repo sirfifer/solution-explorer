@@ -56,7 +56,7 @@ from .contract import (
 )
 from .engine import _clean_component_payload, _clean_relationship_payload, _parse_json_object
 from .evidence import EvidenceValidator
-from .partition import Partition, flatten_components, plan_partitions
+from .partition import Partition, flatten_components
 from .pipeline import PhaseResult, RunContext
 from .prompts import (
     build_compact_component_prompt,
@@ -202,6 +202,66 @@ def merge_payloads(lower: Optional[dict], higher: Optional[dict]) -> dict:
             continue
         out[key] = value
     return out
+
+
+def _project_audited_answers(
+    target_kind: str, product: dict, contract: dict, state: ContractState,
+) -> dict:
+    """Make the reader payload an exact projection of its audited atoms.
+
+    Models never get to keep a second, unaudited version of a meaning in the
+    product. This matters most at a terminal boundary: a repair may return a
+    polished ``help_text`` while honestly marking one of the atoms inside it
+    uncertain. Keeping both would publish prose the contract explicitly says
+    it cannot support. Supported sibling atoms remain reader-visible, and the
+    exact terminal gaps replace any stale gaps from an earlier attempt.
+    """
+    projected = dict(product)
+    answers = contract.get("answers") if isinstance(contract, dict) else {}
+    answers = answers if isinstance(answers, dict) else {}
+
+    def answered_claim(question: str) -> str:
+        answer = answers.get(question)
+        if not isinstance(answer, dict):
+            return ""
+        if str(answer.get("status") or "answered") != "answered":
+            return ""
+        return str(answer.get("claim") or "").strip()
+
+    if target_kind == "component":
+        audited_prose = ("purpose", "mechanism", "place", "why_matters")
+        if any(question in answers for question in audited_prose):
+            claims = [answered_claim(question) for question in audited_prose]
+            help_text = " ".join(claim for claim in claims if claim)
+            if help_text:
+                projected["help_text"] = help_text
+            else:
+                projected.pop("help_text", None)
+        if "data_handled" in answers:
+            data_handled = answered_claim("data_handled")
+            if data_handled:
+                projected["data_handled"] = data_handled
+            else:
+                projected.pop("data_handled", None)
+    elif "flow" in answers:
+        flow = answered_claim("flow")
+        if flow:
+            projected["data_flow_description"] = flow
+        else:
+            projected.pop("data_flow_description", None)
+
+    if state.state == "grounded":
+        projected.pop("honest_gaps", None)
+    elif state.state == "honest_gap":
+        projected["honest_gaps"] = [
+            {
+                "question": failure.question,
+                "why": failure.note
+                or "the terminal repair could not validate this claim",
+            }
+            for failure in state.failed
+        ]
+    return projected
 
 
 def _merge_contract_blocks(lower: dict, higher: dict) -> dict:
@@ -412,7 +472,14 @@ class LadderPhase:
         # failures, escalated them, and left 94 false honest gaps on the
         # `place` question alone in the 2026-08-26 full build.
         validator.attach_facts({
-            cid: ctx.facts.component_facts(cid) for cid in facts_by_id
+            **{cid: ctx.facts.component_facts(cid) for cid in facts_by_id},
+            **{
+                key: ctx.facts.relationship_facts(key)
+                for key in (
+                    f"{row.get('source', '')}|{row.get('target', '')}|{row.get('type', '')}"
+                    for row in relationships
+                )
+            },
         })
         self._rung_2a(ctx, partitions, validator, facts_by_id, brief, outcome)
         self._rung_escalated(
@@ -448,14 +515,12 @@ class LadderPhase:
         self, ctx: RunContext, components: list, relationships: list,
         ranking: ImportanceRanking,
     ) -> list[Partition]:
-        plan = plan_partitions(
-            components, relationships,
-            max_lines=ctx.max_lines,
-            max_components=ctx.max_components,
-            min_components=ctx.min_components,
-            max_relationships=ctx.max_relationships,
-        )
-        return order_partitions(plan.partitions, ranking)
+        # RunContext owns the immutable plan so orientation, the ladder and
+        # determination cannot silently reason about different canary slices.
+        # Keep the parameters in the signature because this seam is exercised
+        # directly by tests and documents what the plan is over.
+        del components, relationships, ranking
+        return list(ctx.planned_partitions())
 
     def _plan_only(
         self, ctx: RunContext, partitions: list[Partition], brief, outcome: LadderOutcome
@@ -575,11 +640,10 @@ class LadderPhase:
             from .prompts import split_cached_prompt
 
             compact_prefix, compact_user = split_cached_prompt(prompt)
-            # One corrective retry on a parse failure, which the other three
-            # call sites in this codebase already had and the ladder alone
-            # lacked (passes._invoke_json, engine._enhance_partition,
-            # engine._enhance_architecture). A response that came back as prose
-            # or half an object is usually recoverable by saying so.
+            # A parse failure gets one corrective retry. A structurally valid
+            # multi-target response with one malformed entry is different: bank
+            # its valid siblings immediately and let only the rejected target
+            # climb. Reissuing the whole prompt would repurchase finished work.
             for attempt in range(2):
                 result = invoker(attempt_prompt)
                 response_bytes = len(result.text.encode("utf-8"))
@@ -633,16 +697,15 @@ class LadderPhase:
                             note = transport_note + ("; " + note if note else "")
                         return job_id, obj, note
                     last_error = "compact schema rejected: " + "; ".join(schema_errors[:8])
-                    if attempt == 1:
-                        salvaged, rejected = salvage_compact_response(
-                            obj, prefix=compact_prefix, user=compact_user
+                    salvaged, rejected = salvage_compact_response(
+                        obj, prefix=compact_prefix, user=compact_user
+                    )
+                    if salvaged is not None:
+                        return (
+                            job_id, salvaged,
+                            f"{last_error}; salvaged valid siblings and rejected "
+                            + ", ".join(rejected[:8]),
                         )
-                        if salvaged is not None:
-                            return (
-                                job_id, salvaged,
-                                f"{last_error}; salvaged valid siblings and rejected "
-                                + ", ".join(rejected[:8]),
-                            )
                 else:
                     last_error = "returned unparseable text"
                 if attempt == 0:
@@ -1016,11 +1079,13 @@ class LadderPhase:
             )
 
         if terminal:
-            # An item still asking to climb after the last rung becomes an
-            # honest gap ONLY if the terminal model actually saw it: it was in a
-            # batch whose call returned, and the model either failed to ground
-            # it or omitted it. There is nowhere left to send it, and the design
-            # forbids both a fake answer and an infinite loop.
+            # A returned CALL is not proof that the model answered every item
+            # and question inside it.  An explicit uncertain/dropped answer (or
+            # declared gap) is handled by _absorb_one above and is a legitimate
+            # honest gap about the code.  A silently omitted required answer is
+            # instead a response-contract failure about the RUN.  Keep it in
+            # ``escalate`` so P5 can repair it and the completion gate cannot
+            # mistake provider silence for a researched conclusion.
             #
             # An item whose terminal call FAILED or was never launched stays in
             # the escalate state instead. That is already an honest terminal
@@ -1029,26 +1094,20 @@ class LadderPhase:
             # --update re-targets it. Stamping it honest_gap would convert a
             # transport failure into a confident claim about the code.
             unexamined = 0
+            omitted = 0
             for state in outcome.states.values():
                 if state.state != "escalate":
                     continue
                 if (state.target_kind, state.target_id) in examined:
-                    previous = state.state
-                    state.state = "honest_gap"
-                    state.rung = "fable"
-                    outcome.transitions.append({
-                        "target_kind": state.target_kind,
-                        "target_id": state.target_id,
-                        "rung": "fable",
-                        "from_state": previous,
-                        "state": "honest_gap",
-                        "failed": [failure.to_dict() for failure in state.failed],
-                        "parser_first": list(state.parser_first),
-                        "resolution": "terminal rung examined the item but did not return a grounded repair",
-                    })
-                    self._write_honest_gaps(ctx, state, outcome)
+                    omitted += 1
                 else:
                     unexamined += 1
+            if omitted:
+                outcome.notes.append(
+                    f"rung {rung}: {omitted} examined item(s) omitted one or "
+                    "more required answers; left unresolved as response-contract "
+                    "failures rather than mislabeled as code-level honest gaps"
+                )
             if unexamined:
                 outcome.notes.append(
                     f"rung {rung}: {unexamined} item(s) left in the escalate "
@@ -1112,7 +1171,7 @@ class LadderPhase:
                 "attempt_claim": str(prior.get("claim") or "")[:300],
                 "citations_tried": [
                     self._evidence_reference(item)
-                    for item in (prior.get("evidence") or [])[:2]
+                    for item in (prior.get("evidence") or [])[:12]
                     if isinstance(item, dict)
                 ],
                 "lacked": prior.get("lacked") or "unknown",
@@ -1164,6 +1223,77 @@ class LadderPhase:
                     raw=raw, terminal=terminal, reject_demotion=reject_demotion,
                 )
 
+    def quarantine_unsupported(
+        self, ctx: RunContext, outcome: LadderOutcome, checks: list
+    ) -> set[str]:
+        """Remove claims the independent judge has explicitly rejected.
+
+        Improvement rounds get the first chance to repair a claim with richer
+        evidence. Once those bounded rounds are exhausted, retaining a sentence
+        the final judge already found unsupported is never an acceptable form
+        of "partial success". This deterministic last line rewrites only the
+        named answer to an actionable uncertainty, preserves every supported
+        sibling answer, and exposes the gap in the product. It performs no new
+        generation and makes no new semantic judgment.
+        """
+        from .evidence import EvidenceValidator
+
+        grouped: dict[tuple[str, str], dict[str, str]] = {}
+        for check in checks or []:
+            target_kind = str(getattr(check, "target_kind", "") or "")
+            target_id = str(getattr(check, "target_id", "") or "")
+            question = str(getattr(check, "question", "") or "")
+            if target_kind not in {"component", "relationship"}:
+                continue
+            if not target_id or not question:
+                continue
+            grouped.setdefault((target_kind, target_id), {})[question] = str(
+                getattr(check, "reason", "")
+                or "independent adjudication found the claim unsupported"
+            )
+        if not grouped:
+            return set()
+
+        validator = EvidenceValidator(ctx.store, root=ctx.root)
+        quarantined: set[str] = set()
+        for (target_kind, target_id), failures in sorted(grouped.items()):
+            facts = (
+                ctx.facts.component_facts(target_id)
+                if target_kind == "component"
+                else ctx.facts.relationship_facts(target_id)
+            )
+            validator.attach_facts({target_id: facts})
+            answer_delta = {
+                question: {
+                    "claim": "", "status": "uncertain", "reason": reason,
+                    "evidence": [], "lacked": "judgment",
+                }
+                for question, reason in failures.items()
+            }
+            block = {
+                "honest_gaps": [
+                    {"question": question, "why": reason}
+                    for question, reason in failures.items()
+                ],
+                "contract": {"answers": answer_delta},
+            }
+            obj = {
+                "components": {target_id: block} if target_kind == "component" else {},
+                "relationships": (
+                    {target_id: block} if target_kind == "relationship" else {}
+                ),
+            }
+            self._absorb(
+                ctx, obj, validator, {target_id: facts}, outcome,
+                rung="p5-adjudication-quarantine",
+                component_ids=[target_id] if target_kind == "component" else [],
+                relationship_keys=[target_id] if target_kind == "relationship" else [],
+                terminal=True,
+            )
+            quarantined.add(target_id)
+        ctx.store.commit()
+        return quarantined
+
     def _absorb_one(
         self, ctx: RunContext, validator: EvidenceValidator, facts_by_id: dict,
         outcome: LadderOutcome, *, rung: str, target_kind: str, target_id: str,
@@ -1173,26 +1303,174 @@ class LadderPhase:
         previous_state = outcome.states.get(key)
         previous_payload = outcome.payloads.get(key, {})
 
-        product, contract_block = split_contract_payload(raw)
-        merged_product = merge_payloads(
-            {k: v for k, v in previous_payload.items() if k != "contract"}, product
+        # Contract evaluation must see the same computed fact block as the
+        # prompt and EvidenceValidator. Raw architecture components omit
+        # file_count, edge counts, capabilities and corpus-wide counts; feeding
+        # that thinner object to E3 made a correctly cited local singleton look
+        # like an unsupported global uniqueness claim.
+        facts = (
+            ctx.facts.component_facts(target_id)
+            if target_kind == "component"
+            else ctx.facts.relationship_facts(target_id)
         )
-        merged_contract = _merge_contract_blocks(
-            previous_payload.get("contract") or {}, contract_block
+        product, contract_block = split_contract_payload(raw)
+
+        def candidate(product_delta: dict, contract_delta: dict):
+            merged_product = merge_payloads(
+                {k: v for k, v in previous_payload.items() if k != "contract"},
+                product_delta,
+            )
+            merged_contract = _merge_contract_blocks(
+                previous_payload.get("contract") or {}, contract_delta,
+            )
+            changed = (
+                contract_delta.get("answers")
+                if isinstance(contract_delta.get("answers"), dict)
+                else {}
+            )
+            if target_kind == "component" and "data_handled" in changed:
+                repaired_data = str(
+                    (changed.get("data_handled") or {}).get("claim") or ""
+                ).strip()
+                if repaired_data:
+                    merged_product["data_handled"] = repaired_data
+            # Compact escalation/work-order responses are deltas. Their
+            # semantic atoms intentionally omit a duplicate reader paragraph,
+            # so rebuild that paragraph from the merged atom set.
+            if (
+                target_kind == "component"
+                and previous_payload
+                and not product_delta.get("help_text")
+                and changed
+            ):
+                answers = merged_contract.get("answers") or {}
+                prose = [
+                    str((answers.get(question) or {}).get("claim") or "").strip()
+                    for question in ("purpose", "mechanism", "place", "why_matters")
+                ]
+                rebuilt = " ".join(sentence for sentence in prose if sentence)
+                if rebuilt:
+                    merged_product["help_text"] = rebuilt
+            state = state_from_block(
+                target_kind=target_kind,
+                target_id=target_id,
+                rung=rung,
+                block=merged_contract,
+                facts=facts,
+                validator=validator,
+                previous=previous_state,
+            )
+            return merged_product, merged_contract, changed, state
+
+        merged_product, merged_contract, changed_answers, state = candidate(
+            product, contract_block,
         )
 
-        facts = (
-            facts_by_id.get(target_id, {}) if target_kind == "component" else {}
-        )
-        state = state_from_block(
-            target_kind=target_kind,
-            target_id=target_id,
-            rung=rung,
-            block=merged_contract,
-            facts=facts,
-            validator=validator,
-            previous=previous_state,
-        )
+        # A scoped work order may repair several questions on one target while
+        # honestly declining one. Do not let that one declined answer discard
+        # its valid siblings. Bank only changed answers that still pass the
+        # contract, retain the earlier answer for rejected questions, and then
+        # re-evaluate the whole target. The prior all-or-nothing behavior was
+        # observed live preserving prose P3 had already rejected even though the
+        # same response contained valid repairs for its neighboring questions.
+        if reject_demotion and previous_state is not None and changed_answers:
+            rank = {"escalate": 0, "honest_gap": 1, "grounded": 2}
+            if rank.get(state.state, -1) < rank.get(previous_state.state, -1):
+                failed_changed = {
+                    failure.question for failure in state.failed
+                    if failure.question in changed_answers
+                }
+                accepted = {
+                    question: answer
+                    for question, answer in changed_answers.items()
+                    if question not in failed_changed
+                }
+                if failed_changed and accepted:
+                    partial_contract = dict(contract_block)
+                    partial_contract["answers"] = accepted
+                    partial_product = dict(product)
+                    partial_product.pop("help_text", None)
+                    if "data_handled" in failed_changed:
+                        partial_product.pop("data_handled", None)
+                    candidate_values = candidate(partial_product, partial_contract)
+                    partial_state = candidate_values[3]
+                    if (
+                        rank.get(partial_state.state, -1)
+                        >= rank.get(previous_state.state, -1)
+                    ):
+                        merged_product, merged_contract, changed_answers, state = (
+                            candidate_values
+                        )
+                        outcome.transitions.append({
+                            "target_kind": target_kind,
+                            "target_id": target_id,
+                            "rung": rung,
+                            "from_state": previous_state.state,
+                            "state": previous_state.state,
+                            "failed": [
+                                failure.to_dict() for failure in state.failed
+                                if failure.question in failed_changed
+                            ],
+                            "parser_first": list(state.parser_first),
+                            "resolution": (
+                                "banked valid work-order answers; retained prior "
+                                "answers for rejected questions: "
+                                + ", ".join(sorted(failed_changed))
+                            ),
+                        })
+
+        # A terminal repair has examined the named question. If its attempted
+        # replacement still fails the mechanical contract, never publish that
+        # known-invalid replacement and never leave the item asking for a rung
+        # that does not exist. Preserve its useful siblings and turn only the
+        # rejected answers into explicit, reasoned uncertainties. This is the
+        # deterministic counterpart to an explicit compact ``s:u`` response.
+        if terminal and state.failed and changed_answers:
+            failures = {
+                failure.question: failure
+                for failure in state.failed
+                if failure.question in changed_answers
+            }
+            if failures:
+                terminal_answers = dict(merged_contract.get("answers") or {})
+                for question, failure in failures.items():
+                    attempted = terminal_answers.get(question) or {}
+                    terminal_answers[question] = {
+                        "claim": "",
+                        "status": "uncertain",
+                        "reason": str(failure.note or "the attempted repair did not validate"),
+                        "evidence": [],
+                        **({"lacked": attempted.get("lacked")}
+                           if isinstance(attempted, dict) and attempted.get("lacked") else {}),
+                        **({"need": attempted.get("need")}
+                           if isinstance(attempted, dict) and attempted.get("need") else {}),
+                    }
+                merged_contract = dict(merged_contract)
+                merged_contract["answers"] = terminal_answers
+                if target_kind == "component":
+                    if "data_handled" in failures:
+                        merged_product.pop("data_handled", None)
+                    prose = [
+                        str((terminal_answers.get(question) or {}).get("claim") or "").strip()
+                        for question in ("purpose", "mechanism", "place", "why_matters")
+                        if (terminal_answers.get(question) or {}).get("status") == "answered"
+                    ]
+                    rebuilt = " ".join(text for text in prose if text)
+                    if rebuilt:
+                        merged_product["help_text"] = rebuilt
+                    else:
+                        merged_product.pop("help_text", None)
+                elif "flow" in failures:
+                    merged_product.pop("data_flow_description", None)
+                state = state_from_block(
+                    target_kind=target_kind,
+                    target_id=target_id,
+                    rung=rung,
+                    block=merged_contract,
+                    facts=facts,
+                    validator=validator,
+                    previous=previous_state,
+                )
 
         # The terminal rung's declared honest gaps close the questions they name,
         # so an item that honestly cannot answer is finished rather than stuck.
@@ -1227,6 +1505,43 @@ class LadderPhase:
                 state.state = "escalate"
                 state.failed = remaining + closed
 
+        # A final repair tier can also express the honest gap directly on the
+        # named answer (compact ``s:u``).  Requiring a second duplicate `gaps`
+        # array caused P5 to retain claims its independent judge had already
+        # rejected: the repair correctly said "the evidence is absent", but the
+        # target stayed grounded because the demotion guard restored the old
+        # prose.  At a terminal boundary, explicit uncertain/dropped answers
+        # close those exact failed questions as honest gaps; answered siblings
+        # remain intact and the reasons stay in the contract state.
+        if terminal and state.failed:
+            merged_answers = merged_contract.get("answers") or {}
+            terminal_questions = {
+                failure.question for failure in state.failed
+                if isinstance(merged_answers.get(failure.question), dict)
+                and merged_answers[failure.question].get("status") in {
+                    "uncertain", "dropped"
+                }
+            }
+            if terminal_questions == {failure.question for failure in state.failed}:
+                state.state = "honest_gap"
+                state.rung = rung
+
+        if terminal and state.state == "honest_gap":
+            existing = merged_product.get("honest_gaps")
+            gaps = list(existing) if isinstance(existing, list) else []
+            known = {
+                str(item.get("question") or "")
+                for item in gaps if isinstance(item, dict)
+            }
+            for failure in state.failed:
+                if failure.question not in known:
+                    gaps.append({
+                        "question": failure.question,
+                        "why": failure.note or "the terminal repair could not validate this claim",
+                    })
+            if gaps:
+                merged_product["honest_gaps"] = gaps
+
         if reject_demotion and previous_state is not None:
             rank = {"escalate": 0, "honest_gap": 1, "grounded": 2}
             if rank.get(state.state, -1) < rank.get(previous_state.state, -1):
@@ -1255,6 +1570,13 @@ class LadderPhase:
             state.entry_class_basis = previous_state.entry_class_basis
             state.repair_attempted = previous_state.repair_attempted
         state.record_entry_class()
+
+        # The contract is the single source for audited reader meanings. Do
+        # this after every terminal/demotion decision so model-supplied prose
+        # and stale gap lists cannot disagree with the final state.
+        merged_product = _project_audited_answers(
+            target_kind, merged_product, merged_contract, state,
+        )
 
         stored = dict(merged_product, contract=merged_contract)
         outcome.payloads[key] = stored
@@ -1332,6 +1654,9 @@ class LadderPhase:
                 cleaned["honest_gaps"] = gaps
         else:
             cleaned = _clean_relationship_payload(ctx.scorer, product, ctx.clock)
+            gaps = product.get("honest_gaps")
+            if isinstance(gaps, list) and gaps:
+                cleaned["honest_gaps"] = gaps
         stamp_enrichment(
             ctx.store, target_kind, target_id, cleaned,
             digest_index=ctx.index, commit_sha=ctx.commit_sha, clock=ctx.clock,

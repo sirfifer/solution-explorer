@@ -1,0 +1,787 @@
+{
+  "identity": {
+    "pass": "verify-identity",
+    "mode": "full",
+    "dry_run": false,
+    "target_count": 5,
+    "done": 4,
+    "failed": [
+      "root"
+    ],
+    "verdicts": {
+      "confirmed": 1,
+      "uncertain": 3
+    },
+    "total_cost_usd": 0.12921,
+    "notes": [
+      "5 identity-bearing component(s); 5 to verify"
+    ],
+    "plan_preview": [],
+    "extra": {},
+    "outcomes": [
+      {
+        "id": "apps/ios",
+        "status": "done",
+        "verdict": "confirmed",
+        "cost_usd": 0.025842,
+        "errors": []
+      },
+      {
+        "id": "compose/cache",
+        "status": "done",
+        "verdict": "uncertain",
+        "cost_usd": 0.025842,
+        "errors": []
+      },
+      {
+        "id": "compose/db",
+        "status": "done",
+        "verdict": "uncertain",
+        "cost_usd": 0.025842,
+        "errors": []
+      },
+      {
+        "id": "root",
+        "status": "failed",
+        "verdict": null,
+        "cost_usd": 0.025842,
+        "errors": [
+          "fields.port: corrected requires a value"
+        ]
+      },
+      {
+        "id": "services/api",
+        "status": "done",
+        "verdict": "uncertain",
+        "cost_usd": 0.025842,
+        "errors": []
+      }
+    ]
+  },
+  "edges": {
+    "pass": "verify-edges",
+    "mode": "full",
+    "dry_run": false,
+    "target_count": 1,
+    "done": 1,
+    "failed": [],
+    "verdicts": {
+      "confirmed": 1
+    },
+    "total_cost_usd": 0.032871,
+    "notes": [
+      "1 inferred edge(s); 1 to verify"
+    ],
+    "plan_preview": [],
+    "extra": {},
+    "outcomes": [
+      {
+        "id": "services/web/src|services/api|http",
+        "status": "done",
+        "verdict": "confirmed",
+        "cost_usd": 0.032871,
+        "errors": []
+      }
+    ]
+  },
+  "findings": {
+    "pass": "verify-findings",
+    "mode": "full",
+    "dry_run": false,
+    "target_count": 5,
+    "done": 5,
+    "failed": [],
+    "verdicts": {
+      "uncertain": 2,
+      "refuted": 3
+    },
+    "total_cost_usd": 0.058841,
+    "notes": [
+      "5 finding(s); 5 to verify"
+    ],
+    "plan_preview": [],
+    "extra": {},
+    "outcomes": [
+      {
+        "id": "finding:unreferenced:apps/ios",
+        "status": "done",
+        "verdict": "uncertain",
+        "cost_usd": 0.011768,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:libs/core",
+        "status": "done",
+        "verdict": "refuted",
+        "cost_usd": 0.011768,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:libs/rubylib",
+        "status": "done",
+        "verdict": "refuted",
+        "cost_usd": 0.011768,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:services/web/src",
+        "status": "done",
+        "verdict": "uncertain",
+        "cost_usd": 0.011768,
+        "errors": []
+      },
+      {
+        "id": "finding:unreferenced:services/worker",
+        "status": "done",
+        "verdict": "refuted",
+        "cost_usd": 0.011768,
+        "errors": []
+      }
+    ]
+  },
+  "spot_checks": [
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "data_handled",
+      "claim": "No data entities are modeled despite the README noting a Postgres driver.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "mechanism",
+      "claim": "Holds two files, server.py and pyproject.toml, totaling 49 lines; the FastAPI route GET /users/{user_id} is detected in server.py via the read_user symbol.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "next_step",
+      "claim": "Confirm the read_user symbol and its GET /users/{user_id} route were correctly attributed to FastAPI.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "place",
+      "claim": "Receives the fixture's one declared relationship, an inbound HTTP call from services/web/src.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "purpose",
+      "claim": "Provides a minimal FastAPI service so the analyzer detects a port-bound API server and its endpoint capability.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/api",
+      "question": "why_matters",
+      "claim": "It is the only component with an inbound edge and a detected capability, making it the anchor for testing relationship and API-capability detection together.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "question": "data_handled",
+      "claim": "No data entities are defined for this component.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "question": "mechanism",
+      "claim": "Consists of a Package.swift manifest and a single ContentView.swift source file totaling 40 lines.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "question": "next_step",
+      "claim": "Check that the parser correctly typed this as a package with language swift and framework SwiftUI.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "question": "place",
+      "claim": "Stands alone with no inbound or outbound edges to other fixture components.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "question": "purpose",
+      "claim": "Provides a minimal Swift package so the analyzer's Swift/Package.swift detection path has a real fixture to parse.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "apps/ios",
+      "question": "why_matters",
+      "claim": "Its presence matches the root README's layout, which lists apps/ios as a Swift package alongside services/api, services/web, services/worker, libs/core, libs/rubylib, and docker-compose infrastructure.",
+      "supported": false,
+      "confidence": "high",
+      "reason": "The cited README excerpt only lists apps/ios; it does not show services/api, services/web, services/worker, libs/core, libs/rubylib, or docker-compose infrastructure."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/cache",
+      "question": "data_handled",
+      "claim": "No data entities are modeled; this is a service declaration only.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/cache",
+      "question": "mechanism",
+      "claim": "Detected purely from a docker-compose service block named 'cache' binding port 6379, with no source files.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/cache",
+      "question": "next_step",
+      "claim": "Verify the port value 6379 was extracted correctly from the compose file.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/cache",
+      "question": "place",
+      "claim": "Isolated in the graph with no inbound or outbound edges.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/cache",
+      "question": "purpose",
+      "claim": "Represents the cache service declared in docker-compose.yml; the service block has no image field cited among facts, so no image-based identity (e.g. Redis) is established.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/cache",
+      "question": "why_matters",
+      "claim": "Its presence matches the root README's mention of docker-compose.yml infrastructure covering db and cache services.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/db",
+      "question": "data_handled",
+      "claim": "No data entities are modeled; this is a service declaration only.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/db",
+      "question": "mechanism",
+      "claim": "Detected purely from a docker-compose service block named 'db' binding port 5432, with no source files.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/db",
+      "question": "next_step",
+      "claim": "Verify the port value 5432 was extracted correctly from the compose file.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/db",
+      "question": "place",
+      "claim": "Isolated in the graph with no inbound or outbound edges.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/db",
+      "question": "purpose",
+      "claim": "Represents the database service declared in docker-compose.yml; the service block has no image field cited among facts, so no image-based identity (e.g. Postgres) is established.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/db",
+      "question": "why_matters",
+      "claim": "Its presence matches the root README's mention of docker-compose.yml infrastructure, without further parser-correctness claim.",
+      "supported": false,
+      "confidence": "high",
+      "reason": "The cited README excerpt says nothing about docker-compose.yml or infrastructure, so it cannot support a claimed match."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "question": "data_handled",
+      "claim": "No data entities are defined for this component.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "question": "mechanism",
+      "claim": "Consists of a Cargo.toml manifest and a single lib.rs source file totaling 30 lines.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "question": "next_step",
+      "claim": "Check that the parser correctly typed this as a package with language rust.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "question": "place",
+      "claim": "Stands alone with no inbound or outbound edges to other fixture components.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "question": "purpose",
+      "claim": "Provides a minimal Rust library so the analyzer's Cargo.toml/Rust detection path has a real fixture to parse.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/core",
+      "question": "why_matters",
+      "claim": "Its presence matches the root README layout, which lists libs/core as a Rust library alongside the other six fixture components.",
+      "supported": false,
+      "confidence": "high",
+      "reason": "The excerpt confirms libs/core is listed as a Rust library but says nothing about six other fixture components."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/rubylib",
+      "question": "data_handled",
+      "claim": "No data entities are defined for this component.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/rubylib",
+      "question": "mechanism",
+      "claim": "Consists of a Gemfile manifest and a single parser.rb source file totaling 21 lines.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/rubylib",
+      "question": "next_step",
+      "claim": "Check that the parser correctly typed this as a package with language ruby.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/rubylib",
+      "question": "place",
+      "claim": "Stands alone with no inbound or outbound edges to other fixture components.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/rubylib",
+      "question": "purpose",
+      "claim": "Provides a minimal Ruby package so the analyzer's Gemfile/Ruby detection path has a real fixture to parse.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "libs/rubylib",
+      "question": "why_matters",
+      "claim": "Its presence matches the root README layout, which lists libs/rubylib as a Ruby package alongside the other six fixture components.",
+      "supported": false,
+      "confidence": "high",
+      "reason": "The README excerpt shows only the libs/rubylib line, so it does not support the claim that six other fixture components are listed alongside it."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "data_handled",
+      "claim": "No data entities are modeled at the root; it only declares infrastructure services.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "mechanism",
+      "claim": "Consists of README.md and docker-compose.yml, with the compose file declaring api, db, and cache services and their ports.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "next_step",
+      "claim": "Compare the README's declared layout against the detected components to confirm full coverage.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "place",
+      "claim": "Records no direct inbound or outbound edges itself, and its README layout list enumerates every other fixture component (services/api, services/web, services/worker, libs/core, libs/rubylib, apps/ios, docker-compose infrastructure).",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "purpose",
+      "claim": "Serves as the top-level directory declaring the docker-compose infrastructure and the README specification the whole fixture is built from.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "root",
+      "question": "why_matters",
+      "claim": "Its README layout list is the fixture's own specification, so drift between this component and the rest of the tree signals a real detection regression.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "question": "data_handled",
+      "claim": "No data entities are modeled for this package.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "question": "mechanism",
+      "claim": "Holds one file, package.json, and one child component, services/web/src.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "question": "next_step",
+      "claim": "Check that the parser correctly nests services/web/src as a child of services/web.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "question": "place",
+      "claim": "Has no direct edges of its own; the fixture's sole HTTP relationship is carried by its child services/web/src.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "question": "purpose",
+      "claim": "Represents the web client package declared by package.json, matching the root README layout's description of services/web as the TypeScript + JavaScript web client that calls the API over HTTP.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web",
+      "question": "why_matters",
+      "claim": "Has no direct inbound or outbound edges itself; the fixture's HTTP relationship is carried by its child services/web/src, matching the README layout's description of services/web calling the API over HTTP.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "data_handled",
+      "claim": "No data entities are modeled for this module.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "mechanism",
+      "claim": "Two files, client.ts and format.js, total 44 lines and produce one outbound HTTP edge to services/api.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "next_step",
+      "claim": "Verify the HTTP edge target resolves to services/api rather than to services/web.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "The cited edge fact already shows the target as services/api, so the evidence gives no basis for suspecting it resolves to services/web instead."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "place",
+      "claim": "Connects to services/api via the fixture's single declared HTTP relationship.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "purpose",
+      "claim": "Implements the client code that calls the API over HTTP, matching the root README layout's description of services/web calling the API over HTTP.",
+      "supported": true,
+      "confidence": "low",
+      "reason": "README excerpt describes the parent services/web rather than this src module, and the other citation is invalid."
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/web/src",
+      "question": "why_matters",
+      "claim": "It is the source of the fixture's only cross-component edge, making it essential for validating relationship detection.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/worker",
+      "question": "data_handled",
+      "claim": "No data entities are defined for this component.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/worker",
+      "question": "mechanism",
+      "claim": "Consists of a single main.go file totaling 21 lines with no other files.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/worker",
+      "question": "next_step",
+      "claim": "Check that the parser correctly typed this as a module with language go.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/worker",
+      "question": "place",
+      "claim": "Stands alone with no inbound or outbound edges to other fixture components.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/worker",
+      "question": "purpose",
+      "claim": "Provides a minimal Go module so the analyzer's go.mod/Go detection path has a real fixture to parse.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": ""
+    },
+    {
+      "target_kind": "component",
+      "target_id": "services/worker",
+      "question": "why_matters",
+      "claim": "Its presence matches the root README layout, which lists services/worker as a Go module alongside the other six fixture components.",
+      "supported": false,
+      "confidence": "medium",
+      "reason": "The excerpt confirms services/worker is listed as a Go module but does not show the other six fixture components or the total count."
+    },
+    {
+      "target_kind": "relationship",
+      "target_id": "services/web/src|services/api|http",
+      "question": "flow",
+      "claim": "The TypeScript web client issues an HTTP call to the FastAPI service at api:8000.",
+      "supported": true,
+      "confidence": "medium",
+      "reason": "Cited client.ts line is the plausible HTTP call site for the edge, though the api:8000 host detail rests on that single line."
+    },
+    {
+      "target_kind": "relationship",
+      "target_id": "services/web/src|services/api|http",
+      "question": "why",
+      "claim": "The root README's layout declares that services/web calls the API over HTTP, matching this edge from services/web/src to services/api.",
+      "supported": true,
+      "confidence": "high",
+      "reason": ""
+    }
+  ],
+  "substitution_checks": [
+    {
+      "target_id": "services/api",
+      "distinctive": true,
+      "chose": "services/api",
+      "confirmed_failure": false,
+      "reason": "Only candidate that is an api-server with FastAPI endpoints and an inbound HTTP edge from services/web/src."
+    },
+    {
+      "target_id": "apps/ios",
+      "distinctive": true,
+      "chose": "apps/ios",
+      "confirmed_failure": false,
+      "reason": "Only candidate that is the Swift package fixture with Package.swift and ContentView.swift at apps/ios."
+    },
+    {
+      "target_id": "compose/cache",
+      "distinctive": true,
+      "chose": "compose/cache",
+      "confirmed_failure": false,
+      "reason": "The description names a docker-compose service 'cache' on port 6379, matching the cache-typed candidate uniquely."
+    },
+    {
+      "target_id": "compose/db",
+      "distinctive": true,
+      "chose": "compose/db",
+      "confirmed_failure": false,
+      "reason": "The description names a docker-compose service 'db' on port 5432 typed as a database, matching compose/db and not the cache or package candidates."
+    },
+    {
+      "target_id": "libs/core",
+      "distinctive": true,
+      "chose": "libs/core",
+      "confirmed_failure": false,
+      "reason": "The description explicitly names libs/core as the Rust library fixture with Cargo.toml and lib.rs, matching the polyglot-core package."
+    },
+    {
+      "target_id": "libs/rubylib",
+      "distinctive": true,
+      "chose": "libs/rubylib",
+      "confirmed_failure": false,
+      "reason": "The description names the Ruby Gemfile fixture at libs/rubylib explicitly."
+    },
+    {
+      "target_id": "root",
+      "distinctive": true,
+      "chose": "root",
+      "confirmed_failure": false,
+      "reason": "Only the root component holds README.md and docker-compose.yml and enumerates every other fixture component."
+    },
+    {
+      "target_id": "services/web",
+      "distinctive": true,
+      "chose": "services/web",
+      "confirmed_failure": false,
+      "reason": "Only this candidate is the web client package holding package.json with a services/web/src child."
+    },
+    {
+      "target_id": "services/web/src",
+      "distinctive": true,
+      "chose": "services/web/src",
+      "confirmed_failure": false,
+      "reason": "Only candidate under services/web, which the description names as the HTTP client calling services/api."
+    },
+    {
+      "target_id": "services/worker",
+      "distinctive": true,
+      "chose": "services/worker",
+      "confirmed_failure": false,
+      "reason": "The description explicitly names services/worker as the Go module fixture, and no other candidate is a Go module."
+    }
+  ],
+  "checked": 62,
+  "unsupported": 6,
+  "disagreement_rate": 0.0968,
+  "substitution_failure_rate": 0.0,
+  "notes": [
+    "verify identity: 4 verified, confirmed=1, uncertain=3",
+    "verify edges: 1 verified, confirmed=1",
+    "verify findings: 5 verified, refuted=3, uncertain=2",
+    "grounding spot-checks: 14 of 62 claims not supported by their own evidence (disagreement rate 22.6%)",
+    "substitution checks: 1 of 5 descriptions did not identify their own subject (20.0%)",
+    "grounding spot-checks: 6 of 62 claims not supported by their own evidence (disagreement rate 9.7%)",
+    "substitution checks: 0 of 10 descriptions did not identify their own subject (0.0%)"
+  ]
+}

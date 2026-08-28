@@ -142,6 +142,8 @@ def test_t2_every_wire_form_expands_into_the_vocabulary(validator, real_file, re
         ([0, 1], "file"),
         ("E0", "edge"),
         (["F", "inbound_edges"], "fact"),
+        ("fact:inbound_edges", "fact"),
+        ([0, "inbound_edges"], "fact"),
         ({"kind": "fact", "component": "svc", "field": "file_count"}, "fact"),
     ]
     for raw, expected_kind in wire_forms:
@@ -162,7 +164,7 @@ def test_t2_every_wire_form_expands_into_the_vocabulary(validator, real_file, re
 
 
 def test_t3_component_prefix_names_every_wire_form_and_citable_fact():
-    for marker in ('[2,"Symbol"]', "[2,120]", '"E3"', '["F","inbound_edges"]'):
+    for marker in ('[0,"Symbol"]', "[0,120]", '"E3"', '["F","inbound_edges"]'):
         assert marker in _COMPACT_COMPONENT_PREFIX, f"prefix lost the {marker} form"
     for fact in CITABLE_FACTS:
         assert fact in _COMPACT_COMPONENT_PREFIX, (
@@ -207,7 +209,8 @@ def test_t4_digest_keeps_every_kinds_payload_keys():
         }
     }
     digest = build_digest(state, answers, facts={"inbound_edges": 6})
-    evidence = digest["claims"][0]["evidence"]
+    refs = digest["claims"][0]["evidence_refs"]
+    evidence = [digest["evidence_menu"][index] for index in refs]
     fact = next(e for e in evidence if e["kind"] == "fact")
     # This is the assertion that would have failed the f766208 build: the
     # judge was promised the field and the value, and the digest stripped both.
@@ -252,7 +255,7 @@ def test_t5_a_fact_citation_survives_normalize_and_validate(validator, real_file
 # --- T6: emission closure ------------------------------------------------------
 
 
-def test_t6_every_citable_fact_is_a_key_the_fact_block_can_emit():
+def test_t6_every_citable_fact_is_a_key_the_fact_block_can_emit(tmp_path):
     """A model may only cite fact names the block it was handed actually shows.
 
     T3 proves the prompt names every citable fact; this proves the fact block
@@ -266,8 +269,12 @@ def test_t6_every_citable_fact_is_a_key_the_fact_block_can_emit():
     services, capabilities, entities or an AI surface emits none of those keys,
     and a thinner fixture would pass this test while the contract was broken.
     """
+    (tmp_path / "a.py").write_text("class TheComponent:\n    pass\n")
+    (tmp_path / "b.py").write_text(
+        "def build():\n    return TheComponent()\n"
+    )
     component = {
-        "id": "the-id", "name": "The Component", "type": "service",
+        "id": "root/the-id", "name": "The Component", "type": "service",
         "path": "src/the", "language": "Python", "framework": "FastAPI",
         "metrics": {"lines": 10}, "files": ["a.py"],
         "description": "It does the thing.", "port": 8080,
@@ -276,25 +283,55 @@ def test_t6_every_citable_fact_is_a_key_the_fact_block_can_emit():
         "external_services": ["stripe"],
         "config_files": [{"path": "pyproject.toml", "type": "python"}],
         "docs": {"purpose": "The public API", "readme": "Setup guide"},
+        "children": [{
+            "id": "root/the-id/child", "name": "Child", "type": "module",
+            "path": "src/the/child", "language": "Python",
+            "metrics": {"lines": 2}, "files": ["child.py"],
+        }],
     }
     facts = StoreFacts(
         {
-            "components": [component],
+            "components": [{
+                "id": "root", "name": "Root", "type": "system",
+                "files": ["README.md"],
+                    "docs": {"readme": "A system containing root/the-id."},
+                    "children": [component, {
+                        "id": "root/peer-id", "name": "Peer Component", "type": "service",
+                    "path": "src/peer", "language": "Python",
+                    "metrics": {"lines": 3}, "files": ["peer.py"],
+                }],
+            }],
             "ai_surface": [{
-                "component_id": "the-id", "kind": "model-call", "name": "claude",
+                "component_id": "root/the-id", "kind": "model-call", "name": "claude",
                 "confidence": "high", "instance_count": 2,
             }],
+                "symbols": [{
+                    "file": "a.py", "line": 1, "end_line": 4,
+                    "name": "TheComponent", "kind": "class",
+                    "visibility": "public", "code_preview": "class TheComponent:",
+                }, {
+                    "file": "b.py", "line": 1, "end_line": 2,
+                    "name": "build", "kind": "function",
+                    "visibility": "public", "code_preview": "def build():",
+                }],
         },
         capabilities=[{
-            "component_id": "the-id", "kind": "api", "name": "create account",
+            "component_id": "root/the-id", "kind": "api", "name": "create account",
             "detail": "POST /accounts",
         }],
-        data_entities=[{"component_id": "the-id", "name": "Account", "kind": "table"}],
-        rules=[{"component_id": "the-id", "kind": "validation", "summary": "ids are uuids"}],
-        relationships=[],
-    )
+        data_entities=[{"component_id": "root/the-id", "name": "Account", "kind": "table"}],
+        rules=[{"component_id": "root/the-id", "kind": "validation", "summary": "ids are uuids"}],
+            relationships=[{
+                "source": "root/the-id/child", "target": "external", "type": "calls",
+            }, *[{
+                "source": "root/the-id", "target": f"external/{index}",
+                "type": "calls", "label": f"calls External{index}",
+                "evidence": [{"file": "b.py", "line": 2, "snippet": "TheComponent"}],
+            } for index in range(8)]],
+            root=tmp_path,
+        )
 
-    facts_block = facts.component_facts("the-id")
+    facts_block = facts.component_facts("root/the-id")
     missing = sorted(set(CITABLE_FACTS) - set(facts_block))
     assert not missing, (
         f"citable facts the fact block never emits: {missing}; a claim citing "

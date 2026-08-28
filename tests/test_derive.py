@@ -12,10 +12,13 @@ from __future__ import annotations
 import copy
 import json
 import os
+from types import SimpleNamespace
 
 import pytest
 
 from analyzer.derive import derive_all, derive_multi_from_config, source_read_audit
+from analyzer.derive.flow import _ui_edge_source_evidence
+from analyzer.derive.relationships import _component_evidence_file
 from analyzer.extract import extract_repo
 from analyzer.parsers import PARSERS
 from analyzer.store import FactStore, parse_symbol_id
@@ -85,6 +88,20 @@ def test_every_edge_has_evidence_and_confidence():
     for e in edges:
         assert e["confidence"] in ("certain", "inferred")
         assert e["evidence"], f"store edge without evidence: {e}"
+
+
+def test_component_level_relationship_evidence_prefers_a_real_file():
+    component = SimpleNamespace(
+        path="UnaMentis Watch App",
+        files=[
+            "UnaMentis Watch App/UnaMentisWatchApp.swift",
+            "UnaMentis Watch App/Assets.xcassets/Contents.json",
+        ],
+        config_files=[{"path": "UnaMentis Watch App/Info.plist"}],
+    )
+    assert _component_evidence_file(component) == (
+        "UnaMentis Watch App/Assets.xcassets/Contents.json"
+    )
 
 
 def test_http_edge_evidence_points_at_the_real_call_site():
@@ -173,6 +190,10 @@ def _mask(arch: dict) -> dict:
         for k in _JUSTIFIED_COMPONENT_KEYS:
             c.pop(k, None)
         c.get("metrics", {}).pop("symbols", None)  # D5
+        c["children"] = [
+            child for child in c.get("children", [])
+            if not str(child.get("id") or "").startswith("compose/")
+        ]
         for ch in c.get("children", []):
             mask_comp(ch)
 
@@ -188,6 +209,7 @@ def _mask(arch: dict) -> dict:
     a.get("stats", {}).pop("total_symbols_detected", None)  # D5
     a.get("stats", {}).pop("lines_by_class", None)          # D10
     a.get("stats", {}).pop("total_path_components", None)   # D10
+    a.get("stats", {}).pop("total_components", None)        # D11 compose services
     return a
 
 
@@ -498,6 +520,20 @@ def test_components_and_edges_are_flushed_to_the_store():
     assert len(store.components()) == len(comps)
 
 
+def test_docker_compose_services_without_source_dirs_are_components():
+    store, _, arch = _extract_and_derive(POLYGLOT, "polyglot")
+    components = {row["id"]: row for row in store.components()}
+
+    assert components["compose/db"]["type"] == "database"
+    assert components["compose/cache"]["type"] == "cache"
+    assert "compose/api" not in components, (
+        "the compose api service already has services/api and must not be duplicated"
+    )
+    assert components["compose/db"]["meta"]["port"] == 5432
+    assert components["compose/cache"]["meta"]["port"] == 6379
+    assert arch["stats"]["total_path_components"] >= 10
+
+
 def test_total_components_counts_the_assembled_tree():
     """One authoritative count (comprehension-study S3): stats.total_components
     equals the distinct node count of the assembled tree the viewer and search
@@ -537,6 +573,55 @@ _AIOHTTP_SERVER = (
     "app.router.add_get('/api/health', health)\n"
     "web.run_app(app, port=8766)\n"
 )
+
+
+def test_swiftui_edge_evidence_points_at_destination_constructor():
+    content = "struct Source: View {\n  var body: some View {\n    TargetView()\n  }\n}\n"
+    evidence = _ui_edge_source_evidence(
+        content, "Source.swift", "TargetView", "navigation"
+    )
+    assert evidence == {
+        "file": "Source.swift", "line": 3, "snippet": "TargetView()",
+    }
+
+
+def test_swiftui_edge_evidence_keeps_the_presentation_modifier_and_destination():
+    content = (
+        "struct Source: View {\n"
+        "  var body: some View {\n"
+        "    Text(\"Source\")\n"
+        "      .sheet(item: $selected) { item in\n"
+        "        TargetView(item: item)\n"
+        "      }\n"
+        "  }\n"
+        "}\n"
+    )
+    evidence = _ui_edge_source_evidence(
+        content, "Source.swift", "TargetView", "sheet",
+    )
+    assert evidence["line"] == 4
+    assert ".sheet(item:" in evidence["snippet"]
+    assert "TargetView(item: item)" in evidence["snippet"]
+
+
+def test_swiftui_edge_evidence_skips_an_earlier_embedded_constructor_for_sheet():
+    content = (
+        "struct Source: View {\n"
+        "  var body: some View {\n"
+        "    if wide { TargetView(item: selected) }\n"
+        "    Text(\"Source\")\n"
+        "      .sheet(item: $selected) { item in\n"
+        "        TargetView(item: item)\n"
+        "      }\n"
+        "  }\n"
+        "}\n"
+    )
+    evidence = _ui_edge_source_evidence(
+        content, "Source.swift", "TargetView", "sheet",
+    )
+    assert evidence["line"] == 5
+    assert ".sheet(item:" in evidence["snippet"]
+    assert "TargetView(item: item)" in evidence["snippet"]
 
 
 def _s2_repo(tmp_path):

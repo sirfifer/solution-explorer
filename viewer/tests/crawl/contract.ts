@@ -40,6 +40,9 @@ export interface Contract {
   /** Lens-bearing arrays, by manifest key, with the component ids they name. */
   lensComponentIds: Map<string, Set<string>>;
   enrichedShare: number;
+  /** True only when a non-public sidecar visibly and exactly discloses a partial overlay. */
+  disclosedPartialEvaluation: boolean;
+  publicationBanner: string;
   maxDepth: number;
 }
 
@@ -113,6 +116,23 @@ export function loadContract(): Contract {
   collect("entity_access", "accessor_id");
 
   const enriched = [...components.values()].filter((c) => c.hasAiEnhance).length;
+  let publication: any = null;
+  const publicationPath = path.join(dataDir, "publication.json");
+  if (fs.existsSync(publicationPath)) {
+    publication = JSON.parse(fs.readFileSync(publicationPath, "utf8"));
+  }
+  const publicationBanner = String(publication?.header?.banner ?? "");
+  const footer = Array.isArray(publication?.footer?.always)
+    ? publication.footer.always.filter((x: unknown): x is string => typeof x === "string")
+    : [];
+  const disclosure = [publicationBanner, ...footer].join(" ").toLowerCase();
+  const disclosedPartialEvaluation =
+    enriched > 0
+    && enriched < components.size
+    && publication?.purpose === "evaluation"
+    && ["private-preview", "internal"].includes(publication?.access?.visibility)
+    && disclosure.includes("partial")
+    && disclosure.includes(`${enriched} of ${components.size}`);
 
   return {
     dataDir,
@@ -124,6 +144,8 @@ export function loadContract(): Contract {
       .map((r: any) => ({ source: r.source, target: r.target, type: String(r.type ?? "") })),
     lensComponentIds,
     enrichedShare: components.size ? enriched / components.size : 0,
+    disclosedPartialEvaluation,
+    publicationBanner,
     maxDepth,
   };
 }

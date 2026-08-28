@@ -29,6 +29,7 @@ believed it was mapping without opening a database.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -250,6 +251,19 @@ On criteria: write bars that could FAIL. "The map is accurate" is not a criterio
 because nothing could be shown to violate it. "Every service's inbound protocol is
 named, because this system's failure modes are all at its boundaries" is one.
 Three to six of them. Each needs a how_to_check that names what to look at.
+Make each bar a test of whether the MAP faithfully explains the supplied code,
+not an assertion that a behavior must exist. Do not require a named target to
+share a property merely because its name or the README makes that plausible.
+For example, require the map to distinguish latency-sensitive live audio from a
+reference-recording/configuration surface; do not predeclare that both enter the
+same latency path unless the selected-slice facts establish that. In a bounded
+canary, name exact selected component IDs or relationship endpoint slugs in
+how_to_check so the adjudicator can reserve part of its sample for the release
+gate instead of leaving the criterion unmeasured.
+Do not bake inventory counts into a criterion (for example "all 17 components").
+The deterministic map owns counts and P5 receives the current inventory. Write
+"all components" instead, so the bar remains exact without turning one model's
+restatement of a parser fact into an executable source of truth.
 
 On idiom_warnings: this is the single most valuable thing you can write here. A
 later rung meeting an unexplained convention will burn an escalation on it and
@@ -271,6 +285,8 @@ def build_orientation_prompt(
     ranking_note: str,
     design: Optional[dict] = None,
     ai_surface_summary: Optional[dict] = None,
+    scope_note: Optional[str] = None,
+    selected_slice: Optional[dict] = None,
 ) -> str:
     parts = [
         "You are orienting an automated enrichment pipeline before it maps a "
@@ -283,6 +299,19 @@ def build_orientation_prompt(
         f"SUBJECT: {name}",
         f"MECHANICAL DESCRIPTION: {description or '(none derived)'}",
         "",
+    ]
+    if scope_note:
+        parts += ["RUN SCOPE:", scope_note, ""]
+    if selected_slice:
+        parts += [
+            "EXACT SELECTED SLICE (the only targets this canary will enrich):",
+            json.dumps(selected_slice, separators=(",", ":"), default=str),
+            "Set subject criteria only where this inventory supplies a target. "
+            "Repository documentation may explain the subject, but it does not "
+            "expand the attempted scope.",
+            "",
+        ]
+    parts += [
         "SCALE AND MIX: " + json.dumps(stats, default=str)[:2000],
         "",
         "MOST NAVIGATIONALLY IMPORTANT COMPONENTS (mechanical ranking: dependency "
@@ -409,6 +438,33 @@ def _top_components(arch: dict, ranking: ImportanceRanking, limit: int) -> list[
     return out
 
 
+_INVENTORY_COUNT = re.compile(
+    r"\b\d+\s+(components?|languages?|relationships?|files?|symbols?)\b",
+    re.IGNORECASE,
+)
+
+
+def _without_inventory_counts(statement: str) -> str:
+    """Keep an inventory coverage bar without trusting a model-copied count."""
+    value = _INVENTORY_COUNT.sub(lambda match: match.group(1), statement)
+    # The common quantified form becomes needlessly clumsy after the number is
+    # removed.  This rewrite changes no scope: both forms mean every member of
+    # the current deterministic inventory.
+    value = re.sub(
+        r"\b[Ee]very one of the (components?|languages?|relationships?|files?|symbols?)\b",
+        lambda match: ("Every" if match.group(0)[0].isupper() else "every")
+        + " " + match.group(1).rstrip("s"),
+        value,
+    )
+    value = re.sub(
+        r"\b([Ee]very\s+(?:component|language|relationship|file|symbol)\s+and\s+)"
+        r"(components?|languages?|relationships?|files?|symbols?)\b",
+        lambda match: match.group(1) + match.group(2).rstrip("s"),
+        value,
+    )
+    return value
+
+
 class OrientationPhase:
     """P1: read the subject, write the brief, set the criteria P5 will answer."""
 
@@ -417,6 +473,16 @@ class OrientationPhase:
     def run(self, ctx: RunContext) -> PhaseResult:
         ranking = rank_components(ctx.store)
         readme = _collect_readme(ctx.arch, ctx.root)
+        selected_slice = None
+        if ctx.max_partitions is not None:
+            scope = ctx.attempted_scope()
+            selected_slice = {
+                "partition_count": min(
+                    ctx.max_partitions, len(ctx.planned_partitions())
+                ),
+                "component_ids": list(scope["components"]),
+                "relationship_keys": list(scope["relationships"]),
+            }
         ranking_note = (
             "Git activity was available for this subject."
             if ranking.has_activity
@@ -432,6 +498,17 @@ class OrientationPhase:
             ranking_note=ranking_note,
             design=ctx.design_digest(),
             ai_surface_summary=_ai_surface_summary(ctx.arch),
+            scope_note=(
+                "This is a bounded validation canary: enrichment will cover only "
+                f"the {ctx.max_partitions} most important planned partition(s). "
+                "Set criteria that judge the selected slice, not full-system "
+                "coverage. Do not weaken evidence, grounding, specificity, or "
+                "usefulness standards inside that slice. A successful canary is "
+                "not evidence that unselected code was enriched."
+                if ctx.max_partitions is not None
+                else None
+            ),
+            selected_slice=selected_slice,
         )
 
         if ctx.dry_run:
@@ -456,6 +533,25 @@ class OrientationPhase:
         brief.generated = True
         if not brief.identity:
             return self._degraded(ctx, "orientation returned no subject identity")
+
+        # Criteria are executable release gates, so a model-authored copy of a
+        # parser-owned inventory count must never become their source of truth.
+        # Keep the bar and remove only the copied number; P5 receives the exact
+        # current inventory from the deterministic map.  This also prevents a
+        # brief from going stale when the subject gains a component between
+        # runs. Ports, versions, line references, and other subject semantics
+        # are untouched because only countable map-inventory nouns match.
+        normalized = 0
+        for criterion in brief.subject_criteria:
+            statement = _without_inventory_counts(criterion.statement)
+            if statement != criterion.statement:
+                criterion.statement = statement
+                normalized += 1
+        if normalized:
+            brief.notes.append(
+                f"normalized parser-owned inventory counts out of {normalized} "
+                "criterion statement(s); determination uses the current map inventory"
+            )
 
         # Universal gates are appended, never substituted for. A brief that names
         # good subject criteria still has to clear the floor.

@@ -46,6 +46,7 @@ REQUIRED_SECTIONS = (
     "parser_findings",
     "criteria",
     "determination",
+    "run_analysis",
     "lessons",
 )
 
@@ -87,6 +88,7 @@ def build_report(ctx, result, *, engine_version: str = "1") -> dict:
         "identity_flags": _identity_flags(ladder),
         "criteria": _criteria(determination, brief),
         "determination": _determination(determination, result),
+        "run_analysis": _run_analysis(determination),
         "lessons": _lessons(ladder, adjudication, determination),
         "phases": [p.to_dict() for p in (result.phases or [])],
         "adjudication": adjudication.to_dict() if adjudication is not None else None,
@@ -426,6 +428,7 @@ def _identity(ctx, result, engine_version: str) -> dict:
                 "max_rounds": policy.iteration.max_rounds,
             },
             "max_cost_usd": policy.max_cost_usd,
+            "pause_at_cost_usd": policy.pause_at_cost_usd,
             "spot_check_fraction": policy.spot_check_fraction,
             "max_work_orders": policy.max_work_orders,
         },
@@ -614,6 +617,33 @@ def _determination(determination, result) -> dict:
             "rounds_run": 0,
         }
     return determination.verdict_dict(result)
+
+
+def _run_analysis(determination) -> dict:
+    """Fable's evidence-bound interpretation of measured run operations.
+
+    Accounting and the raw ledger remain deterministic. This section records
+    what the terminal model concluded from their compact pre-exit digest, so the
+    process can improve without asking the model to regenerate the measurements.
+    """
+    if determination is None:
+        return {
+            "status": "unavailable",
+            "summary": "P5 did not run, so no model analyzed the run logistics.",
+            "deterministic_transfers": [],
+            "improvements": [],
+            "watch_next_run": [],
+        }
+    analysis = getattr(determination, "run_analysis", None)
+    if isinstance(analysis, dict) and analysis:
+        return dict(analysis)
+    return {
+        "status": "missing",
+        "summary": "P5 returned no run analysis; the deterministic accounting remains available.",
+        "deterministic_transfers": [],
+        "improvements": [],
+        "watch_next_run": [],
+    }
 
 
 def _lessons(ladder, adjudication, determination) -> list[dict]:
@@ -1121,6 +1151,35 @@ def render_markdown(report: dict) -> str:
     else:
         lines.append("_Nothing was invoked._")
     lines.append("")
+
+    # Fable's exit analysis. Measurements stay in accounting/the ledger; this
+    # section explains what they imply and what should be validated next.
+    analysis = report.get("run_analysis") or {}
+    lines += ["## Run analysis", ""]
+    lines.append(f"**Status:** {analysis.get('status') or 'missing'}")
+    lines.append("")
+    lines.append(analysis.get("summary") or "_No analysis summary was returned._")
+    lines.append("")
+    for title, key in (
+        ("Deterministic-transfer candidates", "deterministic_transfers"),
+        ("Process improvements", "improvements"),
+        ("Watch on the next run", "watch_next_run"),
+    ):
+        lines += [f"### {title}", ""]
+        items = analysis.get(key) or []
+        if not items:
+            lines.append("_None established._")
+            lines.append("")
+            continue
+        for item in items:
+            if isinstance(item, dict):
+                detail = "; ".join(
+                    f"{name}: {value}" for name, value in item.items() if value
+                )
+            else:
+                detail = str(item)
+            lines.append(f"- {detail}")
+        lines.append("")
 
     # Lessons.
     lessons = report.get("lessons") or []

@@ -369,6 +369,23 @@ def test_global_count_can_ground_a_real_uniqueness_claim():
     assert not any(failure.question == "purpose" for failure in state.failed)
 
 
+def test_word_one_still_requires_global_support_for_global_uniqueness():
+    answers = _grounded_answers("unused.py")
+    answers["purpose"] = {
+        "claim": "This provides the fixture's one cross-component relationship.",
+        "status": "answered",
+        "evidence": [{
+            "kind": "fact", "component": "c1", "field": "outbound_edges",
+        }],
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="sonnet",
+        answers=answers, facts={"outbound_edges": 1}, validator=None,
+    )
+    failure = next(item for item in state.failed if item.question == "purpose")
+    assert failure.trigger == "E3"
+
+
 def test_labeled_count_claim_must_equal_the_analyzer_atom():
     answers = _grounded_answers("unused.py")
     answers["place"] = {
@@ -435,6 +452,27 @@ def test_uncertain_becomes_e2_and_dropped_becomes_e1(validator, a_real_file):
     assert by_q["purpose"].trigger == "E2"
     assert by_q["purpose"].note == "no docs"
     assert by_q["next_step"].trigger == "E1"
+    assert by_q["next_step"].note == "nothing to point at"
+
+
+def test_an_empty_uncertain_claim_preserves_its_specific_gap_reason(
+    validator, a_real_file,
+):
+    path, _, _ = a_real_file
+    answers = _grounded_answers(path)
+    answers["mechanism"] = {
+        "claim": "", "status": "uncertain",
+        "reason": "the generated dispatch table is absent from the supplied facts",
+    }
+    state = evaluate(
+        target_kind="component", target_id="c1", rung="fable",
+        answers=answers, facts={}, validator=validator,
+    )
+    failure = next(item for item in state.failed if item.question == "mechanism")
+    assert failure.trigger == "E2"
+    assert failure.note == (
+        "the generated dispatch table is absent from the supplied facts"
+    )
 
 
 def test_declared_confusion_is_e5_with_the_confusion_named(validator, a_real_file):

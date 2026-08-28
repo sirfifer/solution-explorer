@@ -45,6 +45,14 @@ COMPONENT_CALL_CAP = 21
 RELATIONSHIP_CALL_CAP = 80
 ESCALATION_SCHEMA_CAP = 40
 
+# Evidence is a correctness channel, not a prose-size dial. Five citations were
+# observed on a healthy repair and the former four-item cap silently discarded
+# the fifth before adjudication. Twelve is the largest evidence menu one compact
+# component answer can reasonably need (the component edge menu itself is
+# bounded at twelve); the much broader response-byte guard remains the runaway
+# boundary for the complete payload.
+MAX_EVIDENCE_ITEMS = 12
+
 _PRODUCT_FIELDS = (
     "help_text", "description", "data_handled", "criticality",
     "architectural_role", "tech_context", "testing_assessment",
@@ -152,7 +160,11 @@ def compact_json_schema(prefix: Optional[str], user: str) -> Optional[dict]:
                 "type": "object", "additionalProperties": False,
                 "properties": {
                     "t": {"type": "string", "maxLength": 640},
-                    "e": {"type": "array", "maxItems": 2, "items": {
+                    # A compact compound claim can legitimately need separate
+                    # documentation, identity, file, count and edge facts. A
+                    # live repair emitted five valid citations and the former
+                    # four-item cap silently stripped the last one.
+                    "e": {"type": "array", "maxItems": MAX_EVIDENCE_ITEMS, "items": {
                         "oneOf": [
                             {"type": "integer", "minimum": 0},
                             {"type": "string", "maxLength": 120},
@@ -172,6 +184,7 @@ def compact_json_schema(prefix: Optional[str], user: str) -> Optional[dict]:
                                     "source": {"type": "string", "maxLength": 500},
                                     "target": {"type": "string", "maxLength": 500},
                                     "edge_type": {"type": "string", "maxLength": 80},
+                                    "component": {"type": "string", "maxLength": 500},
                                     "field": {"type": "string", "maxLength": 120},
                                     "value": {"type": "string", "maxLength": 500},
                                     "scope": {"enum": ["local", "global"]},
@@ -232,7 +245,7 @@ def compact_json_schema(prefix: Optional[str], user: str) -> Optional[dict]:
                         {"type": "integer"},
                     ]},
                     "r": {"type": "string", "maxLength": 240},
-                    "e": {"type": "array", "maxItems": 2,
+                    "e": {"type": "array", "maxItems": MAX_EVIDENCE_ITEMS,
                           "items": answer["oneOf"][1]["properties"]["e"]["items"]},
                 },
             }
@@ -383,6 +396,24 @@ def _schema_issues(value: Any, schema: dict, path: str = "$") -> list[str]:
 def _strip_unknown(value: Any, schema: dict, path: str = "$") -> tuple[Any, list[str]]:
     """Remove bounded cosmetic aliases while retaining an explicit audit note."""
     if "oneOf" in schema:
+        # Providers sometimes redundantly return both the file-menu index and
+        # the exact path in a symbol citation: ``[2, "src/api.py", "read"]``.
+        # The compact contract accepts either ``[index, locator]`` or
+        # ``[path, locator]``; the three-part spelling carries no additional
+        # meaning.  Normalize it before choosing a oneOf branch so one harmless
+        # redundant value cannot invalidate (and repurchase) an entire batch.
+        if (
+            isinstance(value, list)
+            and len(value) == 3
+            and isinstance(value[0], int)
+            and not isinstance(value[0], bool)
+            and isinstance(value[1], str)
+            and isinstance(value[2], (str, int))
+        ):
+            normalized, removed = _strip_unknown(
+                [value[1], value[2]], schema, path
+            )
+            return normalized, [f"{path}[0] redundant file index", *removed]
         alternatives = schema["oneOf"]
         matching = [
             item for item in alternatives
@@ -396,6 +427,22 @@ def _strip_unknown(value: Any, schema: dict, path: str = "$") -> tuple[Any, list
     removed: list[str] = []
     if isinstance(value, dict) and schema.get("type") == "object":
         properties = schema.get("properties") or {}
+        # Some providers spell a second citation as sibling ``e2`` rather than
+        # the second item of ``e``. Inside an unmistakable answer object this is
+        # a closed cosmetic alias: fold it into the bounded evidence array so a
+        # valid supporting citation is not silently discarded during repair.
+        if "e" in properties and "e2" in value:
+            value = dict(value)
+            evidence = value.get("e")
+            evidence = list(evidence) if isinstance(evidence, list) else []
+            second = value.pop("e2")
+            max_evidence = int(
+                properties["e"].get("maxItems", MAX_EVIDENCE_ITEMS)
+            )
+            for item in (second if isinstance(second, list) else [second]):
+                if item not in evidence and len(evidence) < max_evidence:
+                    evidence.append(item)
+            value["e"] = evidence
         # Resolve the provider's familiar {file, snippet} spelling only inside
         # an unmistakable compact evidence object. Without this closed alias a
         # valid file locator is stripped to {}, causing a pure spelling
@@ -494,6 +541,34 @@ def _component_evidence(
     files = list(block.get("files") or [])
     edges = list(facts.component_edge_menu(component_id))
 
+    def supplied_symbol(symbol: str, *, parent: str = "") -> Optional[dict]:
+        """Resolve only an unambiguous parser declaration supplied to this item."""
+        name = symbol.strip()
+        parent_name = parent.strip()
+        matches = [
+            item for item in (block.get("source_declarations") or [])
+            if isinstance(item, dict)
+            and str(item.get("name") or "") == name
+            and str(item.get("file") or "") in files
+        ]
+        if parent_name and len(matches) > 1:
+            matches = [
+                item for item in matches
+                if parent_name in str(item.get("parent") or "").split()
+            ]
+        if len(matches) != 1:
+            resolver = getattr(facts, "component_symbol_evidence", None)
+            if callable(resolver):
+                return resolver(component_id, name, parent=parent_name)
+            return None
+        match = matches[0]
+        out = {
+            "kind": "symbol", "path": match["file"], "symbol": name,
+        }
+        if match.get("line") is not None:
+            out["line"] = match["line"]
+        return out
+
     def manifest_path(path: str) -> bool:
         name = PurePosixPath(path).name.lower()
         return name in {
@@ -513,13 +588,34 @@ def _component_evidence(
         field = raw[2:]
         if field in CITABLE_FACTS:
             item = {"kind": "fact", "component": component_id, "field": field}
-            if field.startswith(("same_", "system_")):
+            if field.startswith(("same_", "system_")) or field in (
+                "subject_documentation", "peer_components",
+            ):
                 item["scope"] = "global"
             return item
         return _invalid_evidence(f"fact field {field!r} is not citable")
+    if isinstance(raw, str) and raw.startswith("fact:"):
+        field = raw[5:]
+        if field in CITABLE_FACTS:
+            item = {"kind": "fact", "component": component_id, "field": field}
+            if field.startswith(("same_", "system_")) or field in (
+                "subject_documentation", "peer_components",
+            ):
+                item["scope"] = "global"
+            return item
+        return _invalid_evidence(f"fact field {field!r} is not citable")
+    if isinstance(raw, str) and raw.startswith("symbol:"):
+        symbol = raw[7:].strip()
+        resolved = supplied_symbol(symbol)
+        if resolved is not None:
+            resolved.pop("line", None)
+            return resolved
+        return _invalid_evidence(
+            f"symbol shorthand {symbol!r} did not identify one supplied declaration"
+        )
     if isinstance(raw, str) and raw in CITABLE_FACTS:
         item = {"kind": "fact", "component": component_id, "field": raw}
-        if raw.startswith(("same_", "system_")):
+        if raw.startswith(("same_", "system_")) or raw == "peer_components":
             item["scope"] = "global"
         return item
     if isinstance(raw, str) and raw in files:
@@ -539,6 +635,26 @@ def _component_evidence(
                 "kind": "edge", "source": edge.get("source"),
                 "target": edge.get("target"), "edge_type": edge.get("type"),
             }
+        # Repair a stale example/menu index only in the one case that remains
+        # deterministic: this component has one edge and the claim names one of
+        # that edge's endpoint slugs. This exact shape occurred in the live
+        # CurriculumView repair (E3 against a one-edge E0 menu). Never guess
+        # among multiple edges.
+        if len(edges) == 1:
+            edge = edges[0]
+            claim_key = re.sub(r"[^a-z0-9]", "", claim.lower())
+            endpoint_keys = {
+                re.sub(
+                    r"[^a-z0-9]", "",
+                    str(edge.get(side) or "").rsplit("/", 1)[-1].lower(),
+                )
+                for side in ("source", "target")
+            }
+            if any(key and key in claim_key for key in endpoint_keys):
+                return {
+                    "kind": "edge", "source": edge.get("source"),
+                    "target": edge.get("target"), "edge_type": edge.get("type"),
+                }
         return _invalid_evidence(f"edge index {raw} is outside the supplied menu")
     if raw == "F":
         # A recurring model shorthand for "the local fact(s) named in this
@@ -568,15 +684,74 @@ def _component_evidence(
         field = raw[1]
         if isinstance(field, str) and field in CITABLE_FACTS:
             item = {"kind": "fact", "component": component_id, "field": field}
-            if field.startswith(("same_", "system_")):
+            if field.startswith(("same_", "system_")) or field in (
+                "subject_documentation", "peer_components",
+            ):
                 item["scope"] = "global"
             return item
+        # Live repair calls occasionally read ``F`` as "the supplied source
+        # fact" and place the exact declaration name in the second slot.  It is
+        # safe to repair only because the name must resolve to one parser-owned
+        # declaration in this target's closed menu.  This is not a fuzzy alias.
+        if isinstance(field, str):
+            resolved = supplied_symbol(field)
+            if resolved is not None:
+                return resolved
         return _invalid_evidence(
             f"fact field {field!r} is not citable; use one of: " + ", ".join(CITABLE_FACTS)
         )
+    if (
+        isinstance(raw, list)
+        and len(raw) == 2
+        and raw[0] == "S"
+        and isinstance(raw[1], str)
+    ):
+        resolved = supplied_symbol(raw[1])
+        if resolved is not None:
+            return resolved
+        return _invalid_evidence(
+            f"symbol reference {raw[1]!r} did not identify one supplied declaration"
+        )
+    if (
+        isinstance(raw, list)
+        and len(raw) == 2
+        and raw[0] == component_id
+        and isinstance(raw[1], str)
+        and raw[1] in CITABLE_FACTS
+    ):
+        # A provider occasionally spells the local fact reference as
+        # [component_id, field] instead of ["F", field]. It is equally closed
+        # and unambiguous because the component must be the item currently
+        # being normalized; accepting it prevents a correct repair from being
+        # rejected over a redundant self identifier.
+        field = raw[1]
+        item = {"kind": "fact", "component": component_id, "field": field}
+        if field.startswith(("same_", "system_")) or field in (
+            "subject_documentation", "peer_components",
+        ):
+            item["scope"] = "global"
+        return item
     if isinstance(raw, list) and len(raw) == 2 and isinstance(raw[0], int):
         index, detail = raw
+        if isinstance(detail, str) and detail in CITABLE_FACTS:
+            item = {"kind": "fact", "component": component_id, "field": detail}
+            if detail.startswith(("same_", "system_")) or detail in (
+                "subject_documentation", "peer_components",
+            ):
+                item["scope"] = "global"
+            return item
         if not (0 <= index < len(files)):
+            # A provider can treat the prompt's source-declaration atom as a
+            # citation menu entry and return [atom-index, "Symbol"] rather than
+            # the declaration's file index. Resolve this only when the symbol
+            # name identifies exactly one parser-owned declaration supplied to
+            # this target. The live UnaMentis canary returned [2, "ViewName"]
+            # for nineteen one-file screen targets; rejecting those exact
+            # declarations as compact-invalid caused needless Opus climbs.
+            if isinstance(detail, str) and detail.strip():
+                resolved = supplied_symbol(detail)
+                if resolved is not None:
+                    return resolved
             return _invalid_evidence(f"file index {index} is outside the supplied menu")
         if isinstance(detail, bool):
             return _invalid_evidence("boolean is neither a symbol nor a line")
@@ -590,6 +765,21 @@ def _component_evidence(
             return {"kind": "symbol", "path": files[index], "symbol": detail.strip()}
     if isinstance(raw, list) and len(raw) == 2 and isinstance(raw[0], str):
         path, detail = raw
+        if path in {"source_declaration", "source_declarations"} and isinstance(detail, str):
+            resolved = supplied_symbol(detail)
+            if resolved is not None:
+                resolved.pop("line", None)
+                return resolved
+            return _invalid_evidence(
+                f"source_declarations reference {detail!r} was not unique"
+            )
+        if path.startswith("symbol:") and isinstance(detail, str):
+            resolved = supplied_symbol(detail, parent=path[7:])
+            if resolved is not None:
+                return resolved
+            return _invalid_evidence(
+                f"symbol pair {path!r}, {detail!r} did not identify one supplied declaration"
+            )
         if path not in files:
             return _invalid_evidence(f"path {path!r} is outside the supplied file menu")
         if isinstance(detail, str) and detail.strip():
@@ -599,7 +789,42 @@ def _component_evidence(
                 return {"kind": "manifest", "path": path}
             return {"kind": "symbol", "path": path, "symbol": detail.strip()}
     if isinstance(raw, dict):
-        return dict(raw)
+        item = dict(raw)
+        # A bare file citation from a component call normally means "this
+        # target's declaration in that file", but a file's existence alone is
+        # too weak for source-content claims. Upgrade it only when the target's
+        # normalized id/name identifies exactly one supplied parser declaration
+        # in that exact file. Otherwise retain the original citation and let the
+        # evidence validator/judge treat it at its stated strength.
+        if (
+            str(item.get("kind") or "") == "file"
+            and item.get("path") in files
+            and item.get("line") is None
+            and not item.get("symbol")
+        ):
+            target_names = {
+                re.sub(r"[^a-z0-9]", "", component_id.rsplit("/", 1)[-1].lower()),
+                re.sub(r"[^a-z0-9]", "", str(block.get("name") or "").lower()),
+            }
+            matches = [
+                declaration
+                for declaration in (block.get("source_declarations") or [])
+                if isinstance(declaration, dict)
+                and declaration.get("file") == item.get("path")
+                and re.sub(
+                    r"[^a-z0-9]", "",
+                    str(declaration.get("name") or "").lower(),
+                ) in target_names
+            ]
+            if len(matches) == 1:
+                return {
+                    key: value for key, value in {
+                        "kind": "symbol", "path": item["path"],
+                        "symbol": matches[0].get("name"),
+                        "line": matches[0].get("line"),
+                    }.items() if value is not None
+                }
+        return item
     return _invalid_evidence("citation did not match compact/v1")
 
 
@@ -634,6 +859,52 @@ def _relationship_evidence(raw: Any, relationship_key: str, facts: Any) -> dict:
         if 0 <= raw < len(evidence) and isinstance(evidence[raw], dict):
             return canonical(evidence[raw])
         return _invalid_evidence(f"relationship evidence index {raw} is outside the menu")
+    if isinstance(raw, str) and raw.startswith("F."):
+        raw = ["F", raw[2:]]
+    if isinstance(raw, str) and raw.startswith("fact:"):
+        raw = ["F", raw[5:]]
+    if isinstance(raw, str) and raw in CITABLE_FACTS:
+        raw = ["F", raw]
+    if (
+        isinstance(raw, list)
+        and len(raw) == 2
+        and raw[0] == "F"
+        and isinstance(raw[1], str)
+        and raw[1] in CITABLE_FACTS
+        and raw[1] in block
+    ):
+        field = raw[1]
+        item = {"kind": "fact", "component": relationship_key, "field": field}
+        if field.startswith(("same_", "system_")) or field in (
+            "subject_documentation", "peer_components",
+        ):
+            item["scope"] = "global"
+        return item
+    if (
+        isinstance(raw, list)
+        and len(raw) == 2
+        and isinstance(raw[0], int)
+        and isinstance(raw[1], str)
+        and raw[1] in CITABLE_FACTS
+        and raw[1] in block
+    ):
+        field = raw[1]
+        item = {"kind": "fact", "component": relationship_key, "field": field}
+        if field.startswith(("same_", "system_")) or field in (
+            "subject_documentation", "peer_components",
+        ):
+            item["scope"] = "global"
+        return item
+    if isinstance(raw, str) and raw.startswith("file:"):
+        path = raw[5:]
+        matches = [
+            item for item in evidence
+            if isinstance(item, dict)
+            and (item.get("path") or item.get("file")) == path
+        ]
+        if len(matches) == 1:
+            return canonical(matches[0])
+        return _invalid_evidence(f"relationship file {path!r} is outside the menu")
     if isinstance(raw, dict):
         return canonical(raw)
     return _invalid_evidence("citation did not match compact/v1")
@@ -726,7 +997,8 @@ def _component_entry(entry: dict, component_id: str, facts: Any) -> dict:
         product["testing_assessment"] = (
             deterministic + " " + interpretation
         ).strip()[:600]
-    compact_answers = entry.get("q") if isinstance(entry.get("q"), dict) else {
+    delta_answers = isinstance(entry.get("q"), dict)
+    compact_answers = entry.get("q") if delta_answers else {
         "purpose": entry.get("purpose"),
         "mechanism": entry.get("mechanism"),
         "place": entry.get("place"),
@@ -771,36 +1043,36 @@ def _component_entry(entry: dict, component_id: str, facts: Any) -> dict:
             if product_name and answer_value.get("claim"):
                 product[product_name] = answer_value["claim"]
     local_singletons = {
-        "file_count": r"\b(?:only|sole|single)\s+(?:source\s+)?files?\b",
-        "inbound_edges": r"\b(?:only|sole|single)\s+inbound\s+(?:edge|relationship)\b",
-        "outbound_edges": r"\b(?:only|sole|single)\s+outbound\s+(?:edge|relationship)\b",
-        "capability_count": r"\b(?:only|sole|single)\s+(?:route|capability|endpoint)\b",
-        "data_entity_count": r"\b(?:only|sole|single)\s+data\s+entit(?:y|ies)\b",
+        "file_count": r"\b(?:only|sole|single|one)\s+(?:source\s+)?files?\b",
+        "inbound_edges": r"\b(?:only|sole|single|one)\s+inbound\s+(?:edge|relationship)\b",
+        "outbound_edges": r"\b(?:only|sole|single|one)\s+outbound\s+(?:edge|relationship)\b",
+        "capability_count": r"\b(?:only|sole|single|one)\s+(?:route|capability|endpoint)\b",
+        "data_entity_count": r"\b(?:only|sole|single|one)\s+data\s+entit(?:y|ies)\b",
     }
     global_singletons = {
         "same_language_component_count": (
-            rf"\b(?:only|sole|single)\b[^.]{{0,100}}(?:"
+            rf"\b(?:only|sole|single|one)\b[^.]{{0,100}}(?:"
             rf"\b{re.escape(str(fact_block.get('language') or ''))}\b[^.]{{0,60}}"
             r"\b(?:component|representative|sample|target)\b|"
             r"\b(?:component|representative|sample|target)\b[^.]{0,60}"
             rf"\b{re.escape(str(fact_block.get('language') or ''))}\b)"
         ),
         "same_type_component_count": (
-            rf"\b(?:only|sole|single)\b[^.]{{0,100}}(?:"
+            rf"\b(?:only|sole|single|one)\b[^.]{{0,100}}(?:"
             rf"\b{re.escape(str(fact_block.get('type') or ''))}\b[^.]{{0,60}}"
             r"\b(?:component|representative|sample|target|type)\b|"
             r"\b(?:component|representative|sample|target|type)\b[^.]{0,60}"
             rf"\b{re.escape(str(fact_block.get('type') or ''))}\b)"
         ),
         "system_relationship_count": (
-            r"\b(?:only|sole|single)\b[^.]{0,80}"
+            r"\b(?:only|sole|single|one)\b[^.]{0,80}"
             r"\b(?:edge|relationship|call)\b"
         ),
         "system_capability_count": (
-            r"\b(?:only|sole|single)\s+(?:api\s+)?capabilit(?:y|ies)\b"
+            r"\b(?:only|sole|single|one)\s+(?:api\s+)?capabilit(?:y|ies)\b"
         ),
         "system_capability_component_count": (
-            r"\b(?:only|sole|single)\b[^.]{0,80}"
+            r"\b(?:only|sole|single|one)\b[^.]{0,80}"
             r"\bcomponent\b[^.]{0,80}\bcapabilit(?:y|ies)\b"
         ),
     }
@@ -845,7 +1117,7 @@ def _component_entry(entry: dict, component_id: str, facts: Any) -> dict:
                 "kind": "fact", "component": component_id,
                 "field": "capabilities",
             }
-            if citation not in evidence and len(evidence) < 2:
+            if citation not in evidence and len(evidence) < MAX_EVIDENCE_ITEMS:
                 evidence.append(citation)
         deterministic_matches = []
         if re.search(r"\b\d[\d,]*\s+lines?\b", claim, re.I):
@@ -857,17 +1129,84 @@ def _component_entry(entry: dict, component_id: str, facts: Any) -> dict:
         ):
             deterministic_matches.append("file_count")
         if re.search(
-            r"\bno\s+(?:detected\s+)?capabilit(?:y|ies)\b", claim, re.I
+            r"\bno\s+(?:detected\s+|internal\s+)?capabilit(?:y|ies)\b",
+            claim,
+            re.I,
         ):
             deterministic_matches.append("capability_count")
+        if re.search(
+            r"\b(?:no|without)\b[^.]{0,80}\b(?:data\s+)?entit(?:y|ies)\b",
+            claim,
+            re.I,
+        ):
+            deterministic_matches.append("data_entity_count")
+        if fact_block.get("file_count") == 0 and re.search(
+            r"\b(?:file_count\s*(?:is|of|:)?\s*0|zero\s+files?|"
+            r"no\s+(?:source\s+)?files?|not\s+code)\b",
+            claim,
+            re.I,
+        ):
+            deterministic_matches.append("file_count")
+        if fact_block.get("lines") == 0 and re.search(
+            r"\b(?:zero\s+lines?|no\s+lines?(?:\s+of\s+code)?)\b",
+            claim,
+            re.I,
+        ):
+            deterministic_matches.append("lines")
+        if fact_block.get("inbound_edges") == 0 and re.search(
+            r"\b(?:no|zero)\b[^.]{0,35}\binbound\b|"
+            r"\binbound_edges\s*(?:is|are|:)?\s*0\b",
+            claim,
+            re.I,
+        ):
+            deterministic_matches.append("inbound_edges")
+        if fact_block.get("outbound_edges") == 0 and re.search(
+            r"\b(?:no|zero)\b[^.]{0,35}\boutbound\b|"
+            r"\boutbound_edges\s*(?:is|are|:)?\s*0\b",
+            claim,
+            re.I,
+        ):
+            deterministic_matches.append("outbound_edges")
+        if (
+            fact_block.get("inbound_edges") == 0
+            and fact_block.get("outbound_edges") == 0
+            and re.search(
+                r"\bno\b[^.]{0,35}\b(?:connections?|edges?)\b", claim, re.I
+            )
+        ):
+            deterministic_matches.extend(("inbound_edges", "outbound_edges"))
         if "highest inbound" in claim.lower():
             deterministic_matches.append("system_max_inbound_edges")
         if "highest outbound" in claim.lower():
             deterministic_matches.append("system_max_outbound_edges")
-        for field in ("framework", "language", "port"):
+        for field in ("framework", "language", "port", "type"):
             value = fact_block.get(field)
             if value not in (None, "") and str(value).lower() in claim.lower():
                 deterministic_matches.append(field)
+        child_components = fact_block.get("child_components") or []
+        if any(str(child).lower() in claim.lower() for child in child_components):
+            deterministic_matches.append("child_components")
+        peer_components = fact_block.get("peer_components") or []
+        if any(
+            any(
+                len(str(value)) >= 2
+                and re.search(
+                    rf"(?<![a-z0-9]){re.escape(str(value).lower())}(?![a-z0-9])",
+                    claim.lower(),
+                )
+                for value in (peer.get("id"), peer.get("name"))
+                if value not in (None, "")
+            )
+            for peer in peer_components if isinstance(peer, dict)
+        ):
+            deterministic_matches.append("peer_components")
+        descendant_edges = fact_block.get("descendant_edges") or []
+        if any(
+            str(edge.get("source") or "").lower() in claim.lower()
+            or str(edge.get("target") or "").lower() in claim.lower()
+            for edge in descendant_edges if isinstance(edge, dict)
+        ):
+            deterministic_matches.append("descendant_edges")
         files = fact_block.get("files") or []
         names_a_file = any(
             str(path).lower() in claim.lower()
@@ -913,8 +1252,37 @@ def _component_entry(entry: dict, component_id: str, facts: Any) -> dict:
             for item in config_files if isinstance(item, dict)
         ):
             deterministic_matches.append("config_files")
-        if "readme" in claim.lower() and fact_block.get("documentation"):
-            deterministic_matches.append("documentation")
+        if (
+            config_files
+            and re.search(r"\b(?:compose|service\s+declaration)\b", claim, re.I)
+            and any(
+                "compose" in str(item.get("path") or "").lower()
+                or "compose" in str(
+                    item.get("type") or item.get("kind") or ""
+                ).lower()
+                for item in config_files if isinstance(item, dict)
+            )
+        ):
+            deterministic_matches.append("config_files")
+        if "readme" in claim.lower():
+            local_docs = fact_block.get("documentation") or {}
+            if isinstance(local_docs, dict) and local_docs.get("readme_excerpt"):
+                deterministic_matches.append("documentation")
+            elif fact_block.get("subject_documentation"):
+                deterministic_matches.append("subject_documentation")
+        # Intent and corpus-comparison prose is not carried by parser facts.
+        # When the deterministic subject documentation supplied to this exact
+        # target declares that context, attach it automatically.  This does not
+        # manufacture evidence: it makes the already-supplied README fact the
+        # citation for claims whose vocabulary explicitly signals documented
+        # intent or whole-subject comparison.
+        if fact_block.get("subject_documentation") and re.search(
+            r"\b(?:fixture|test(?:ing|\s+suite)?|pars(?:e|er|ing)|parity|verify|validat(?:e|ing)|"
+            r"prove|planted|built\s+to|exists\s+to|other\s+language|distinct\s+from)\b",
+            claim,
+            re.I,
+        ):
+            deterministic_matches.append("subject_documentation")
         for field in dict.fromkeys(deterministic_matches):
             if field not in fact_block:
                 continue
@@ -922,13 +1290,15 @@ def _component_entry(entry: dict, component_id: str, facts: Any) -> dict:
             citation = {
                 "kind": "fact", "component": component_id, "field": field,
             }
-            if field.startswith("system_"):
+            if field.startswith(("same_", "system_")) or field in (
+                "subject_documentation", "peer_components",
+            ):
                 citation["scope"] = "global"
             if citation not in evidence:
                 evidence.append(citation)
     # Generate each semantic atom once.  The reader prose and audit contract
     # share those exact atoms instead of paying the model for two paraphrases.
-    if not product.get("help_text"):
+    if not product.get("help_text") and not delta_answers:
         prose = [
             answers.get(name, {}).get("claim", "")
             for name in ("purpose", "mechanism", "place")
@@ -979,20 +1349,36 @@ def _relationship_entry(entry: dict, key: str, facts: Any) -> dict:
                 lambda ev, claim: _relationship_evidence(ev, key, facts),
             )
     relationship_facts = facts.relationship_facts(key)
-    if relationship_facts.get("system_relationship_count") == 1:
-        for answer in answers.values():
-            claim = str(answer.get("claim") or "")
-            if not re.search(
-                r"\b(?:only|sole|single)\b[^.]{0,80}"
+    for answer in answers.values():
+        claim = str(answer.get("claim") or "")
+        evidence = answer.setdefault("evidence", [])
+        if (
+            relationship_facts.get("system_relationship_count") == 1
+            and re.search(
+                r"\b(?:only|sole|single|one)\b[^.]{0,80}"
                 r"\b(?:edge|relationship|call|connection)\b",
                 claim,
                 re.I,
-            ):
-                continue
-            evidence = answer.setdefault("evidence", [])
-            if evidence and isinstance(evidence[0], dict):
-                evidence[0]["scope"] = "global"
-                evidence[0]["value"] = {"system_relationship_count": 1}
+            )
+        ):
+            citation = {
+                "kind": "fact", "component": key,
+                "field": "system_relationship_count", "scope": "global",
+            }
+            if citation not in evidence:
+                evidence.append(citation)
+        if relationship_facts.get("subject_documentation") and re.search(
+            r"\b(?:fixture|test(?:ing|\s+suite)?|pars(?:e|er|ing)|parity|verify|validat(?:e|ing)|"
+            r"prove|planted|built\s+to|exists\s+to)\b",
+            claim,
+            re.I,
+        ):
+            citation = {
+                "kind": "fact", "component": key,
+                "field": "subject_documentation", "scope": "global",
+            }
+            if citation not in evidence:
+                evidence.append(citation)
     if entry.get("d"):
         product["data_flow_description"] = entry["d"]
     elif answers.get("flow", {}).get("claim"):

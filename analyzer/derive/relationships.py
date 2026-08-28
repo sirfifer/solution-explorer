@@ -61,6 +61,30 @@ def _evidence(file: str, line: Optional[int], snippet: str = "") -> list[dict]:
     return [{"file": file, "line": line, "snippet": snippet}]
 
 
+def _component_evidence_file(component) -> str:
+    """Return a real source/config file for a component-level inference.
+
+    A component ``path`` is normally a directory.  Publishing that directory in
+    an evidence row makes the row look like a file citation and fails the
+    projection's source-accusability contract.  Prefer the component's own files,
+    then its config files; retain the path only as a legacy last resort for a
+    synthetic component with neither.
+    """
+    files = sorted(
+        path for path in (getattr(component, "files", None) or [])
+        if isinstance(path, str) and path
+    )
+    if files:
+        return files[0]
+    configs = sorted(
+        row.get("path") for row in (getattr(component, "config_files", None) or [])
+        if isinstance(row, dict) and isinstance(row.get("path"), str) and row.get("path")
+    )
+    if configs:
+        return configs[0]
+    return getattr(component, "path", "") or ""
+
+
 def _sig_line(signals: list[dict], kind: str) -> Optional[int]:
     for s in signals:
         if s["kind"] == kind:
@@ -216,7 +240,8 @@ def derive_relationships(d: Deriver) -> None:
                     best_ios = ios
                     break
             add(watch.id, best_ios.id, "import",
-                _evidence(watch.path, None, "companion app"), "inferred", "static",
+                _evidence(_component_evidence_file(watch), None, "companion app"),
+                "inferred", "static",
                 label="companion app")
 
     # -- docker-compose depends_on ----------------------------------------

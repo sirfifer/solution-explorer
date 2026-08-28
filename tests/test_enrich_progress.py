@@ -82,6 +82,23 @@ def test_no_denominator_is_invented_before_the_engine_publishes_one(wired):
     assert run.record["total"] == 0, "a made-up denominator is a progress bar that lies"
 
 
+def test_persisted_pause_packet_is_published_as_decision_support(wired, tmp_path):
+    run, watch, _, _ = wired
+    control = tmp_path / "control.json"
+    control.write_text(json.dumps({
+        "state": "paused",
+        "reason": "operator cost checkpoint reached",
+        "recommendation": "Inspect failures before resuming.",
+        "spent_usd": 12.5,
+        "pause_at_usd": 12.0,
+    }))
+    watch._control = control
+    watch.tick()
+    assert run.record["enrichment_control"]["state"] == "paused"
+    assert run.record["enrichment_control"]["path"] == str(control)
+    assert run.record["current"].startswith("PAUSED for owner decision")
+
+
 def test_an_escalated_rung_adds_to_the_total_rather_than_restarting_it(wired):
     run, watch, progress, _ = wired
     progress.plan(rung="2a", partitions=159, components=569, relationships=5453)

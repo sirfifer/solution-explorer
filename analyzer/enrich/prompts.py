@@ -16,6 +16,8 @@ without invoking a model.
 from __future__ import annotations
 
 import json
+import re
+from pathlib import Path, PurePosixPath
 from typing import Any, Optional
 
 from .partition import Partition
@@ -133,13 +135,18 @@ metadata, password hashes"
 """
 
 
-# Byte budgets for one component's fact block. The 569-block VS Code mean is
+# Character budgets for one component's fact block. The 569-block VS Code mean is
 # 1,417 characters, so these bound the pathological tail without touching a
 # normal block. A prompt that cannot fit in a context window is not a quality
 # choice, it is a failed call.
-MAX_FACT_BLOCK_CHARS = 12_000
+# High-degree shells need their complete bounded dependency menu; the measured
+# UnaMentis shell is 20.8k JSON characters with all 26 callsites retained.
+# 22k leaves a narrow serialization margin while remaining far below a model
+# context on its own. Ordinary blocks are unaffected (they return before trim).
+MAX_FACT_BLOCK_CHARS = 22_000
 MAX_FACT_VALUE_CHARS = 2_000
 MAX_FACT_STRING_CHARS = 600
+MAX_SOURCE_DECLARATIONS_CHARS = 7_000
 
 
 def _cap_value(value: Any, budget: int) -> Any:
@@ -185,21 +192,63 @@ def _cap_value(value: Any, budget: int) -> Any:
 
 
 def _cap_block(facts: dict) -> dict:
-    """Bound a whole fact block, trimming its largest fields first."""
+    """Bound a whole fact block without evicting target-specific documentation."""
     if len(json.dumps(facts, default=str)) <= MAX_FACT_BLOCK_CHARS:
         return facts
     out = dict(facts)
     # Trim biggest-first so one runaway field cannot evict everything else.
+    # Subject documentation was selected specifically for this target and may
+    # be the only legal source for intent.  Trim generic inventories before it;
+    # otherwise a huge capability can indirectly turn a true documented claim
+    # into an unsupported one merely by pushing the selected README text out.
+    protected = {
+        "subject_documentation", "source_declarations", "source_references",
+        "outbound_dependency_evidence",
+    }
     by_size = sorted(
         out.items(),
-        key=lambda kv: len(json.dumps(kv[1], default=str)),
+        key=lambda kv: (
+            kv[0] not in protected,
+            len(json.dumps(kv[1], default=str)),
+        ),
         reverse=True,
     )
     for key, value in by_size:
         if len(json.dumps(out, default=str)) <= MAX_FACT_BLOCK_CHARS:
             break
         if isinstance(value, (str, list, dict)):
-            out[key] = _cap_value(value, MAX_FACT_VALUE_CHARS)
+            if key in {"source_references", "outbound_dependency_evidence"}:
+                # Both are already structurally bounded at construction. Their
+                # callsites are the evidence that high-degree and callback
+                # components otherwise lack, so trim generic inventories and
+                # documentation before discarding the selected source.
+                continue
+            if key == "source_declarations" and isinstance(value, list):
+                kept = []
+                used = 0
+                for index, declaration in enumerate(value):
+                    if not isinstance(declaration, dict):
+                        continue
+                    item = dict(declaration)
+                    preview_cap = 4_000 if index == 0 else 1_200
+                    preview = str(item.get("code_preview") or "")
+                    if len(preview) > preview_cap:
+                        item["code_preview"] = (
+                            preview[:preview_cap]
+                            + f"... [+{len(preview) - preview_cap} chars]"
+                        )
+                    size = len(json.dumps(item, default=str))
+                    if used + size > MAX_SOURCE_DECLARATIONS_CHARS and kept:
+                        break
+                    kept.append(item)
+                    used += size
+                if len(kept) < len(value):
+                    kept.append(
+                        f"[{len(value) - len(kept)} more omitted to fit the prompt budget]"
+                    )
+                out[key] = kept
+            else:
+                out[key] = _cap_value(value, MAX_FACT_VALUE_CHARS)
     return out
 
 
@@ -219,9 +268,26 @@ class StoreFacts:
         data_entities: list[dict],
         rules: list[dict],
         relationships: list[dict],
+        root: Optional[Path] = None,
     ):
         self.arch = arch
+        self._root = Path(root).resolve() if root is not None else None
+        self._source_excerpt_cache: dict[tuple[str, int, int], str] = {}
+        self._source_lines_cache: dict[str, list[str]] = {}
+        self._source_references_cache: dict[str, list[dict]] = {}
         self.component_index = _index_components(arch.get("components", []))
+        self._subject_readme = ""
+        self._subject_readme_source = ""
+        for cid, component in sorted(
+            self.component_index.items(), key=lambda item: item[0] != "root"
+        ):
+            readme = str(
+                ((component.get("docs") or {}).get("readme")) or ""
+            ).strip()
+            if readme:
+                self._subject_readme = readme
+                self._subject_readme_source = cid
+                break
         self.caps_by_comp = _group_by(capabilities, "component_id")
         # The AI surface rides on the arch itself (projected after the SBOM), so
         # no new constructor parameter: components that talk to, route, or run
@@ -231,6 +297,21 @@ class StoreFacts:
         self.ai_by_comp = _group_by(arch.get("ai_surface") or [], "component_id")
         self.entities_by_comp = _group_by(data_entities, "component_id")
         self.rules_by_comp = _group_by(rules, "component_id")
+        self._symbols_by_file: dict[str, list[dict]] = {}
+        for symbol in arch.get("symbols") or []:
+            path = str(symbol.get("file") or "")
+            if path:
+                self._symbols_by_file.setdefault(path, []).append(symbol)
+        for rows in self._symbols_by_file.values():
+            rows.sort(key=lambda symbol: (
+                0 if symbol.get("visibility") == "public" else 1,
+                {
+                    "actor": 0, "class": 1, "struct": 2, "protocol": 3,
+                    "enum": 4, "constant": 5, "property": 6,
+                    "function": 7, "method": 8,
+                }.get(str(symbol.get("kind") or ""), 9),
+                int(symbol.get("line") or 0), str(symbol.get("name") or ""),
+            ))
         self._language_counts: dict[str, int] = {}
         self._type_counts: dict[str, int] = {}
         for component in self.component_index.values():
@@ -250,6 +331,7 @@ class StoreFacts:
             f"{r.get('source','')}|{r.get('target','')}|{r.get('type','')}": r
             for r in relationships
         }
+        self._relationships = list(relationships)
         self._inbound: dict[str, int] = {}
         self._outbound: dict[str, int] = {}
         self._edges_by_component: dict[str, list[dict]] = {}
@@ -270,6 +352,270 @@ class StoreFacts:
         self._max_inbound = max(self._inbound.values(), default=0)
         self._max_outbound = max(self._outbound.values(), default=0)
 
+    def _declaration_excerpt(
+        self, path: str, start: Any, end: Any, *, chars: int = 4_000
+    ) -> str:
+        """Return a bounded exact declaration slice when the source is local.
+
+        Five-line parser previews establish identity but routinely omit the
+        SwiftUI modifiers, state, and calls that carry behavioral claims. The
+        parser still owns the declaration boundary; this method only projects
+        that bounded source interval into the evidence envelope. A head/tail
+        excerpt preserves both declaration/state and closing modifiers for a
+        long view without allowing one symbol to dominate the prompt.
+        """
+        if self._root is None or not path:
+            return ""
+        try:
+            first = max(1, int(start))
+            last = max(first, int(end or first))
+        except (TypeError, ValueError):
+            return ""
+        key = (path, first, last)
+        if key not in self._source_excerpt_cache:
+            try:
+                candidate = (self._root / path).resolve()
+                candidate.relative_to(self._root)
+                lines = candidate.read_text(errors="replace").splitlines()
+                self._source_excerpt_cache[key] = "\n".join(lines[first - 1:last])
+            except (OSError, ValueError):
+                self._source_excerpt_cache[key] = ""
+        text = self._source_excerpt_cache[key]
+        if len(text) <= chars:
+            return text
+        tail_chars = min(1_200, chars // 3)
+        head_chars = chars - tail_chars - 80
+        omitted = len(text) - head_chars - tail_chars
+        return (
+            text[:head_chars]
+            + f"\n    ... [{omitted} source chars omitted] ...\n"
+            + text[-tail_chars:]
+        )
+
+    def _source_lines(self, path: str) -> list[str]:
+        """Read one repository-relative source file once, failing closed."""
+        if path in self._source_lines_cache:
+            return self._source_lines_cache[path]
+        lines: list[str] = []
+        if self._root is not None and path:
+            try:
+                candidate = (self._root / path).resolve()
+                candidate.relative_to(self._root)
+                lines = candidate.read_text(errors="replace").splitlines()
+            except (OSError, ValueError):
+                pass
+        self._source_lines_cache[path] = lines
+        return lines
+
+    def _source_references(self, comp_id: str, names: set[str]) -> list[dict]:
+        """Return bounded parser-owned call sites that refer to this component.
+
+        A component declaration explains the callee but not how its caller wires
+        it.  That missing half hid the real server-download -> local-import
+        handoff in the UnaMentis canary.  This index is deterministic: exact
+        identifier matches in parser-known source files, with the nearest
+        enclosing symbol and any directly-called sibling method attached.  It
+        never infers intent and never scans outside the analyzed repository.
+        """
+        if comp_id in self._source_references_cache:
+            return self._source_references_cache[comp_id]
+        names = {name for name in names if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name)}
+        if not names:
+            self._source_references_cache[comp_id] = []
+            return []
+
+        own_spans = {
+            (str(row.get("file") or ""), int(row.get("line") or 0),
+             int(row.get("end_line") or row.get("line") or 0))
+            for path in (self.component_index.get(comp_id, {}).get("files") or [])
+            for row in self._symbols_by_file.get(str(path), [])
+            if str(row.get("name") or "") in names
+        }
+        own_files = set(self.component_index.get(comp_id, {}).get("files") or [])
+        found: list[dict] = []
+        for path in sorted(
+            self._symbols_by_file,
+            key=lambda value: (0 if value in own_files else 1, value),
+        ):
+            lines = self._source_lines(path)
+            if not lines:
+                continue
+            for line_number, line in enumerate(lines, 1):
+                matched = next(
+                    (name for name in sorted(names) if re.search(
+                        rf"\b{re.escape(name)}\b", line
+                    )),
+                    None,
+                )
+                if matched is None or any(
+                    own_path == path and start <= line_number <= end
+                    for own_path, start, end in own_spans
+                ):
+                    continue
+                containing = []
+                for row in self._symbols_by_file.get(path, []):
+                    try:
+                        start = int(row.get("line") or 0)
+                        end = int(row.get("end_line") or start)
+                    except (TypeError, ValueError):
+                        continue
+                    if start <= line_number <= end:
+                        containing.append((end - start, start, row))
+                owner = min(containing, key=lambda item: (item[0], item[1]))[2] \
+                    if containing else None
+                start = max(1, line_number - 8)
+                end = min(len(lines), line_number + 10)
+                callsite = "\n".join(lines[start - 1:end]).strip()
+
+                # If the call site delegates to a named method in the same
+                # enclosing declaration, attach that method's exact bounded
+                # body. This carries a callback handoff without shipping the
+                # caller's entire (often thousand-line) view.
+                related: list[dict] = []
+                owner_name = str((owner or {}).get("name") or "")
+                related_candidates = []
+                for row in self._symbols_by_file.get(path, []):
+                    method = str(row.get("name") or "")
+                    parent_tail = str(row.get("parent") or "").rsplit(" ", 1)[-1]
+                    if (
+                        not method or parent_tail != owner_name
+                        or not re.search(rf"\b{re.escape(method)}\s*\(", callsite)
+                    ):
+                        continue
+                    occurrence_lines = [
+                        start + offset
+                        for offset, source_line in enumerate(lines[start - 1:end])
+                        if re.search(rf"\b{re.escape(method)}\s*\(", source_line)
+                    ]
+                    after = [value for value in occurrence_lines if value >= line_number]
+                    preferred_line = min(
+                        after or occurrence_lines,
+                        key=lambda value: abs(value - line_number),
+                        default=-1,
+                    )
+                    distance = (
+                        abs(preferred_line - line_number)
+                        if preferred_line >= 0 else 10_000
+                    )
+                    related_candidates.append((
+                        0 if after else 1, distance, method, row,
+                    ))
+                for _, _, method, row in sorted(related_candidates)[:2]:
+                    excerpt = self._declaration_excerpt(
+                        path, row.get("line"), row.get("end_line"), chars=2_600
+                    )
+                    if excerpt:
+                        related.append({
+                            "name": method, "line": row.get("line"),
+                            "end_line": row.get("end_line"),
+                            "code_preview": excerpt,
+                        })
+                focused_handoff = ""
+                if related:
+                    method_lines = str(related[0].get("code_preview") or "").splitlines()
+                    relevant = [
+                        index for index, value in enumerate(method_lines)
+                        if re.search(
+                            r"\.shared\b|\btry\s+(?:await\s+)?|\bawait\s+|"
+                            r"\bon[A-Z][A-Za-z0-9_]*\s*\(",
+                            value,
+                        )
+                    ]
+                    if relevant:
+                        lo = max(0, min(relevant) - 3)
+                        hi = min(len(method_lines), max(relevant) + 4)
+                        focused_handoff = "\n".join([
+                            *method_lines[:2], "    ...", *method_lines[lo:hi],
+                        ])[:1_800]
+                downstream: list[dict] = []
+                downstream_calls = re.findall(
+                    r"\b([A-Z][A-Za-z0-9_]*)\.shared\."
+                    r"([a-z_][A-Za-z0-9_]*)\s*\(",
+                    "\n".join([callsite, focused_handoff]),
+                )
+                for owner_type, method in downstream_calls:
+                    matches = [
+                        (source_path, row)
+                        for source_path, rows in self._symbols_by_file.items()
+                        for row in rows
+                        if str(row.get("name") or "") == method
+                        and str(row.get("parent") or "").rsplit(" ", 1)[-1]
+                        == owner_type
+                    ]
+                    if len(matches) != 1:
+                        continue
+                    source_path, row = matches[0]
+                    source_lines = self._source_lines(source_path)
+                    try:
+                        method_start = max(1, int(row.get("line") or 1))
+                        method_end = min(
+                            len(source_lines),
+                            int(row.get("end_line") or method_start),
+                        )
+                    except (TypeError, ValueError):
+                        continue
+                    body = source_lines[method_start - 1:method_end]
+                    signal_lines = [
+                        index for index, value in enumerate(body)
+                        if re.search(
+                            r"Core Data|\bimport[A-Z_a-z]|managedObjectContext|"
+                            r"\.save\s*\(|\breturn\b",
+                            value,
+                        )
+                    ]
+                    seen = set(range(min(8, len(body))))
+                    for signal in signal_lines:
+                        for index in range(max(0, signal - 2), min(len(body), signal + 3)):
+                            seen.add(index)
+                    selected_lines: list[str] = []
+                    previous = -2
+                    for index in sorted(seen):
+                        if index > previous + 1:
+                            selected_lines.append("    ...")
+                        selected_lines.append(body[index])
+                        previous = index
+                    preview = "\n".join(selected_lines)[:3_200]
+                    downstream.append({
+                        "file": source_path, "line": row.get("line"),
+                        "end_line": row.get("end_line"), "owner": owner_type,
+                        "name": method, "code_preview": preview,
+                    })
+                    if len(downstream) >= 2:
+                        break
+                entry = {
+                    "file": path,
+                    "line": line_number,
+                    "referenced_symbol": matched,
+                    "caller_symbol": owner_name or None,
+                    "handoff_preview": focused_handoff or None,
+                    "downstream_atoms": [
+                        value.strip()
+                        for declaration in downstream
+                        for value in str(
+                            declaration.get("code_preview") or ""
+                        ).splitlines()
+                        if re.search(
+                            r"\bimport[A-Z_a-z]|managedObjectContext|"
+                            r"\.save\s*\(|\breturn\b",
+                            value,
+                        )
+                    ][:12] or None,
+                    "downstream_declarations": downstream or None,
+                    "code_preview": callsite[:1_000],
+                    "related_declarations": related or None,
+                }
+                found.append({k: v for k, v in entry.items() if v not in (None, [], "")})
+                if len(found) >= 12:
+                    break
+            if len(found) >= 12:
+                break
+        found.sort(key=lambda item: (
+            0 if item.get("file") in own_files else 1,
+            str(item.get("file") or ""), int(item.get("line") or 0),
+        ))
+        self._source_references_cache[comp_id] = found[:3]
+        return self._source_references_cache[comp_id]
+
     def component_facts(self, comp_id: str) -> dict:
         """A compact, JSON-serializable fact block for one component.
 
@@ -282,6 +628,131 @@ class StoreFacts:
         against. The partition holding it could never have succeeded.
         """
         return _cap_block(self._component_facts(comp_id))
+
+    def evidence_source_context(self, comp_id: str, item: dict) -> Optional[dict]:
+        """Resolve a cited source symbol/line to its exact parser-bounded slice.
+
+        The compact component block intentionally carries only a small menu of
+        declarations. A model may nevertheless cite a method visible inside
+        the target declaration (for example ``loadCurricula``). Adjudication
+        must not reduce that citation back to a bare symbol merely because the
+        method was not a separate menu entry. Resolution stays strict: an
+        ambiguous duplicate symbol is not guessed.
+        """
+        if not isinstance(item, dict):
+            return None
+        path = str(item.get("path") or "")
+        if not path:
+            return None
+        rows = list(self._symbols_by_file.get(path, []))
+        kind = str(item.get("kind") or "")
+        symbol_name = str(item.get("symbol") or "")
+        selected: Optional[dict] = None
+        if kind == "symbol" and symbol_name:
+            matches = [row for row in rows if str(row.get("name") or "") == symbol_name]
+            if len(matches) > 1:
+                comp = self.component_index.get(comp_id, {})
+                target_names = {
+                    re.sub(r"[^a-z0-9]", "", comp_id.rsplit("/", 1)[-1].lower()),
+                    re.sub(
+                        r"[^a-z0-9]", "", str(comp.get("name") or "").lower()
+                    ),
+                }
+                owned = [
+                    row for row in matches
+                    if any(
+                        name and name in re.sub(
+                            r"[^a-z0-9]", "", str(row.get("parent") or "").lower()
+                        )
+                        for name in target_names
+                    )
+                ]
+                matches = owned
+            if len(matches) == 1:
+                selected = matches[0]
+        elif kind == "file" and item.get("line") is not None:
+            try:
+                line = int(item["line"])
+            except (TypeError, ValueError):
+                line = 0
+            containing = []
+            for row in rows:
+                try:
+                    start = int(row.get("line"))
+                    end = int(row.get("end_line") or start)
+                except (TypeError, ValueError):
+                    continue
+                if start <= line <= end:
+                    containing.append((end - start, start, row))
+            if containing:
+                selected = min(containing, key=lambda value: (value[0], value[1]))[2]
+        if selected is None:
+            return None
+        excerpt = self._declaration_excerpt(
+            path, selected.get("line"), selected.get("end_line")
+        ) or str(selected.get("code_preview") or "")[:600]
+        if not excerpt:
+            return None
+        return {
+            key: value for key, value in {
+                "line": selected.get("line"),
+                "end_line": selected.get("end_line"),
+                "symbol": selected.get("name"),
+                "kind": selected.get("kind"),
+                "code_preview": excerpt,
+            }.items() if value not in (None, "", [])
+        }
+
+    def component_symbol_evidence(
+        self, comp_id: str, symbol: str, *, parent: str = ""
+    ) -> Optional[dict]:
+        """Resolve one exact symbol in this component's parser-owned files.
+
+        The compact prompt may show a method inside its owning declaration even
+        when the bounded declaration menu cannot afford a separate row for that
+        method. The parser index still knows the exact file and line. Exposing
+        this closed resolver avoids turning a true, source-visible citation into
+        ``compact-invalid`` while refusing ambiguous names.
+        """
+        comp = self.component_index.get(comp_id, {})
+        files = {str(path) for path in (comp.get("files") or [])}
+        matches = [
+            row
+            for path in files
+            for row in self._symbols_by_file.get(path, [])
+            if str(row.get("name") or "") == symbol.strip()
+        ]
+        if parent.strip():
+            matches = [
+                row for row in matches
+                if parent.strip() in str(row.get("parent") or "").split()
+            ]
+        elif len(matches) > 1:
+            target_names = {
+                re.sub(r"[^a-z0-9]", "", comp_id.rsplit("/", 1)[-1].lower()),
+                re.sub(r"[^a-z0-9]", "", str(comp.get("name") or "").lower()),
+            }
+            owned = [
+                row for row in matches
+                if any(
+                    name and name == re.sub(
+                        r"[^a-z0-9]", "",
+                        str(row.get("parent") or "").rsplit(" ", 1)[-1].lower(),
+                    )
+                    for name in target_names
+                )
+            ]
+            if owned:
+                matches = owned
+        if len(matches) != 1:
+            return None
+        row = matches[0]
+        return {
+            key: value for key, value in {
+                "kind": "symbol", "path": row.get("file"),
+                "symbol": row.get("name"), "line": row.get("line"),
+            }.items() if value is not None
+        }
 
     def _component_facts(self, comp_id: str) -> dict:
         comp = self.component_index.get(comp_id, {"id": comp_id})
@@ -314,12 +785,70 @@ class StoreFacts:
                 for row in self._edges_by_component.get(comp_id, [])[:12]
             ],
         }
+        outbound_dependencies = []
+        for row in self._edges_by_component.get(comp_id, []):
+            if row.get("source") != comp_id:
+                continue
+            outbound_dependencies.append({
+                "target": row.get("target"),
+                "type": row.get("type"),
+                "label": row.get("label"),
+                "evidence": [
+                    {
+                        "file": item.get("file"), "line": item.get("line"),
+                        "snippet": item.get("snippet"),
+                    }
+                    for item in (row.get("evidence") or [])[:2]
+                    if isinstance(item, dict)
+                ],
+            })
+        if len(outbound_dependencies) >= 8:
+            # A flat edge count is insufficient for a high-degree shell. Give
+            # the model every deterministic edge label and representative
+            # callsite so it can distinguish load-bearing paths from incidental
+            # wiring rather than merely enumerate dependencies.
+            facts["outbound_dependency_evidence"] = outbound_dependencies[:32]
         language_key = str(comp.get("language") or "").strip().lower()
         type_key = str(comp.get("type") or "").strip().lower()
         if language_key:
             facts["same_language_component_count"] = self._language_counts[language_key]
         if type_key:
             facts["same_type_component_count"] = self._type_counts[type_key]
+        children = [
+            str(child.get("id") or "")
+            for child in (comp.get("children") or [])
+            if isinstance(child, dict) and child.get("id")
+        ]
+        if children and comp_id != self._subject_readme_source:
+            facts["child_components"] = children[:20]
+        parent = comp_id.rpartition("/")[0]
+        if parent:
+            peers = [
+                {
+                    key: value for key, value in {
+                        "id": peer_id,
+                        "name": peer.get("name"),
+                        "type": peer.get("type"),
+                        "language": peer.get("language"),
+                    }.items() if value not in (None, "")
+                }
+                for peer_id, peer in sorted(self.component_index.items())
+                if peer_id != comp_id and peer_id.rpartition("/")[0] == parent
+            ]
+            if peers:
+                facts["peer_components"] = peers[:20]
+        descendant_prefix = comp_id.rstrip("/") + "/"
+        descendant_edges = [
+            {
+                "source": row.get("source"), "target": row.get("target"),
+                "type": row.get("type"),
+            }
+            for row in self._relationships
+            if str(row.get("source") or "").startswith(descendant_prefix)
+            or str(row.get("target") or "").startswith(descendant_prefix)
+        ]
+        if descendant_edges and comp_id != self._subject_readme_source:
+            facts["descendant_edges"] = descendant_edges[:12]
         # Conditional data the schema keys on. Only present when non-empty, so the
         # model sees exactly which optional fields apply.
         if comp.get("port"):
@@ -333,6 +862,13 @@ class StoreFacts:
         }
         if any(value for value in documentation.values()):
             facts["documentation"] = documentation
+        subject_excerpt = self._subject_documentation_excerpt(comp_id, comp)
+        if subject_excerpt:
+            facts["subject_documentation"] = {
+                "source_component": self._subject_readme_source,
+                "readme_excerpt": subject_excerpt,
+                "scope": "global",
+            }
         if comp.get("testing"):
             facts["has_testing_data"] = True
             facts["testing"] = comp.get("testing")
@@ -341,6 +877,140 @@ class StoreFacts:
             facts["action_count"] = len(comp.get("actions") or [])
         if comp.get("external_services"):
             facts["external_services"] = comp.get("external_services")
+        # Bounded parser-owned declarations give the model the source-level
+        # evidence it was previously told to obtain with tools it does not
+        # have. Actor/class/MainActor declarations, constants, and initializer
+        # wiring are especially important on Swift repositories. These are
+        # short previews from the extraction store, not an open-ended file read.
+        declarations = []
+        for path in comp.get("files") or []:
+            for symbol in self._symbols_by_file.get(str(path), []):
+                declarations.append({
+                    key: value for key, value in {
+                        "file": symbol.get("file"),
+                        "line": symbol.get("line"),
+                        "end_line": symbol.get("end_line"),
+                        "name": symbol.get("name"),
+                        "kind": symbol.get("kind"),
+                        "visibility": symbol.get("visibility"),
+                        "annotations": symbol.get("annotations"),
+                        "parent": symbol.get("parent"),
+                        "code_preview": str(symbol.get("code_preview") or "")[:600],
+                    }.items() if value not in (None, "", [])
+                })
+        if declarations:
+            slug = comp_id.rsplit("/", 1)[-1].replace("-", "").lower()
+            display = re.sub(r"[^a-z0-9]", "", str(comp.get("name") or "").lower())
+            target_names = {slug, display}
+            if str(comp.get("type") or "") in {"ios-client", "application", "app"}:
+                target_names.update({slug + "app", display + "app"})
+            primary_symbol_names = {
+                str(item.get("name") or "")
+                for item in declarations
+                if re.sub(r"[^a-z0-9]", "", str(item.get("name") or "").lower())
+                in target_names
+            }
+            source_references = self._source_references(comp_id, primary_symbol_names)
+            if source_references:
+                facts["source_references"] = source_references
+            target_source = "\n".join(
+                self._declaration_excerpt(
+                    str(item.get("file") or ""), item.get("line"), item.get("end_line"),
+                    chars=4_000,
+                ) or str(item.get("code_preview") or "")
+                for item in declarations
+                if re.sub(
+                    r"[^a-z0-9]", "", str(item.get("name") or "").lower()
+                ) in target_names
+            )
+            referenced_siblings = {
+                re.sub(r"[^a-z0-9]", "", str(item.get("name") or "").lower())
+                for item in declarations
+                if not item.get("parent")
+                and re.sub(
+                    r"[^a-z0-9]", "", str(item.get("name") or "").lower()
+                ) not in target_names
+                and re.search(
+                    rf"\b{re.escape(str(item.get('name') or ''))}\b", target_source
+                )
+            }
+            referenced_members = {
+                re.sub(r"[^a-z0-9]", "", str(item.get("name") or "").lower())
+                for item in declarations
+                if item.get("parent")
+                and re.search(
+                    rf"\b{re.escape(str(item.get('name') or ''))}\b", target_source
+                )
+            }
+            reference_positions = {
+                normalized: min(
+                    (
+                        match.start()
+                        for match in re.finditer(
+                            rf"\b{re.escape(str(item.get('name') or ''))}\b",
+                            target_source,
+                        )
+                    ),
+                    default=10**9,
+                )
+                for item in declarations
+                for normalized in [re.sub(
+                    r"[^a-z0-9]", "", str(item.get("name") or "").lower()
+                )]
+                if normalized in referenced_siblings
+            }
+            for declaration in declarations:
+                normalized = re.sub(
+                    r"[^a-z0-9]", "", str(declaration.get("name") or "").lower()
+                )
+                parent_name = re.sub(
+                    r"[^a-z0-9]", "",
+                    str(declaration.get("parent") or "").rsplit(" ", 1)[-1].lower(),
+                )
+                if (
+                    normalized in target_names
+                    or normalized in referenced_siblings
+                    or parent_name in target_names
+                    or parent_name in referenced_siblings
+                ):
+                    excerpt = self._declaration_excerpt(
+                        str(declaration.get("file") or ""),
+                        declaration.get("line"), declaration.get("end_line"),
+                        chars=4_000 if normalized in target_names else 1_200,
+                    )
+                    if excerpt:
+                        declaration["code_preview"] = excerpt
+            def declaration_rank(item: dict) -> int:
+                name = re.sub(
+                    r"[^a-z0-9]", "", str(item.get("name") or "").lower()
+                )
+                parent = re.sub(
+                    r"[^a-z0-9]", "",
+                    str(item.get("parent") or "").rsplit(" ", 1)[-1].lower(),
+                )
+                if name in target_names:
+                    return 0
+                if name in referenced_siblings:
+                    return 1
+                if parent in referenced_siblings and name in referenced_members:
+                    return 2
+                if parent in referenced_siblings:
+                    return 3
+                if parent in target_names:
+                    return 4
+                return 5
+
+            declarations.sort(key=lambda item: (
+                declaration_rank(item),
+                reference_positions.get(re.sub(
+                    r"[^a-z0-9]", "", str(item.get("name") or "").lower()
+                ), 10**9),
+                0 if item.get("visibility") == "public" else 1,
+                int(item.get("line") or 0),
+                str(item.get("name") or ""),
+            ))
+            limit = 8 if comp.get("type") in {"screen", "tab"} else 16
+            facts["source_declarations"] = declarations[:limit]
         caps = self.caps_by_comp.get(comp_id)
         if caps:
             facts["capabilities"] = [
@@ -370,9 +1040,173 @@ class StoreFacts:
             ]
         return facts
 
+    def _subject_documentation_excerpt(self, comp_id: str, comp: dict) -> str:
+        """Return subject identity plus the relevant README section.
+
+        Root documentation commonly defines child roles while child projections
+        correctly have no README of their own. A single matching bullet is not
+        enough for placement or navigation claims: the live exit-validation run
+        cited the `libs/core` bullet for a true `libs/rubylib` comparison and the
+        adjudicator correctly rejected it. Preserve the containing list/section,
+        bounded, so sibling and infrastructure context actually exists in the
+        cited value rather than only elsewhere in the parser record.
+        """
+        readme = self._subject_readme
+        if not readme:
+            return ""
+        if comp_id == self._subject_readme_source:
+            return readme[:4_000]
+        lines = readme.splitlines()
+        # Keep the document's opening prose, not merely its first Markdown
+        # block.  README titles are commonly separated from the actual purpose
+        # paragraph by a blank line; splitting on the first blank retained only
+        # "# title" and made the next paragraph impossible to cite.  Stop when
+        # the first labelled list begins, because that list is selected below
+        # in a target-aware way.
+        preamble_end = len(lines)
+        for index, line in enumerate(lines):
+            if index == 0 or not line.strip().endswith(":"):
+                continue
+            following = index + 1
+            while following < len(lines) and not lines[following].strip():
+                following += 1
+            if (
+                following < len(lines)
+                and lines[following].lstrip().startswith(("- ", "* ", "+ "))
+            ):
+                preamble_end = index
+                break
+        intro = "\n".join(lines[:preamble_end]).strip()[:2_000]
+        candidates = {
+            str(comp_id or "").strip().lower(),
+            str(comp.get("path") or "").strip().lower(),
+            str(comp.get("name") or "").strip().lower(),
+        }
+        for path in comp.get("files") or []:
+            candidates.add(str(path).strip().lower())
+            candidates.add(PurePosixPath(str(path)).name.lower())
+        for item in comp.get("config_files") or []:
+            if not isinstance(item, dict):
+                continue
+            path = str(item.get("path") or "").strip().lower()
+            if path:
+                candidates.add(path)
+                candidates.add(PurePosixPath(path).name.lower())
+            for service in item.get("services") or []:
+                candidates.add(str(service).strip().lower())
+        for value in list(candidates):
+            if value.endswith("/src"):
+                candidates.add(value[:-4])
+            leaf = value.rsplit("/", 1)[-1]
+            if leaf:
+                candidates.add(leaf)
+        candidates.discard("")
+
+        def mentions(line: str) -> bool:
+            lowered = line.lower()
+            return any(
+                (
+                    value in lowered if len(value) >= 4
+                    else re.search(
+                        rf"(?<![a-z0-9]){re.escape(value)}(?![a-z0-9])",
+                        lowered,
+                    ) is not None
+                )
+                for value in candidates
+            )
+
+        ranges: list[tuple[int, int]] = []
+        for index, line in enumerate(lines):
+            if not mentions(line):
+                continue
+            start, end = index, index + 1
+            # A matched list item gets its whole contiguous list and label. This
+            # is the smallest deterministic unit that can support “alongside” or
+            # “next” without shipping the whole README.
+            if (
+                line.lstrip().startswith(("- ", "* ", "+ "))
+                or line[:1].isspace()
+            ):
+                while start > 0:
+                    previous = lines[start - 1]
+                    stripped = previous.strip()
+                    if (
+                        previous[:1].isspace()
+                        or previous.lstrip().startswith(("- ", "* ", "+ "))
+                        or stripped.endswith(":")
+                    ):
+                        start -= 1
+                        continue
+                    break
+                while end < len(lines):
+                    following = lines[end]
+                    if (
+                        following[:1].isspace()
+                        or following.lstrip().startswith(("- ", "* ", "+ "))
+                    ):
+                        end += 1
+                        continue
+                    break
+            else:
+                while start > 0 and lines[start - 1].lstrip().startswith("#"):
+                    start -= 1
+                while end < len(lines) and lines[end].strip() and end <= index + 2:
+                    end += 1
+            ranges.append((start, end))
+
+        selected: list[str] = []
+        for start, end in ranges:
+            block_lines = lines[start:end]
+            block = "\n".join(block_lines).strip()
+            if len(block) > 3_000:
+                # A giant monorepo inventory can exceed the total excerpt cap.
+                # Keep a small window around every actual target mention and
+                # the list label, rather than blindly retaining the start of
+                # the list and dropping the one line selected for this target.
+                matched = [
+                    offset for offset, value in enumerate(block_lines)
+                    if mentions(value)
+                ]
+                if matched:
+                    window_start = max(0, min(matched) - 4)
+                    window_end = min(len(block_lines), max(matched) + 5)
+                    window = block_lines[window_start:window_end]
+                    prefix: list[str] = []
+                    first = block_lines[0].strip() if block_lines else ""
+                    if window_start and (first.endswith(":") or first.startswith("#")):
+                        prefix = [block_lines[0], "[earlier list entries omitted]"]
+                    suffix = (
+                        ["[later list entries omitted]"]
+                        if window_end < len(block_lines) else []
+                    )
+                    block = "\n".join([*prefix, *window, *suffix]).strip()
+            if block and block not in selected:
+                selected.append(block)
+        if not selected:
+            return intro[:1_200]
+        return "\n\n".join([intro, *selected]).strip()[:4_000]
+
     def relationship_facts(self, key: str) -> dict:
         rel = self._rel_by_key.get(key, {})
-        return {
+        evidence = []
+        for item in (rel.get("evidence") or [])[:3]:
+            if not isinstance(item, dict):
+                continue
+            enriched = dict(item)
+            path = str(item.get("file") or item.get("path") or "")
+            try:
+                line = int(item.get("line") or 0)
+            except (TypeError, ValueError):
+                line = 0
+            source_lines = self._source_lines(path) if path and line else []
+            if source_lines and 1 <= line <= len(source_lines):
+                start = max(1, line - 10)
+                end = min(len(source_lines), line + 10)
+                enriched["context"] = "\n".join(
+                    source_lines[start - 1:end]
+                ).strip()[:1_600]
+            evidence.append(enriched)
+        facts = {
             "key": key,
             "source": rel.get("source"),
             "target": rel.get("target"),
@@ -382,8 +1216,21 @@ class StoreFacts:
             "port": rel.get("port"),
             "confidence": rel.get("confidence"),
             "system_relationship_count": self._relationship_count,
-            "evidence": (rel.get("evidence") or [])[:3],
+            "evidence": evidence,
         }
+        # Relationship intent is often declared only by subject-level
+        # documentation (for example, a fixture README saying that its one
+        # edge exists to exercise relationship detection).  Make that source a
+        # first-class fact just as component prompts do; otherwise a true
+        # relationship-intent claim has no legal citation and no tier can
+        # repair it.
+        if self._subject_readme:
+            facts["subject_documentation"] = {
+                "source_component": self._subject_readme_source,
+                "readme_excerpt": self._subject_readme[:1_200],
+                "scope": "global",
+            }
+        return facts
 
     def component_edge_menu(self, comp_id: str) -> list[dict]:
         """Stable citation menu: at most 8 outbound then 4 inbound edges."""
@@ -1005,7 +1852,9 @@ Also citable: path, existing_description, capability_count,
 data_entity_count, same_language_component_count, same_type_component_count,
 system_relationship_count, system_capability_count,
 system_capability_component_count, system_max_inbound_edges,
-system_max_outbound_edges, files, edges, config_files, and documentation.
+system_max_outbound_edges, files, edges, config_files, documentation, and
+subject_documentation, child_components, peer_components, descendant_edges, and
+source_declarations.
 
 Paths must come from the files listed in the facts for that component. A citation
 to a file that is not in the analyzed set fails the check, and the answer is
@@ -1167,9 +2016,10 @@ actions_summary, key_user_flows. Omit nulls, empties, defaults, and all fields n
 listed here.
 
 EVIDENCE applies to purpose, mechanism, place, why_matters, next, and data. It
-uses the target's menus: 2 (or the exact supplied path) = that file;
-[2,"Symbol"] (or ["exact/path","Symbol"]) = symbol in that file; [2,120] =
-line; "E3" = edge index 3; ["F","inbound_edges"] = this component's own
+uses the target's ZERO-BASED files menu: 0 (or the exact supplied path) = the
+first file; [0,"Symbol"] (or ["exact/path","Symbol"]) = symbol in that file;
+[0,120] = line 120 in the first file; "E3" = edge index 3;
+["F","inbound_edges"] = this component's own
 analyzer fact; "F.type" is accepted shorthand. Fields: file_count, lines,
 inbound_edges, outbound_edges, language, framework, port, type, path,
 existing_description, capability_count, capabilities, data_entity_count,
@@ -1177,7 +2027,10 @@ data_entities, same_language_component_count, same_type_component_count,
 system_relationship_count, system_capability_count,
 system_capability_component_count, system_max_inbound_edges,
 system_max_outbound_edges, files, edges, config_files, documentation,
-external_services, action_count, ai_surface, has_testing_data, testing. Use
+subject_documentation, child_components, peer_components, descendant_edges,
+source_declarations, source_references, outbound_dependency_evidence,
+external_services, action_count, ai_surface, has_testing_data, testing. Never
+copy an example index blindly: a one-file target has only index 0. Use
 it for any claim about a count, an absence, or a detected attribute. A full
 evidence object is the escape hatch. An answer with t+e is answered by default. If it cannot be
 grounded, emit {"t":"best bounded claim","s":"u","r":"why"}; add
@@ -1185,11 +2038,38 @@ grounded, emit {"t":"best bounded claim","s":"u","r":"why"}; add
 would settle it, otherwise "l":"judgment". Emit {"s":"d","r":"why"} only when
 nothing worth saying exists.
 
-Every CLAUSE must be carried by one of the answer's one or two citations. When
+`source_declarations`, `source_references`, and `outbound_dependency_evidence`
+are fact fields, not file paths. Cite a whole supplied fact field with
+e.g. ["F","source_references"]. Cite one named declaration through its real
+file as [0,"Symbol"] / ["exact/path","Symbol"]. Never emit
+["source_declarations","Symbol"] or `symbol:Symbol`.
+
+Every CLAUSE must be carried by an exact citation. Most answers need one to four;
+the schema permits up to twelve when a genuinely compound explanation needs
+separate documentation, file, count, and edge facts. When
 you name a detected endpoint, route, framework, or data shape, cite
 ["F","capabilities"] or the exact fact that contains it. A file's existence
-does not prove an adjacent claim about its contents. If two citations cannot
-carry every clause, narrow the sentence; do not append an uncited detail.
+does not prove an adjacent claim about its contents. Do not add citations that
+carry no clause, but never omit a needed citation to satisfy a length target.
+
+Evidence that a manifest or file EXISTS does not establish its contents,
+relationships, or intent. Treat every modifier and relationship in a sentence
+as its own claim and carry it with exact supplied evidence. When one clause is
+unsupported, remove or qualify that clause while preserving every supported,
+useful piece of meaning. There is no forbidden vocabulary and concision is not
+a reason to make the explanation less useful to a reader.
+
+For next, name a component only when that exact id appears in edges,
+child_components, peer_components, descendant_edges, or supplied
+subject_documentation. A system relationship count proves how many edges exist;
+it does not identify either endpoint. Prefer a supported parent component over
+an uncited, more-specific child path.
+
+Intent words such as deliberate, intended, designed to, or static stub require
+subject_documentation whose supplied excerpt actually says that. A file count,
+type, manifest, or absence of detected symbols cannot establish author intent.
+If the documentation does not carry the intent, describe the observable shape
+and reader consequence without attributing a motive.
 
 Each fact block includes deterministic_atoms. Those are authoritative local
 facts and already carry their exact citation. Copy a relevant value faithfully;
@@ -1224,13 +2104,28 @@ COMPONENTS (produce none); relationships carry the requested edge work.
 sentence describing what crosses the edge","e":[0]},"why":{"t":"complete
 sentence explaining why the connection exists","e":[0]}}]}
 
-One entry per key. flow and why MUST use the compact answer form with one or two
-citations into that edge's evidence menu: {"t":"...","e":[0]}. When the
+One entry per key. flow and why MUST use the compact answer form with only the
+citations their clauses need (the structural maximum is twelve)
+citations into that edge's evidence menu: {"t":"...","e":[0]}. Analyzer
+facts supplied on the relationship use ["F","system_relationship_count"] or
+["F","subject_documentation"]. When the
 evidence is insufficient, use {"t":"...","s":"u","r":"why",
 "l":"fact|judgment","need":"only with fact"}. Omit nulls, empties, status for
 answered claims, and fields not shown. The coordinator uses flow.t as both the
 reader-facing data_flow_description and the audit claim: generate the meaning
 once, then reuse it.
+
+Relationship evidence may include an exact `context` window around the supplied
+call site. Cite that evidence row when the window literally shows observable
+behavior such as `.sheet`, `.navigationDestination`, a state binding, callback,
+constructor argument, or method call. Describe what a reader can observe from
+that syntax. Do not infer presentation mode, lifecycle, ownership, intent, or
+data semantics from endpoint names or an edge label alone. In particular, do
+not say `fullScreenCover`, modal, push, persistence, or synchronization unless
+the cited source context literally establishes it. `why` should explain the
+supported reader consequence of the connection; when no supplied fact carries
+a stronger rationale, preserve the useful observable connection and mark the
+unsupported rationale uncertain rather than inventing one.
 """
 
 
@@ -1259,6 +2154,7 @@ def build_compact_component_prompt(
             "same_type_component_count", "system_relationship_count",
             "system_capability_count", "system_capability_component_count",
             "system_max_inbound_edges", "system_max_outbound_edges",
+            "child_components", "descendant_edges", "source_declarations",
         ):
             if field in block and block[field] not in (None, "", []):
                 atoms.append({
@@ -1345,11 +2241,40 @@ Rules:
   tier"}. On "s":"u" only, add "l":"fact" with "need":"<the concrete missing
   fact: a file, a config, a build step>" when a fact absent from this prompt
   would settle it, otherwise "l":"judgment".
+- A repaired claim is a DELTA, not a replacement description: carry only the
+  meaning needed to repair the named failure. Use every citation needed to carry
+  the repaired clauses; the structural maximum is twelve. Do not
+  add a handler, symbol, comparison, or surrounding detail that the TODO did not
+  require; every extra clause is a new way to fail validation and re-spend the
+  item at the next rung. Be concise, but never omit needed meaning to hit a
+  length or cost target.
+- A manifest/file citation proves existence, not its contents, relationships,
+  or intent. Repair only the unsupported clause. Preserve all supported meaning
+  and produce the most useful reader-facing explanation the supplied evidence
+  permits. Do not optimize for shortness and do not apply a phrase blacklist.
+- Intent words such as deliberate, intended, designed to, or static stub require
+  subject_documentation whose supplied excerpt actually states that intent. If
+  it does not, preserve the useful observable fact and remove the attributed
+  motive.
+- For next_step, name a component only when that exact id appears in the
+  target's edges, child_components, peer_components, descendant_edges, or
+  subject_documentation. A relationship count does not identify endpoints;
+  prefer a supported parent over an uncited child path.
 - Citations use the item's menus exactly as the bulk pass does: 2 = file
   index 2; [2,"Symbol"] = that symbol in that file; [2,120] = that line;
   "E3" = edge index 3; ["F","inbound_edges"] = this item's own analyzer
-  fact; a full evidence object is the escape hatch. Every citation is
+  fact ("F.inbound_edges" and "fact:inbound_edges" are accepted aliases);
+  a full evidence object is the escape hatch. Every citation is
   checked mechanically.
+- Never copy an example index: inspect this item's own `files` and `edges`
+  arrays, whose first entries are 0 and E0. `source_declarations` is a fact
+  field, not a path. Cite its whole menu as ["F","source_declarations"], or
+  cite one exact supplied declaration as ["S","Symbol"] or
+  ["exact/path","Symbol"].
+- Numeric file indexes refer ONLY to this item's `files` array. Entries inside
+  `source_references` and `outbound_dependency_evidence` do not extend that
+  array: cite those collections as ["F","source_references"] /
+  ["F","outbound_dependency_evidence"], or cite an entry's exact full path.
 - "established" answers are settled. Do not re-emit them. If one is actually
   WRONG, emit the corrected field or answer directly; the merge takes the
   correction and keeps everything else. Corrections are rare and each one
@@ -1618,6 +2543,16 @@ an "edge" citation names a real edge in the dependency graph, a "manifest" or
 names a real field of the analyzer's own output for that component with the
 value shown.
 
+The digest is normalized to avoid repeating the same source many times. Each
+claim's evidence_refs indexes the zero-based evidence_menu. Resolve those
+references before judging support; one menu entry may legitimately support
+several claims.
+
+A symbol or line citation may carry `source_context`, a bounded parser-owned
+declaration preview or exact call-site snippet from the same evidence envelope
+the producer saw. Treat that text as source evidence for the clauses it visibly
+shows. Do not infer code beyond the shown excerpt.
+
 A "fact" citation is NOT a bare assertion. It points at the deterministic
 analyzer's own data, the same numbers the map is built from, and for a claim
 ABOUT that data it is the strongest evidence available. A component whose
@@ -1649,17 +2584,19 @@ The only question is SUFFICIENCY: does that evidence actually support that claim
 - Use confidence "low" rather than guessing when you cannot tell from what you
   were given. A low-confidence agreement is recorded as exactly that.
 """
-    return "\n".join([
+    prefix = "\n".join([
         "You are auditing whether claims about a codebase are actually supported "
         "by the evidence attached to them.",
         "",
         contract,
-        "",
+    ])
+    user = "\n".join([
         "CLAIMS AND THEIR EVIDENCE:",
         json.dumps(digest, indent=2, default=str),
         "",
         "Return the JSON object now.",
     ])
+    return _cached_prompt(prefix, user)
 
 
 def build_substitution_prompt(description: str, candidates: list[dict]) -> str:
@@ -1682,13 +2619,14 @@ of the candidates. That is not a failure to answer: it is the finding. A
 description that fits several components is a description of none of them, and
 saying so is more useful than picking the most likely one.
 """
-    return "\n".join([
+    prefix = "\n".join([
         "Below is a description written about ONE component of a software system, "
         "and a list of candidate components it might be describing. Identify which "
         "one it describes.",
         "",
         contract,
-        "",
+    ])
+    user = "\n".join([
         "DESCRIPTION:",
         description,
         "",
@@ -1697,3 +2635,4 @@ saying so is more useful than picking the most likely one.
         "",
         "Return the JSON object now.",
     ])
+    return _cached_prompt(prefix, user)

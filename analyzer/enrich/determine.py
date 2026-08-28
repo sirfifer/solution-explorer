@@ -35,7 +35,12 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from .engine import _parse_json_object
-from .orientation import Criterion, CriterionVerdict, universal_criteria
+from .orientation import (
+    Criterion,
+    CriterionVerdict,
+    _collect_readme,
+    universal_criteria,
+)
 from .pipeline import PhaseResult, RunContext
 from .prompts import _cached_prompt
 from .workorder import WorkOrder, WorkOrderOutcome, make_descender, parse_work_orders
@@ -67,8 +72,20 @@ class IterationRound:
 
     @property
     def gained(self) -> bool:
-        """Did anything measurably change? Judgment does not get a vote here."""
-        return bool(self.measured_delta.get("changed"))
+        """Did any recorded state, tier, or independent quality measure improve?"""
+        if (
+            self.measured_delta.get("changed")
+            or self.measured_delta.get("rung_moves")
+            or self.measured_delta.get("payload_changes")
+        ):
+            return True
+        before = self.measured_delta.get("adjudication_disagreement_before")
+        after = self.measured_delta.get("adjudication_disagreement_after")
+        return (
+            isinstance(before, (int, float))
+            and isinstance(after, (int, float))
+            and after < before
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -94,6 +111,7 @@ class DeterminationOutcome:
     pending_orders: list[WorkOrder] = field(default_factory=list)
     rejected_orders: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    run_analysis: dict = field(default_factory=dict)
 
     def work_order_dicts(self) -> list[dict]:
         out = []
@@ -167,17 +185,19 @@ def evaluate_universal(
 
     if criterion.id == "u3":
         gaps = census.honest_gaps
+        generic_reason = "no answer was produced for a required question"
         without_reason = [
-            s.target_id for s in gaps
-            if not any((f.note or "").strip() for f in s.failed)
+            (s.target_id, f.question) for s in gaps for f in s.failed
+            if not (f.note or "").strip()
+            or (f.note or "").strip().lower() == generic_reason
         ]
         verdict.evidence = [f"{len(gaps)} honest gap(s)"]
         verdict.verdict = "met" if not without_reason else "unmet"
         verdict.reasoning = (
             f"all {len(gaps)} honest gap(s) carry a reason a reader can act on"
             if not without_reason
-            else f"{len(without_reason)} honest gap(s) carry no reason, which is a "
-            "silence dressed as a disclosure"
+            else f"{len(without_reason)} honest-gap question(s) carry no specific "
+            "reason, which is silence dressed as a disclosure"
         )
         return verdict
 
@@ -205,6 +225,20 @@ supports a reader doing, and what it does not.",
      "expected_effect": "form|truth|utility: what should measurably move",
      "budget": {"max_cost_usd": 1.0, "max_targets": 8}}
   ],
+  "run_analysis": {
+    "summary": "two to four sentences about how the run worked, not a restatement of the map",
+    "deterministic_transfers": [
+      {"finding": "what model work may be mechanically derivable",
+       "basis": "the measured parser-first or failure evidence",
+       "validation": "the test needed before moving it"}
+    ],
+    "improvements": [
+      {"area": "context|prompt|routing|parser|adjudication|synthesis|operations",
+       "recommendation": "a concrete change worth evaluating",
+       "basis": "the measured run evidence that motivated it"}
+    ],
+    "watch_next_run": ["a specific quality or efficiency signal to compare"]
+  },
   "improvement_target": "if another round should run, the ONE thing it should \
 change, stated so that afterwards anyone could tell whether it happened"
 }
@@ -218,10 +252,26 @@ the limitation stated in your reasoning.
 Answer every criterion you were given, including the ones you would rather not.
 "unknown" is a legitimate verdict when the census cannot settle it, and is far
 better than a confident "met" that nothing supports.
+Before proposing general polish, cover every subject criterion you mark
+"unmet" or "unknown". If changing in-census enrichment claims could settle it,
+issue an executable work order naming the exact component/relationship IDs and
+claim questions that must change. An aggregate disagreement rate below its gate
+does not excuse a known criterion gap. If enrichment cannot settle it, name the
+deterministic or external blocker in run_analysis rather than buying another
+identical pass.
 
 Work from what you are given below. Do not ask for a re-read of the components:
 the census is the record of what was established about them, and it is what you
 are judging.
+
+The run_analysis is the learning channel, not filler. Use only measurements in
+the operations digest and findings in the supplied evidence. Empty arrays are
+correct when the run established no recommendation. Never propose moving an
+interpretive judgment to deterministic code merely because it was expensive;
+name a transfer only when a parser-first finding or repeatable mechanical rule
+supports it. Keep at most five non-duplicate entries in each list. The complete
+ledger remains authoritative; your job is to explain what its measurements mean
+and what should be tested next.
 
 A work order can repair or sharpen enrichment claims for its scoped components
 and relationships. It cannot change parser facts or the independent identity,
@@ -241,6 +291,9 @@ def build_determination_prompt(
     forced_round: bool,
     rounds_so_far: list[dict],
     budget_note: str,
+    mechanical_map: Optional[dict] = None,
+    scope_note: Optional[str] = None,
+    operations: Optional[dict] = None,
 ) -> str:
     # The prompt splits at the stable/variable seam. Everything identical
     # across a run's determination calls (instructions, contract, brief,
@@ -262,12 +315,21 @@ def build_determination_prompt(
     ]
     if brief:
         prefix_parts += ["THE SUBJECT BRIEF:", json.dumps(brief, indent=2, default=str), ""]
+    if scope_note:
+        prefix_parts += ["RUN SCOPE:", scope_note, ""]
     prefix_parts += [
         "THE CRITERIA YOU MUST ANSWER (set by the orientation pass before any "
         "enrichment ran, so they are not shaped by what happened to be easy):",
         json.dumps([c.to_dict() for c in criteria], indent=2, default=str),
         "",
     ]
+    if mechanical_map:
+        prefix_parts += [
+            "THE MECHANICAL MAP INVENTORY (parser-owned evidence for criteria "
+            "about coverage, language, type, ports, and declared edges):",
+            json.dumps(mechanical_map, separators=(",", ":"), default=str),
+            "",
+        ]
     if synthesis:
         prefix_parts += [
             "THE STORY AND THE LENSES:",
@@ -287,6 +349,16 @@ def build_determination_prompt(
         tail_parts += [
             "WHAT INDEPENDENT ADJUDICATION FOUND:",
             json.dumps(adjudication, separators=(",", ":"), default=str),
+            "",
+        ]
+    if operations:
+        # This digest changes as repair rounds add calls. It belongs in the
+        # uncached tail. The stable contract above tells Fable how to consume it;
+        # the raw append-only ledger remains in the final report for audit.
+        tail_parts += [
+            "MEASURED RUN OPERATIONS THROUGH THE PREVIOUS PHASE (the final "
+            "report mechanically adds this determination call and its audit):",
+            json.dumps(operations, separators=(",", ":"), default=str),
             "",
         ]
     if forced_round:
@@ -309,6 +381,144 @@ def build_determination_prompt(
         ]
     tail_parts += [budget_note, "", "Return the JSON object now."]
     return _cached_prompt("\n".join(prefix_parts), "\n".join(tail_parts))
+
+
+def _operations_digest(ctx: RunContext, ladder: Any = None) -> dict:
+    """Compact measured inputs for Fable's exit analysis.
+
+    P5 cannot analyze logistics it never sees. Conversely, replaying the full
+    ledger in its prompt would rebuild the output-waste problem. This digest
+    carries exact totals and phase/model buckets, plus a bounded sample of
+    distinct parser-first capability cards. The final report retains every raw
+    row and every card, so sampling here never destroys the audit record.
+    """
+    rows = list(ctx.ledger or [])
+
+    def bucketed(field: str) -> list[dict]:
+        buckets: dict[str, dict] = {}
+        for row in rows:
+            key = str(getattr(row, field, None) or "unknown")
+            bucket = buckets.setdefault(key, {
+                field: key, "calls": 0, "targets": 0, "tokens_in": 0,
+                "tokens_cached": 0, "tokens_cache_write": 0,
+                "tokens_out": 0, "response_bytes": 0, "cost_usd": 0.0,
+                "wall_seconds": 0.0, "retries": 0, "failures": 0,
+            })
+            bucket["calls"] += 1
+            bucket["targets"] += int(row.targets or 0)
+            bucket["tokens_in"] += int(row.tokens_in or 0)
+            bucket["tokens_cached"] += int(row.tokens_cached or 0)
+            bucket["tokens_cache_write"] += int(row.tokens_cache_write or 0)
+            bucket["tokens_out"] += int(row.tokens_out or 0)
+            bucket["response_bytes"] += int(row.response_bytes or 0)
+            bucket["cost_usd"] += float(row.cost_usd or 0.0)
+            bucket["wall_seconds"] += float(row.wall_seconds or 0.0)
+            bucket["retries"] += int(row.retries or 0)
+            bucket["failures"] += int(not row.ok)
+        for bucket in buckets.values():
+            bucket["cost_usd"] = round(bucket["cost_usd"], 6)
+            bucket["wall_seconds"] = round(bucket["wall_seconds"], 3)
+        return [buckets[key] for key in sorted(buckets)]
+
+    totals = {
+        "calls": len(rows),
+        "targets": sum(int(row.targets or 0) for row in rows),
+        "tokens_in": sum(int(row.tokens_in or 0) for row in rows),
+        "tokens_cached": sum(int(row.tokens_cached or 0) for row in rows),
+        "tokens_cache_write": sum(int(row.tokens_cache_write or 0) for row in rows),
+        "tokens_out": sum(int(row.tokens_out or 0) for row in rows),
+        "response_bytes": sum(int(row.response_bytes or 0) for row in rows),
+        "cost_usd": round(sum(float(row.cost_usd or 0.0) for row in rows), 6),
+        "wall_seconds": round(sum(float(row.wall_seconds or 0.0) for row in rows), 3),
+        "retries": sum(int(row.retries or 0) for row in rows),
+        "failures": sum(int(not row.ok) for row in rows),
+        "output_budget_violations": sum(row.output_budget_ok is False for row in rows),
+    }
+    writes = totals["tokens_cache_write"]
+    totals["cache_read_write_ratio"] = round(
+        totals["tokens_cached"] / writes, 4
+    ) if writes else None
+
+    trigger_counts: dict[str, int] = {}
+    climbed: set[tuple[str, str]] = set()
+    if ladder is not None:
+        for event in list(getattr(ladder, "transitions", None) or []):
+            if event.get("state") not in ("escalate", "honest_gap"):
+                continue
+            climbed.add((str(event.get("target_kind")), str(event.get("target_id"))))
+            for failed in event.get("failed") or []:
+                trigger = str(failed.get("trigger") or "unknown")
+                trigger_counts[trigger] = trigger_counts.get(trigger, 0) + 1
+
+    distinct_findings: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    if ladder is not None:
+        for item in list(getattr(ladder, "parser_findings", None) or []):
+            key = (
+                str(item.get("target_kind") or ""),
+                str(item.get("target_id") or ""),
+                str(item.get("finding") or ""),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            distinct_findings.append({
+                "target_kind": key[0], "target_id": key[1], "finding": key[2],
+            })
+
+    return {
+        "totals": totals,
+        "by_phase": bucketed("phase"),
+        "by_model": bucketed("model"),
+        "escalation": {
+            "climbed_targets": len(climbed),
+            "failure_records_by_trigger": dict(sorted(trigger_counts.items())),
+        },
+        "parser_first": {
+            "distinct_count": len(distinct_findings),
+            "examples": distinct_findings[:40],
+            "examples_are_bounded": len(distinct_findings) > 40,
+        },
+    }
+
+
+def _normalize_run_analysis(value: Any) -> dict:
+    """Keep the learning channel useful, bounded and structurally predictable."""
+    value = value if isinstance(value, dict) else {}
+
+    def text_value(raw: Any, cap: int) -> str:
+        return str(raw or "").strip()[:cap]
+
+    def object_list(name: str, fields: tuple[str, ...]) -> list[dict]:
+        out = []
+        for item in value.get(name) or []:
+            if not isinstance(item, dict):
+                continue
+            normalized = {
+                field: text_value(item.get(field), 800)
+                for field in fields if text_value(item.get(field), 800)
+            }
+            if normalized:
+                out.append(normalized)
+            if len(out) == 5:
+                break
+        return out
+
+    watch = [
+        text_value(item, 800) for item in (value.get("watch_next_run") or [])
+        if text_value(item, 800)
+    ][:5]
+    return {
+        "status": "model-analyzed" if value else "missing",
+        "summary": text_value(value.get("summary"), 2_400),
+        "deterministic_transfers": object_list(
+            "deterministic_transfers", ("finding", "basis", "validation")
+        ),
+        "improvements": object_list(
+            "improvements", ("area", "recommendation", "basis")
+        ),
+        "watch_next_run": watch,
+    }
 
 
 def _rounds_digest(rounds: list[dict]) -> list[dict]:
@@ -394,6 +604,23 @@ def _adjudication_digest(adjudication: Optional[dict]) -> Optional[dict]:
         item for item in (adjudication.get("substitution_checks") or [])
         if isinstance(item, dict) and item.get("confirmed_failure")
     ][:20]
+    # P5 judges subject criteria against what the map actually says, not only
+    # against failures. Canary 13 had a supported API claim explicitly naming
+    # its Postgres driver, but the former failure-only digest hid that claim and
+    # forced the corresponding criterion to UNKNOWN. The spot-check quota
+    # already bounds this collection; cap each claim and the total as a second
+    # deterministic guard against rebuilding the product inside the report.
+    checked_claims = [
+        {
+            "target_kind": item.get("target_kind"),
+            "target_id": item.get("target_id"),
+            "question": item.get("question"),
+            "claim": str(item.get("claim") or "")[:400],
+            "supported": bool(item.get("supported")),
+        }
+        for item in (adjudication.get("spot_checks") or [])
+        if isinstance(item, dict)
+    ][:200]
     return {
         "checked": adjudication.get("checked"),
         "unsupported": adjudication.get("unsupported"),
@@ -404,6 +631,7 @@ def _adjudication_digest(adjudication: Optional[dict]) -> Optional[dict]:
             for name in ("identity", "edges", "findings")
         },
         "unsupported_examples": unsupported,
+        "checked_claims": checked_claims,
         "substitution_failures": substitutions,
     }
 
@@ -423,6 +651,71 @@ def _synthesis_digest(synthesis: Optional[dict]) -> Optional[dict]:
     if not isinstance(synthesis, dict):
         return None
     return dict(synthesis)
+
+
+def _mechanical_map_digest(ctx: RunContext, ladder=None) -> dict:
+    """Exact, compact evidence for subject criteria that the census cannot answer.
+
+    The census intentionally says whether enrichment grounded; it does not carry
+    parser identity or an inventory roll-call.  P1 is allowed to set bars about
+    those facts, so withholding them from P5 forced the judge to return unknown
+    even when the deterministic map already knew the answer.
+    """
+    attempted = set(ladder.states) if ladder is not None else None
+    component_scope = (
+        {target_id for kind, target_id in attempted if kind == "component"}
+        if attempted is not None else None
+    )
+    relationship_scope = (
+        {target_id for kind, target_id in attempted if kind == "relationship"}
+        if attempted is not None else None
+    )
+    components: list[dict] = []
+
+    def walk(items: list) -> None:
+        for component in items:
+            if component_scope is None or component.get("id") in component_scope:
+                components.append({
+                    key: component.get(key)
+                    for key in ("id", "name", "type", "language", "framework", "port")
+                    if component.get(key) not in (None, "")
+                })
+            walk(component.get("children") or [])
+
+    walk(ctx.arch.get("components") or [])
+    relationships = [
+        {
+            key: row.get(key)
+            for key in ("source", "target", "type", "protocol", "port")
+            if row.get(key) not in (None, "")
+        }
+        for row in (ctx.arch.get("relationships") or [])
+        if relationship_scope is None or (
+            f"{row.get('source', '')}|{row.get('target', '')}|{row.get('type', '')}"
+            in relationship_scope
+        )
+    ]
+    language_counts: dict[str, int] = {}
+    type_counts: dict[str, int] = {}
+    for component in components:
+        language = str(component.get("language") or "").strip().lower()
+        component_type = str(component.get("type") or "").strip().lower()
+        if language:
+            language_counts[language] = language_counts.get(language, 0) + 1
+        if component_type:
+            type_counts[component_type] = type_counts.get(component_type, 0) + 1
+    return {
+        "scope": "attempted-targets" if attempted is not None else "full-repository",
+        "stats": {
+            "total_components": len(components),
+            "total_relationships": len(relationships),
+            "languages": language_counts,
+            "component_types": type_counts,
+        },
+        "components": components,
+        "relationships": relationships,
+        "readme": _collect_readme(ctx.arch, ctx.root)[:6_000],
+    }
 
 
 # --- the phase -----------------------------------------------------------------
@@ -463,10 +756,18 @@ class DeterminationPhase:
             forced_round=policy.min_rounds > 0,
         )
         self._merge_verdicts(outcome, criteria, mechanical, judged)
+        self._ensure_adjudication_repair(outcome, adjudication, ctx)
 
         while round_number < policy.max_rounds:
             forced = round_number < policy.min_rounds
-            wants_more = outcome.verdict == "not-done"
+            # A model saying "done" cannot end the loop while one of the
+            # predeclared criteria is still unmet or unknown. If it supplied a
+            # repair order, use the remaining bounded round; if it did not,
+            # _run_round records that no executable path was named and settle()
+            # truthfully qualifies the final verdict.
+            wants_more = outcome.verdict == "not-done" or any(
+                verdict.verdict != "met" for verdict in outcome.verdicts
+            )
             if not forced and not wants_more:
                 break
             if not ctx.budget.under():
@@ -475,6 +776,10 @@ class DeterminationPhase:
                 )
                 break
             round_number += 1
+            disagreement_before = (
+                adjudication.disagreement_rate()
+                if adjudication is not None else None
+            )
             round_ = self._run_round(
                 ctx, outcome, ladder, census, judged, number=round_number, forced=forced
             )
@@ -500,6 +805,26 @@ class DeterminationPhase:
                     + recheck_cost,
                     6,
                 )
+                disagreement_after = adjudication.disagreement_rate()
+                if disagreement_before is not None and disagreement_after is not None:
+                    round_.measured_delta["adjudication_disagreement_before"] = round(
+                        disagreement_before, 6
+                    )
+                    round_.measured_delta["adjudication_disagreement_after"] = round(
+                        disagreement_after, 6
+                    )
+                # _run_round records its no-gain note before the independent
+                # recheck exists. Reconcile that provisional statement now that
+                # the quality instrument has reported.
+                if round_.gained:
+                    no_gain = "This round produced no measurable gain."
+                    round_.notes = [
+                        note for note in round_.notes if not note.startswith(no_gain)
+                    ]
+                    outcome.notes = [
+                        note for note in outcome.notes
+                        if note != f"round {round_number} produced no measurable change to the census"
+                    ]
             census = self._census(ctx, ladder=ladder)
             if ladder is not None:
                 ladder.census = census
@@ -510,6 +835,78 @@ class DeterminationPhase:
                 rounds_so_far=[r.to_dict() for r in outcome.rounds],
             )
             self._merge_verdicts(outcome, criteria, mechanical, judged)
+            self._ensure_adjudication_repair(outcome, adjudication, ctx)
+
+        # The round bound limits generative iteration; it must not authorize
+        # publication of claims the final independent check has already found
+        # unsupported. Quarantine only those exact question/target pairs,
+        # remeasure the resulting map, and ask for the actual final verdict.
+        # This closes the live canary defect where a repair order created after
+        # round 2 sat unexecuted while eight known-bad clauses remained visible.
+        remaining_unsupported = list(
+            getattr(adjudication, "unsupported", []) or []
+        ) if adjudication is not None else []
+        if remaining_unsupported and ladder is not None:
+            from .adjudicate import AdjudicationPhase
+            from .ladder import LadderPhase
+
+            quarantined_targets: set[str] = set()
+            quarantined_claims = 0
+            seen_rejections: set[tuple[tuple[str, str, str, str], ...]] = set()
+            # Rechecking a mixed honest-gap item can expose a different,
+            # previously sampled sibling claim after the first rejected claim
+            # is removed.  Iterate to a fixed point: every pass strictly
+            # removes at least one answered atom, so this is bounded by the
+            # finite contract rather than an arbitrary retry count.  Judge P5
+            # only once after the evidence surface is stable.
+            while remaining_unsupported:
+                fingerprint = tuple(sorted(
+                    (
+                        str(getattr(check, "target_kind", "") or ""),
+                        str(getattr(check, "target_id", "") or ""),
+                        str(getattr(check, "question", "") or ""),
+                        str(getattr(check, "claim", "") or ""),
+                    )
+                    for check in remaining_unsupported
+                ))
+                if fingerprint in seen_rejections:
+                    outcome.notes.append(
+                        "adjudication quarantine stopped because the identical "
+                        "rejection set recurred; completion remains gated"
+                    )
+                    break
+                seen_rejections.add(fingerprint)
+                quarantined = LadderPhase().quarantine_unsupported(
+                    ctx, ladder, remaining_unsupported
+                )
+                if not quarantined:
+                    break
+                quarantined_targets.update(quarantined)
+                quarantined_claims += len(remaining_unsupported)
+                adjudication = AdjudicationPhase().recheck(ctx, quarantined)
+                remaining_unsupported = list(
+                    getattr(adjudication, "unsupported", []) or []
+                )
+            if quarantined_targets:
+                outcome.notes.append(
+                    "after the bounded improvement rounds, deterministically "
+                    f"quarantined {quarantined_claims} independently "
+                    f"unsupported claim(s) on {len(quarantined_targets)} target(s) "
+                    "to an adjudication fixed point; "
+                    "supported sibling answers were preserved"
+                )
+                census = self._census(ctx, ladder=ladder)
+                ladder.census = census
+                mechanical = self._mechanical(criteria, census, adjudication)
+                judged = self._judge(
+                    ctx, outcome, criteria, census, adjudication, synthesis, brief,
+                    forced_round=False,
+                    rounds_so_far=[r.to_dict() for r in outcome.rounds],
+                )
+                self._merge_verdicts(outcome, criteria, mechanical, judged)
+                # A final judgment may describe future improvement, but there is
+                # no hidden executable order after the declared round bound.
+                outcome.pending_orders = []
 
         self._settle(outcome, census)
         return PhaseResult(
@@ -585,16 +982,36 @@ class DeterminationPhase:
             forced_round=forced_round,
             rounds_so_far=rounds_so_far or [],
             budget_note=budget_note,
+            mechanical_map=_mechanical_map_digest(
+                ctx, (ctx.phase_data("p2_ladder") or {}).get("ladder")
+            ),
+            operations=_operations_digest(
+                ctx, (ctx.phase_data("p2_ladder") or {}).get("ladder")
+            ),
+            scope_note=(
+                "This is a bounded validation canary over only the selected "
+                f"{ctx.max_partitions} most important planned partition(s). Judge "
+                "whether that attempted slice meets the full quality bar. Do not "
+                "fail it merely because unselected code was intentionally not "
+                "attempted, and do not claim the full repository is complete."
+                if ctx.max_partitions is not None
+                else None
+            ),
         )
         invoker = ctx.invoker(
             "p5_determination", phase=self.name, targets=1,
-            output_budget_bytes=12_000,
+            # The learning analysis is deliberately allowed meaningful room.
+            # Canary 16's determination used 5.6k bytes before this channel;
+            # 20k is a runaway tripwire, not a target or a terse-answer dial.
+            output_budget_bytes=20_000,
         )
         result = invoker(prompt)
         if not result.ok:
             outcome.notes.append(f"determination did not return: {result.error}")
             return {}
-        obj = _parse_json_object(result.text)
+        obj = _parse_json_object(
+            result.text, expect_keys=("verdict", "criteria", "run_analysis")
+        )
         if obj is None:
             outcome.notes.append("determination returned unparseable text")
             return {}
@@ -602,6 +1019,7 @@ class DeterminationPhase:
         if verdict in ("done", "not-done"):
             outcome.verdict = verdict
         outcome.reasoning = str(obj.get("reasoning") or "").strip()
+        outcome.run_analysis = _normalize_run_analysis(obj.get("run_analysis"))
         orders, rejected = parse_work_orders(
             obj.get("work_orders"), issued_by="P5", cap=ctx.policy.max_work_orders
         )
@@ -647,6 +1065,86 @@ class DeterminationPhase:
 
     # --- rounds ----------------------------------------------------------------
 
+    def _ensure_adjudication_repair(
+        self, outcome: DeterminationOutcome, adjudication, ctx: RunContext
+    ) -> None:
+        """Make independently rejected claims part of the next repair order.
+
+        Independent adjudication has already identified exact target/question
+        pairs whose claims outrun their citations. Narrowing those claims is an
+        executable enrichment repair, not an open-ended judgment. The model may
+        choose a better order, but it cannot omit a named failed claim from a
+        forced round. If it already supplied an order, augment that order rather
+        than purchasing a second pass over the same target.
+        """
+        if adjudication is None:
+            return
+        unsupported = list(getattr(adjudication, "unsupported", []) or [])
+        if not unsupported:
+            return
+        grouped: dict[str, list[str]] = {}
+        for check in unsupported:
+            target_id = str(getattr(check, "target_id", "") or "")
+            question = str(getattr(check, "question", "") or "")
+            if target_id and question:
+                grouped.setdefault(target_id, []).append(question)
+        scope = sorted(grouped)[: max(1, ctx.policy.max_work_orders * 8)]
+        if not scope:
+            return
+        pairs = ", ".join(
+            f"{target}:" + "/".join(sorted(set(grouped[target])))
+            for target in scope
+        )
+        repair_lens = (
+                "Repair only the independently unsupported claims. Narrow each "
+                "claim until every clause is carried by this target's supplied "
+                "evidence; do not add replacement detail. The replacement must "
+                "not repeat any phrase the independent judge explicitly named "
+                "unsupported unless you attach the exact missing evidence. For "
+                "an unsupported "
+                "negative or uniqueness clause (no, none, only, sole), remove "
+                "that clause unless a supplied deterministic fact directly "
+                f"establishes it. Targets/questions: {pairs}"
+        )
+        repair_criteria = (
+                "Re-adjudication marks every named target/question supported, "
+                "with no regression in the other established answers."
+        )
+        repair_effect = (
+                "truth: the unsupported-claim count for the scoped targets "
+                "decreases to zero"
+        )
+        if outcome.pending_orders:
+            order = outcome.pending_orders[0]
+            order.scope = sorted(set(order.scope) | set(scope))
+            order.lens = order.lens.rstrip() + " " + repair_lens
+            order.criteria = order.criteria.rstrip() + " " + repair_criteria
+            order.expected_effect = repair_effect
+            order.budget = {
+                **order.budget,
+                "max_cost_usd": max(order.max_cost_usd, 2.0),
+                "max_targets": len(order.scope),
+            }
+            note = (
+                "P5's work order omitted independently unsupported claims; "
+                "expanded its first-round scope to include every named failure"
+            )
+            if note not in outcome.notes:
+                outcome.notes.append(note)
+        else:
+            outcome.pending_orders = [WorkOrder(
+                scope=scope,
+                lens=repair_lens,
+                criteria=repair_criteria,
+                expected_effect=repair_effect,
+                budget={"max_cost_usd": 2.0, "max_targets": len(scope)},
+                issued_by="P5-deterministic-repair",
+            )]
+            outcome.notes.append(
+                "P5 named no executable repair despite independently unsupported "
+                "claims; issued one deterministic claim-narrowing work order"
+            )
+
     def _run_round(
         self, ctx: RunContext, outcome: DeterminationOutcome, ladder,
         census, judged: dict, *, number: int, forced: bool,
@@ -683,11 +1181,10 @@ class DeterminationPhase:
         round_.ran = any(o.executed for o in round_.outcomes)
         after = self._state_snapshot(ladder)
 
-        # Compare the contract STATE, not the terminal key. An item re-grounded
-        # by a work order changes rung, and counting that as a measured gain
-        # would let a round that improved nothing claim it improved something,
-        # which is precisely the false positive the no-gain record exists to
-        # prevent.
+        # State and rung are distinct instruments. A state transition measures
+        # completion/truth posture; a rung move measures that the same terminal
+        # answer was regenerated at a different tier. The latter is a real,
+        # reportable economics change, not a perceived prose improvement.
         changed = {
             key: {"before": before.get(key, {}).get("state"),
                   "after": value.get("state")}
@@ -699,11 +1196,17 @@ class DeterminationPhase:
             if before.get(key, {}).get("state") == value.get("state")
             and before.get(key, {}).get("rung") != value.get("rung")
         )
+        payload_changes = sorted({
+            target_id
+            for result in round_.outcomes
+            for target_id in result.payload_changes
+        })
         round_.measured_delta = {
             "changed": len(changed),
             "targets": sorted(changed),
             "state_changes": changed,
             "rung_moves": rung_moves,
+            "payload_changes": payload_changes,
             "grounded_before": sum(
                 1 for v in before.values() if v.get("state") == "grounded"
             ),
@@ -727,7 +1230,7 @@ class DeterminationPhase:
         return round_
 
     def _state_snapshot(self, ladder) -> dict:
-        """State and rung per target. Only the state decides whether a round gained."""
+        """State and rung per target, the two contract-side change instruments."""
         if ladder is None:
             return {}
         return {
@@ -739,7 +1242,27 @@ class DeterminationPhase:
 
     def _settle(self, outcome: DeterminationOutcome, census) -> None:
         """Reconcile the verdict with what the criteria and the rounds actually say."""
-        unmet = [v for v in outcome.verdicts if v.verdict == "unmet"]
+        unsettled = [v for v in outcome.verdicts if v.verdict != "met"]
+
+        # The predeclared criteria are the publication contract. Once a real
+        # improvement round has run and every criterion is met, a model may
+        # still be able to name another useful edit; that belongs in the exit
+        # learning channel, not in an endless refusal to finish. The live
+        # canary reached 9.7% disagreement (well inside u2's 20% gate), met all
+        # eight criteria, and nevertheless said not-done because six more
+        # sentences could be polished. Resolve that boundary deterministically
+        # while retaining its pending orders in the report as follow-up data.
+        if (
+            outcome.verdict == "not-done"
+            and not unsettled
+            and any(round_.ran for round_ in outcome.rounds)
+        ):
+            outcome.verdict = "done"
+            outcome.notes.append(
+                "verdict settled to 'done': every predeclared criterion is met "
+                "after a measured improvement round; additional executable "
+                "orders remain recorded as exit-learning opportunities"
+            )
 
         if outcome.verdict == "not-done":
             executable = any(r.ran for r in outcome.rounds) or outcome.pending_orders
@@ -751,11 +1274,15 @@ class DeterminationPhase:
                     "change the result, and a run cannot refuse to finish without "
                     "naming what would finish it"
                 )
-        if outcome.verdict == "done" and unmet:
+        if outcome.verdict == "done" and unsettled:
             outcome.verdict = "done-with-reservations"
             outcome.notes.append(
-                f"verdict qualified: {len(unmet)} criterion/criteria were not met "
-                + "(" + ", ".join(v.criterion_id for v in unmet) + ")"
+                f"verdict qualified: {len(unsettled)} criterion/criteria were "
+                "not conclusively met ("
+                + ", ".join(
+                    f"{v.criterion_id}:{v.verdict}" for v in unsettled
+                )
+                + ")"
             )
         if not outcome.reasoning:
             outcome.reasoning = (

@@ -273,6 +273,7 @@ class LedgerWatch:
         interval: float = 15.0,
         ps_fn=None,
         progress_path: Optional[Path] = None,
+        control_path: Optional[Path] = None,
     ) -> None:
         import threading
 
@@ -284,6 +285,11 @@ class LedgerWatch:
             Path(progress_path)
             if progress_path is not None
             else Path(ledger_path).with_name("progress.jsonl")
+        )
+        self._control = (
+            Path(control_path)
+            if control_path is not None
+            else Path(ledger_path).with_name("control.json")
         )
         self._pid = child_pid
         self._interval = interval
@@ -343,6 +349,7 @@ class LedgerWatch:
             self.last_phase = f"{phase}/{rung}" if rung else phase
 
         self._read_progress()
+        control = self._read_control()
         in_flight = self._ps_fn()
 
         if new_rows:
@@ -365,6 +372,21 @@ class LedgerWatch:
             self._run.record["completed"] = min(self.targets_done, self.targets_planned)
 
         parts = []
+        if control:
+            # The full packet remains on the record for decision support and
+            # resume/cancel actions. The one-line current state leads the live
+            # status so a paused run can never look merely idle or stalled.
+            self._run.record["enrichment_control"] = {
+                **control,
+                "path": str(self._control),
+            }
+            if control.get("state") == "paused":
+                parts.append(
+                    "PAUSED for owner decision: "
+                    + str(control.get("reason") or "operator checkpoint")
+                )
+            elif control.get("state") == "cancelled":
+                parts.append("CANCELLED by owner")
         # A phase with no item-level story still reports itself, with how long
         # it has been working, so silence is never mistaken for a stall.
         now = time.time()
@@ -413,6 +435,13 @@ class LedgerWatch:
             parts.append("no model call in flight")
         self._run.record["current"] = " · ".join(parts)
         self._run._flush()
+
+    def _read_control(self) -> dict:
+        try:
+            value = json.loads(self._control.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError):
+            return {}
+        return value if isinstance(value, dict) else {}
 
     def _read_progress(self) -> None:
         """Fold the engine's item-level events into the watcher's counters."""

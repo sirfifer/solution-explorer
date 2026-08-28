@@ -478,7 +478,7 @@ def evaluate(
         if _parser_settles(question, facts):
             continue
         answer = parsed.get(question)
-        if answer is None or not answer.claim:
+        if answer is None:
             failed.append(
                 FailedQuestion(
                     question,
@@ -487,6 +487,12 @@ def evaluate(
                 )
             )
             continue
+        # An explicit uncertain/dropped answer intentionally carries no claim:
+        # its reason is the result.  Check status before the answered-claim
+        # shape or the evaluator replaces a useful, specific reason with the
+        # generic "no answer" fallback.  That ordering defect made the stored
+        # answer and census disagree and erased the learning value of terminal
+        # gaps during the live UnaMentis canary.
         if answer.status == "dropped":
             failed.append(
                 FailedQuestion(
@@ -503,6 +509,15 @@ def evaluate(
                     "E2",
                     answer.reason or "the tier marked this answer uncertain",
                     lacked=answer.lacked,
+                )
+            )
+            continue
+        if not answer.claim:
+            failed.append(
+                FailedQuestion(
+                    question,
+                    "E1",
+                    "no answer was produced for a required question",
                 )
             )
             continue
@@ -530,7 +545,7 @@ def evaluate(
         # exclusively component-local.
         uniqueness_claim = re.search(
             r"\b(?:(?:the|its|fixture's|system's|suite's)\s+"
-            r"(?:only|sole|unique|single)|(?:only|sole|unique|single)\s+"
+            r"(?:only|sole|unique|single|one)|(?:only|sole|unique|single|one)\s+"
             r"(?:\w+[\s/-]+){0,3}(?:component|representative|sample|target|"
             r"file|edge|relationship|capability|endpoint|source|route|type))\b",
             answer.claim,
@@ -542,11 +557,11 @@ def evaluate(
                 if isinstance(item, dict) and item.get("scope") == "global"
             ]
             local_singletons = {
-                "file_count": r"\b(?:only|sole|single)\s+(?:source\s+)?files?\b",
-                "inbound_edges": r"\b(?:only|sole|single)\s+inbound\s+(?:edge|relationship)\b",
-                "outbound_edges": r"\b(?:only|sole|single)\s+outbound\s+(?:edge|relationship)\b",
-                "capability_count": r"\b(?:only|sole|single)\s+(?:route|capability|endpoint)\b",
-                "data_entity_count": r"\b(?:only|sole|single)\s+data\s+entit(?:y|ies)\b",
+                "file_count": r"\b(?:only|sole|single|one)\s+(?:source\s+)?files?\b",
+                "inbound_edges": r"\b(?:only|sole|single|one)\s+inbound\s+(?:edge|relationship)\b",
+                "outbound_edges": r"\b(?:only|sole|single|one)\s+outbound\s+(?:edge|relationship)\b",
+                "capability_count": r"\b(?:only|sole|single|one)\s+(?:route|capability|endpoint)\b",
+                "data_entity_count": r"\b(?:only|sole|single|one)\s+data\s+entit(?:y|ies)\b",
             }
             cited_fields = {
                 str(item.get("field") or "") for item in answer.evidence

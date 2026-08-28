@@ -139,6 +139,15 @@ def test_an_entry_without_the_block_runs_the_classic_pass_untouched(
     assert "--update" in cmd
 
 
+def test_registry_operator_checkpoint_reaches_the_ladder_cli(
+    ds, monkeypatch, tmp_path
+):
+    corpus = ds.load_registry("vscode")
+    corpus["budget"]["pause_at_cost_usd"] = 75.0
+    cmd = _capture_cmd(ds, monkeypatch, corpus, tmp_path)
+    assert cmd[cmd.index("--pause-at-cost-usd") + 1] == "75.0"
+
+
 # --- the gate reads the truth instrument ----------------------------------------
 
 

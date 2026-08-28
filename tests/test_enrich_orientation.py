@@ -161,6 +161,30 @@ def test_the_prompt_demands_criteria_that_could_fail(world):
     assert "write bars that could FAIL" in prompt
     assert '"The map is accurate" is not a criterion' in prompt
     assert "how_to_check" in prompt
+    assert "Do not bake inventory counts into a criterion" in prompt
+    assert "test of whether the MAP faithfully explains" in prompt
+    assert "reference-recording/configuration surface" in prompt
+
+
+def test_parser_owned_inventory_counts_are_not_promoted_to_release_gates(world):
+    payload = dict(GOOD_BRIEF)
+    payload["criteria"] = [{
+        "id": "s1",
+        "statement": (
+            "Every one of the 8 components and 11 languages appears in the map, "
+            "and port 8000 is named."
+        ),
+        "why": "coverage",
+        "how_to_check": "use the current mechanical inventory",
+    }]
+    result, _ = _orient(world, CannedOrientation(payload))
+
+    criterion = result.data["brief"].subject_criteria[0]
+    assert criterion.statement == (
+        "Every component and language appears in the map, and port 8000 is named."
+    )
+    assert any("parser-owned inventory counts" in note
+               for note in result.data["brief"].notes)
 
 
 def test_the_brief_is_stored_in_the_store_and_beside_the_run_report(world):
@@ -197,6 +221,31 @@ def test_orientation_sees_the_ranking_and_says_when_activity_is_missing(world):
     # The fixture has no git history, and the prompt says so rather than letting
     # the ranking read as if activity had been considered.
     assert "no git activity data" in prompt
+
+
+def test_bounded_canary_sets_slice_criteria_without_weakening_quality(world):
+    invoker = CannedOrientation(GOOD_BRIEF)
+    config = LadderConfig(
+        store_path=world["db"], root=POLYGLOT, run_dir=world["run_dir"],
+        policy=LadderPolicy(), max_partitions=1,
+    )
+    ctx = build_run_context(
+        config, invoker_factory=lambda spec: invoker, clock=FIXED_CLOCK
+    )
+    try:
+        expected_scope = ctx.attempted_scope()
+        run_pipeline(ctx, [OrientationPhase()])
+    finally:
+        ctx.store.close()
+
+    prompt = invoker.prompts[0]
+    assert "bounded validation canary" in prompt
+    assert "selected slice, not full-system coverage" in prompt
+    assert "Do not weaken evidence, grounding, specificity, or usefulness" in prompt
+    assert "EXACT SELECTED SLICE" in prompt
+    assert "reserve part of its sample" in prompt
+    for target_id in (*expected_scope["components"], *expected_scope["relationships"]):
+        assert target_id in prompt
 
 
 def test_idiom_warnings_reach_the_rung_that_has_to_read_the_code(world):

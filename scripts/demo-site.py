@@ -677,6 +677,9 @@ def run_enhance(
         wall = corpus.get("budget", {}).get("max_wall_minutes")
         if wall is not None:
             cmd += ["--max-wall-minutes", str(wall)]
+        pause_at = corpus.get("budget", {}).get("pause_at_cost_usd")
+        if pause_at is not None:
+            cmd += ["--pause-at-cost-usd", str(pause_at)]
         if enrichment.get("max_parallel") is not None:
             cmd += ["--max-parallel", str(enrichment["max_parallel"])]
         if enrichment.get("invoke_timeout_seconds") is not None:
@@ -690,6 +693,12 @@ def run_enhance(
             cmd += ["--min-rounds", str(iteration["min_rounds"])]
         if iteration.get("max_rounds") is not None:
             cmd += ["--max-rounds", str(iteration["max_rounds"])]
+        if enrichment.get("spot_check_fraction") is not None:
+            cmd += [
+                "--spot-check-fraction", str(enrichment["spot_check_fraction"])
+            ]
+        if enrichment.get("max_spot_checks") is not None:
+            cmd += ["--max-spot-checks", str(enrichment["max_spot_checks"])]
 
     if max_partitions is not None:
         cmd += ["--max-partitions", str(max_partitions)]

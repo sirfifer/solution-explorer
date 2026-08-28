@@ -113,7 +113,7 @@ def test_every_tool_has_a_json_schema_and_json_flag():
 def test_overview_counts_and_narrative(ctx):
     r = call_tool(ctx, "se_overview", {})
     d = r.data
-    assert d["components"]["total"] == 8
+    assert d["components"]["total"] == 10
     assert d["capabilities"]["by_kind"].get("api") == 1
     # D4: the five orphan findings are reframed to `unreferenced`. The two
     # weak-language (rust/ruby) components stay VISIBLE but heavily de-ranked

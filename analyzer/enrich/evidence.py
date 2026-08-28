@@ -72,7 +72,9 @@ CITABLE_FACTS = (
     "system_relationship_count", "system_capability_count",
     "system_capability_component_count", "system_max_inbound_edges",
     "system_max_outbound_edges", "files", "edges", "config_files",
-    "documentation",
+    "documentation", "subject_documentation", "child_components",
+    "peer_components", "descendant_edges",
+    "source_declarations", "source_references", "outbound_dependency_evidence",
 )
 
 

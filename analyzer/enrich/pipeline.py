@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 import time
 from collections.abc import Callable, Iterable, Sequence
@@ -172,6 +173,16 @@ class BudgetMeter:
     spent: float = 0.0
     charges: int = 0
     reserved: float = 0.0
+    # Optional operator checkpoint. Unlike ``ceiling``, this is deliberately
+    # resumable: reaching it persists a decision packet and blocks every NEW
+    # launch until the dashboard writes either ``running`` with a higher
+    # checkpoint or ``cancelled``. Calls already in flight finish and are
+    # banked. The distinction is important: a quality run must not be turned
+    # into a partial result merely because an estimate was a little low.
+    pause_at_usd: Optional[float] = None
+    control_path: Optional[Path] = None
+    control_poll_s: float = 0.5
+    _cancelled: bool = field(default=False, repr=False, compare=False)
     # The wall-clock ceiling, in seconds, with the same soft semantics as the
     # cost ceiling: work in flight when it is reached runs to completion, and
     # no NEW work launches. Configured via configure_wall because it needs the
@@ -194,6 +205,136 @@ class BudgetMeter:
         self.wall_ceiling_s = ceiling_s
         self._wall_timer = timer
         self._wall_started = timer() if ceiling_s is not None else None
+
+    def configure_control(
+        self,
+        path: Optional[Path],
+        pause_at_usd: Optional[float],
+        *,
+        poll_s: float = 0.5,
+    ) -> None:
+        """Create the persisted operator-control record for this run.
+
+        A missing path disables interactive control. ``pause_at_usd`` may be
+        omitted while retaining explicit dashboard cancel/pause controls.
+        """
+        self.control_path = Path(path) if path is not None else None
+        self.pause_at_usd = (
+            max(0.01, float(pause_at_usd))
+            if pause_at_usd is not None
+            else None
+        )
+        self.control_poll_s = max(0.01, float(poll_s))
+        if self.control_path is not None:
+            self.control_path.parent.mkdir(parents=True, exist_ok=True)
+            existing = self._control_snapshot()
+            if str(existing.get("state") or "") in {
+                "running", "paused", "cancelled"
+            }:
+                # A process restart is not an operator decision. Preserve the
+                # durable state and checkpoint exactly as the prior process
+                # left them, especially a pause awaiting human review.
+                persisted = existing.get("pause_at_usd")
+                if persisted is not None:
+                    try:
+                        self.pause_at_usd = max(0.01, float(persisted))
+                    except (TypeError, ValueError):
+                        pass
+                self._cancelled = existing.get("state") == "cancelled"
+                return
+            self._write_control(
+                state="running",
+                reason="operator checkpoint armed",
+                recommendation="No action required; the run is proceeding.",
+            )
+
+    def _control_snapshot(self) -> dict:
+        if self.control_path is None:
+            return {}
+        try:
+            value = json.loads(self.control_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError):
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    def _write_control(
+        self, *, state: str, reason: str, recommendation: str
+    ) -> None:
+        if self.control_path is None:
+            return
+        current = self._control_snapshot()
+        payload = {
+            "version": 1,
+            "state": state,
+            "reason": reason,
+            "recommendation": recommendation,
+            "pause_at_usd": self.pause_at_usd,
+            "spent_usd": round(self.spent, 6),
+            "reserved_usd": round(self.reserved, 6),
+            "completed_calls": self.charges,
+            "wall_elapsed_s": self.wall_elapsed_s(),
+            "actions": ["resume-with-new-checkpoint", "cancel"],
+            "revision": int(current.get("revision") or 0) + 1,
+            "updated_at": time.time(),
+        }
+        tmp = self.control_path.with_name(
+            f".{self.control_path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+        )
+        try:
+            tmp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            os.replace(tmp, self.control_path)
+        finally:
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _await_operator(self) -> bool:
+        """Apply persisted pause/cancel commands before a new launch.
+
+        This method is intentionally called by ``under``. Existing launch sites
+        already use that one gate, so a newly added phase cannot accidentally
+        bypass operator control. A pause blocks rather than returning false;
+        returning false would make the pipeline skip work and publish a partial
+        result, exactly the failure this control is designed to prevent.
+        """
+        if self.control_path is None:
+            return not self._cancelled
+        announced = False
+        while True:
+            command = self._control_snapshot()
+            state = str(command.get("state") or "running")
+            if state == "cancelled":
+                self._cancelled = True
+                return False
+            new_checkpoint = command.get("pause_at_usd")
+            if new_checkpoint is not None:
+                try:
+                    self.pause_at_usd = max(0.01, float(new_checkpoint))
+                except (TypeError, ValueError):
+                    pass
+            threshold_hit = (
+                self.pause_at_usd is not None
+                and self.spent + self.reserved >= self.pause_at_usd
+            )
+            if state == "running" and not threshold_hit:
+                return True
+            if state == "running" and threshold_hit and not announced:
+                self._write_control(
+                    state="paused",
+                    reason=(
+                        "operator cost checkpoint reached: "
+                        f"${self.spent:.2f} spent with ${self.reserved:.2f} reserved "
+                        f"against ${self.pause_at_usd:.2f}"
+                    ),
+                    recommendation=(
+                        "Review the live phase, failures, acceptance and repair rates. "
+                        "Resume with a higher checkpoint if behavior is healthy; "
+                        "cancel if spend reflects repeated or failed work."
+                    ),
+                )
+                announced = True
+            time.sleep(self.control_poll_s)
 
     def wall_elapsed_s(self) -> Optional[float]:
         if self._wall_started is None or self._wall_timer is None:
@@ -252,7 +393,9 @@ class BudgetMeter:
         return self._systemic_error
 
     def under(self) -> bool:
-        """True while new work may be launched (all three ceilings clear)."""
+        """True while new work may be launched and operator control permits it."""
+        if not self._await_operator():
+            return False
         if self._systemic_error is not None:
             return False
         if self.ceiling is not None:
@@ -264,6 +407,8 @@ class BudgetMeter:
     def stop_reason(self) -> str:
         """Which ceiling stopped the run, for honest notes. Systemic wins ties:
         it is the only one of the three where the fix is outside this run."""
+        if self._cancelled:
+            return "run cancelled by the operator from the persisted control plane"
         if self._systemic_error is not None:
             return (
                 f"systemic failure circuit open: {self.systemic_threshold} "
@@ -668,6 +813,10 @@ class LadderPolicy:
     models: dict[str, ModelSpec] = field(default_factory=lambda: dict(DEFAULT_MODELS))
     iteration: IterationPolicy = field(default_factory=IterationPolicy)
     max_cost_usd: Optional[float] = None
+    # A generous, resumable operator checkpoint. It does not constrain an
+    # individual answer and therefore cannot truncate quality. None disables
+    # automatic pausing while dashboard pause/cancel remain available.
+    pause_at_cost_usd: Optional[float] = None
     # Wall-clock ceiling for the whole run, minutes. Enforced by the shared
     # budget meter with the cost ceiling's soft semantics. None disables.
     max_wall_minutes: Optional[float] = None
@@ -816,6 +965,7 @@ class RunContext:
     # rather than None because None is a real result ("this subject yields no
     # signals") and must be cached like any other.
     _design_digest_cache: Any = field(default=_UNSET, repr=False, compare=False)
+    _planned_partitions_cache: Any = field(default=_UNSET, repr=False, compare=False)
 
     def design_digest(self) -> Optional[dict]:
         """The compact design-signals digest for this subject, or None (D7).
@@ -831,6 +981,51 @@ class RunContext:
 
             self._design_digest_cache = design_digest_for(self.store)
         return self._design_digest_cache
+
+    def planned_partitions(self) -> tuple[Any, ...]:
+        """The exact importance-ordered P2 plan every phase must share.
+
+        P1 used to know only that a canary would run ``N`` partitions, while P2
+        independently chose those partitions later.  That let orientation set
+        criteria for Core code while the selected slice contained Knowledge
+        Bowl UI, and P5 then spent repair rounds chasing targets the canary had
+        never attempted.  Plan once, cache the immutable tuple, and let P1, P2,
+        and P5 agree on the same scope by construction.
+        """
+        if self._planned_partitions_cache is _UNSET:
+            from ..derive.importance import rank_components
+            from .ladder import order_partitions
+            from .partition import plan_partitions
+
+            plan = plan_partitions(
+                self.arch.get("components", []),
+                self.arch.get("relationships", []),
+                max_lines=self.max_lines,
+                max_components=self.max_components,
+                min_components=self.min_components,
+                max_relationships=self.max_relationships,
+            )
+            ordered = order_partitions(plan.partitions, rank_components(self.store))
+            self._planned_partitions_cache = tuple(ordered)
+        return self._planned_partitions_cache
+
+    def attempted_scope(self) -> dict[str, tuple[str, ...]]:
+        """Exact component and relationship targets selected for rung 2a."""
+        partitions = self.planned_partitions()
+        if self.max_partitions is not None:
+            partitions = partitions[: self.max_partitions]
+        return {
+            "components": tuple(dict.fromkeys(
+                component_id
+                for partition in partitions
+                for component_id in partition.answered_component_ids
+            )),
+            "relationships": tuple(dict.fromkeys(
+                relationship_key
+                for partition in partitions
+                for relationship_key in partition.relationship_keys
+            )),
+        }
 
     def invoker(
         self,
@@ -986,10 +1181,7 @@ def run_pipeline(ctx: RunContext, phases: Iterable[Phase]) -> PipelineResult:
             outcome = PhaseResult(
                 name=phase.name,
                 status="skipped",
-                notes=[
-                    "not run: run cost ceiling reached "
-                    f"(${ctx.budget.ceiling:.2f} API-equivalent)"
-                ],
+                notes=["not run: " + ctx.budget.stop_reason()],
             )
             result.ceiling_hit = True
         else:
@@ -1049,6 +1241,9 @@ class LadderConfig:
     # Response bound: relationships per partition (each demands a contract
     # block in the reply). See partition.DEFAULT_MAX_RELATIONSHIPS.
     max_relationships: int = 40
+    # Override for tests or hosts. The normal path writes control.json in the
+    # run directory so the board and a restarted controller find the same state.
+    control_path: Optional[Path] = None
 
 
 def build_run_context(
@@ -1083,6 +1278,10 @@ def build_run_context(
     budget.configure_wall(
         float(wall_minutes) * 60.0 if wall_minutes is not None else None, timer
     )
+    budget.configure_control(
+        config.control_path or (Path(config.run_dir) / "control.json"),
+        config.policy.pause_at_cost_usd,
+    )
     # Coerce the paths here rather than trusting the dataclass annotation: a
     # caller passing a plain string is doing something reasonable, and failing on
     # it deep inside derivation would read as a store problem rather than a
@@ -1098,6 +1297,7 @@ def build_run_context(
             store.data_entities(),
             store.rules(),
             arch.get("relationships", []),
+            root=root,
         )
         return RunContext(
             store=store,

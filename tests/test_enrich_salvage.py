@@ -72,6 +72,30 @@ def test_a_fenced_response_parses():
     assert len(obj["components"]) == 8
 
 
+def test_complete_response_with_trailing_commas_parses_without_losing_content():
+    text = """{
+      "verdict": "not-done",
+      "criteria": [
+        {"criterion_id": "s1", "verdict": "met"},
+      ],
+      "run_analysis": {"watch_next_run": ["grounding, not prose",],},
+    }"""
+    obj = _parse_json_object(text, expect_keys=("verdict", "criteria"))
+    assert obj == {
+        "verdict": "not-done",
+        "criteria": [{"criterion_id": "s1", "verdict": "met"}],
+        "run_analysis": {"watch_next_run": ["grounding, not prose"]},
+    }
+
+
+def test_trailing_comma_repair_never_changes_commas_inside_strings():
+    obj = _parse_json_object(
+        '{"reasoning":"keep comma, } and comma, ]",}',
+        expect_keys=("reasoning",),
+    )
+    assert obj == {"reasoning": "keep comma, } and comma, ]"}
+
+
 def test_a_fence_reopened_mid_object_parses():
     """The continuation defect seen in four sessions of the killed run.
 

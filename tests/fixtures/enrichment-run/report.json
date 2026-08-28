@@ -2,7 +2,7 @@
   "identity": {
     "subject": "polyglot",
     "root": "/Volumes/Studio/dev/solution-explorer/tests/fixtures/polyglot",
-    "commit": "e1dbb70df6e7bc1e1202ccb9d0e59f09dde7d1ab",
+    "commit": "2c01ee0398acf1be95c38ab6082d6b194a6ab53c",
     "snapshot_date": "2026-08-21T00:00:00+00:00",
     "analyzer_version": "",
     "engine_version": "1",
@@ -62,6 +62,7 @@
         "max_rounds": 2
       },
       "max_cost_usd": null,
+      "pause_at_cost_usd": null,
       "spot_check_fraction": 0.1,
       "max_work_orders": 3
     },
@@ -107,7 +108,7 @@
       "phase": "p2_ladder",
       "rung": "2a",
       "model": "anthropic-claude-cli:sonnet",
-      "targets": 8,
+      "targets": 10,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
@@ -118,10 +119,10 @@
       "num_turns": 1,
       "partition_id": 0,
       "session_id": null,
-      "prefix_hash": "9b39e061a3ce0a824dd3df7f3ea8892e8bc3791049113c43ec64edde3aa790f8",
+      "prefix_hash": "28b7fafb2dfd7e7c7afdb570e5bd7b0915e0b340d0afb7c4f2b77a00aa8e7d24",
       "prefix_tokens_est": 0,
-      "response_bytes": 11731,
-      "output_budget_bytes": 31656,
+      "response_bytes": 14505,
+      "output_budget_bytes": 39432,
       "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
@@ -145,7 +146,7 @@
       "num_turns": 1,
       "partition_id": 1,
       "session_id": null,
-      "prefix_hash": "732fc554bae33e59bb93d8d4eca1a223dc740418134c53855036db31d56706c0",
+      "prefix_hash": "63640291628f471c53a24acea03ecd1e3c28d1d45b9050096631184489fa3087",
       "prefix_tokens_est": 0,
       "response_bytes": 481,
       "output_budget_bytes": 1330,
@@ -172,9 +173,9 @@
       "num_turns": 1,
       "partition_id": 0,
       "session_id": null,
-      "prefix_hash": "9ad178acc1e49f0e9c7e6086d8d9a7a952c9d8d5d15e12333c44f36122659d91",
+      "prefix_hash": "7434cee98cd8cd384951a7edbb8f7db74b3b5fc387f03b2794a6838a9fc4e996",
       "prefix_tokens_est": 0,
-      "response_bytes": 1305,
+      "response_bytes": 1337,
       "output_budget_bytes": 4440,
       "output_budget_ok": true,
       "structured_output_enforced": false,
@@ -199,9 +200,9 @@
       "num_turns": 1,
       "partition_id": 0,
       "session_id": null,
-      "prefix_hash": "2bb14f254a1ae54500f793abef04d00d98321ab20c38aa136643f8f012f9cf0d",
+      "prefix_hash": "7b261c08b07dfc20860fcb193099c64f8fc2b95f3852cf67452c05562af0cac5",
       "prefix_tokens_est": 0,
-      "response_bytes": 1540,
+      "response_bytes": 1572,
       "output_budget_bytes": 4440,
       "output_budget_ok": true,
       "structured_output_enforced": false,
@@ -215,7 +216,7 @@
       "phase": "p3_adjudication",
       "rung": "verify-identity",
       "model": "anthropic-claude-cli:opus",
-      "targets": 3,
+      "targets": 5,
       "tokens_in": 1200,
       "tokens_cached": 0,
       "tokens_out": 300,
@@ -228,7 +229,7 @@
       "session_id": null,
       "prefix_hash": null,
       "prefix_tokens_est": 0,
-      "response_bytes": 565,
+      "response_bytes": 938,
       "output_budget_bytes": 26000,
       "output_budget_ok": true,
       "structured_output_enforced": false,
@@ -307,7 +308,7 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": null,
+      "prefix_hash": "67921f353cd5a70051a997681f2814f00148923a1f2f5f198052991446d7036a",
       "prefix_tokens_est": 0,
       "response_bytes": 575,
       "output_budget_bytes": 8000,
@@ -334,7 +335,7 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": null,
+      "prefix_hash": "7a13091aa7163a88b9d6ffc35e7037d2bf37535eab49fff2c189a478972f71e2",
       "prefix_tokens_est": 0,
       "response_bytes": 79,
       "output_budget_bytes": 2000,
@@ -390,7 +391,7 @@
       "session_id": null,
       "prefix_hash": null,
       "prefix_tokens_est": 0,
-      "response_bytes": 1121,
+      "response_bytes": 1133,
       "output_budget_bytes": 24000,
       "output_budget_ok": true,
       "structured_output_enforced": false,
@@ -415,10 +416,10 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": "aceeb6cc7ca61927586e12a23c5b0b899788242abf2d022694b3101b14b01fce",
+      "prefix_hash": "689c9442300a50689eef6365744468170a7011c65652a808a623c1ee41cfe102",
       "prefix_tokens_est": 0,
-      "response_bytes": 721,
-      "output_budget_bytes": 12000,
+      "response_bytes": 1314,
+      "output_budget_bytes": 20000,
       "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
@@ -442,7 +443,7 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": "fd54b138af295b86340fdfab431cbb5f0478d5da23e830d04e0599ad6d2da7cd",
+      "prefix_hash": "733698024c1c01a8659c33f089844a6b3dc99ef8e4889d27b9fb489ec5feda23",
       "prefix_tokens_est": 0,
       "response_bytes": 3049,
       "output_budget_bytes": 8328,
@@ -469,7 +470,7 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": null,
+      "prefix_hash": "67921f353cd5a70051a997681f2814f00148923a1f2f5f198052991446d7036a",
       "prefix_tokens_est": 0,
       "response_bytes": 503,
       "output_budget_bytes": 8000,
@@ -496,7 +497,7 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": null,
+      "prefix_hash": "67921f353cd5a70051a997681f2814f00148923a1f2f5f198052991446d7036a",
       "prefix_tokens_est": 0,
       "response_bytes": 498,
       "output_budget_bytes": 8000,
@@ -523,7 +524,7 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": null,
+      "prefix_hash": "7a13091aa7163a88b9d6ffc35e7037d2bf37535eab49fff2c189a478972f71e2",
       "prefix_tokens_est": 0,
       "response_bytes": 79,
       "output_budget_bytes": 2000,
@@ -550,7 +551,7 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": null,
+      "prefix_hash": "7a13091aa7163a88b9d6ffc35e7037d2bf37535eab49fff2c189a478972f71e2",
       "prefix_tokens_est": 0,
       "response_bytes": 79,
       "output_budget_bytes": 2000,
@@ -577,10 +578,10 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": "aceeb6cc7ca61927586e12a23c5b0b899788242abf2d022694b3101b14b01fce",
+      "prefix_hash": "689c9442300a50689eef6365744468170a7011c65652a808a623c1ee41cfe102",
       "prefix_tokens_est": 0,
-      "response_bytes": 721,
-      "output_budget_bytes": 12000,
+      "response_bytes": 1314,
+      "output_budget_bytes": 20000,
       "output_budget_ok": true,
       "structured_output_enforced": false,
       "cost_usd": 0.01,
@@ -592,7 +593,7 @@
   ],
   "census": {
     "by_state": {
-      "grounded@sonnet": 8,
+      "grounded@sonnet": 10,
       "honest-gap": 1
     },
     "items": [
@@ -620,17 +621,17 @@
         "failed": [
           {
             "question": "mechanism",
-            "trigger": "E1",
+            "trigger": "E2",
             "note": "the dispatch table is generated at build time and no source file in the repository contains it"
           }
         ],
         "attempt_ref": null,
         "target_kind": "component",
-        "target_id": "libs/core",
+        "target_id": "compose/cache",
         "self_declared": "grounded",
         "declared_confusion": null,
         "parser_first": [
-          "libs/core's language was inferable from its manifest"
+          "compose/cache's language was inferable from its manifest"
         ],
         "history": [
           "sonnet:escalate",
@@ -641,6 +642,38 @@
         ],
         "entry_class": "reasoning",
         "entry_class_basis": "lacked:0/trigger:1",
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "compose/db",
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
+        "repair_attempted": false
+      },
+      {
+        "state": "grounded",
+        "rung": "sonnet",
+        "failed": [],
+        "attempt_ref": null,
+        "target_kind": "component",
+        "target_id": "libs/core",
+        "self_declared": "grounded",
+        "declared_confusion": null,
+        "parser_first": [],
+        "history": [],
+        "entry_triggers": [],
+        "entry_class": null,
+        "entry_class_basis": null,
         "repair_attempted": false
       },
       {
@@ -758,18 +791,18 @@
         "repair_attempted": false
       }
     ],
-    "total": 9,
-    "grounded": 8,
-    "grounded_fraction": 0.8889,
+    "total": 11,
+    "grounded": 10,
+    "grounded_fraction": 0.9091,
     "trigger_counts": {
-      "E1": 1
+      "E2": 1
     },
     "unresolved": []
   },
   "escalations": [
     {
       "target_kind": "component",
-      "target_id": "libs/core",
+      "target_id": "compose/cache",
       "climbed_from": [
         "sonnet:escalate",
         "opus:escalate"
@@ -777,12 +810,12 @@
       "resolved_at": "fable",
       "terminal": "honest-gap",
       "triggers": [
-        "E1"
+        "E2"
       ],
       "failed_questions": [
         {
           "question": "mechanism",
-          "trigger": "E1",
+          "trigger": "E2",
           "note": "the dispatch table is generated at build time and no source file in the repository contains it"
         }
       ]
@@ -822,10 +855,11 @@
         "executed": true,
         "targets_attempted": 2,
         "state_changes": {},
+        "payload_changes": [],
         "cost_usd": 0.01,
         "changed_anything": false,
         "notes": [
-          "executed and changed no contract state; the order cost budget and moved nothing"
+          "executed and changed neither contract state nor payload; the order cost budget and moved nothing"
         ]
       },
       "executed": true
@@ -871,10 +905,11 @@
             "executed": true,
             "targets_attempted": 2,
             "state_changes": {},
+            "payload_changes": [],
             "cost_usd": 0.01,
             "changed_anything": false,
             "notes": [
-              "executed and changed no contract state; the order cost budget and moved nothing"
+              "executed and changed neither contract state nor payload; the order cost budget and moved nothing"
             ]
           }
         }
@@ -884,10 +919,13 @@
         "targets": [],
         "state_changes": {},
         "rung_moves": [],
-        "grounded_before": 8,
-        "grounded_after": 8,
+        "payload_changes": [],
+        "grounded_before": 10,
+        "grounded_after": 10,
         "cost_usd": 0.05,
-        "adjudication_cost_usd": 0.04
+        "adjudication_cost_usd": 0.04,
+        "adjudication_disagreement_before": 0.0,
+        "adjudication_disagreement_after": 0.0
       },
       "perceived_delta": "deepen the boundary descriptions on the two services that face outward",
       "perceived_delta_is_judgment": true,
@@ -900,8 +938,8 @@
   "parser_findings": [
     {
       "target_kind": "component",
-      "target_id": "libs/core",
-      "finding": "libs/core's language was inferable from its manifest",
+      "target_id": "compose/cache",
+      "finding": "compose/cache's language was inferable from its manifest",
       "raised_at_rungs": [
         "sonnet",
         "opus",
@@ -934,6 +972,42 @@
       "target_id": "apps/ios",
       "field": "type",
       "claim": "apps/ios: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/cache",
+      "field": "port",
+      "claim": "compose/cache: a specific answer for identity.port",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/cache",
+      "field": "type",
+      "claim": "compose/cache: a specific answer for identity.type",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/db",
+      "field": "port",
+      "claim": "compose/db: a specific answer for identity.port",
+      "reason": null,
+      "evidence_count": 1,
+      "card": "is the parser wrong here, and can extraction learn the rule?"
+    },
+    {
+      "target_kind": "component",
+      "target_id": "compose/db",
+      "field": "type",
+      "claim": "compose/db: a specific answer for identity.type",
       "reason": null,
       "evidence_count": 1,
       "card": "is the parser wrong here, and can extraction learn the rule?"
@@ -1116,10 +1190,10 @@
       "statement": "Claims are grounded in evidence that checks out.",
       "verdict": "met",
       "evidence": [
-        "grounded fraction 88.9%",
+        "grounded fraction 90.9%",
         "adjudication disagreement rate 0.0%"
       ],
-      "reasoning": "88.9% of items grounded; adjudication would not stand behind 0.0% of the claims it sampled"
+      "reasoning": "90.9% of items grounded; adjudication would not stand behind 0.0% of the claims it sampled"
     },
     {
       "criterion_id": "u3",
@@ -1143,18 +1217,45 @@
       "round 1 produced no measurable change to the census"
     ]
   },
+  "run_analysis": {
+    "status": "model-analyzed",
+    "summary": "The measured ledger shows a clean bounded run; the parser-first card is the transferable lesson.",
+    "deterministic_transfers": [
+      {
+        "finding": "The fixture framework is inferable from its manifest.",
+        "basis": "The same parser-first card survived every rung.",
+        "validation": "Add a real manifest extraction regression."
+      }
+    ],
+    "improvements": [
+      {
+        "area": "parser",
+        "recommendation": "Teach extraction the repeated manifest rule.",
+        "basis": "The exit digest contains one distinct parser-first card."
+      }
+    ],
+    "watch_next_run": [
+      "Compare parser-first cards and escalation count."
+    ]
+  },
   "lessons": [
     {
       "kind": "escalation-trigger",
       "pattern": "E1",
       "count": 1,
-      "of_total": 9
+      "of_total": 11
+    },
+    {
+      "kind": "escalation-trigger",
+      "pattern": "E2",
+      "count": 1,
+      "of_total": 11
     },
     {
       "kind": "parser-first",
       "pattern": "deterministic processing could have answered this",
       "count": 3,
-      "of_total": 9
+      "of_total": 11
     },
     {
       "kind": "inter-tier-disagreement",
@@ -1181,14 +1282,14 @@
       "name": "p2_ladder",
       "status": "ok",
       "notes": [
-        "census: grounded@sonnet=8, honest-gap=1"
+        "census: grounded@sonnet=10, honest-gap=1"
       ]
     },
     {
       "name": "p3_adjudication",
       "status": "ok",
       "notes": [
-        "verify identity: 3 verified, confirmed=3",
+        "verify identity: 5 verified, confirmed=5",
         "verify edges: 1 verified, confirmed=1",
         "verify findings: 5 verified, verified=5",
         "grounding spot-checks: 0 of 8 claims not supported by their own evidence (disagreement rate 0.0%)",
@@ -1215,15 +1316,15 @@
       "pass": "verify-identity",
       "mode": "full",
       "dry_run": false,
-      "target_count": 3,
-      "done": 3,
+      "target_count": 5,
+      "done": 5,
       "failed": [],
       "verdicts": {
-        "confirmed": 3
+        "confirmed": 5
       },
       "total_cost_usd": 0.01,
       "notes": [
-        "3 identity-bearing component(s); 3 to verify"
+        "5 identity-bearing component(s); 5 to verify"
       ],
       "plan_preview": [],
       "extra": {},
@@ -1232,21 +1333,35 @@
           "id": "apps/ios",
           "status": "done",
           "verdict": "confirmed",
-          "cost_usd": 0.003333,
+          "cost_usd": 0.002,
+          "errors": []
+        },
+        {
+          "id": "compose/cache",
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.002,
+          "errors": []
+        },
+        {
+          "id": "compose/db",
+          "status": "done",
+          "verdict": "confirmed",
+          "cost_usd": 0.002,
           "errors": []
         },
         {
           "id": "root",
           "status": "done",
           "verdict": "confirmed",
-          "cost_usd": 0.003333,
+          "cost_usd": 0.002,
           "errors": []
         },
         {
           "id": "services/api",
           "status": "done",
           "verdict": "confirmed",
-          "cost_usd": 0.003333,
+          "cost_usd": 0.002,
           "errors": []
         }
       ]
@@ -1559,7 +1674,7 @@
     "disagreement_rate": 0.0,
     "substitution_failure_rate": 0.6667,
     "notes": [
-      "verify identity: 3 verified, confirmed=3",
+      "verify identity: 5 verified, confirmed=5",
       "verify edges: 1 verified, confirmed=1",
       "verify findings: 5 verified, verified=5",
       "grounding spot-checks: 0 of 8 claims not supported by their own evidence (disagreement rate 0.0%)",
@@ -1594,9 +1709,9 @@
             }
           },
           {
-            "target": "libs/core",
-            "title": "Stop at libs/core",
-            "narration": "What libs/core contributes to the request path.",
+            "target": "compose/cache",
+            "title": "Stop at compose/cache",
+            "narration": "What compose/cache contributes to the request path.",
             "evidence": {
               "file": "README.md",
               "line": 1
@@ -1655,12 +1770,12 @@
       {
         "model": "anthropic-claude-cli:opus",
         "invocations": 10,
-        "targets": 16,
+        "targets": 18,
         "tokens_in": 12000,
         "tokens_cached": 0,
         "tokens_cache_write": 0,
         "tokens_out": 3000,
-        "response_bytes": 4674,
+        "response_bytes": 5079,
         "output_budget_violations": 0,
         "cost_usd": 0.1,
         "wall_seconds": 0.0,
@@ -1686,7 +1801,7 @@
         "tokens_cached": 0,
         "tokens_cache_write": 0,
         "tokens_out": 1800,
-        "response_bytes": 4850,
+        "response_bytes": 6080,
         "output_budget_violations": 0,
         "cost_usd": 0.06,
         "wall_seconds": 0.0,
@@ -1706,12 +1821,12 @@
       {
         "model": "anthropic-claude-cli:sonnet",
         "invocations": 3,
-        "targets": 11,
+        "targets": 13,
         "tokens_in": 3600,
         "tokens_cached": 0,
         "tokens_cache_write": 0,
         "tokens_out": 900,
-        "response_bytes": 15261,
+        "response_bytes": 18035,
         "output_budget_violations": 0,
         "cost_usd": 0.03,
         "wall_seconds": 0.0,
@@ -1733,14 +1848,14 @@
       "tokens_cached": 0,
       "tokens_cache_write": 0,
       "tokens_out": 5700,
-      "response_bytes": 24785,
+      "response_bytes": 29194,
       "output_budget_violations": 0,
       "cost_usd": 0.19,
       "wall_seconds": 0.0
     },
     "output_efficiency": {
       "billed_output_tokens": 5700,
-      "delivered_response_bytes": 24785,
+      "delivered_response_bytes": 29194,
       "compact_budgeted_calls": 19,
       "compact_budget_violations": 0,
       "note": "Delivered JSON is schema- and byte-bounded. Billed output also includes hidden reasoning; the Claude CLI exposes no per-call max_tokens below its provider ceiling, so billed-token reduction is measured and gated against the baseline, not falsely called a transport guarantee."
@@ -1750,12 +1865,14 @@
       "reads": 0,
       "read_write_ratio": 0.0,
       "prefix_hashes": [
-        "2bb14f254a1ae54500f793abef04d00d98321ab20c38aa136643f8f012f9cf0d",
-        "732fc554bae33e59bb93d8d4eca1a223dc740418134c53855036db31d56706c0",
-        "9ad178acc1e49f0e9c7e6086d8d9a7a952c9d8d5d15e12333c44f36122659d91",
-        "9b39e061a3ce0a824dd3df7f3ea8892e8bc3791049113c43ec64edde3aa790f8",
-        "aceeb6cc7ca61927586e12a23c5b0b899788242abf2d022694b3101b14b01fce",
-        "fd54b138af295b86340fdfab431cbb5f0478d5da23e830d04e0599ad6d2da7cd"
+        "28b7fafb2dfd7e7c7afdb570e5bd7b0915e0b340d0afb7c4f2b77a00aa8e7d24",
+        "63640291628f471c53a24acea03ecd1e3c28d1d45b9050096631184489fa3087",
+        "67921f353cd5a70051a997681f2814f00148923a1f2f5f198052991446d7036a",
+        "689c9442300a50689eef6365744468170a7011c65652a808a623c1ee41cfe102",
+        "733698024c1c01a8659c33f089844a6b3dc99ef8e4889d27b9fb489ec5feda23",
+        "7434cee98cd8cd384951a7edbb8f7db74b3b5fc387f03b2794a6838a9fc4e996",
+        "7a13091aa7163a88b9d6ffc35e7037d2bf37535eab49fff2c189a478972f71e2",
+        "7b261c08b07dfc20860fcb193099c64f8fc2b95f3852cf67452c05562af0cac5"
       ],
       "mechanism_verified": true,
       "budgeted_as_saving": false,
@@ -1777,16 +1894,29 @@
         "questions": [
           {
             "question": "mechanism",
-            "items": 3
+            "items": 2
           }
         ],
         "class": "reasoning",
-        "class_basis": "lacked:0/trigger:3"
+        "class_basis": "lacked:0/trigger:2"
+      },
+      {
+        "trigger": "E2",
+        "meaning": "ungrounded: an answer whose evidence the tier could not cite",
+        "items": 1,
+        "questions": [
+          {
+            "question": "mechanism",
+            "items": 1
+          }
+        ],
+        "class": "context",
+        "class_basis": "lacked:0/trigger:1"
       }
     ],
     "deterministic_opportunities": [
       {
-        "question": "libs/core's language was inferable from its manifest",
+        "question": "compose/cache's language was inferable from its manifest",
         "items": 1
       }
     ]
@@ -1800,7 +1930,7 @@
     ]
   },
   "audit": {
-    "run_dir": "/private/var/folders/j1/f88bws916px1k7zn1bltx2j00000gn/T/pytest-of-ramerman/pytest-460/test_the_committed_reference_r0/run",
+    "run_dir": "/private/var/folders/j1/f88bws916px1k7zn1bltx2j00000gn/T/pytest-of-ramerman/pytest-625/test_the_committed_reference_r0/run",
     "spend_usd": 0.19,
     "calls": 19,
     "calls_failed": 0,
@@ -1814,11 +1944,13 @@
       "cache_hit_share": 0.0
     },
     "work": {
-      "planned_targets": 9,
-      "answered": 9,
+      "planned_targets": 11,
+      "answered": 11,
       "units_done": 4,
-      "usd_per_target": 0.02111,
-      "out_tokens_per_target": 633.3
+      "bulk_attempted_targets": 11,
+      "bulk_unique_targets": 11,
+      "usd_per_target": 0.01727,
+      "out_tokens_per_target": 518.2
     },
     "output_gate": {
       "baseline_output_tokens": null,
@@ -1826,20 +1958,24 @@
       "allowed_output_tokens": null,
       "compact_calls": 19,
       "compact_budget_violations": 0,
-      "non_warm_cache_misses": 1,
+      "non_warm_cache_misses": 5,
       "prefix_read_shortfalls": 0,
       "stable_prefix_fragmentations": 0,
-      "bulk_tokens_per_target": 66.7,
-      "ladder_tokens_per_unique_target": 133.3,
-      "escalation_tokens_per_attempt": 300.0
+      "bulk_tokens_per_target": 54.5,
+      "ladder_tokens_per_unique_target": 109.1,
+      "escalation_tokens_per_attempt": 300.0,
+      "escalation_attempts": 2,
+      "escalation_release_sample_min": 5,
+      "work_order_tokens_per_attempt": 150.0,
+      "work_order_attempts": 2
     },
     "by_rung": {
       "2a": {
         "calls": 2,
         "cost_usd": 0.02,
-        "targets": 9,
+        "targets": 11,
         "out_tokens": 600,
-        "usd_per_target": 0.00222
+        "usd_per_target": 0.00182
       },
       "P5": {
         "calls": 1,
@@ -1921,21 +2057,21 @@
       "verify-identity": {
         "calls": 1,
         "cost_usd": 0.01,
-        "targets": 3,
+        "targets": 5,
         "out_tokens": 300,
-        "usd_per_target": 0.00333
+        "usd_per_target": 0.002
       }
     },
     "findings": [
       {
         "level": "fail",
         "check": "cache-boundary",
-        "detail": "1 non-warm cacheable call(s) read zero cached tokens"
+        "detail": "5 non-warm cacheable call(s) read zero cached tokens"
       },
       {
-        "level": "fail",
+        "level": "info",
         "check": "escalation-output-density",
-        "detail": "escalations emitted 300.0 billed tokens per attempt; limit is 260"
+        "detail": "escalations emitted 300.0 billed tokens per attempt; limit is 260; INCONCLUSIVE: only 2 attempt(s), fewer than the 5-attempt release sample"
       }
     ],
     "verdict": "fail"

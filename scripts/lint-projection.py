@@ -117,8 +117,10 @@ LENS_COMPONENT_FIELDS = {
 
 DEFAULT_POLICY: dict[str, Any] = {
     # "deterministic" expects no ai_enhance anywhere; "enriched" expects it on
-    # every component. Both reject a partial state, which is the S3 defect class
-    # (a surface claiming an enrichment posture the payload does not have).
+    # every component. ``evaluation`` admits a deliberately partial overlay only
+    # when a private publication sidecar tells the reader exactly that.  This is
+    # not a relaxation of the public enriched gate: it is a separate posture for
+    # human evaluation of a bounded canary.
     "profile": "deterministic",
     # A component with no files and no children renders as a dead end in the
     # viewer. A few are legitimate (a namespace folder); a lot is a defect.
@@ -1100,6 +1102,46 @@ class Linter:
                 "census.enrichment_profile",
                 "policy profile is 'enriched' but no component carries ai_enhance",
             )
+        elif profile == "evaluation":
+            publication_path = self.dir / "publication.json"
+            try:
+                publication = json.loads(publication_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                publication = None
+            banner = (
+                ((publication or {}).get("header") or {}).get("banner", "")
+                if isinstance(publication, dict) else ""
+            )
+            footer = (
+                ((publication or {}).get("footer") or {}).get("always", [])
+                if isinstance(publication, dict) else []
+            )
+            visibility = (
+                ((publication or {}).get("access") or {}).get("visibility")
+                if isinstance(publication, dict) else None
+            )
+            disclosure = " ".join(
+                [banner, *(x for x in footer if isinstance(x, str))]
+            ).lower()
+            exact_scope = f"{len(enriched)} of {total}"
+            if not 0 < share < 1.0:
+                self.report.error(
+                    "census.enrichment_profile",
+                    "policy profile is 'evaluation' but enrichment is not a partial overlay",
+                )
+            elif (
+                not isinstance(publication, dict)
+                or publication.get("purpose") != "evaluation"
+                or visibility not in {"private-preview", "internal"}
+                or "partial" not in disclosure
+                or exact_scope not in disclosure
+            ):
+                self.report.error(
+                    "census.enrichment_profile",
+                    "partial evaluation requires a non-public evaluation publication.json "
+                    f"that says it is partial and discloses the exact component scope "
+                    f"({exact_scope})",
+                )
 
         self._check_component_weight()
 
@@ -1715,7 +1757,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="JSON file of policy overrides merged over the defaults",
     )
     parser.add_argument(
-        "--profile", choices=("deterministic", "enriched"), default=None,
+        "--profile", choices=("deterministic", "enriched", "evaluation"), default=None,
         help="shorthand for the policy's enrichment expectation",
     )
     parser.add_argument("--json", dest="json_out", default=None, help="write the machine report here")

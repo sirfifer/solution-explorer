@@ -16,20 +16,22 @@ def _audit_module():
     return module
 
 
-def _run_dir(tmp_path: Path, *, output: int, budget_ok=True, rung="2a") -> Path:
+def _run_dir(
+    tmp_path: Path, *, output: int, budget_ok=True, rung="2a", targets=10,
+) -> Path:
     run = tmp_path / "run"
     run.mkdir(parents=True)
     row = {
         "rung": rung, "phase": "p2_ladder", "effort": "low",
         "tokens_out": output, "cost_usd": 1.0, "ok": True,
-        "num_turns": 1, "targets": 10,
+        "num_turns": 1, "targets": targets,
         "output_budget_bytes": 1000, "output_budget_ok": budget_ok,
     }
     (run / "ledger.jsonl").write_text(json.dumps(row) + "\n")
     (run / "progress.jsonl").write_text(json.dumps({
-        "event": "plan", "rung": "2a", "targets": 10,
+        "event": "plan", "rung": "2a", "targets": targets,
     }) + "\n")
-    (run / "report.json").write_text(json.dumps({"census": {"total": 10}}))
+    (run / "report.json").write_text(json.dumps({"census": {"total": targets}}))
     return run
 
 
@@ -79,6 +81,118 @@ def test_real_escalation_rung_names_are_included_in_cost(tmp_path):
         _run_dir(tmp_path, output=10, rung="opus")
     )
     assert any(f["check"] == "escalation" for f in report["findings"])
+
+
+def test_escalation_density_needs_a_real_sample_but_keeps_the_same_ceiling(tmp_path):
+    tiny = _audit_module().audit(
+        _run_dir(tmp_path, output=600, rung="opus", targets=2)
+    )
+    density = next(
+        finding for finding in tiny["findings"]
+        if finding["check"] == "escalation-output-density"
+    )
+    assert density["level"] == "info"
+    assert "INCONCLUSIVE" in density["detail"]
+    assert tiny["output_gate"]["escalation_release_sample_min"] == 5
+
+    enough = _audit_module().audit(
+        _run_dir(tmp_path / "enough", output=1301, rung="opus", targets=5)
+    )
+    density = next(
+        finding for finding in enough["findings"]
+        if finding["check"] == "escalation-output-density"
+    )
+    assert density["level"] == "fail"
+    assert enough["verdict"] == "fail"
+
+
+def test_work_order_density_cannot_hide_outside_the_ladder_gate(tmp_path):
+    run = _run_dir(tmp_path, output=10, targets=10)
+    repair = {
+        "rung": "P5", "phase": "work_order", "effort": "low",
+        "tokens_out": 1_301, "cost_usd": 1.0, "ok": True,
+        "num_turns": 1, "targets": 5,
+        "output_budget_bytes": 20_000, "output_budget_ok": True,
+    }
+    with (run / "ledger.jsonl").open("a") as fh:
+        fh.write(json.dumps(repair) + "\n")
+
+    report = _audit_module().audit(run)
+
+    assert report["output_gate"]["work_order_tokens_per_attempt"] == 260.2
+    assert report["output_gate"]["work_order_attempts"] == 5
+    assert any(
+        finding["level"] == "fail"
+        and finding["check"] == "work-order-output-density"
+        for finding in report["findings"]
+    )
+
+
+def test_honest_gap_quality_reads_contract_reasons_from_the_census(tmp_path):
+    run = _run_dir(tmp_path, output=10, targets=1)
+    report_path = run / "report.json"
+    report = json.loads(report_path.read_text())
+    report["census"] = {
+        "total": 1,
+        "items": [{
+            "target_kind": "component", "target_id": "voice-screen",
+            "state": "honest_gap",
+            "failed": [{
+                "question": "purpose", "trigger": "E1",
+                "note": "no answer was produced for a required question",
+            }],
+        }],
+    }
+    # The presentation-oriented escalation row has no duplicate failed list;
+    # that must not make the audit conclude there were no gaps to inspect.
+    report["escalations"] = [{
+        "target_id": "voice-screen", "terminal": "honest-gap",
+    }]
+    report_path.write_text(json.dumps(report))
+
+    audited = _audit_module().audit(run)
+
+    assert any(
+        finding["level"] == "fail"
+        and finding["check"] == "honest-gap-quality"
+        for finding in audited["findings"]
+    )
+
+
+def test_bulk_density_uses_unique_plan_so_retries_cannot_hide_waste(tmp_path):
+    run = _run_dir(tmp_path, output=3_000, targets=10)
+    duplicate = {
+        "rung": "2a", "phase": "p2_ladder", "effort": "low",
+        "tokens_out": 3_000, "cost_usd": 1.0, "ok": True,
+        "num_turns": 1, "targets": 10,
+        "output_budget_bytes": 20_000, "output_budget_ok": True,
+    }
+    with (run / "ledger.jsonl").open("a") as fh:
+        fh.write(json.dumps(duplicate) + "\n")
+
+    report = _audit_module().audit(run)
+
+    assert report["work"]["bulk_attempted_targets"] == 20
+    assert report["work"]["bulk_unique_targets"] == 10
+    assert report["output_gate"]["bulk_tokens_per_target"] == 600.0
+    assert any(
+        finding["level"] == "fail"
+        and finding["check"] == "bulk-output-density"
+        for finding in report["findings"]
+    )
+
+
+def test_all_per_target_economics_keep_the_planned_denominator_on_scope_drift(tmp_path):
+    run = _run_dir(tmp_path, output=1_000, targets=10)
+    report_path = run / "report.json"
+    report_path.write_text(json.dumps({"census": {"total": 13}}))
+
+    audited = _audit_module().audit(run)
+
+    assert any(f["check"] == "target-conservation" for f in audited["findings"])
+    assert audited["work"]["usd_per_target"] == 0.1
+    assert audited["work"]["out_tokens_per_target"] == 100.0
+    assert audited["output_gate"]["ladder_tokens_per_unique_target"] == 100.0
 
 
 def test_the_cache_read_floor_catches_a_small_unrelated_read(tmp_path):
@@ -136,6 +250,33 @@ def test_the_cache_read_floor_catches_a_small_unrelated_read(tmp_path):
     assert legacy_report["output_gate"]["prefix_read_shortfalls"] == 0
 
 
+def test_cache_read_within_the_narrow_tokenizer_estimate_envelope_passes(tmp_path):
+    run = tmp_path / "run"
+    run.mkdir(parents=True)
+    common = {
+        "rung": "p5", "phase": "p5_determination", "effort": "low",
+        "ok": True, "num_turns": 1, "targets": 1, "cost_usd": 0.1,
+        "tokens_out": 100, "prefix_hash": "stable", "model": "fable",
+        "prefix_tokens_est": 12_335,
+    }
+    rows = [
+        dict(common, tokens_cached=0),
+        dict(common, tokens_cached=12_306),  # observed live: 0.24% under estimate
+    ]
+    (run / "ledger.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n"
+    )
+    (run / "progress.jsonl").write_text("")
+    (run / "report.json").write_text(json.dumps({"census": {"total": 0}}))
+
+    report = _audit_module().audit(run)
+    assert report["output_gate"]["prefix_read_shortfalls"] == 0
+    assert not any(
+        finding["check"] == "cache-boundary"
+        for finding in report["findings"]
+    )
+
+
 def test_cache_boundary_also_covers_non_schema_phases(tmp_path):
     """A cacheable P5-style prefix is audited even without a compact schema."""
     run = tmp_path / "run"
@@ -159,6 +300,31 @@ def test_cache_boundary_also_covers_non_schema_phases(tmp_path):
     assert any(
         finding["check"] == "cache-boundary"
         for finding in report["findings"]
+    )
+
+
+def test_p5_input_guard_allows_measured_quality_context_but_flags_runaway(tmp_path):
+    def write_run(name, tokens):
+        run = tmp_path / name
+        run.mkdir()
+        (run / "ledger.jsonl").write_text(json.dumps({
+            "phase": "p5_determination", "ok": True, "targets": 1,
+            "tokens_fresh_in": 0, "tokens_cache_write": tokens,
+            "tokens_cached": 0, "tokens_out": 100, "cost_usd": 0.1,
+        }) + "\n")
+        (run / "progress.jsonl").write_text("")
+        (run / "report.json").write_text(json.dumps({"census": {"total": 0}}))
+        return _audit_module().audit(run)
+
+    measured = write_run("measured", 43_453)
+    assert not any(
+        item["check"] == "input-ceiling" for item in measured["findings"]
+    )
+
+    runaway = write_run("runaway", 70_001)
+    assert any(
+        item["level"] == "fail" and item["check"] == "input-ceiling"
+        for item in runaway["findings"]
     )
 
 

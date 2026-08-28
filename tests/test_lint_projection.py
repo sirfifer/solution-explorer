@@ -486,6 +486,42 @@ def test_enrichment_leaking_into_a_deterministic_run_is_an_error(projection: Pat
     assert "census.enrichment_profile" in _rules(_run(projection, policy={"profile": "deterministic"}))
 
 
+def test_partial_enrichment_is_allowed_only_as_a_disclosed_private_evaluation(
+    projection: Path,
+) -> None:
+    def mutate(d):
+        d["components"][0]["children"][0]["ai_enhance"] = {"help_text": "x"}
+
+    _edit_manifest(projection, mutate)
+    (projection / "publication.json").write_text(json.dumps({
+        "purpose": "evaluation",
+        "header": {"banner": "Private partial-enrichment human evaluation."},
+        "footer": {"always": ["AI enrichment covers 1 of 3 components."]},
+        "access": {"visibility": "private-preview"},
+    }), encoding="utf-8")
+
+    report = _run(projection, policy={"profile": "evaluation"})
+    assert "census.enrichment_profile" not in _rules(report)
+
+
+def test_partial_evaluation_without_exact_visible_scope_is_an_error(
+    projection: Path,
+) -> None:
+    def mutate(d):
+        d["components"][0]["children"][0]["ai_enhance"] = {"help_text": "x"}
+
+    _edit_manifest(projection, mutate)
+    (projection / "publication.json").write_text(json.dumps({
+        "purpose": "evaluation",
+        "header": {"banner": "Private partial-enrichment human evaluation."},
+        "footer": {"always": ["Some components are enhanced."]},
+        "access": {"visibility": "private-preview"},
+    }), encoding="utf-8")
+
+    report = _run(projection, policy={"profile": "evaluation"})
+    assert "census.enrichment_profile" in _rules(report)
+
+
 def test_a_flat_tree_on_a_large_subject_is_an_error(projection: Path) -> None:
     def mutate(d):
         children = d["components"][0]["children"]

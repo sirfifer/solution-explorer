@@ -8,6 +8,7 @@ regressed on the tiktoken o200k_base count of the exact first user message.
 The slope is the o200k -> Claude scale; the intercept is the CLI's fixed
 prompt-side overhead (system prompt etc.), which the fit separates out.
 """
+import datetime
 import json
 import re
 import sys
@@ -19,8 +20,6 @@ import tiktoken
 ENC = tiktoken.get_encoding("o200k_base")
 TDIR = Path.home() / ".claude/projects/-Volumes-Studio-dev-solution-explorer"
 OUT = Path(__file__).parent / "stage1_results.json"
-
-import datetime
 
 def run_window_files():
     lo = datetime.datetime(2026, 8, 25, 8, 0).timestamp()
@@ -122,14 +121,15 @@ def main():
         pts.append((n, billed, s["session"],
                     int(u.get("cache_read_input_tokens") or 0)))
     # least squares y = a x + b
-    import statistics
     N = len(pts)
-    sx = sum(p[0] for p in pts); sy = sum(p[1] for p in pts)
-    sxx = sum(p[0] * p[0] for p in pts); sxy = sum(p[0] * p[1] for p in pts)
+    sx = sum(p[0] for p in pts)
+    sy = sum(p[1] for p in pts)
+    sxx = sum(p[0] * p[0] for p in pts)
+    sxy = sum(p[0] * p[1] for p in pts)
     a = (N * sxy - sx * sy) / (N * sxx - sx * sx)
     b = (sy - a * sx) / N
     resid = [p[1] - (a * p[0] + b) for p in pts]
-    max_rel_err = max(abs(r) / p[1] for r, p in zip(resid, pts))
+    max_rel_err = max(abs(r) / p[1] for r, p in zip(resid, pts, strict=True))
     cache_reads = [p[3] for p in pts]
     fit = {
         "points": N,
@@ -164,7 +164,7 @@ def main():
         product = {k: v for k, v in block.items() if k != "contract"}
         answers = contract.get("answers") or {}
         ev_tokens = 0
-        for q, ans in answers.items():
+        for _q, ans in answers.items():
             if isinstance(ans, dict):
                 ev = ans.get("evidence")
                 if isinstance(ev, list):

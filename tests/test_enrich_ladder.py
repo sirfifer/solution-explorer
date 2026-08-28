@@ -26,16 +26,20 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
+from types import SimpleNamespace
 
 import pytest
 
 from analyzer.derive import derive_all
-from analyzer.enrich.contract import CONTRACT_KEY, required_questions
+from analyzer.enrich.contract import CONTRACT_KEY, EvidenceValidator, required_questions
 from analyzer.enrich.engine import InvokeResult
 from analyzer.enrich.ladder import (
     COMPONENT_CALL_CAP,
     CONTRACT_TARGET_KIND,
     RELATIONSHIP_CALL_CAP,
+    LadderOutcome,
     LadderPhase,
     build_escalation_prompt,
     merge_payloads,
@@ -252,6 +256,16 @@ def _run(world, plan, *, ceiling=None, tmp_path=None, duplicate_on_higher=None):
         ctx.store.close()
 
 
+def _ctx(world, invoker):
+    config = LadderConfig(
+        store_path=world["db"], root=POLYGLOT,
+        run_dir=world["root"] / "direct-run", policy=LadderPolicy(),
+    )
+    return build_run_context(
+        config, invoker_factory=lambda spec: invoker, clock=FIXED_CLOCK
+    )
+
+
 # --- 1. no-redo ---------------------------------------------------------------
 
 
@@ -269,7 +283,8 @@ def test_a_higher_rung_receives_the_attempt_and_the_named_gaps(world):
 
     # The 2a attempt is in the prompt, verbatim.
     assert "previous_attempt" in prompt
-    assert f"Four sentences describing {target} and its neighbours." in prompt
+    # Reader prose is projected from the exact audited atoms, not retained as a
+    # second model-authored paraphrase.
     assert "a defensible claim about purpose" in prompt
     # And the specific failed question, with its trigger, is why it climbed.
     assert "failed_questions" in prompt
@@ -278,6 +293,8 @@ def test_a_higher_rung_receives_the_attempt_and_the_named_gaps(world):
     # The assignment says explicitly not to redo what already succeeded.
     assert 'Repair ONLY what "todo" names' in prompt
     assert "Work that passed is finished" in prompt
+    assert "Numeric file indexes refer ONLY to this item's `files` array" in prompt
+    assert "`source_references` and `outbound_dependency_evidence` do not extend" in prompt
 
 
 def test_the_terminal_rung_is_told_to_declare_a_gap_rather_than_paper_over_it(world):
@@ -328,6 +345,314 @@ def test_empty_values_from_a_higher_rung_never_overwrite_good_ones():
     merged = merge_payloads(lower, higher)
     assert merged == lower
     assert {**lower, **higher} != lower  # what a naive merge would have done
+
+
+def test_partial_semantic_repair_rebuilds_complete_reader_prose(world):
+    cid = world["components"][0]
+    ctx = _ctx(world, ScriptedLadder(
+        {}, world["real_file"], world["components"], world["relationships"],
+        world["facts_by_id"],
+    ))
+    validator = EvidenceValidator(ctx.store, root=ctx.root)
+    validator.attach_facts({cid: ctx.facts.component_facts(cid)})
+    outcome = LadderOutcome()
+    cite = [{"kind": "file", "path": world["real_file"], "line": 1}]
+    lower_answers = {
+        question: {
+            "claim": f"Original {question} sentence.",
+            "status": "answered", "evidence": cite,
+        }
+        for question in required_questions(
+            "component", ctx.facts.component_facts(cid)
+        )
+    }
+    lower_answers["why_matters"] = {
+        "claim": "Original why_matters sentence.",
+        "status": "answered", "evidence": cite,
+    }
+    lower_answers["data_handled"] = {
+        "claim": "Original data sentence.",
+        "status": "answered", "evidence": cite,
+    }
+    try:
+        phase = LadderPhase()
+        phase._absorb_one(
+            ctx, validator, world["facts_by_id"], outcome,
+            rung="sonnet", target_kind="component", target_id=cid,
+            raw={
+                "help_text": "Original purpose sentence. Original mechanism "
+                "sentence. Original place sentence. Original why_matters sentence.",
+                "data_handled": "Original data sentence.",
+                "contract": {"answers": lower_answers},
+            },
+            terminal=False,
+        )
+        phase._absorb_one(
+            ctx, validator, world["facts_by_id"], outcome,
+            rung="opus", target_kind="component", target_id=cid,
+            raw={"contract": {"answers": {
+                "mechanism": {
+                    "claim": "Repaired mechanism sentence.",
+                    "status": "answered", "evidence": cite,
+                },
+                "data_handled": {
+                    "claim": "Repaired data sentence.",
+                    "status": "answered", "evidence": cite,
+                },
+            }}},
+            terminal=False,
+        )
+        prose = outcome.payloads[("component", cid)]["help_text"]
+        assert "Original purpose sentence." in prose
+        assert "Repaired mechanism sentence." in prose
+        assert "Original place sentence." in prose
+        assert "Original why_matters sentence." in prose
+        assert "Original mechanism sentence." not in prose
+        assert outcome.payloads[("component", cid)]["data_handled"] == (
+            "Repaired data sentence."
+        )
+    finally:
+        ctx.store.close()
+
+
+def test_final_adjudication_quarantine_removes_only_the_rejected_claim(world):
+    cid = world["components"][0]
+    ctx = _ctx(world, ScriptedLadder(
+        {}, world["real_file"], world["components"], world["relationships"],
+        world["facts_by_id"],
+    ))
+    facts = ctx.facts.component_facts(cid)
+    cite = [{"kind": "file", "path": world["real_file"], "line": 1}]
+    answers = {
+        question: {
+            "claim": f"Supported {question} sentence.",
+            "status": "answered", "evidence": cite,
+        }
+        for question in required_questions("component", facts)
+    }
+    answers["why_matters"] = {
+        "claim": "This unsupported clause must not remain visible.",
+        "status": "answered", "evidence": cite,
+    }
+    outcome = LadderOutcome()
+    validator = EvidenceValidator(ctx.store, root=ctx.root)
+    validator.attach_facts({cid: facts})
+    phase = LadderPhase()
+    try:
+        phase._absorb_one(
+            ctx, validator, world["facts_by_id"], outcome,
+            rung="sonnet", target_kind="component", target_id=cid,
+            raw={
+                "help_text": "Supported purpose sentence. Supported mechanism "
+                "sentence. Supported place sentence. This unsupported clause "
+                "must not remain visible.",
+                "contract": {"answers": answers},
+            },
+            terminal=False,
+        )
+        changed = phase.quarantine_unsupported(ctx, outcome, [SimpleNamespace(
+            target_kind="component", target_id=cid, question="why_matters",
+            reason="the cited file does not carry this clause",
+        )])
+
+        assert changed == {cid}
+        state = outcome.states[("component", cid)]
+        assert state.state == "honest_gap"
+        payload = outcome.payloads[("component", cid)]
+        assert "unsupported clause" not in payload["help_text"]
+        assert payload["contract"]["answers"]["why_matters"]["status"] == "uncertain"
+        assert payload["honest_gaps"] == [{
+            "question": "why_matters",
+            "why": "the cited file does not carry this clause",
+        }]
+        stored = next(
+            row["payload"] for row in ctx.store.enrichment()
+            if row["target_kind"] == "component" and row["target_id"] == cid
+        )
+        assert stored["honest_gaps"] == payload["honest_gaps"]
+    finally:
+        ctx.store.close()
+
+
+def test_terminal_gap_cannot_leave_stale_prose_or_hide_supported_siblings(world):
+    """The reader product, contract, and adjudicator must tell one truth.
+
+    The live UnaMentis canary returned a strong voice/latency paragraph and an
+    honest purpose gap in the same repair. The gap closed the item, but the
+    paragraph and a stale second gap survived while adjudication skipped every
+    supported sibling answer on the partial-gap item.
+    """
+    from analyzer.enrich.adjudicate import AdjudicationPhase
+
+    cid = world["components"][0]
+    ctx = _ctx(world, ScriptedLadder(
+        {}, world["real_file"], world["components"], world["relationships"],
+        world["facts_by_id"],
+    ))
+    facts = ctx.facts.component_facts(cid)
+    cite = [{"kind": "file", "path": world["real_file"], "line": 1}]
+    answers = {
+        question: {
+            "claim": f"Supported {question} sentence.",
+            "status": "answered", "evidence": cite,
+        }
+        for question in required_questions("component", facts)
+    }
+    answers["why_matters"] = {
+        "claim": "Supported latency-sensitive reader consequence.",
+        "status": "answered", "evidence": cite,
+    }
+    outcome = LadderOutcome()
+    validator = EvidenceValidator(ctx.store, root=ctx.root)
+    validator.attach_facts({cid: facts})
+    phase = LadderPhase()
+    try:
+        phase._absorb_one(
+            ctx, validator, world["facts_by_id"], outcome,
+            rung="sonnet", target_kind="component", target_id=cid,
+            raw={
+                "help_text": "Supported purpose sentence. Supported mechanism "
+                "sentence. Supported place sentence. Supported latency-sensitive "
+                "reader consequence.",
+                "contract": {"answers": answers},
+            },
+            terminal=False,
+        )
+        phase._absorb_one(
+            ctx, validator, world["facts_by_id"], outcome,
+            rung="sonnet", target_kind="component", target_id=cid,
+            raw={
+                "help_text": "STALE unsupported purpose. Supported mechanism "
+                "sentence. Supported place sentence. Supported latency-sensitive "
+                "reader consequence.",
+                "honest_gaps": [
+                    {"question": "purpose", "why": "the purpose citation failed"},
+                    {"question": "why_matters", "why": "obsolete earlier gap"},
+                ],
+                "contract": {"answers": {
+                    "purpose": {
+                        "claim": "", "status": "uncertain",
+                        "reason": "the purpose citation failed", "evidence": [],
+                        "lacked": "judgment",
+                    },
+                }},
+            },
+            terminal=True,
+        )
+
+        payload = outcome.payloads[("component", cid)]
+        assert "STALE unsupported purpose" not in payload["help_text"]
+        assert "Supported mechanism sentence." in payload["help_text"]
+        assert "Supported latency-sensitive reader consequence." in payload["help_text"]
+        assert payload["honest_gaps"] == [{
+            "question": "purpose", "why": "the purpose citation failed",
+        }]
+
+        checked = {
+            state.target_id: checked_answers
+            for state, checked_answers in AdjudicationPhase()._grounded_states(ctx)
+        }
+        assert cid in checked
+        assert checked[cid]["purpose"]["status"] == "uncertain"
+        assert checked[cid]["why_matters"]["status"] == "answered"
+
+        stored = next(
+            row["payload"] for row in ctx.store.enrichment()
+            if row["target_kind"] == "component" and row["target_id"] == cid
+        )
+        assert stored["help_text"] == payload["help_text"]
+        assert stored["honest_gaps"] == payload["honest_gaps"]
+    finally:
+        ctx.store.close()
+
+
+def test_relationship_quarantine_preserves_supported_flow_and_publishes_gap(world):
+    key = world["relationships"][0]
+    source, target, edge_type = key.split("|", 2)
+    ctx = _ctx(world, ScriptedLadder(
+        {}, world["real_file"], world["components"], world["relationships"],
+        world["facts_by_id"],
+    ))
+    facts = ctx.facts.relationship_facts(key)
+    cite = [{
+        "kind": "edge", "source": source, "target": target,
+        "edge_type": edge_type,
+    }]
+    outcome = LadderOutcome()
+    validator = EvidenceValidator(ctx.store, root=ctx.root)
+    validator.attach_facts({key: facts})
+    phase = LadderPhase()
+    try:
+        phase._absorb_one(
+            ctx, validator, {}, outcome, rung="sonnet",
+            target_kind="relationship", target_id=key,
+            raw={
+                "data_flow_description": "A supported flow.",
+                "importance": "internal",
+                "contract": {"answers": {
+                    "flow": {"claim": "A supported flow.", "status": "answered",
+                             "evidence": cite},
+                    "why": {"claim": "An unsupported motive.", "status": "answered",
+                            "evidence": cite},
+                }},
+            }, terminal=False,
+        )
+        phase.quarantine_unsupported(ctx, outcome, [SimpleNamespace(
+            target_kind="relationship", target_id=key, question="why",
+            reason="the edge proves connection, not motive",
+        )])
+
+        payload = outcome.payloads[("relationship", key)]
+        assert payload["data_flow_description"] == "A supported flow."
+        stored = next(
+            row["payload"] for row in ctx.store.enrichment()
+            if row["target_kind"] == "relationship" and row["target_id"] == key
+        )
+        assert stored["honest_gaps"] == [{
+            "question": "why", "why": "the edge proves connection, not motive",
+        }]
+    finally:
+        ctx.store.close()
+
+
+def test_e3_uses_computed_component_facts_when_absorbing(world):
+    ctx = _ctx(world, ScriptedLadder(
+        {}, world["real_file"], world["components"], world["relationships"],
+        world["facts_by_id"],
+    ))
+    try:
+        cid = next(
+            item for item in world["components"]
+            if ctx.facts.component_facts(item).get("file_count") == 1
+        )
+        facts = ctx.facts.component_facts(cid)
+        validator = EvidenceValidator(ctx.store, root=ctx.root)
+        validator.attach_facts({cid: facts})
+        file_cite = [{"kind": "file", "path": facts["files"][0]}]
+        answers = {
+            question: {
+                "claim": f"Grounded {question} statement.",
+                "status": "answered", "evidence": file_cite,
+            }
+            for question in required_questions("component", facts)
+        }
+        answers["next_step"] = {
+            "claim": "Inspect the single file this component contains.",
+            "status": "answered",
+            "evidence": [{
+                "kind": "fact", "component": cid, "field": "file_count",
+            }],
+        }
+        outcome = LadderOutcome()
+        LadderPhase()._absorb_one(
+            ctx, validator, world["facts_by_id"], outcome,
+            rung="sonnet", target_kind="component", target_id=cid,
+            raw={"contract": {"answers": answers}}, terminal=False,
+        )
+        state = outcome.states[("component", cid)]
+        assert state.state == "grounded", [failure.to_dict() for failure in state.failed]
+    finally:
+        ctx.store.close()
 
 
 def test_a_climbing_item_keeps_the_answers_the_lower_rung_grounded(world):
@@ -433,8 +758,8 @@ def test_an_honest_gap_is_visible_in_the_product_with_its_reason(world):
     assert payload["help_text"]  # the rest of the product is intact
 
 
-def test_an_item_the_last_rung_ignores_still_terminates_as_an_honest_gap(world):
-    """No fake answer, no infinite loop, and not silently reported as grounded."""
+def test_an_item_the_last_rung_ignores_remains_an_unresolved_run_failure(world):
+    """No fake answer, no false code gap, and not silently reported as grounded."""
     stubborn = world["components"][0]
     plan = {cid: ("ground",) for cid in world["components"]}
     plan[stubborn] = ("gap", "silent", "silent")
@@ -442,8 +767,8 @@ def test_an_item_the_last_rung_ignores_still_terminates_as_an_honest_gap(world):
     _, outcome, _, _ = _run(world, plan)
 
     state = outcome.states[("component", stubborn)]
-    assert state.terminal == "honest-gap"
-    assert outcome.census.unresolved == []
+    assert state.terminal.startswith("escalate@")
+    assert [item.target_id for item in outcome.census.unresolved] == [stubborn]
 
     store = FactStore(str(world["db"]))
     try:
@@ -453,9 +778,7 @@ def test_an_item_the_last_rung_ignores_still_terminates_as_an_honest_gap(world):
         )
     finally:
         store.close()
-    gaps = payload["honest_gaps"]
-    assert gaps and gaps[0]["question"] == "mechanism"
-    assert gaps[0]["why"]
+    assert "honest_gaps" not in payload
 
 
 def test_a_confident_but_uncitable_answer_climbs_rather_than_standing(world):
@@ -584,6 +907,79 @@ def test_contract_answers_live_in_their_own_rows_never_in_the_product(world):
     assert "purpose" in sample["answers"]
     assert sample["answers"]["purpose"]["claim"]
     assert sample["answers"]["purpose"]["evidence"]
+
+
+def test_operator_pause_banks_completed_wave_then_resumes_without_repurchase(
+    world, tmp_path
+):
+    """The persisted checkpoint pauses launches, never completed paid work."""
+    plan = {cid: ("ground",) for cid in world["components"]}
+    invoker = ScriptedLadder(
+        plan,
+        world["real_file"],
+        world["components"],
+        world["relationships"],
+        world["facts_by_id"],
+    )
+    run_dir = tmp_path / "checkpoint-run"
+    config = LadderConfig(
+        store_path=world["db"],
+        root=POLYGLOT,
+        run_dir=run_dir,
+        policy=LadderPolicy(max_parallel=1, max_cost_usd=None),
+    )
+    ctx = build_run_context(
+        config, invoker_factory=lambda spec: invoker, clock=FIXED_CLOCK
+    )
+    control = run_dir / "control.json"
+    ctx.budget.configure_control(control, 0.01, poll_s=0.01)
+    observations = {}
+
+    def resume_from_dashboard() -> None:
+        deadline = time.time() + 3
+        while time.time() < deadline:
+            packet = json.loads(control.read_text())
+            if packet["state"] == "paused":
+                break
+            time.sleep(0.01)
+        else:
+            observations["error"] = "pipeline never reached the checkpoint"
+            return
+
+        # The component wave completed and was committed before the
+        # relationship wave asked permission to launch. Waiting longer must
+        # not repurchase it.
+        observations["packet"] = packet
+        observations["prompts_at_pause"] = list(invoker.prompts)
+        with FactStore(str(world["db"])) as observer:
+            observations["banked"] = len([
+                row for row in observer.enrichment()
+                if row["target_kind"] == "component"
+            ])
+        time.sleep(0.03)
+        observations["prompts_after_wait"] = list(invoker.prompts)
+        packet.update({"state": "running", "pause_at_usd": 1.0})
+        control.write_text(json.dumps(packet))
+
+    controller = threading.Thread(target=resume_from_dashboard)
+    controller.start()
+    try:
+        run_pipeline(ctx, [LadderPhase()])
+        controller.join(timeout=5)
+        assert not controller.is_alive()
+        assert observations.get("error") is None
+        packet = observations["packet"]
+        assert packet["completed_calls"] == 1
+        paused_prompts = observations["prompts_at_pause"]
+        assert len(paused_prompts) == 1
+        first_prompt = paused_prompts[0]
+        assert observations["banked"] == len(world["components"])
+        assert observations["prompts_after_wait"] == [first_prompt]
+        assert invoker.prompts.count(first_prompt) == 1
+        assert len(invoker.prompts) == 2
+        assert json.loads(control.read_text())["state"] == "running"
+    finally:
+        ctx.store.close()
 
 
 def test_relationships_are_enriched_and_carry_the_reduced_contract(world):
@@ -751,17 +1147,17 @@ def test_a_failed_terminal_call_never_becomes_an_honest_gap(world, tmp_path):
         ctx.store.close()
 
 
-def test_an_examined_item_the_terminal_model_leaves_ungapped_still_gaps(world):
-    """The healthy half must survive the fix: when the terminal CALL returns
-    and the model omits an item, the item is an honest gap exactly as before.
-    (This is the existing ignores-test's semantics, restated beside the
-    regression so the two halves of the rule live together.)"""
+def test_an_examined_item_with_an_omitted_terminal_answer_stays_unresolved(world):
+    """Provider silence is a run failure, not a researched fact about code."""
     stubborn = world["components"][0]
     plan = {cid: ("ground",) for cid in world["components"]}
     plan[stubborn] = ("gap", "silent", "silent")
 
     _, outcome, _, _ = _run(world, plan)
-    assert outcome.states[("component", stubborn)].state == "honest_gap"
+    assert outcome.states[("component", stubborn)].state == "escalate"
+    assert any(
+        "response-contract failures" in note for note in outcome.notes
+    )
 
 
 # --- the call plan and the store's terminal truth ------------------------------

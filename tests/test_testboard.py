@@ -48,6 +48,16 @@ def _load():
 tb = _load()
 
 
+def _load_control():
+    spec = importlib.util.spec_from_file_location(
+        "control_for_test", REPO_ROOT / "scripts" / "control.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
 # --------------------------------------------------------------------- fixtures
 
 
@@ -519,6 +529,58 @@ def test_a_missing_dashboard_file_is_reported_as_a_server_error(
     with pytest.raises(urllib.error.HTTPError) as excinfo:
         urllib.request.urlopen(f"{server}/", timeout=10)
     assert excinfo.value.code == 500
+
+
+# ------------------------------------------------ enrichment owner control
+
+
+def test_enrichment_resume_requires_and_persists_a_higher_checkpoint(
+    runs_dir, tmp_path
+):
+    control_module = _load_control()
+    control_module.testboard.RUNS_DIR = runs_dir
+    run_id = "2026-08-27-enhance-unamentis"
+    run_dir = runs_dir / run_id
+    run_dir.mkdir()
+    control_path = tmp_path / "control.json"
+    control_path.write_text(json.dumps({
+        "state": "paused", "spent_usd": 10.0, "reserved_usd": 2.0,
+        "pause_at_usd": 10.0, "revision": 3,
+    }))
+    (run_dir / "run.json").write_text(json.dumps({
+        "kind": "enhance",
+        "enrichment_control": {"path": str(control_path)},
+    }))
+
+    refused = control_module.enrichment_control(
+        run_id, "resume", {"pause_at_usd": 12.0}
+    )
+    assert refused["status"] == 400
+    accepted = control_module.enrichment_control(
+        run_id, "resume", {"pause_at_usd": 20.0}
+    )
+    assert accepted["status"] == 202
+    persisted = json.loads(control_path.read_text())
+    assert persisted["state"] == "running"
+    assert persisted["pause_at_usd"] == 20.0
+    assert persisted["revision"] == 4
+
+
+def test_enrichment_cancel_is_persisted_for_the_engine_to_observe(runs_dir, tmp_path):
+    control_module = _load_control()
+    control_module.testboard.RUNS_DIR = runs_dir
+    run_id = "2026-08-27-enhance-unamentis"
+    run_dir = runs_dir / run_id
+    run_dir.mkdir()
+    control_path = tmp_path / "control.json"
+    control_path.write_text(json.dumps({"state": "paused", "revision": 1}))
+    (run_dir / "run.json").write_text(json.dumps({
+        "kind": "enhance",
+        "enrichment_control": {"path": str(control_path)},
+    }))
+    result = control_module.enrichment_control(run_id, "cancel", {})
+    assert result["status"] == 202
+    assert json.loads(control_path.read_text())["state"] == "cancelled"
 
 
 # --------------------------------------------------------------- LedgerWatch

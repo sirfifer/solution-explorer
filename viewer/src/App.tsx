@@ -264,10 +264,27 @@ export function App() {
   const [summaryExpanded, setSummaryExpanded] = useState(() =>
     getStoredValue("arch-summary-expanded", true, localStorage),
   );
+  const evaluationSummaryAdjusted = useRef(false);
   const setSummaryExpandedPersisted = useCallback((expanded: boolean) => {
     setSummaryExpanded(expanded);
     setStoredValue("arch-summary-expanded", expanded, localStorage);
   }, []);
+  // A private evaluation can legitimately carry a large architecture summary,
+  // several honesty/status bands, and publication framing at once. Starting
+  // that summary expanded can reduce the actual graph to zero height on an
+  // ordinary laptop viewport. Collapse it once when the evaluation sidecar
+  // arrives; the reader can still expand it immediately, and public/non-eval
+  // publications retain the owner-decided expanded default.
+  useEffect(() => {
+    if (
+      publication?.purpose === "evaluation"
+      && publication.access.visibility !== "public"
+      && !evaluationSummaryAdjusted.current
+    ) {
+      evaluationSummaryAdjusted.current = true;
+      setSummaryExpanded(false);
+    }
+  }, [publication]);
   // One detail/review panel instance per form factor (S4): matches the lg:
   // breakpoint the panel classes already use.
   const [isDesktopViewport, setIsDesktopViewport] = useState(

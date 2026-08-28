@@ -112,12 +112,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-cost-usd",
         type=float,
-        default=DEFAULT_MAX_COST_USD,
+        default=None,
         help="Per-run cost ceiling in USD summed across ALL attempts, retries "
-        f"included (default: {DEFAULT_MAX_COST_USD}). Once reached, no new "
+        f"included (classic pass default: {DEFAULT_MAX_COST_USD}; ladder default: "
+        "disabled in favor of --pause-at-cost-usd). Once reached, no new "
         "partitions launch, in-flight ones finish, the rest are recorded as "
-        "skipped, and the run exits successfully with the partial state reported. "
+        "skipped, and the partial state is reported honestly. "
         "Pass a large value to effectively disable it.",
+    )
+    parser.add_argument(
+        "--pause-at-cost-usd",
+        type=float,
+        default=None,
+        help="Generous operator checkpoint for ladder runs. When reached, "
+        "finish and bank calls already in flight, persist decision support in "
+        "<run-dir>/control.json, and pause before any new model call until the "
+        "dashboard resumes with a higher checkpoint or cancels. Unlike "
+        "--max-cost-usd this is resumable and does not cap an answer.",
     )
     parser.add_argument(
         "--ladder",
@@ -179,6 +190,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Cap on P5 improvement rounds (default 2). Ladder only.",
     )
     parser.add_argument(
+        "--spot-check-fraction",
+        type=float,
+        default=None,
+        help="Fraction of grounded targets independently checked by P3 "
+        "(default 0.1). Use 1.0 for a small release canary. Ladder only.",
+    )
+    parser.add_argument(
+        "--max-spot-checks",
+        type=int,
+        default=None,
+        help="Maximum grounded targets independently checked by P3 "
+        "(default 25). Ladder only.",
+    )
+    parser.add_argument(
         "--retry-attempts",
         type=int,
         default=None,
@@ -233,7 +258,11 @@ def main(argv: list[str]) -> int:
         max_lines=args.max_lines,
         max_components=args.max_components,
         min_components=args.min_components,
-        max_cost_usd=args.max_cost_usd,
+        max_cost_usd=(
+            DEFAULT_MAX_COST_USD
+            if args.max_cost_usd is None
+            else args.max_cost_usd
+        ),
         retry_policy=retry_policy,
     )
 
@@ -360,6 +389,7 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
         models=models,
         iteration=iteration,
         max_cost_usd=args.max_cost_usd,
+        pause_at_cost_usd=args.pause_at_cost_usd,
         threshold=args.threshold,
         max_parallel=max(1, int(args.max_parallel or 1)),
         retry_attempts=(
@@ -370,6 +400,12 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
         policy.max_wall_minutes = args.max_wall_minutes
     if args.invoke_timeout_seconds is not None:
         policy.invoke_timeout_s = args.invoke_timeout_seconds
+    if args.spot_check_fraction is not None:
+        policy.spot_check_fraction = max(
+            0.0, min(1.0, float(args.spot_check_fraction))
+        )
+    if args.max_spot_checks is not None:
+        policy.max_spot_checks = max(1, int(args.max_spot_checks))
     config = LadderConfig(
         store_path=store_path,
         root=root,

@@ -806,12 +806,65 @@ def _parse_json_object(
         # strings is relaxed.
         obj = json.loads(span, strict=False)
     except json.JSONDecodeError:
-        obj = _repair_truncated(span)
+        # Models occasionally emit otherwise-complete JSON with a comma after
+        # the final array/object member. The live UnaMentis P5 response did
+        # exactly this after spending 4,471 output tokens; treating it as an
+        # unparseable determination skipped both quality-improvement rounds.
+        # Delete only commas that are structurally followed by a closer while
+        # outside a string. This invents no value and cannot alter prose.
+        repaired = _remove_trailing_commas(span)
+        try:
+            obj = json.loads(repaired, strict=False)
+        except json.JSONDecodeError:
+            obj = _repair_truncated(repaired)
     if not isinstance(obj, dict):
         return None
     if expect_keys and not any(key in obj for key in expect_keys):
         return None
     return obj
+
+
+def _remove_trailing_commas(text: str) -> str:
+    """Remove JSON trailing commas outside strings, and nothing else."""
+    out: list[str] = []
+    in_string = False
+    escaped = False
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            out.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            out.append(char)
+            index += 1
+            continue
+        if char == ",":
+            following = index + 1
+            while following < len(text) and text[following].isspace():
+                following += 1
+            previous = index - 1
+            while previous >= 0 and text[previous].isspace():
+                previous -= 1
+            if (
+                previous >= 0
+                and text[previous] not in "{[:,"
+                and following < len(text)
+                and text[following] in "]}"
+            ):
+                index += 1
+                continue
+        out.append(char)
+        index += 1
+    return "".join(out)
 
 
 def _clean_component_payload(scorer: Any, ai: dict, clock: Clock) -> dict:
@@ -1015,6 +1068,7 @@ def run_enhance(
             store.data_entities(),
             store.rules(),
             arch.get("relationships", []),
+            root=config.root,
         )
 
         include_ids: Optional[set[str]] = None
