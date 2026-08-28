@@ -1,0 +1,260 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "bom-ref": "pkg:swift/github.com/livekit/client-sdk-swift",
+      "name": "client-sdk-swift",
+      "properties": [
+        {
+          "name": "solution_explorer:ecosystem",
+          "value": "swift"
+        },
+        {
+          "name": "solution_explorer:pin_status",
+          "value": "range"
+        },
+        {
+          "name": "solution_explorer:scope",
+          "value": "direct"
+        },
+        {
+          "name": "solution_explorer:declared",
+          "value": "from: 2.0.0"
+        },
+        {
+          "name": "solution_explorer:evidence",
+          "value": ".claude/worktrees/agent-a47f3b12323d6bde3/Package.swift:20"
+        }
+      ],
+      "purl": "pkg:swift/github.com/livekit/client-sdk-swift",
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:swift/github.com/shibapm/Komondor",
+      "name": "komondor",
+      "properties": [
+        {
+          "name": "solution_explorer:ecosystem",
+          "value": "swift"
+        },
+        {
+          "name": "solution_explorer:pin_status",
+          "value": "range"
+        },
+        {
+          "name": "solution_explorer:scope",
+          "value": "direct"
+        },
+        {
+          "name": "solution_explorer:declared",
+          "value": "from: 1.1.0"
+        },
+        {
+          "name": "solution_explorer:evidence",
+          "value": ".claude/worktrees/agent-a47f3b12323d6bde3/Package.swift:40"
+        }
+      ],
+      "purl": "pkg:swift/github.com/shibapm/Komondor",
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:swift/github.com/StanfordBDHG/llama.cpp",
+      "name": "llama.cpp",
+      "properties": [
+        {
+          "name": "solution_explorer:ecosystem",
+          "value": "swift"
+        },
+        {
+          "name": "solution_explorer:pin_status",
+          "value": "range"
+        },
+        {
+          "name": "solution_explorer:scope",
+          "value": "direct"
+        },
+        {
+          "name": "solution_explorer:declared",
+          "value": "from: 0.3.3"
+        },
+        {
+          "name": "solution_explorer:evidence",
+          "value": ".claude/worktrees/agent-a47f3b12323d6bde3/Package.swift:30"
+        }
+      ],
+      "purl": "pkg:swift/github.com/StanfordBDHG/llama.cpp",
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:swift/github.com/apple/swift-collections",
+      "name": "swift-collections",
+      "properties": [
+        {
+          "name": "solution_explorer:ecosystem",
+          "value": "swift"
+        },
+        {
+          "name": "solution_explorer:pin_status",
+          "value": "range"
+        },
+        {
+          "name": "solution_explorer:scope",
+          "value": "direct"
+        },
+        {
+          "name": "solution_explorer:declared",
+          "value": "from: 1.1.0"
+        },
+        {
+          "name": "solution_explorer:evidence",
+          "value": ".claude/worktrees/agent-a47f3b12323d6bde3/Package.swift:26"
+        }
+      ],
+      "purl": "pkg:swift/github.com/apple/swift-collections",
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:swift/github.com/apple/swift-log",
+      "name": "swift-log",
+      "properties": [
+        {
+          "name": "solution_explorer:ecosystem",
+          "value": "swift"
+        },
+        {
+          "name": "solution_explorer:pin_status",
+          "value": "range"
+        },
+        {
+          "name": "solution_explorer:scope",
+          "value": "direct"
+        },
+        {
+          "name": "solution_explorer:declared",
+          "value": "from: 1.5.0"
+        },
+        {
+          "name": "solution_explorer:evidence",
+          "value": ".claude/worktrees/agent-a47f3b12323d6bde3/Package.swift:23"
+        }
+      ],
+      "purl": "pkg:swift/github.com/apple/swift-log",
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:swift/github.com/lake-of-fire/swift-readability",
+      "name": "swift-readability",
+      "properties": [
+        {
+          "name": "solution_explorer:ecosystem",
+          "value": "swift"
+        },
+        {
+          "name": "solution_explorer:pin_status",
+          "value": "exact-pinned"
+        },
+        {
+          "name": "solution_explorer:scope",
+          "value": "direct"
+        },
+        {
+          "name": "solution_explorer:declared",
+          "value": "revision: d4f0824f5f4496791d01a83493ffccf3dd89c4cf"
+        },
+        {
+          "name": "solution_explorer:evidence",
+          "value": ".claude/worktrees/agent-a47f3b12323d6bde3/Package.swift:37"
+        }
+      ],
+      "purl": "pkg:swift/github.com/lake-of-fire/swift-readability",
+      "type": "library"
+    },
+    {
+      "bom-ref": "pkg:swift/github.com/mgriebling/SwiftMath",
+      "name": "swiftmath",
+      "properties": [
+        {
+          "name": "solution_explorer:ecosystem",
+          "value": "swift"
+        },
+        {
+          "name": "solution_explorer:pin_status",
+          "value": "range"
+        },
+        {
+          "name": "solution_explorer:scope",
+          "value": "direct"
+        },
+        {
+          "name": "solution_explorer:declared",
+          "value": "from: 3.4.0"
+        },
+        {
+          "name": "solution_explorer:evidence",
+          "value": ".claude/worktrees/agent-a47f3b12323d6bde3/Package.swift:33"
+        }
+      ],
+      "purl": "pkg:swift/github.com/mgriebling/SwiftMath",
+      "type": "library"
+    },
+    {
+      "bom-ref": "vendored:UnaMentis",
+      "name": "UnaMentis",
+      "properties": [
+        {
+          "name": "solution_explorer:vendored",
+          "value": "true"
+        },
+        {
+          "name": "solution_explorer:evidence",
+          "value": "UnaMentis"
+        }
+      ],
+      "type": "library"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "bom-ref": "root:unamentis-ios",
+      "name": "unamentis-ios",
+      "properties": [
+        {
+          "name": "solution_explorer:target:swift:swift-tools",
+          "value": "6.0"
+        },
+        {
+          "name": "solution_explorer:target:swift:swift-tools",
+          "value": "6.0"
+        },
+        {
+          "name": "solution_explorer:target:swift:swift-tools",
+          "value": "6.0"
+        },
+        {
+          "name": "solution_explorer:target:swift:swift-tools",
+          "value": "6.0"
+        },
+        {
+          "name": "solution_explorer:target:swift:swift-tools",
+          "value": "6.0"
+        },
+        {
+          "name": "solution_explorer:target:swift:swift-tools",
+          "value": "6.0"
+        },
+        {
+          "name": "solution_explorer:target:swift:swift-tools",
+          "value": "6.0"
+        },
+        {
+          "name": "solution_explorer:target:swift:swift-tools",
+          "value": "6.0"
+        }
+      ],
+      "type": "application"
+    }
+  },
+  "serialNumber": "urn:uuid:e1475402-0101-5ebc-b0fd-220fd43bdf0b",
+  "specVersion": "1.5",
+  "version": 1
+}

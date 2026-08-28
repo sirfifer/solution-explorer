@@ -1,0 +1,65 @@
+{
+  "cra_readiness_version": 1,
+  "items": [
+    {
+      "cra_clause": "Annex I Part II(5) coordinated vulnerability disclosure policy",
+      "evidence": {
+        "detail": null,
+        "path": "SECURITY.md"
+      },
+      "id": "security_md",
+      "label": "Security policy (SECURITY.md)",
+      "status": "present"
+    },
+    {
+      "cra_clause": "Annex I Part II(6) single point of contact for vulnerability reports",
+      "evidence": {
+        "detail": "Instead, please email richard@amerman.net with:",
+        "path": "SECURITY.md"
+      },
+      "id": "cvd_contact",
+      "label": "Vulnerability disclosure contact",
+      "status": "present"
+    },
+    {
+      "cra_clause": "Annex I Part II(1) SBOM covering at least the top-level dependencies",
+      "evidence": {
+        "detail": "sbom.json emitted with 7 shipping dependency component(s).",
+        "path": "sbom.json"
+      },
+      "id": "sbom",
+      "label": "Software bill of materials (sbom.json)",
+      "status": "present"
+    },
+    {
+      "cra_clause": "Annex I Part II(7) secure distribution of security updates",
+      "evidence": null,
+      "id": "dependency_update_config",
+      "label": "Dependency update configuration",
+      "status": "absent"
+    },
+    {
+      "cra_clause": "Article 13(8) support period statement; Annex I Part II(8) timely security updates",
+      "evidence": {
+        "detail": "## Supported Versions",
+        "path": "SECURITY.md"
+      },
+      "id": "support_statement",
+      "label": "Support or end-of-life statement",
+      "status": "present"
+    },
+    {
+      "cra_clause": "Annex I Part I(2)(f) integrity protection (hygiene observation, not a CRA obligation line)",
+      "evidence": {
+        "detail": "11 of the last 50 commit(s) carry a signature (git log --format=%G?). Hygiene observation, not a pass/fail.",
+        "path": null
+      },
+      "id": "signed_commits",
+      "label": "Signed-commit sample (recent history)",
+      "observation": true,
+      "status": "present"
+    }
+  ],
+  "kind": "solution-explorer-cra-readiness",
+  "scope": "Repo-observable CRA readiness only. This enumerates repository artifacts that an EU Cyber Resilience Act technical file references, checked by presence or absence. It is NOT a conformity assessment, NOT vulnerability reporting, and NOT legal advice. Absence of an item is not proof of non-compliance, and presence is not proof of compliance."
+}
