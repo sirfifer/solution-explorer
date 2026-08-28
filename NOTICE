@@ -1,0 +1,20 @@
+# Licensing history
+
+Each version of Solution Explorer is governed by the license present in that
+version's `LICENSE` file. A license change applies to versions published after
+the change. It does not alter the terms of versions already published, and it
+does not withdraw rights already granted to anyone holding an earlier copy.
+
+| Versions | License |
+| --- | --- |
+| First commit (2026-01-30) through 2026-07-21 | MIT |
+| 2026-07-21 (commit `f0f8d00`) through 2026-08-27 | FSL-1.1-ALv2 (SPDX: `FSL-1.1-Apache-2.0`) |
+| 2026-08-27 onward | PolyForm Noncommercial License 1.0.0 |
+
+Copies obtained under MIT or FSL remain governed by those terms, for those
+versions only. Every version published from 2026-08-27 onward is noncommercial
+only. Commercial use of those versions requires a written license from the
+copyright holder. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+
+Copyright 2025-2026 Richard Amerman (sirfifer). All rights not expressly
+granted are reserved.

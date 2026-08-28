@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/sirfifer/solution-explorer/actions/workflows/architecture-viz.yml"><img src="https://github.com/sirfifer/solution-explorer/actions/workflows/architecture-viz.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue.svg" alt="FSL-1.1-ALv2 License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm--Noncommercial--1.0.0-blue.svg" alt="PolyForm Noncommercial 1.0.0 License"></a>
   <a href="https://github.com/sirfifer/solution-explorer/releases"><img src="https://img.shields.io/github/v/release/sirfifer/solution-explorer" alt="Release"></a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/node-20%2B-green" alt="Node 20+">
@@ -716,6 +716,10 @@ solution-explorer/
 
 ## License
 
-[Functional Source License, Version 1.1, ALv2 Future License](LICENSE) (FSL-1.1-ALv2, SPDX: FSL-1.1-Apache-2.0) &copy; 2025-2026 Richard Amerman (sirfifer).
+[PolyForm Noncommercial License 1.0.0](LICENSE) (SPDX: `PolyForm-Noncommercial-1.0.0`) &copy; 2025-2026 Richard Amerman (sirfifer).
 
-In plain terms: you can use, copy, modify, and redistribute this software freely for any purpose except offering a product or service that competes with it. Each release automatically becomes Apache-2.0 two years after its publication. Versions of this project published before the license change remain MIT; everything after is FSL. This is a source-available (Fair Source) license, not an OSI open source license, and we label it honestly as such.
+In plain terms: you can use, copy, modify, and redistribute this software for any noncommercial purpose. Personal, hobby, study, and research use is free, and so is use by charities, schools, public research bodies, public safety and health organizations, environmental organizations, and government institutions.
+
+**Commercial use requires a written license.** That includes a company running it internally on its own code, consultancies using it on client work, and anyone embedding it in something they sell. Evaluation and proof of concept access is granted routinely, and free grants for open source and public benefit work are common, but each one is granted explicitly rather than assumed. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) to ask, [ADDITIONAL-PERMISSIONS.md](ADDITIONAL-PERMISSIONS.md) for what has been granted, and [docs/commercial/GRANT-POLICY.md](docs/commercial/GRANT-POLICY.md) for the criteria.
+
+This is a source-available license, not an OSI open source license, and we label it honestly as such. Earlier versions of this project carried different terms and keep them; see [NOTICE](NOTICE).

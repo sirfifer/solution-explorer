@@ -42,7 +42,7 @@ Recorded in the demo's registry entry and checked before publish.
    and not-affiliated framing is required, and is enforced: the validator rejects
    a non-owner publication whose banner, footer and disclaimers never say so.
 6. **Keep our code and their content separable in the bundle.** Our viewer is
-   FSL-1.1-ALv2. Their content is theirs. Nothing in the bundle should imply our
+   PolyForm Noncommercial 1.0.0. Their content is theirs. Nothing in the bundle should imply our
    license covers their material, or theirs covers ours.
 7. **Record the reviewer and the date** in the registry entry, with the SPDX
    identifier and the commit reviewed. A review is of a specific snapshot.

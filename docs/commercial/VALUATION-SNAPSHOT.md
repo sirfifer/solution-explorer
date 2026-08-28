@@ -30,7 +30,7 @@ What exists and is verifiable:
 | Multi-repo composition | M1 shipped (composition without cross-repo edges); M2-M4 designed, not built |
 | Engineering hygiene | 1,642 passing tests, golden corpora with parity guards, CI green, SBOM, CRA readiness artifact |
 | AI-era angles | Machine front door (`ai.json`, `llms.txt`): agents consume the enumeration at a fraction of raw-repo token cost |
-| Clean IP | One human contributor plus dependabot; solo copyright; FSL-1.1-ALv2; license review and consent policy already built for demos |
+| Clean IP | One human contributor plus dependabot; solo copyright; PolyForm Noncommercial 1.0.0 with all commercial rights reserved; license review, grant policy, and consent policy already built |
 | Operational maturity path | Weekly refresh harness designed (gates, provenance, findings loop); demos as living infrastructure, not screenshots |
 
 What does not exist, and a buyer will notice in the same ten minutes:
@@ -204,10 +204,11 @@ private code)**: weekly refreshed, gated, provenance-stamped private map.
   everyone looks at it). 5-15 customers by month 9-12 in the good case:
   **$2k-$10k MRR**.
 
-**5c. OEM / embed licensing to dev-tool companies.** FSL makes this clean:
-internal use is free under FSL, but embedding Solution Explorer's capability
-in someone else's commercial product is Competing Use and requires a
-commercial grant. That forces exactly the right companies to the table.
+**5c. OEM / embed licensing to dev-tool companies.** PolyForm Noncommercial
+makes this clean: no commercial use of any kind is granted, so embedding
+Solution Explorer's capability in someone else's commercial product requires a
+negotiated license, and so does that company merely trialling it. That forces
+exactly the right companies to the table, earlier than FSL did.
 - Comp scaffolds for small OEM: GoJS $3,995-$11,950 per team perpetual;
   JointJS+ $2,990/dev; tldraw SDK ~$6k/yr per team [R]; Zwibbler $5,999 flat;
   SQLite's public ladder $2k-$6k per component, support $8k-$85k/yr,
@@ -228,14 +229,30 @@ does support paid plugins.
 close to zero; $100M lifetime across 70k+ maintainers). Keep a sponsor
 button; expect nothing.
 
-**FSL mechanics worth writing down once:** dual licensing on top of FSL is
-standard practice (PowerSync, Keygen; Sentry relicensed Codecov after
-acquiring it, proving a single-owner fair-source codebase transfers and
-relicenses freely). Internal use and professional services are free by the
-license, so enterprise revenue must sell operation, freshness, support, and
-gates, not the right to run the tool. Each release converts to Apache-2.0
-after two years, which mildly discounts old code in a sale and argues against
-a slow-burn strategy stretched past ~24 months.
+**License mechanics worth writing down once** (relicensed from FSL-1.1-ALv2
+to PolyForm Noncommercial 1.0.0 on 2026-08-27; see NOTICE for the full
+history): dual licensing on top of a source-available license is standard
+practice (PowerSync, Keygen; Sentry relicensed Codecov after acquiring it,
+proving a single-owner source-available codebase transfers and relicenses
+freely). Three consequences of the move off FSL:
+
+- **The right to run the tool is now itself sellable.** Under FSL, internal
+  corporate use was free and enterprise revenue had to sell operation,
+  freshness, support, and gates. Under PolyForm Noncommercial it does not,
+  which restores per-organization internal-use licensing (5b) as a primary
+  line rather than a packaging exercise.
+- **No conversion date.** FSL converted each release to Apache-2.0 after two
+  years, which discounted older code in a sale and argued against a slow burn
+  past ~24 months. PolyForm Noncommercial has no sunset, so age does not erode
+  the asset and a longer build is not self-defeating.
+- **Adoption is now top-down.** A developer can no longer legally trial it at
+  work without a grant. Pipeline comes from inbound license requests, which
+  enterprise SCA tooling reliably generates by flagging the license, plus
+  direct sales. Bottom-up organic adoption inside companies is no longer a
+  channel, and the demo showcase is a sales asset rather than a funnel.
+  Grants are issued per docs/commercial/GRANT-POLICY.md, and every one is
+  recorded in ADDITIONAL-PERMISSIONS.md, which doubles as evidence of
+  consistent enforcement in diligence.
 
 ## 6. Buyer and licensee map, ranked
 
