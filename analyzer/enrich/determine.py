@@ -785,7 +785,7 @@ class DeterminationPhase:
                 break
             if not ctx.budget.under():
                 outcome.notes.append(
-                    f"round {round_number + 1} not run: run cost ceiling reached"
+                    f"round {round_number + 1} not run: {ctx.budget.stop_reason()}"
                 )
                 break
             round_number += 1
@@ -972,7 +972,9 @@ class DeterminationPhase:
         *, forced_round: bool, rounds_so_far: Optional[list[dict]] = None,
     ) -> dict:
         if not ctx.budget.under():
-            outcome.notes.append("determination not judged: run cost ceiling reached")
+            outcome.notes.append(
+                f"determination not judged: {ctx.budget.stop_reason()}"
+            )
             return {}
         ceiling = ctx.policy.max_cost_usd
         remaining = ctx.budget.remaining()

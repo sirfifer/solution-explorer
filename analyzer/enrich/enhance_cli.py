@@ -477,7 +477,8 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
             "(metered against the owner's subscription, not money spent)"
         )
     if result.ceiling_hit:
-        print("  note: run cost ceiling reached; partial state reported honestly")
+        reason = getattr(result, "stop_reason", None) or "run ceiling reached"
+        print(f"  note: {reason}; partial state reported honestly")
     if result.failed_phases:
         print(f"  FAILED phases: {result.failed_phases}")
     if not result.ok:

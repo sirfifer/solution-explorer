@@ -33,6 +33,7 @@ from analyzer.enrich.pipeline import (
     run_pipeline,
 )
 from analyzer.enrich.retry import RetryingInvoker, RetryPolicy
+from analyzer.enrich.runreport import render_markdown
 
 # --- seams -------------------------------------------------------------------
 
@@ -180,7 +181,43 @@ def test_one_budget_spans_phases_and_the_terminal_phase_still_runs():
     assert by_name["p5_determination"].status == "ok"
     assert [name for name, _ in order] == ["p5_determination"]
     assert result.ceiling_hit is True
+    assert result.stop_reason == "run cost ceiling reached ($1.00 API-equivalent)"
     assert ctx.budget.spent == 1.2
+
+
+def test_pipeline_reports_systemic_failure_as_systemic_not_cost():
+    order: list = []
+    ctx = _context(ceiling=100.0)
+    for _ in range(ctx.budget.systemic_threshold):
+        ctx.budget.note_result(False, "provider capacity exhausted")
+
+    result = run_pipeline(
+        ctx,
+        [RecordingPhase("p2_ladder", order), RecordingPhase("p5_determination", order)],
+    )
+
+    assert result.ceiling_hit is True
+    assert result.stop_reason is not None
+    assert "systemic failure circuit open" in result.stop_reason
+    assert "cost ceiling" not in result.stop_reason
+    assert "systemic failure circuit open" in result.phases[0].notes[0]
+
+    markdown = render_markdown(
+        {
+            "identity": {
+                "subject": "test",
+                "totals": {
+                    "invocations": 0,
+                    "cost_usd": 0.0,
+                    "ceiling_hit": True,
+                    "stop_reason": result.stop_reason,
+                },
+            },
+            "determination": {},
+        }
+    )
+    assert "systemic failure circuit open" in markdown
+    assert "run cost ceiling was reached" not in markdown.lower()
 
 
 def test_a_metered_invoker_past_the_ceiling_spends_nothing_and_says_so():

@@ -515,7 +515,7 @@ class AdjudicationPhase:
         for label, fn, attr in passes:
             if not ctx.budget.under():
                 outcome.notes.append(
-                    f"verify {label} not run: run cost ceiling reached"
+                    f"verify {label} not run: {ctx.budget.stop_reason()}"
                 )
                 continue
             config = VerifyConfig(
@@ -642,7 +642,8 @@ class AdjudicationPhase:
         for state in sampled:
             if not ctx.budget.under():
                 outcome.notes.append(
-                    "grounding spot-checks stopped early: run cost ceiling reached"
+                    "grounding spot-checks stopped early: "
+                    + ctx.budget.stop_reason()
                 )
                 break
             answers = answers_by_key.get((state.target_kind, state.target_id), {})
@@ -736,7 +737,7 @@ class AdjudicationPhase:
         for state in sampled:
             if not ctx.budget.under():
                 outcome.notes.append(
-                    "substitution checks stopped early: run cost ceiling reached"
+                    "substitution checks stopped early: " + ctx.budget.stop_reason()
                 )
                 break
             payload = payloads.get(state.target_id) or {}

@@ -269,7 +269,7 @@ def execute_work_order(
         outcome.notes.append("not executed: " + "; ".join(problems))
         return outcome
     if not ctx.budget.under():
-        outcome.notes.append("not executed: run cost ceiling reached")
+        outcome.notes.append("not executed: " + ctx.budget.stop_reason())
         return outcome
 
     scope = list(dict.fromkeys(order.scope))[: order.max_targets]
@@ -381,7 +381,7 @@ def execute_work_order(
 
     for component_ids, partition_relationship_keys in target_batches:
         if not ctx.budget.under():
-            outcome.notes.append("stopped early: run cost ceiling reached")
+            outcome.notes.append("stopped early: " + ctx.budget.stop_reason())
             break
         if not component_ids and not partition_relationship_keys:
             continue

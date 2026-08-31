@@ -541,6 +541,11 @@ def _identity(ctx, result, engine_version: str) -> dict:
                 and result.total_cost_usd > result.cost_ceiling_usd + 1e-9
             ),
             "ceiling_hit": result.ceiling_hit,
+            **(
+                {"stop_reason": result.stop_reason}
+                if getattr(result, "stop_reason", None)
+                else {}
+            ),
             "failed_phases": result.failed_phases,
         },
         "dry_run": ctx.dry_run,
@@ -1060,9 +1065,10 @@ def render_markdown(report: dict) -> str:
         "",
     ]
     if totals.get("ceiling_hit"):
+        stop_reason = totals.get("stop_reason") or "run ceiling reached"
         lines += [
-            "**The run cost ceiling was reached.** Work below was left undone and "
-            "is recorded as skipped, not as complete.",
+            f"**The run stopped early:** {stop_reason} Work below was left undone "
+            "and is recorded as skipped, not as complete.",
             "",
         ]
     if totals.get("cost_ceiling_exceeded"):

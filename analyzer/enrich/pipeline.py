@@ -1244,6 +1244,7 @@ class PipelineResult:
     total_cost_usd: float = 0.0
     cost_ceiling_usd: Optional[float] = None
     ceiling_hit: bool = False
+    stop_reason: Optional[str] = None
     quality_status: str = "not-evaluated"
     quality_issues: list[str] = field(default_factory=list)
     audit: Optional[dict] = None
@@ -1268,6 +1269,7 @@ class PipelineResult:
             "total_cost_usd": round(self.total_cost_usd, 6),
             "cost_ceiling_usd": self.cost_ceiling_usd,
             "ceiling_hit": self.ceiling_hit,
+            "stop_reason": self.stop_reason,
             "failed_phases": self.failed_phases,
             "quality_status": self.quality_status,
             "quality_issues": list(self.quality_issues),
@@ -1330,6 +1332,7 @@ def run_pipeline(ctx: RunContext, phases: Iterable[Phase]) -> PipelineResult:
 
     if not ctx.budget.under():
         result.ceiling_hit = True
+        result.stop_reason = ctx.budget.stop_reason()
     result.ledger = list(ctx.ledger)
     result.total_cost_usd = ctx.budget.spent
     result.cost_ceiling_usd = ctx.budget.ceiling
