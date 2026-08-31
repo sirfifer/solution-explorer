@@ -9,6 +9,7 @@ import pytest
 from analyzer.enrich.compact import (
     compact_json_schema,
     coverage_issues,
+    escalation_response_budget_bytes,
     normalize_compact_response,
     response_budget_bytes,
     salvage_compact_response,
@@ -898,6 +899,10 @@ def test_schema_and_byte_budget_are_exact_for_the_requested_call_shape():
     assert "key_user_flows is an array of at most five strings" in prefix
 
     assert response_budget_bytes(components=1) == int((512 + 3600) * 1.08)
+    assert response_budget_bytes(relationships=5) == int((512 + 5 * 720) * 1.08)
+    assert escalation_response_budget_bytes(relationships=5) == int(
+        (512 + 5 * 2400) * 1.08
+    )
     # Array bounds are the RUNG caps, not this call's counts: the schema text
     # is part of the cached entry, so a per-call bound cold-writes the whole
     # stable block. Exact per-call id sets stay with coverage_issues.

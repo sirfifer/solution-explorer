@@ -253,7 +253,11 @@ def execute_work_order(
     "the map got better", and a determination that cannot tell them apart will
     keep buying rounds that do nothing.
     """
-    from .compact import coverage_issues, normalize_compact_response, response_budget_bytes
+    from .compact import (
+        coverage_issues,
+        escalation_response_budget_bytes,
+        normalize_compact_response,
+    )
     from .evidence import EvidenceValidator
     from .ladder import LadderOutcome, LadderPhase
     from .partition import flatten_components
@@ -481,7 +485,7 @@ def execute_work_order(
             prompt = build_compact_escalation_prompt(
                 items, terminal=False, assignment=attempt_assignment
             )
-            output_budget = response_budget_bytes(
+            output_budget = escalation_response_budget_bytes(
                 components=len(pending_components),
                 relationships=len(pending_relationships),
             )

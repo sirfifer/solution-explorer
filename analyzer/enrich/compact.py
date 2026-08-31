@@ -32,6 +32,12 @@ COMPACT_WIRE_VERSION = "compact/v1"
 # JSON punctuation and escaped characters around per-target budgets.
 COMPONENT_RESPONSE_BYTES = 3_600
 RELATIONSHIP_RESPONSE_BYTES = 720
+# Repair prompts carry failed-question history, current product, and
+# replacement evidence. The VS Code full run measured 2,007 bytes/target at
+# p99 in the terminal repair rung; applying the bulk 720-byte contract there
+# rejected otherwise delivered work. Keep bulk tight, but make the repair guard
+# a runaway boundary with roughly 20% p99 headroom.
+ESCALATION_RELATIONSHIP_RESPONSE_BYTES = 2_400
 RESPONSE_ENVELOPE_BYTES = 512
 RESPONSE_BUDGET_TOLERANCE = 1.08
 
@@ -67,6 +73,24 @@ def response_budget_bytes(*, components: int = 0, relationships: int = 0) -> int
         RESPONSE_ENVELOPE_BYTES
         + max(0, int(components)) * COMPONENT_RESPONSE_BYTES
         + max(0, int(relationships)) * RELATIONSHIP_RESPONSE_BYTES
+    )
+    return int(nominal * RESPONSE_BUDGET_TOLERANCE)
+
+
+def escalation_response_budget_bytes(
+    *, components: int = 0, relationships: int = 0,
+) -> int:
+    """Runaway guard for targeted repair calls, including tolerance.
+
+    This is separate from ``response_budget_bytes`` so widening a repair
+    envelope cannot weaken the much larger one-shot bulk calls. The exit audit
+    still enforces output density, preventing verbosity from being mistaken
+    for an efficient success.
+    """
+    nominal = (
+        RESPONSE_ENVELOPE_BYTES
+        + max(0, int(components)) * COMPONENT_RESPONSE_BYTES
+        + max(0, int(relationships)) * ESCALATION_RELATIONSHIP_RESPONSE_BYTES
     )
     return int(nominal * RESPONSE_BUDGET_TOLERANCE)
 

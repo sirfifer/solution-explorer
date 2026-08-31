@@ -43,6 +43,7 @@ from .compact import (
     COMPONENT_CALL_CAP,
     RELATIONSHIP_CALL_CAP,
     coverage_issues,
+    escalation_response_budget_bytes,
     normalize_compact_response,
     response_budget_bytes,
 )
@@ -983,7 +984,7 @@ class LadderPhase:
             )
             jobs.append((
                 index, prompt, len(batch),
-                response_budget_bytes(
+                escalation_response_budget_bytes(
                     components=sum(1 for s in batch if s.target_kind == "component"),
                     relationships=sum(1 for s in batch if s.target_kind == "relationship"),
                 ),
