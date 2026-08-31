@@ -99,6 +99,24 @@ def test_relationship_claims_require_explicit_citations():
     assert normalized["relationships"][key]["data_flow_description"] == answers["flow"]["claim"]
 
 
+def test_malformed_compact_citation_preserves_raw_bytes_for_replay():
+    facts = _facts()
+    malformed = [99, {"unexpected": "shape"}]
+    normalized = normalize_compact_response(
+        {"components": [{
+            "i": "api",
+            "purpose": {"t": "Handles requests.", "e": [malformed]},
+        }], "relationships": []},
+        facts=facts, component_ids=["api"],
+    )
+    evidence = normalized["components"]["api"]["contract"]["answers"][
+        "purpose"
+    ]["evidence"][0]
+    assert evidence["kind"] == "compact-invalid"
+    assert evidence["raw_citation"] == malformed
+    assert evidence["reason"]
+
+
 def test_word_one_uniqueness_claim_gets_the_global_count_atom():
     facts = _facts()
     obj = {"components": [{
@@ -422,6 +440,61 @@ def test_live_declaration_aliases_resolve_only_to_an_exact_supplied_symbol(citat
         key: evidence[0][key] for key in ("kind", "path", "symbol")
     } == {
         "kind": "symbol", "path": "Dashboard.swift", "symbol": "DashboardView",
+    }
+
+
+def test_flattened_single_symbol_citation_is_not_split_into_invalid_strings():
+    facts = StoreFacts(
+        {"components": [{
+            "id": "ui/dashboard", "name": "Dashboard", "type": "screen",
+            "files": ["Dashboard.swift"],
+        }], "symbols": [{
+            "file": "Dashboard.swift", "line": 12, "end_line": 80,
+            "name": "DashboardView", "kind": "struct",
+            "code_preview": "struct DashboardView: View {",
+        }]},
+        capabilities=[], data_entities=[], rules=[], relationships=[],
+    )
+    wire = {"components": [{
+        "i": "ui/dashboard",
+        "mechanism": {
+            "t": "DashboardView renders the dashboard.",
+            "e": ["S", "DashboardView"],
+        },
+    }], "relationships": []}
+
+    evidence = normalize_compact_response(
+        wire, facts=facts, component_ids=["ui/dashboard"],
+    )["components"]["ui/dashboard"]["contract"]["answers"]["mechanism"]["evidence"]
+    assert len(evidence) == 1
+    assert {key: evidence[0][key] for key in ("kind", "path", "symbol")} == {
+        "kind": "symbol", "path": "Dashboard.swift", "symbol": "DashboardView",
+    }
+    assert evidence[0]["line"] == 12
+
+
+def test_relationship_facts_include_bounded_endpoint_declaration_context():
+    key = "api|db|queries"
+    facts = StoreFacts(
+        {"components": [
+            {"id": "api", "name": "API", "files": ["api.py"]},
+            {"id": "db", "name": "Database", "files": ["db.py"]},
+        ], "symbols": [
+            {"file": "api.py", "line": 1, "end_line": 5,
+             "name": "API", "kind": "class", "code_preview": "class API:"},
+            {"file": "db.py", "line": 1, "end_line": 5,
+             "name": "Database", "kind": "class", "code_preview": "class Database:"},
+        ]},
+        capabilities=[], data_entities=[], rules=[], relationships=[{
+            "source": "api", "target": "db", "type": "queries",
+            "evidence": [{"kind": "file", "path": "api.py", "line": 3}],
+        }],
+    )
+
+    block = facts.relationship_facts(key)
+    assert {row["component"] for row in block["source_declarations"]} == {"api", "db"}
+    assert {row["endpoint"] for row in block["source_declarations"]} == {
+        "source", "target",
     }
 
 
@@ -820,6 +893,9 @@ def test_schema_and_byte_budget_are_exact_for_the_requested_call_shape():
 
     assert "A system relationship count proves how many edges exist" in prefix
     assert "Prefer a supported parent component" in prefix
+    assert 'not {"t","e"} evidence objects' in prefix
+    assert "testing_maturity is exactly" in prefix
+    assert "key_user_flows is an array of at most five strings" in prefix
 
     assert response_budget_bytes(components=1) == int((512 + 3600) * 1.08)
     # Array bounds are the RUNG caps, not this call's counts: the schema text

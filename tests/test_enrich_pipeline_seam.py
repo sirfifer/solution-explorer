@@ -247,6 +247,44 @@ def test_every_invocation_ledgers_phase_rung_model_tokens_and_cost():
     assert row.ok is True
 
 
+def test_ledger_preserves_ttl_split_and_the_resolved_cache_policy():
+    selected = []
+
+    class CacheAwareInvoker:
+        def set_cache_policy(self, value):
+            selected.append(value)
+
+        def __call__(self, prompt):
+            return InvokeResult(
+                ok=True, text="{}", cost_usd=0.1,
+                usage={
+                    "input_tokens": 2,
+                    "cache_creation_input_tokens": 1_250,
+                    "cache_read_input_tokens": 3_000,
+                    "output_tokens": 4,
+                    "cache_creation": {
+                        "ephemeral_1h_input_tokens": 0,
+                        "ephemeral_5m_input_tokens": 1_250,
+                    },
+                },
+            )
+
+    ctx = _context(invoker_factory=lambda _model: CacheAwareInvoker())
+    invoker = ctx.invoker(
+        "p3_adjudication", phase="p3_adjudication",
+        rung="substitution-check",
+    )
+    invoker("prompt")
+
+    row = ctx.ledger[-1]
+    assert selected == ["5m"]
+    assert row.cache_policy == "5m"
+    assert row.tokens_cache_write == 1_250
+    assert row.tokens_cache_write_5m == 1_250
+    assert row.tokens_cache_write_1h == 0
+    assert row.tokens_cache_write_unknown == 0
+
+
 def test_the_ledger_retry_count_is_the_real_transport_attempt_count():
     """Fail-before contrast: this is the field that would silently read zero.
 

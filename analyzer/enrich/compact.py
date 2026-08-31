@@ -534,6 +534,26 @@ def _invalid_evidence(reason: str) -> dict:
     return {"kind": "compact-invalid", "reason": reason}
 
 
+def _raw_citation_snapshot(raw: Any) -> Any:
+    """Keep bounded, JSON-safe malformed input for deterministic replay.
+
+    The old compact-invalid row retained only our diagnosis, throwing away the
+    provider bytes needed to improve the parser without buying the answer
+    again. Compact citations are tiny by contract, but the bound makes that
+    invariant explicit even for a malformed object.
+    """
+    try:
+        encoded = json.dumps(raw, ensure_ascii=False, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        encoded = repr(raw)
+    if len(encoded.encode("utf-8")) <= 2_000:
+        try:
+            return json.loads(encoded)
+        except json.JSONDecodeError:
+            return encoded
+    return encoded[:2_000] + "…"
+
+
 def _component_evidence(
     raw: Any, component_id: str, facts: Any, *, claim: str = ""
 ) -> Any:
@@ -921,12 +941,32 @@ def _answer(raw: Any, expand_evidence, *, default_evidence: Iterable[dict] = ())
         return {"claim": "", "status": "dropped", "reason": "answer was absent"}
     status = {"u": "uncertain", "d": "dropped"}.get(raw.get("s"), "answered")
     evidence_raw = raw.get("e") if isinstance(raw.get("e"), list) else []
+    # A recurring compact spelling flattens a single two-part citation into
+    # the evidence array itself: ``e:["S","View"]`` rather than the canonical
+    # ``e:[["S","View"]]``. Treat only closed, unambiguous pair markers as one
+    # citation. Numeric arrays remain multiple file citations, so this cannot
+    # guess between legitimate meanings.
+    if (
+        len(evidence_raw) == 2
+        and isinstance(evidence_raw[0], str)
+        and evidence_raw[0] in {
+            "S", "F", "source_declaration", "source_declarations",
+        }
+        and isinstance(evidence_raw[1], str)
+    ):
+        evidence_raw = [evidence_raw]
     expanded = []
     for item in evidence_raw:
         value = expand_evidence(item, str(raw.get("t") or ""))
         if isinstance(value, list):
             expanded.extend(value)
         else:
+            if (
+                isinstance(value, dict)
+                and value.get("kind") == "compact-invalid"
+                and "raw_citation" not in value
+            ):
+                value["raw_citation"] = _raw_citation_snapshot(item)
             expanded.append(value)
     answer = {
         "claim": str(raw.get("t") or "").strip(),

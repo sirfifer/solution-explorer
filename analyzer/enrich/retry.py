@@ -192,6 +192,17 @@ class RetryingInvoker:
         """Bound the whole logical invoke, including all retry attempts."""
         self.max_budget_usd = value
 
+    def set_cache_policy(self, value: str) -> None:
+        """Forward a transport policy through the retry wrapper.
+
+        Cache policy must apply to every attempt of one logical call; setting it
+        only on the outer wrapper would make retries silently fall back to the
+        operator's ambient Claude Code default.
+        """
+        setter = getattr(self._base, "set_cache_policy", None)
+        if callable(setter):
+            setter(value)
+
     def _full_jitter(self, attempt: int) -> float:
         """Full-jitter backoff for a 1-based attempt index: uniform(0, cap)."""
         exp = self._policy.base_delay * (2 ** (attempt - 1))

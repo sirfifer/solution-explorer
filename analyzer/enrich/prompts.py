@@ -1218,6 +1218,45 @@ class StoreFacts:
             "system_relationship_count": self._relationship_count,
             "evidence": evidence,
         }
+        # Relationship meaning sometimes depends on what each endpoint defines,
+        # not just on the inferred call site. Supply a bounded parser-owned menu
+        # from both endpoints. This also lets enrichment explain a refuted edge
+        # without inventing a rationale for the mechanically incorrect target.
+        endpoint_declarations = []
+        endpoint_references = []
+        for role, component_id in (
+            ("source", rel.get("source")), ("target", rel.get("target")),
+        ):
+            if not component_id or component_id not in self.component_index:
+                continue
+            endpoint = self.component_facts(str(component_id))
+            for item in (endpoint.get("source_declarations") or [])[:3]:
+                if not isinstance(item, dict):
+                    continue
+                endpoint_declarations.append({
+                    field: value for field, value in {
+                        "endpoint": role, "component": component_id,
+                        "file": item.get("file"), "line": item.get("line"),
+                        "name": item.get("name"), "kind": item.get("kind"),
+                        "code_preview": str(item.get("code_preview") or "")[:500],
+                    }.items() if value not in (None, "", [])
+                })
+            for item in (endpoint.get("source_references") or [])[:2]:
+                if not isinstance(item, dict):
+                    continue
+                endpoint_references.append({
+                    field: value for field, value in {
+                        "endpoint": role, "component": component_id,
+                        "file": item.get("file"), "line": item.get("line"),
+                        "referenced_symbol": item.get("referenced_symbol"),
+                        "caller_symbol": item.get("caller_symbol"),
+                        "code_preview": str(item.get("code_preview") or "")[:500],
+                    }.items() if value not in (None, "", [])
+                })
+        if endpoint_declarations:
+            facts["source_declarations"] = endpoint_declarations[:6]
+        if endpoint_references:
+            facts["source_references"] = endpoint_references[:4]
         # Relationship intent is often declared only by subject-level
         # documentation (for example, a fixture README saying that its one
         # edge exists to exercise relationship detection).  Make that source a
@@ -2009,11 +2048,13 @@ One entry per id. Generate each meaning ONCE. The coordinator constructs the
 3-5 sentence help_text from purpose + mechanism + place + why_matters, uses label
 as description, data as data_handled, and uses the same grounded atoms for the
 audit contract. Every atom must therefore be clear reader prose, not shorthand.
-Optional product fields are:
-architectural_role, tech_context, testing_assessment, testing_maturity,
-port_assessment, complexity_assessment, external_services_assessment,
-actions_summary, key_user_flows. Omit nulls, empties, defaults, and all fields not
-listed here.
+Optional product fields use these EXACT JSON shapes (they are product prose,
+not {"t","e"} evidence objects): architectural_role, tech_context,
+testing_assessment, port_assessment, complexity_assessment,
+external_services_assessment, and actions_summary are strings;
+testing_maturity is exactly "comprehensive", "adequate", "minimal", or
+"untested"; key_user_flows is an array of at most five strings. Omit nulls,
+empties, defaults, and all fields not listed here.
 
 EVIDENCE applies to purpose, mechanism, place, why_matters, next, and data. It
 uses the target's ZERO-BASED files menu: 0 (or the exact supplied path) = the
@@ -2108,7 +2149,8 @@ One entry per key. flow and why MUST use the compact answer form with only the
 citations their clauses need (the structural maximum is twelve)
 citations into that edge's evidence menu: {"t":"...","e":[0]}. Analyzer
 facts supplied on the relationship use ["F","system_relationship_count"] or
-["F","subject_documentation"]. When the
+["F","subject_documentation"]. Endpoint declaration and usage menus use
+["F","source_declarations"] and ["F","source_references"]. When the
 evidence is insufficient, use {"t":"...","s":"u","r":"why",
 "l":"fact|judgment","need":"only with fact"}. Omit nulls, empties, status for
 answered claims, and fields not shown. The coordinator uses flow.t as both the

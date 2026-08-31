@@ -590,11 +590,24 @@ def _adjudication_digest(adjudication: Optional[dict]) -> Optional[dict]:
 
     def pass_summary(value: Any) -> dict:
         value = value if isinstance(value, dict) else {}
-        return {
+        summary = {
             key: value.get(key) for key in
             ("pass", "target_count", "done", "failed", "verdicts", "total_cost_usd")
             if key in value
         }
+        # Aggregate counts hide the exact deterministic verdict a subject
+        # criterion may name. A live criterion named an edge verify-edges had
+        # refuted, but P5 saw only "2 refuted" and repeatedly tried to enrich a
+        # rationale for the bad edge. Preserve the bounded per-target verdicts.
+        summary["outcomes"] = [
+            {
+                key: item.get(key) for key in ("id", "status", "verdict", "errors")
+                if item.get(key) not in (None, "", [])
+            }
+            for item in (value.get("outcomes") or [])[:200]
+            if isinstance(item, dict)
+        ]
+        return summary
 
     unsupported = [
         item for item in (adjudication.get("spot_checks") or [])

@@ -461,6 +461,10 @@ def _symbol_reference_edges(d: Deriver, add, content_ids: set) -> None:
       same file shows another relationship with that component (a
       non-common-name reference or a module import of it). Honest boundary
       recorded in TASKS.md.
+    - A Swift name defined in the source component is never resolved to a
+      same-named type in another component. With no per-name import evidence,
+      that is an intra-component reference or an ambiguity, not proof of a
+      cross-component dependency.
 
     Edges are aggregated so one edge carries the total reference count and up to
     :data:`_MAX_USES_EVIDENCE` file:line evidence rows. Emission is deterministic
@@ -503,10 +507,19 @@ def _symbol_reference_edges(d: Deriver, add, content_ids: set) -> None:
             if not name:
                 continue
             count = v.get("count") or 1
-            targets = defn.get(name)
-            if not targets:
+            all_targets = defn.get(name)
+            if not all_targets:
                 continue
-            targets = {t for t in targets if t != source_comp.id}
+            # Do not discard the local definition before assessing ambiguity.
+            # Doing so made a local Swift reference look uniquely external
+            # whenever one nested component happened to define the same name.
+            # Python/TypeScript/JavaScript can still select an external definer
+            # through their per-name import evidence below; Swift cannot.
+            if fi.language == "swift" and source_comp.id in all_targets:
+                if len(all_targets) > 1:
+                    d._uses_ambiguous_dropped += 1
+                continue
+            targets = {t for t in all_targets if t != source_comp.id}
             if not targets:
                 continue  # defined only in the same component: intra-component
             if len(targets) > 1:

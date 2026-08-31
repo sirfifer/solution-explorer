@@ -350,6 +350,37 @@ def test_the_scorer_accepts_honest_gaps_as_a_product_field():
     assert "honest_gaps" in scorer.OPTIONAL_COMPONENT_FIELDS
 
 
+def test_the_scorer_treats_a_complete_named_gap_as_a_truthful_field_result():
+    scorer = _scorer_module()
+    payload = {
+        "criticality": "important", "ai_enhanced_at": "2026-08-21T00:00:00Z",
+        "ai_enhance_version": 2,
+        "honest_gaps": [
+            {"question": question, "why": "the supplied evidence cannot establish it"}
+            for question in (
+                "purpose", "mechanism", "place", "why_matters", "data_handled"
+            )
+        ],
+    }
+    assert scorer.validate_component_ai_enhance("c1", payload) == []
+    score, details = scorer.score_component("c1", payload)
+    assert "missing_help_text" not in details
+    assert "missing_data_handled" not in details
+    assert "help_text_length" not in details
+    assert score > 0
+
+
+def test_the_scorer_accepts_relationship_honest_gaps_and_a_gapped_flow():
+    scorer = _scorer_module()
+    payload = {
+        "importance": "primary", "ai_enhanced_at": "2026-08-21T00:00:00Z",
+        "honest_gaps": [
+            {"question": "flow", "why": "the supplied evidence cannot establish it"}
+        ],
+    }
+    assert scorer.validate_relationship_ai_enhance(("a", "b", "uses"), payload) == []
+
+
 def test_an_actually_unexpected_field_is_still_rejected():
     """Fail-before contrast: tolerance is a named list, not a hole in the check."""
     scorer = _scorer_module()

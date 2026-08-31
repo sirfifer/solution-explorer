@@ -21,6 +21,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -62,6 +63,7 @@ __all__ = [
     "KNOWN_EFFORTS",
     "DEFAULT_MAX_PARALLEL",
     "DEFAULT_MAX_COST_USD",
+    "CACHE_POLICIES",
 ]
 
 DEFAULT_MODEL = "sonnet"
@@ -173,6 +175,10 @@ def _recover_transcript_usage(session_id: str) -> tuple[dict, dict]:
     usage = {
         "input_tokens": 0, "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0, "output_tokens": 0,
+        "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0,
+        },
     }
     by_model: dict[str, dict] = {}
     try:
@@ -212,6 +218,18 @@ def _recover_transcript_usage(session_id: str) -> tuple[dict, dict]:
                 value = int(block.get(source) or 0)
                 usage[aggregate] += value
                 model_block[model_key] += value
+            creation = block.get("cache_creation") or {}
+            if isinstance(creation, dict):
+                for ttl_key in (
+                    "ephemeral_1h_input_tokens",
+                    "ephemeral_5m_input_tokens",
+                ):
+                    try:
+                        usage["cache_creation"][ttl_key] += int(
+                            creation.get(ttl_key) or 0
+                        )
+                    except (TypeError, ValueError):
+                        pass
             stop_reason = message.get("stop_reason") or stop_reason
         if not seen:
             return {}, {}
@@ -251,12 +269,41 @@ class ClaudeCliInvoker:
         timeout: int = 600,
         effort: str = DEFAULT_EFFORT,
         max_budget_usd: Optional[float] = None,
+        cache_policy: str = "provider-default",
     ):
         self.model = model
         self.claude_bin = claude_bin
         self.timeout = timeout
         self.effort = effort
         self.max_budget_usd = max_budget_usd
+        self.set_cache_policy(cache_policy)
+
+    def set_cache_policy(self, value: str) -> None:
+        """Select a deterministic Claude Code prompt-cache policy.
+
+        The policy is applied to the child environment for every attempt.  It
+        never mutates ``os.environ`` and therefore cannot leak from a probe into
+        the operator's shell or a concurrent session.
+        """
+        policy = str(value or "provider-default").strip().lower()
+        if policy not in CACHE_POLICIES:
+            raise ValueError(
+                f"unknown cache policy {value!r}; expected one of "
+                + ", ".join(sorted(CACHE_POLICIES))
+            )
+        self.cache_policy = policy
+
+    def _child_env(self) -> dict[str, str]:
+        env = dict(os.environ)
+        for key in _CACHE_ENV_KEYS:
+            env.pop(key, None)
+        if self.cache_policy == "5m":
+            env["FORCE_PROMPT_CACHING_5M"] = "1"
+        elif self.cache_policy == "1h":
+            env["ENABLE_PROMPT_CACHING_1H"] = "1"
+        elif self.cache_policy == "off":
+            env["DISABLE_PROMPT_CACHING"] = "1"
+        return env
 
     def set_max_budget_usd(self, value: Optional[float]) -> None:
         """Set the CLI's best-effort allowance for the next invocation.
@@ -318,10 +365,11 @@ class ClaudeCliInvoker:
             from .prompts import split_cached_prompt
 
             prefix, user_prompt = split_cached_prompt(prompt)
+            child_env = self._child_env()
             if prefix is None:
                 proc = subprocess.run(
                     argv, input=user_prompt, capture_output=True, text=True,
-                    timeout=self.timeout,
+                    timeout=self.timeout, env=child_env,
                 )
             else:
                 prefix_chars = len(prefix)
@@ -344,7 +392,7 @@ class ClaudeCliInvoker:
                             "--max-turns", "1",
                         ],
                         input=user_prompt, capture_output=True, text=True,
-                        timeout=self.timeout,
+                        timeout=self.timeout, env=child_env,
                     )
         except (OSError, subprocess.SubprocessError) as exc:
             # Spawn failure or subprocess timeout: a bounded transient (R2).
@@ -558,6 +606,25 @@ def _envelope_error(stdout: str) -> tuple[Optional[int], Optional[str]]:
 # path); it does not touch the deterministic analyzer output or the golden legs.
 DEFAULT_MAX_COST_USD = 10.0
 
+# Prompt-cache policy is an invocation property, not a machine setting.  The
+# enrichment runner creates hundreds of independent CLI processes; inheriting a
+# user's cache environment would make two nominally identical runs bill
+# differently.  ``provider-default`` deliberately clears every known override
+# and lets Claude Code choose from the authentication mode.  The ladder's
+# higher-level ``adaptive`` policy resolves to one of these concrete values
+# before an invoker is built.
+CACHE_POLICIES = frozenset({"provider-default", "1h", "5m", "off"})
+_CACHE_ENV_KEYS = (
+    "FORCE_PROMPT_CACHING_5M",
+    "ENABLE_PROMPT_CACHING_1H",
+    "CLAUDE_CODE_PROMPT_CACHE_TTL",
+    "DISABLE_PROMPT_CACHING",
+    "DISABLE_PROMPT_CACHING_HAIKU",
+    "DISABLE_PROMPT_CACHING_SONNET",
+    "DISABLE_PROMPT_CACHING_OPUS",
+    "DISABLE_PROMPT_CACHING_FABLE",
+)
+
 
 @dataclass
 class EnhanceConfig:
@@ -579,6 +646,10 @@ class EnhanceConfig:
     # explicitly injected invoker is used as-is, so tests wrap their own).
     max_cost_usd: Optional[float] = DEFAULT_MAX_COST_USD
     retry_policy: Optional[RetryPolicy] = None
+    # Classic enhancement consists of independent one-shot partitions.  Under
+    # ``adaptive`` those calls run uncached; explicit values exist for the same
+    # controlled A/B probes as the ladder CLI.
+    cache_policy: str = "adaptive"
 
 
 @dataclass
@@ -1053,7 +1124,15 @@ def run_enhance(
         from .retry import RetryingInvoker, RetryPolicy
 
         policy = config.retry_policy or RetryPolicy()
-        invoker = RetryingInvoker(ClaudeCliInvoker(model=config.model), policy=policy)
+        concrete_cache_policy = (
+            "off" if config.cache_policy == "adaptive" else config.cache_policy
+        )
+        invoker = RetryingInvoker(
+            ClaudeCliInvoker(
+                model=config.model, cache_policy=concrete_cache_policy
+            ),
+            policy=policy,
+        )
 
     store = FactStore(str(config.store_path))
     try:

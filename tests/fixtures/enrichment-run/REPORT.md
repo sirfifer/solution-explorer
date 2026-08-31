@@ -1,6 +1,6 @@
 # Enrichment Run Report: polyglot
 
-Commit `2c01ee0398acf1be95c38ab6082d6b194a6ab53c`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
+Commit `7afabc4af01988b01968052da07e3de021b2c200`, snapshot 2026-08-21T00:00:00+00:00, engine version 1.
 
 **Determination: DONE**
 
@@ -24,7 +24,8 @@ The census shows the map supports a reader orienting and finding the service bou
 
 Delivered response payload: 29,194 UTF-8 bytes total. 19 call(s) exercised the compact transport gate, with 0 violation(s).
 
-Prompt cache: 0 tokens read and 0 written (read/write 0.00). Only measured reads are counted as savings.
+Prompt cache: 0 tokens read and 0 written (0 at 1h; 0 at 5m; read/write 0.00). Verdict: neutral
+Cache net versus uncached: +0.0 base-input-token equivalents. Negative saves; positive costs.
 
 Delivered JSON is schema- and byte-bounded. Billed output also includes hidden reasoning; the Claude CLI exposes no per-call max_tokens below its provider ceiling, so billed-token reduction is measured and gated against the baseline, not falsely called a transport guarantee.
 

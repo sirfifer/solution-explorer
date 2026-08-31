@@ -239,6 +239,22 @@ def test_determination_digest_carries_supported_claims_needed_by_criteria():
     assert digest["unsupported_examples"][0]["target_id"] == "root"
 
 
+def test_determination_digest_names_each_independently_refuted_edge():
+    digest = _adjudication_digest({
+        "edges": {
+            "pass": "verify-edges", "target_count": 2, "done": 2,
+            "verdicts": {"confirmed": 1, "refuted": 1},
+            "outcomes": [
+                {"id": "a|b|uses", "status": "done", "verdict": "refuted"},
+                {"id": "a|c|uses", "status": "done", "verdict": "confirmed"},
+            ],
+        },
+    })
+    assert digest["verification"]["edges"]["outcomes"][0] == {
+        "id": "a|b|uses", "status": "done", "verdict": "refuted",
+    }
+
+
 def test_determination_receives_parser_owned_inventory_in_the_stable_prefix():
     prompt = build_determination_prompt(
         criteria=universal_criteria(), census={"total": 2}, adjudication=None,

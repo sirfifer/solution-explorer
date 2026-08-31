@@ -93,10 +93,10 @@ def test_escalation_density_needs_a_real_sample_but_keeps_the_same_ceiling(tmp_p
     )
     assert density["level"] == "info"
     assert "INCONCLUSIVE" in density["detail"]
-    assert tiny["output_gate"]["escalation_release_sample_min"] == 5
+    assert tiny["output_gate"]["escalation_release_sample_min"] == 10
 
     enough = _audit_module().audit(
-        _run_dir(tmp_path / "enough", output=1301, rung="opus", targets=5)
+        _run_dir(tmp_path / "enough", output=2751, rung="opus", targets=10)
     )
     density = next(
         finding for finding in enough["findings"]
@@ -110,8 +110,8 @@ def test_work_order_density_cannot_hide_outside_the_ladder_gate(tmp_path):
     run = _run_dir(tmp_path, output=10, targets=10)
     repair = {
         "rung": "P5", "phase": "work_order", "effort": "low",
-        "tokens_out": 1_301, "cost_usd": 1.0, "ok": True,
-        "num_turns": 1, "targets": 5,
+        "tokens_out": 5_201, "cost_usd": 1.0, "ok": True,
+        "num_turns": 1, "targets": 10,
         "output_budget_bytes": 20_000, "output_budget_ok": True,
     }
     with (run / "ledger.jsonl").open("a") as fh:
@@ -119,13 +119,57 @@ def test_work_order_density_cannot_hide_outside_the_ladder_gate(tmp_path):
 
     report = _audit_module().audit(run)
 
-    assert report["output_gate"]["work_order_tokens_per_attempt"] == 260.2
-    assert report["output_gate"]["work_order_attempts"] == 5
+    assert report["output_gate"]["work_order_tokens_per_attempt"] == 520.1
+    assert report["output_gate"]["work_order_attempts"] == 10
     assert any(
         finding["level"] == "fail"
         and finding["check"] == "work-order-output-density"
         for finding in report["findings"]
     )
+
+
+def test_cache_disabled_prefixes_are_not_expected_to_hit(tmp_path):
+    run = _run_dir(tmp_path, output=10, targets=5)
+    rows = [
+        {
+            "phase": "p2_ladder", "rung": "2a", "model": "sonnet",
+            "effort": "low", "ok": True, "num_turns": 1, "targets": 1,
+            "tokens_out": 1, "cost_usd": 0.01, "prefix_hash": "stable",
+            "prefix_tokens_est": 4_000, "tokens_cached": 0,
+            "tokens_cache_write": 0, "tokens_cache_write_1h": 0,
+            "tokens_cache_write_5m": 0, "tokens_cache_write_unknown": 0,
+            "cache_policy": "off",
+        }
+        for _ in range(2)
+    ]
+    (run / "ledger.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n"
+    )
+    report = _audit_module().audit(run)
+    assert report["output_gate"]["non_warm_cache_misses"] == 0
+    assert not any(f["check"] == "cache-boundary" for f in report["findings"])
+
+
+def test_cache_policy_ttl_mismatch_and_net_loss_fail_release_sample(tmp_path):
+    run = _run_dir(tmp_path, output=10, targets=5)
+    rows = []
+    for _ in range(5):
+        rows.append({
+            "phase": "p3_adjudication", "rung": "substitution-check",
+            "model": "opus", "effort": "low", "ok": True,
+            "num_turns": 1, "targets": 1, "tokens_out": 1,
+            "cost_usd": 0.01, "cache_policy": "5m",
+            "tokens_cache_write": 1_000, "tokens_cache_write_1h": 1_000,
+            "tokens_cache_write_5m": 0, "tokens_cache_write_unknown": 0,
+            "tokens_cached": 100,
+        })
+    (run / "ledger.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n"
+    )
+    report = _audit_module().audit(run)
+    checks = {f["check"] for f in report["findings"] if f["level"] == "fail"}
+    assert "cache-policy" in checks
+    assert "cache-net-economics" in checks
 
 
 def test_honest_gap_quality_reads_contract_reasons_from_the_census(tmp_path):

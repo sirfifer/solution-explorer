@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 
 from analyzer.enrich.engine import ClaudeCliInvoker, InvokeResult
-from analyzer.enrich.enhance_cli import _parse_phase_models
+from analyzer.enrich.enhance_cli import _parse_phase_cache, _parse_phase_models
 from analyzer.enrich.models import (
     ANTHROPIC_CLAUDE_CLI,
     DEFAULT_SOURCE,
@@ -148,6 +148,76 @@ def test_an_unpinned_binding_omits_the_model_flag_so_the_source_routes(monkeypat
         "--effort", "low",
         "--session-id", session,
     ]
+
+
+def test_cache_policy_is_an_explicit_isolated_child_environment(monkeypatch):
+    seen = []
+
+    class FakeProc:
+        returncode = 0
+        stdout = '{"result": "{}", "total_cost_usd": 0.0, "usage": {}}'
+        stderr = ""
+
+    def fake_run(argv, **kwargs):
+        seen.append(kwargs["env"])
+        return FakeProc()
+
+    monkeypatch.setattr("analyzer.enrich.engine.subprocess.run", fake_run)
+    # Ambient settings must not silently override a recorded run policy.
+    monkeypatch.setenv("ENABLE_PROMPT_CACHING_1H", "1")
+    monkeypatch.setenv("DISABLE_PROMPT_CACHING_SONNET", "1")
+
+    ClaudeCliInvoker(model="sonnet", cache_policy="5m")("prompt")
+    ClaudeCliInvoker(model="sonnet", cache_policy="off")("prompt")
+    ClaudeCliInvoker(model="sonnet", cache_policy="provider-default")("prompt")
+
+    assert seen[0]["FORCE_PROMPT_CACHING_5M"] == "1"
+    assert "ENABLE_PROMPT_CACHING_1H" not in seen[0]
+    assert seen[1]["DISABLE_PROMPT_CACHING"] == "1"
+    assert "FORCE_PROMPT_CACHING_5M" not in seen[1]
+    assert all(
+        key not in seen[2]
+        for key in (
+            "FORCE_PROMPT_CACHING_5M", "ENABLE_PROMPT_CACHING_1H",
+            "DISABLE_PROMPT_CACHING", "DISABLE_PROMPT_CACHING_SONNET",
+        )
+    )
+
+
+def test_adaptive_cache_policy_is_per_work_shape_not_per_model():
+    policy = LadderPolicy()
+    assert policy.cache_policy_for(
+        "p2a_bulk", phase="p2_ladder", rung="2a"
+    ) == "off"
+    assert policy.cache_policy_for(
+        "p3_adjudication", phase="p3_adjudication",
+        rung="substitution-check",
+    ) == "5m"
+    assert policy.cache_policy_for(
+        "p3_adjudication", phase="p3_adjudication", rung="verify-edges"
+    ) == "off"
+    assert policy.cache_policy_for(
+        "p5_determination", phase="p5_determination"
+    ) == "5m"
+
+    forced = LadderPolicy(cache_policy="off")
+    assert forced.cache_policy_for(
+        "p5_determination", phase="p5_determination"
+    ) == "off"
+
+    overridden = LadderPolicy(cache_policy_overrides={"verify-edges": "5m"})
+    assert overridden.cache_policy_for(
+        "p3_adjudication", phase="p3_adjudication", rung="verify-edges"
+    ) == "5m"
+
+
+def test_phase_cache_parser_rejects_unknown_policy():
+    parsed, errors = _parse_phase_cache([
+        "verify-edges=5m", "p2a_bulk=off", "bad=forever"
+    ])
+    assert parsed == {"verify-edges": "5m", "p2a_bulk": "off"}
+    assert len(errors) == 1
+    assert "forever" in errors[0]
 
 
 # --- 2. a binding is a source plus an optional model --------------------------

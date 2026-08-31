@@ -263,6 +263,28 @@ def test_d5_ambiguous_name_is_dropped_not_guessed(tmp_path):
     assert getattr(d, "_uses_ambiguous_dropped", 0) >= 1
 
 
+def test_d5_swift_local_definition_is_not_reassigned_to_nested_component(tmp_path):
+    # UnaMentis canary reproduction: a source component and a nested component
+    # both define KBQuestion.  The source's unqualified KBQuestion references
+    # are local/ambiguous in Swift, which has no per-name import capable of
+    # proving that the nested definition was intended.  Removing the source
+    # component from the candidates too early used to fabricate ui->knowledge.
+    _write(tmp_path, "ui/KBQuestion.swift",
+           "struct KBQuestion {\n    let text: String\n}\n")
+    _write(tmp_path, "ui/QuestionView.swift",
+           "struct QuestionView {\n    let question: KBQuestion\n}\n")
+    _write(tmp_path, "knowledge/KBQuestion.swift",
+           "struct KBQuestion {\n    let prompt: String\n}\n")
+    _write(tmp_path, "knowledge/KnowledgeStore.swift",
+           "struct KnowledgeStore {\n    var count = 0\n}\n")
+
+    d, arch = _derive(tmp_path)
+    uses = [r for r in _rels(arch, "uses")
+            if r["source"] == "ui" and r["target"] == "knowledge"]
+    assert uses == [], f"a local Swift definition must win over a name collision: {uses}"
+    assert getattr(d, "_uses_ambiguous_dropped", 0) >= 1
+
+
 # ---------------------------------------------------------------------------
 # D4: orphan reframed `unreferenced`, collapses under D5, honest about maturity
 # ---------------------------------------------------------------------------

@@ -250,6 +250,24 @@ def test_budget_meter_charging_is_thread_safe():
     assert abs(meter.spent - 8.0) < 1e-6
 
 
+def test_control_snapshot_refreshes_after_every_settlement(tmp_path):
+    control = tmp_path / "control.json"
+    meter = BudgetMeter(ceiling=100.0)
+    meter.configure_control(control, 90.0)
+    reservation = meter.reserve(slots=4)
+    reserved = json.loads(control.read_text())
+    assert reserved["reserved_usd"] == 25.0
+    assert reserved["completed_calls"] == 0
+
+    meter.settle(reservation, 1.25)
+    settled = json.loads(control.read_text())
+    assert settled["state"] == "running"
+    assert settled["spent_usd"] == 1.25
+    assert settled["reserved_usd"] == 0.0
+    assert settled["completed_calls"] == 1
+    assert settled["revision"] > reserved["revision"]
+
+
 def test_operator_checkpoint_pauses_then_resumes_without_losing_the_run(tmp_path):
     control = tmp_path / "control.json"
     meter = BudgetMeter()

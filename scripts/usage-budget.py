@@ -55,10 +55,9 @@ CONFIG_PATH = REPO_ROOT / "demos" / "usage-calibration.json"
 # every model, so a run that reads a lot and writes a little is nothing like one
 # that does the reverse, and a single blended rate would hide that.
 #
-# Cache reads are ~0.1x input and cache writes ~1.25x input. Those two multipliers
-# matter more here than anywhere else: the enrichment ladder sends a large stable
-# prefix to every partition, so a well-cached run and a badly-cached one can
-# differ several-fold on identical work.
+# Cache reads are 0.1x input; writes are 1.25x at five minutes and 2x at one
+# hour. Conflating the two made the 2026-08-30 full-run cache loss appear almost
+# neutral when all 5.39M writes were in fact the expensive one-hour class.
 MODEL_RATES = {
     # key           input $/1M   output $/1M
     "fable":        (10.00,      50.00),
@@ -67,7 +66,11 @@ MODEL_RATES = {
     "haiku":        (1.00,       5.00),
 }
 CACHE_READ_MULTIPLIER = 0.10
-CACHE_WRITE_MULTIPLIER = 1.25
+CACHE_WRITE_5M_MULTIPLIER = 1.25
+CACHE_WRITE_1H_MULTIPLIER = 2.0
+# Backward-compatible name for old unsplit reports/tests. New reports always
+# carry the TTL fields and never use this fallback.
+CACHE_WRITE_MULTIPLIER = CACHE_WRITE_5M_MULTIPLIER
 
 # The one assumption. Until `--calibrate` has run against a real observation this
 # is a placeholder, and every report built on it is labelled UNCALIBRATED.
@@ -172,6 +175,11 @@ def api_equivalent_usd(usage_by_model: dict) -> tuple[float, list[dict], list[st
         out = bucket.get("output_tokens", 0)
         cache_read = bucket.get("cache_read_input_tokens", 0)
         cache_write = bucket.get("cache_creation_input_tokens", 0)
+        cache_write_1h = bucket.get("cache_creation_input_tokens_1h", 0) or 0
+        cache_write_5m = bucket.get("cache_creation_input_tokens_5m", 0) or 0
+        cache_write_unknown = max(
+            0, cache_write - cache_write_1h - cache_write_5m
+        )
         if rates is None:
             unknown.append(model)
             # Fall back to what the CLI itself reported for this model, so an
@@ -183,7 +191,9 @@ def api_equivalent_usd(usage_by_model: dict) -> tuple[float, list[dict], list[st
             priced = (
                 fresh_in / 1e6 * in_rate
                 + cache_read / 1e6 * in_rate * CACHE_READ_MULTIPLIER
-                + cache_write / 1e6 * in_rate * CACHE_WRITE_MULTIPLIER
+                + cache_write_1h / 1e6 * in_rate * CACHE_WRITE_1H_MULTIPLIER
+                + cache_write_5m / 1e6 * in_rate * CACHE_WRITE_5M_MULTIPLIER
+                + cache_write_unknown / 1e6 * in_rate * CACHE_WRITE_MULTIPLIER
                 + out / 1e6 * out_rate
             )
         total += priced
@@ -194,6 +204,8 @@ def api_equivalent_usd(usage_by_model: dict) -> tuple[float, list[dict], list[st
             "output_tokens": out,
             "cache_read_input_tokens": cache_read,
             "cache_creation_input_tokens": cache_write,
+            "cache_creation_input_tokens_1h": cache_write_1h,
+            "cache_creation_input_tokens_5m": cache_write_5m,
             "api_equivalent_usd": round(priced, 4),
             "priced_from": "published rates" if rates else "CLI-reported cost (unrecognised model)",
         })
@@ -212,10 +224,26 @@ def _read_usage(report_path: Path) -> tuple[dict, float]:
         for bucket in acct["by_model"]:
             usage[bucket["model"]] = {
                 "calls": bucket.get("invocations", 0),
-                "input_tokens": bucket.get("tokens_in", 0),
+                # tokens_in is the historical fresh+cache-write sum. Feeding it
+                # back as fresh while discarding writes priced every report as
+                # if caching were free. New reports carry the split explicitly.
+                "input_tokens": bucket.get(
+                    "tokens_fresh_in",
+                    max(
+                        0,
+                        int(bucket.get("tokens_in", 0) or 0)
+                        - int(bucket.get("tokens_cache_write", 0) or 0),
+                    ),
+                ),
                 "output_tokens": bucket.get("tokens_out", 0),
                 "cache_read_input_tokens": bucket.get("tokens_cached", 0),
-                "cache_creation_input_tokens": 0,
+                "cache_creation_input_tokens": bucket.get("tokens_cache_write", 0),
+                "cache_creation_input_tokens_1h": bucket.get(
+                    "tokens_cache_write_1h", 0
+                ),
+                "cache_creation_input_tokens_5m": bucket.get(
+                    "tokens_cache_write_5m", 0
+                ),
                 "cost_usd": bucket.get("cost_usd", 0.0),
             }
         return usage, float((acct.get("totals") or {}).get("cost_usd", 0.0) or 0.0)
