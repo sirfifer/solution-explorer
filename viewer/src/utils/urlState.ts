@@ -6,6 +6,8 @@
  */
 
 export interface UrlState {
+  mode?: "overview" | "workbench";
+  level?: "system" | "domain" | "component";
   component?: string;
   tab?: string;
   drill?: string;
@@ -47,6 +49,12 @@ export function parseUrlState(): UrlState {
   // Same strict token discipline as line: a non-negative integer step or nothing.
   const stepNum = stepRaw !== null && /^\d+$/.test(stepRaw) ? Number.parseInt(stepRaw, 10) : NaN;
   return {
+    mode: params.get("mode") === "overview" || params.get("mode") === "workbench"
+      ? params.get("mode") as "overview" | "workbench"
+      : undefined,
+    level: ["system", "domain", "component"].includes(params.get("level") ?? "")
+      ? params.get("level") as "system" | "domain" | "component"
+      : undefined,
     component: params.get("component") || undefined,
     tab: params.get("tab") || undefined,
     drill: params.get("drill") || undefined,
@@ -83,6 +91,8 @@ function buildUrl(state: UrlState): string {
   const existing = new URLSearchParams(window.location.search);
   const dataBase = existing.get("data");
   if (dataBase) params.set("data", dataBase);
+  if (state.mode) params.set("mode", state.mode);
+  if (state.level && state.level !== "system") params.set("level", state.level);
   if (state.component) params.set("component", state.component);
   if (state.tab) params.set("tab", state.tab);
   if (state.drill) params.set("drill", state.drill);

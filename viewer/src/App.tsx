@@ -31,6 +31,13 @@ import { CapabilityPanel } from "./components/CapabilityPanel";
 import { DataPanel } from "./components/DataPanel";
 import { RulesPanel } from "./components/RulesPanel";
 import { DesignPanel } from "./components/DesignPanel";
+import { SupportPanel } from "./components/SupportPanel";
+import { SecurityPanel } from "./components/SecurityPanel";
+import { SystemOverview } from "./components/SystemOverview";
+import { ExperienceSwitcher } from "./components/ExperienceSwitcher";
+import { WorkbenchTrustStrip } from "./components/WorkbenchTrustStrip";
+import { TrustDrawer } from "./components/TrustLedger";
+import { ViewerPreferences } from "./components/ViewerPreferences";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useBottomSheet } from "./hooks/useBottomSheet";
@@ -40,10 +47,18 @@ import { collectCriticalComponents, collectExternalDependencies } from "./lenses
 import { formatNumber, formatRelativeTime, getTypeColors } from "./utils/layout";
 import { dataUrl, getDataBase } from "./utils/dataSource";
 import { parsePublication, publicationDisplayName } from "./utils/publication";
+import { attachHumanViews } from "./utils/orientation";
 import { SolutionIndex } from "./components/SolutionIndex";
 import { Tooltip } from "./components/Tooltip";
 import { TOOLTIP_COPY } from "./utils/tooltipCopy";
-import type { Architecture, Component, SolutionManifest } from "./types";
+import type {
+  Architecture,
+  Component,
+  OrientationProjection,
+  SecurityProjection,
+  SolutionManifest,
+  SupportProjection,
+} from "./types";
 import { SOLUTION_MANIFEST_KIND } from "./types";
 
 // Session storage keys for UI state persistence
@@ -217,6 +232,8 @@ export function MobileLensSheet({ lens, darkMode, bottomSheet }: {
         {lens === "data" && <DataPanel mobile />}
         {lens === "rules" && <RulesPanel mobile />}
         {lens === "design" && <DesignPanel mobile />}
+        {lens === "support" && <SupportPanel mobile />}
+        {lens === "security" && <SecurityPanel mobile />}
       </div>
     </div>
   );
@@ -251,6 +268,11 @@ export function App() {
     mobileChromeHidden,
     fileDeepLinkNotice,
     clearFileDeepLinkNotice,
+    experienceMode,
+    semanticLevel,
+    setSemanticLevel,
+    workbenchDensity,
+    setPreferencesOpen,
   } = useArchStore();
 
   useLiveMonitor();
@@ -365,8 +387,8 @@ export function App() {
   });
 
   // Collapsible + resizable sidebar widths (restored from session storage)
-  const [leftCollapsed, setLeftCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.leftCollapsed, false));
-  const [rightCollapsed, setRightCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.rightCollapsed, false));
+  const [leftCollapsed, setLeftCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.leftCollapsed, workbenchDensity === "focused"));
+  const [rightCollapsed, setRightCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.rightCollapsed, workbenchDensity === "focused"));
   const [leftWidth, setLeftWidth] = useState(() => getStoredValue(STORAGE_KEYS.leftWidth, 256));
   const [rightWidth, setRightWidth] = useState(() => getStoredValue(STORAGE_KEYS.rightWidth, 320));
   const resizing = useRef<"left" | "right" | null>(null);
@@ -432,6 +454,15 @@ export function App() {
       return res.ok && (res.headers.get("content-type")?.includes("json") ?? false);
     }
 
+    async function optionalJson<T>(path: string): Promise<T | null> {
+      try {
+        const response = await fetch(dataUrl(path));
+        return isJsonResponse(response) ? await response.json() as T : null;
+      } catch {
+        return null;
+      }
+    }
+
     // Apply loaded static data only if the live monitor has not already loaded
     // an architecture (from its cache or an authoritative poll). The static file
     // is the deployed baseline; if live data arrived first it is at least as
@@ -463,7 +494,13 @@ export function App() {
             return;
           }
           // Split mode: manifest has components/relationships but no symbols/files
-          const data: Architecture = { ...manifest, symbols: manifest.symbols || [], files: manifest.files || [] };
+          const base: Architecture = { ...manifest, symbols: manifest.symbols || [], files: manifest.files || [] };
+          const [orientation, support, security] = await Promise.all([
+            optionalJson<OrientationProjection>("orientation.json"),
+            optionalJson<SupportProjection>("support.json"),
+            optionalJson<SecurityProjection>("security.json"),
+          ]);
+          const data = attachHumanViews(base, { orientation, support, security });
           applyIfUnset(data);
           return;
         }
@@ -472,7 +509,7 @@ export function App() {
         const monoRes = await fetch("./architecture.json");
         if (isJsonResponse(monoRes)) {
           const data: Architecture = await monoRes.json();
-          applyIfUnset(data);
+          applyIfUnset(attachHumanViews(data, {}));
           return;
         }
 
@@ -612,6 +649,11 @@ export function App() {
   // else the folder-derived architecture.name (the contextual default). This is
   // display only; the annotation identity key stays on architecture.name.
   const displayName = publicationDisplayName(publication, architecture.name);
+  const showLegacyOpeningBands = false;
+
+  if (experienceMode === "overview") {
+    return <SystemOverview displayName={displayName} />;
+  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -675,6 +717,7 @@ export function App() {
         </div>
 
         <div className="flex items-center gap-2">
+          <ExperienceSwitcher />
           {/* Home button - visible when drilled into a component */}
           {drillLevel && (
             <button
@@ -718,6 +761,12 @@ export function App() {
               reachable on a phone (GUI run finding V8.4). */}
           <LensSwitcher />
 
+          <div className={`hidden rounded-lg p-0.5 xl:flex ${darkMode ? "bg-zinc-900" : "bg-zinc-100"}`} aria-label="Semantic level">
+            {(["system", "domain", "component"] as const).map((level) => (
+              <button key={level} onClick={() => setSemanticLevel(level)} className={`rounded-md px-2 py-1 text-[9px] capitalize ${semanticLevel === level ? darkMode ? "bg-zinc-700 text-zinc-100" : "bg-white text-zinc-900 shadow" : "text-zinc-500"}`}>{level}</button>
+            ))}
+          </div>
+
           {/* Review mode: reachable on every viewport so the annotation
               workflow works on a phone (GUI run finding V8.8). The button is
               already responsive (icon-only under sm). */}
@@ -728,6 +777,8 @@ export function App() {
               the overflow menu, and the dress is the first thing a demo
               audience asks to see changed. */}
           <ThemeSwitcher />
+
+          <button onClick={() => setPreferencesOpen(true)} className={`hidden rounded-lg p-2 sm:block ${darkMode ? "text-zinc-400 hover:bg-zinc-800" : "text-zinc-600 hover:bg-zinc-100"}`} aria-label="Viewer preferences">◒</button>
 
           {/* Desktop: remaining secondary buttons inline */}
           <div className="hidden sm:flex items-center gap-2">
@@ -777,6 +828,13 @@ export function App() {
                   >
                     <span>{"\u{1F4F1}"}</span>
                     <span>{enhancedFrames ? "Classic frames" : "Enhanced frames"}</span>
+                  </button>
+                  <button
+                    onClick={() => { setPreferencesOpen(true); setMoreMenuOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
+                  >
+                    <span>◒</span>
+                    <span>Viewer preferences</span>
                   </button>
                   {liveConfig && (
                     <button
@@ -852,6 +910,10 @@ export function App() {
           </a>
         </div>
       </header>
+
+      <WorkbenchTrustStrip />
+
+      {showLegacyOpeningBands && <>
 
       {/* AI summary banner */}
       {architecture.ai_enhance?.summary && !summaryDismissed && (
@@ -1025,6 +1087,7 @@ export function App() {
 
       {/* Tours entry point (P6-7); present only when the dataset carries tours. */}
       <ToursEntry />
+      </>}
 
       {/* Review mode banner */}
       {reviewMode && (
@@ -1117,6 +1180,8 @@ export function App() {
           {isPanelViewport && lens === "data" && <DataPanel />}
           {isPanelViewport && lens === "rules" && <RulesPanel />}
           {isPanelViewport && lens === "design" && <DesignPanel />}
+          {isPanelViewport && lens === "support" && <SupportPanel />}
+          {isPanelViewport && lens === "security" && <SecurityPanel />}
           <div className="flex-1 relative">
             <ReactFlowProvider>
               <ArchitectureGraph />
@@ -1272,6 +1337,9 @@ export function App() {
 
       {/* Search overlay */}
       <SearchOverlay />
+
+      <TrustDrawer />
+      <ViewerPreferences />
 
       {/* Findings and concerns surface overlay (P6-8) */}
       <FindingsSurface />

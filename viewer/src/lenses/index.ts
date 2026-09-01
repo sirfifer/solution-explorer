@@ -10,6 +10,8 @@ import "./capability";
 import "./data";
 import "./rules";
 import "./design";
+import "./support";
+import "./security";
 
 export * from "./registry";
 export { structureLens, STRUCTURE_QUESTIONS } from "./structure";
@@ -116,3 +118,5 @@ export {
   type ScatterData,
   type ZoneThresholds,
 } from "./design";
+export { supportLens, SUPPORT_QUESTIONS, hasSupportEvidence } from "./support";
+export { securityLens, SECURITY_QUESTIONS, hasSecurityEvidence } from "./security";

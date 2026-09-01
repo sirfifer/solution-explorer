@@ -73,6 +73,64 @@ const DARK_MODE_KEY = "arch-dark-mode";
 const ENHANCED_FRAMES_KEY = "arch-enhanced-frames";
 const THEME_KEY = "arch-theme";
 const CHANGELOG_READ_KEY = "arch-changelog-read";
+const EXPERIENCE_PREFS_KEY = "arch-experience-preferences-v1";
+
+export type ExperienceMode = "overview" | "workbench";
+export type OverviewDirection = "portrait" | "questions" | "atlas";
+export type StartView = "overview" | "workbench" | "last";
+export type WorkbenchDensity = "focused" | "dense";
+export type SemanticLevel = "system" | "domain" | "component";
+
+interface ExperiencePreferences {
+  version: 1;
+  startView: StartView;
+  overviewDirection: OverviewDirection;
+  workbenchDensity: WorkbenchDensity;
+  rememberNavigation: boolean;
+  lastMode: ExperienceMode;
+}
+
+const DEFAULT_EXPERIENCE_PREFERENCES: ExperiencePreferences = {
+  version: 1,
+  startView: "overview",
+  overviewDirection: "portrait",
+  workbenchDensity: "focused",
+  rememberNavigation: true,
+  lastMode: "overview",
+};
+
+function getExperiencePreferences(): ExperiencePreferences {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(EXPERIENCE_PREFS_KEY) ?? "null");
+    if (parsed?.version === 1) {
+      return { ...DEFAULT_EXPERIENCE_PREFERENCES, ...parsed };
+    }
+  } catch {
+    // A corrupt preference cannot block the viewer.
+  }
+  return DEFAULT_EXPERIENCE_PREFERENCES;
+}
+
+function saveExperiencePreferences(preferences: ExperiencePreferences): void {
+  try {
+    localStorage.setItem(EXPERIENCE_PREFS_KEY, JSON.stringify(preferences));
+  } catch {
+    // Storage is optional (private browsing, embedded publications).
+  }
+}
+
+function initialExperienceMode(preferences: ExperiencePreferences): ExperienceMode {
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const explicit = params.get("mode");
+    if (explicit === "overview" || explicit === "workbench") return explicit;
+    if (["lens", "component", "drill", "file", "flow", "capability", "entity", "rule", "finding"].some((key) => params.has(key))) {
+      return "workbench";
+    }
+  }
+  if (preferences.startView === "last") return preferences.lastMode;
+  return preferences.startView;
+}
 
 // High-water mark + sparse read set for efficient read tracking.
 // w = watermark (everything at or below is read), r = individually-read serials above watermark.
@@ -198,6 +256,25 @@ interface ArchStore {
   // absent or invalid, in which case the viewer renders exactly as today.
   publication: Publication | null;
   setPublication: (publication: Publication | null) => void;
+
+  // Adaptive front door. These are apertures over the same architecture, not
+  // separate products; switching never clears Workbench navigation state.
+  experienceMode: ExperienceMode;
+  overviewDirection: OverviewDirection;
+  startView: StartView;
+  workbenchDensity: WorkbenchDensity;
+  rememberNavigation: boolean;
+  semanticLevel: SemanticLevel;
+  trustOpen: boolean;
+  preferencesOpen: boolean;
+  setExperienceMode: (mode: ExperienceMode) => void;
+  setOverviewDirection: (direction: OverviewDirection) => void;
+  setStartView: (view: StartView) => void;
+  setWorkbenchDensity: (density: WorkbenchDensity) => void;
+  setRememberNavigation: (remember: boolean) => void;
+  setSemanticLevel: (level: SemanticLevel) => void;
+  setTrustOpen: (open: boolean) => void;
+  setPreferencesOpen: (open: boolean) => void;
 
   // Navigation
   selectedComponentId: string | null;
@@ -1024,12 +1101,88 @@ function findOrCreateConcernSet(get: () => ArchStore, concernId: string): string
   return get().createSetFromConcern(concernId);
 }
 
+const initialExperiencePreferences = getExperiencePreferences();
+
 export const useArchStore = create<ArchStore>((set, get) => ({
   architecture: null,
   loading: true,
   error: null,
   publication: null,
   setPublication: (publication) => set({ publication }),
+
+  experienceMode: initialExperienceMode(initialExperiencePreferences),
+  overviewDirection: initialExperiencePreferences.overviewDirection,
+  startView: initialExperiencePreferences.startView,
+  workbenchDensity: initialExperiencePreferences.workbenchDensity,
+  rememberNavigation: initialExperiencePreferences.rememberNavigation,
+  semanticLevel: "system",
+  trustOpen: false,
+  preferencesOpen: false,
+  setExperienceMode: (mode) => {
+    const state = get();
+    if (state.rememberNavigation) {
+      saveExperiencePreferences({
+        version: 1,
+        startView: state.startView,
+        overviewDirection: state.overviewDirection,
+        workbenchDensity: state.workbenchDensity,
+        rememberNavigation: state.rememberNavigation,
+        lastMode: mode,
+      });
+    }
+    set({ experienceMode: mode });
+  },
+  setOverviewDirection: (overviewDirection) => {
+    const state = get();
+    saveExperiencePreferences({
+      version: 1,
+      startView: state.startView,
+      overviewDirection,
+      workbenchDensity: state.workbenchDensity,
+      rememberNavigation: state.rememberNavigation,
+      lastMode: state.experienceMode,
+    });
+    set({ overviewDirection });
+  },
+  setStartView: (startView) => {
+    const state = get();
+    saveExperiencePreferences({
+      version: 1,
+      startView,
+      overviewDirection: state.overviewDirection,
+      workbenchDensity: state.workbenchDensity,
+      rememberNavigation: state.rememberNavigation,
+      lastMode: state.experienceMode,
+    });
+    set({ startView });
+  },
+  setWorkbenchDensity: (workbenchDensity) => {
+    const state = get();
+    saveExperiencePreferences({
+      version: 1,
+      startView: state.startView,
+      overviewDirection: state.overviewDirection,
+      workbenchDensity,
+      rememberNavigation: state.rememberNavigation,
+      lastMode: state.experienceMode,
+    });
+    set({ workbenchDensity });
+  },
+  setRememberNavigation: (rememberNavigation) => {
+    const state = get();
+    saveExperiencePreferences({
+      version: 1,
+      startView: state.startView,
+      overviewDirection: state.overviewDirection,
+      workbenchDensity: state.workbenchDensity,
+      rememberNavigation,
+      lastMode: state.experienceMode,
+    });
+    set({ rememberNavigation });
+  },
+  setSemanticLevel: (semanticLevel) => set({ semanticLevel }),
+  setTrustOpen: (trustOpen) => set({ trustOpen }),
+  setPreferencesOpen: (preferencesOpen) => set({ preferencesOpen }),
 
   selectedComponentId: null,
   breadcrumbs: [],

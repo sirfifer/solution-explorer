@@ -952,6 +952,172 @@ export interface ProducerGap {
   reason: string;
 }
 
+// Human-entry projections. These are deterministic, bounded views over the
+// same stable ids the Workbench uses; the viewer never derives architectural
+// claims from display geometry.
+export interface OrientationTarget {
+  lens?: string;
+  semantic_level?: "system" | "domain" | "component";
+  tour_id?: string | null;
+  surface?: string;
+}
+
+export interface OrientationNode {
+  id: string;
+  label: string;
+  role: string;
+  member_count: number;
+  stable_targets: string[];
+  target_truncated: boolean;
+  statement_kind: "deterministic_grouping";
+}
+
+export interface OrientationEdge {
+  source: string;
+  target: string;
+  relationship_count: number;
+  evidence_pairs: [string, string][];
+}
+
+export interface OrientationProjection {
+  schema: "syscorpus.orientation/v1";
+  subject: {
+    id: string;
+    name: string;
+    kind: string;
+    repository?: string | null;
+    default_branch?: string | null;
+    generated_at?: string | null;
+    analyzer_version?: string | null;
+  };
+  orientation: {
+    deterministic_statement: string;
+    interpreted_statement?: {
+      text: string;
+      status: "interpreted";
+      provenance: { derived_from_commit?: string | null; stale: boolean };
+    } | null;
+    default_path: { kind: "tour" | "question"; id: string };
+  };
+  portrait: {
+    semantic_level: "system";
+    method: string;
+    nodes: OrientationNode[];
+    edges: OrientationEdge[];
+  };
+  question_routes: Array<{
+    id: string;
+    label: string;
+    target: OrientationTarget;
+    available: boolean;
+  }>;
+  trust: {
+    source_coverage: {
+      status: "unavailable" | "complete" | "has_gaps";
+      percent: number | null;
+      analyzed?: number;
+      gaps?: number;
+      target: string;
+    };
+    interpretation: { status: "present" | "absent"; component_count: number; total_components: number };
+    producer_gaps: number;
+    findings: { total: number; unverified: number };
+    direct_dependencies: number;
+  };
+  launch_targets: Record<string, OrientationTarget & { mode: "overview" | "workbench" }>;
+}
+
+export interface SupportProjection {
+  schema: "syscorpus.support/v1";
+  method_caveat: string;
+  configuration: Array<{
+    key: string;
+    component_id: string;
+    component_name: string;
+    kind: "environment_variable" | "configuration_file";
+    evidence: Record<string, unknown>;
+  }>;
+  external_dependencies: Array<{
+    name: string;
+    category: string;
+    component_id: string;
+    component_name: string;
+    evidence: Record<string, unknown>;
+  }>;
+  entry_points: Array<{
+    id: string;
+    name: string;
+    kind: string;
+    component_id: string | null;
+    component_name: string | null;
+    confidence: string;
+    evidence: unknown[];
+  }>;
+  data_handled: Array<{
+    id: string;
+    name: string;
+    kind: string;
+    component_id: string | null;
+    confidence: string;
+    evidence: unknown[];
+  }>;
+  attention: Array<{
+    component_id: string;
+    component_name: string;
+    attention_score: number;
+    reasons: string[];
+  }>;
+  counts: Record<string, number>;
+}
+
+export interface SecurityProjection {
+  schema: "syscorpus.security/v1";
+  method_caveat: string;
+  mechanisms: Array<{
+    source: string;
+    target: string;
+    mechanism: string;
+    confidence: string;
+    evidence: Record<string, unknown>;
+  }>;
+  credential_configuration: Array<{
+    key: string;
+    component_id: string;
+    component_name: string;
+    claim: string;
+    confidence: string;
+    evidence: Record<string, unknown>;
+  }>;
+  communication_boundaries: Array<{
+    source: string;
+    source_name: string;
+    target: string;
+    target_name: string;
+    type: string;
+    protocol: string;
+    transport_state: "encrypted_observed" | "cleartext_label_observed" | "not_observable";
+    evidence: Record<string, unknown>;
+  }>;
+  sensitive_data_leads: Array<{
+    entity_id: string;
+    entity_name: string;
+    component_id: string | null;
+    matched_terms: string[];
+    confidence: "inferred";
+    evidence: unknown[];
+  }>;
+  findings: Array<{
+    id: string;
+    kind: string;
+    summary: string;
+    confidence?: string | null;
+    verification_status: string;
+    evidence: unknown[];
+  }>;
+  not_observable: string[];
+  counts: Record<string, number>;
+}
+
 export interface Architecture {
   name: string;
   description: string;
@@ -1009,6 +1175,9 @@ export interface Architecture {
   // --design-signals. Presence gates the Design lens; every other dataset omits
   // the key and the lens does not appear, exactly like coverage and activity.
   design_signals?: DesignSignals;
+  orientation?: OrientationProjection;
+  support?: SupportProjection;
+  security?: SecurityProjection;
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
   live_status?: {
     statuses?: Record<string, ArchitectureStatus>;
