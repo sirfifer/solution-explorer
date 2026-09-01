@@ -21,4 +21,5 @@ Supporting artifacts:
 - `DESIGN-PROPOSAL.md` — rationale, lens decisions, data contracts, execution plan, and acceptance criteria.
 - `MOBILE-AND-CROSS-CLIENT-EXECUTION.md` — rendered mobile assessment, immediate fixes, native interaction model, and the shared web/iOS snapshot and A/B plan.
 - `GRAPH-ENGINE-EVALUATION.md` — current 2D engine decision, corrected routing integration, limits, replacement thresholds, and the shared 2D/3D scene contract.
+- `INTERFACE-COMPARISON-AND-VSCODE-ROLLOUT.md` — one-data-stack New/Classic comparison contract and the staged plan for graduating the new interface onto the VS Code demo and then `main`.
 - `orientation.v1.example.json` — proposed generated human-orientation projection.

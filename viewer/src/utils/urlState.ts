@@ -82,15 +82,37 @@ export function pushUrlState(state: UrlState): void {
   window.history.pushState({}, "", url);
 }
 
+/**
+ * Return the counterpart-interface URL without changing anything else about the
+ * current demo. This is deliberately narrower than buildUrl: the comparison
+ * links must preserve the exact data override, selection, lens, and any future
+ * query parameters so two tabs are an apples-to-apples rendering comparison.
+ */
+export function interfaceHref(mode: NonNullable<UrlState["mode"]>): string {
+  const params = new URLSearchParams(window.location.search);
+  params.set("mode", mode);
+  const search = params.toString();
+  return `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
+}
+
 function buildUrl(state: UrlState): string {
   const params = new URLSearchParams();
   // The data-source override (a member open inside a solution, M1) is
   // orthogonal to nav state and must survive every URL rewrite; dropping it
   // broke member drill-in on the first click and killed shareable member
-  // links (adversarial-review blocker). Carry it verbatim when present.
+  // links (adversarial-review blocker). Unrecognized parameters are also
+  // orthogonal: preserve them so an interface switch cannot erase a future
+  // experiment or host-level setting this version does not yet understand.
+  // Known inbound-only file/line parameters remain managed so consuming a
+  // source deep link can still remove them deliberately.
   const existing = new URLSearchParams(window.location.search);
-  const dataBase = existing.get("data");
-  if (dataBase) params.set("data", dataBase);
+  const managed = new Set([
+    "mode", "level", "component", "tab", "drill", "lens", "flow", "step",
+    "capability", "entity", "rule", "finding", "file", "line",
+  ]);
+  for (const [key, value] of existing) {
+    if (key === "data" || !managed.has(key)) params.append(key, value);
+  }
   if (state.mode) params.set("mode", state.mode);
   if (state.level && state.level !== "system") params.set("level", state.level);
   if (state.component) params.set("component", state.component);

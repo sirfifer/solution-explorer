@@ -5,6 +5,7 @@ import { buildOrientationFallback, attachHumanViews } from "../utils/orientation
 import { getLens, listAvailableLenses } from "../lenses";
 import { ExperienceSwitcher } from "../components/ExperienceSwitcher";
 import { conciseOverviewStatement, SystemOverview } from "../components/SystemOverview";
+import { ViewerPreferences } from "../components/ViewerPreferences";
 import { HelpSystem } from "../components/HelpSystem";
 import { SupportPanel } from "../components/SupportPanel";
 import type { Architecture, Component, SecurityProjection, SupportProjection } from "../types";
@@ -51,7 +52,8 @@ const security: SecurityProjection = {
 
 beforeEach(() => {
   localStorage.clear();
-  useArchStore.setState({ experienceMode: "overview", darkMode: true, architecture: null, lens: "structure" });
+  window.history.replaceState({}, "", "/");
+  useArchStore.setState({ experienceMode: "overview", startView: "overview", preferencesOpen: false, darkMode: true, architecture: null, lens: "structure" });
 });
 
 describe("human-entry compatibility projection", () => {
@@ -134,11 +136,40 @@ describe("experience aperture", () => {
   it("switches without clearing Workbench navigation and persists the last mode", () => {
     useArchStore.setState({ architecture: architecture(), selectedComponentId: "api" });
     render(<ExperienceSwitcher />);
-    fireEvent.click(screen.getByRole("button", { name: "workbench" }));
+    fireEvent.click(screen.getByRole("button", { name: "Classic interface" }));
     expect(useArchStore.getState().experienceMode).toBe("workbench");
     expect(useArchStore.getState().selectedComponentId).toBe("api");
     expect(JSON.parse(localStorage.getItem("arch-experience-preferences-v1") ?? "{}").lastMode).toBe("workbench");
     expect(useArchStore.getState().overviewHandoff).toBe(true);
+  });
+
+  it("makes the A/B boundary explicit and opens either UI on the exact same data URL", () => {
+    window.history.replaceState({}, "", "/demo?data=.%2Farchitecture&component=api&lens=support&mode=overview#compare");
+    useArchStore.setState({
+      architecture: architecture(),
+      experienceMode: "overview",
+      preferencesOpen: true,
+    });
+
+    render(<ViewerPreferences />);
+
+    expect(screen.getByText("Same data")).toBeTruthy();
+    expect(screen.getByText(/Comparing/).textContent).toContain("Transit");
+    const classicNewTab = screen.getByRole("link", {
+      name: "Open Classic explorer in a new tab with the same data",
+    });
+    expect(classicNewTab.getAttribute("href")).toBe(
+      "/demo?data=.%2Farchitecture&component=api&lens=support&mode=workbench#compare",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Classic explorer" }));
+    expect(useArchStore.getState().experienceMode).toBe("workbench");
+    expect(useArchStore.getState().preferencesOpen).toBe(false);
+  });
+
+  it("defaults a fresh session to the new front door", () => {
+    expect(useArchStore.getState().startView).toBe("overview");
+    expect(useArchStore.getState().experienceMode).toBe("overview");
   });
 
   it("does not stack the legacy welcome modal on an Overview handoff", () => {
