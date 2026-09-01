@@ -555,7 +555,7 @@ def build_orientation(
         "orientation": {
             "deterministic_statement": (
                 f"{arch.get('name') or 'This system'} contains "
-                f"{int(stats.get('total_components', len(components)) or len(components))} mapped "
+                f"{len(components)} mapped "
                 f"components across {len(portrait_nodes)} system areas, connected by "
                 f"{int(stats.get('total_relationships', len(arch.get('relationships') or [])) or 0)} relationships."
             ),

@@ -28,6 +28,35 @@ function groupFor(component: Component): (typeof GROUPS)[number]["id"] {
   return "core";
 }
 
+function compareRepresentative(group: (typeof GROUPS)[number]["id"], a: Component, b: Component): number {
+  const rank = (component: Component): Array<number | string> => {
+    const type = component.type.toLowerCase();
+    const searchable = `${component.id} ${component.name} ${component.path}`.toLowerCase();
+    let semanticPriority = 1;
+    let typePriority = 2;
+    if (group === "experience") {
+      typePriority = ["ios-client", "android-client", "mobile-client", "desktop-app", "watch-app", "web-client"].includes(type) ? 0 : 1;
+    } else if (group === "services") {
+      typePriority = ({ "api-server": 0, service: 1, worker: 2, server: 2 } as Record<string, number>)[type] ?? 3;
+    } else if (group === "data") {
+      semanticPriority = /(?:^|[/ _-])database$/.test(searchable) ? 0 : /(?:^|[/ _-])migrations?(?:$|[/ _-])/.test(searchable) ? 1 : 2;
+      typePriority = ["module", "package"].includes(type) ? 0 : 1;
+    } else if (group === "operations") {
+      typePriority = type === "infrastructure" ? 0 : 1;
+    } else {
+      typePriority = ["module", "package", "library"].includes(type) ? 0 : 1;
+    }
+    return [component.id === "root" ? 1 : 0, semanticPriority, typePriority, component.id.split("/").length - 1, -(component.children?.length ?? 0), component.id];
+  };
+  const left = rank(a);
+  const right = rank(b);
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] === right[index]) continue;
+    return left[index] < right[index] ? -1 : 1;
+  }
+  return 0;
+}
+
 /**
  * Deterministic compatibility Overview for projections created before
  * orientation.json. It deliberately makes only count/grouping claims already
@@ -45,7 +74,7 @@ export function buildOrientationFallback(architecture: Architecture): Orientatio
   const nodes = GROUPS.flatMap((group) => {
     const members = grouped.get(group.id) ?? [];
     if (!members.length) return [];
-    const targets = members.map((component) => component.id).sort();
+    const targets = [...members].sort((a, b) => compareRepresentative(group.id, a, b)).map((component) => component.id);
     return [{
       id: `orientation:${group.id}`,
       label: group.label,
@@ -151,6 +180,20 @@ export function attachHumanViews(
     support: sidecars.support ?? architecture.support,
     security: sidecars.security ?? architecture.security,
   };
-  merged.orientation = sidecars.orientation ?? architecture.orientation ?? buildOrientationFallback(merged);
-  return merged;
+  const orientation = sidecars.orientation ?? architecture.orientation ?? buildOrientationFallback(merged);
+  const classifiedTotal = orientation.portrait.nodes.reduce((sum, node) => sum + node.member_count, 0);
+  const reportedTotal = merged.stats.total_components;
+  const legacyPathCount = merged.stats.total_path_components;
+  const normalized = legacyPathCount == null && classifiedTotal > reportedTotal
+    ? {
+        ...merged,
+        stats: {
+          ...merged.stats,
+          total_path_components: reportedTotal,
+          total_components: classifiedTotal,
+        },
+      }
+    : merged;
+  normalized.orientation = orientation;
+  return normalized;
 }

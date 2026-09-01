@@ -71,6 +71,21 @@ describe("human-entry compatibility projection", () => {
     expect(merged.support).toBe(support);
     expect(merged.security).toBe(security);
   });
+
+  it("normalizes legacy path-only component totals against the classified tree", () => {
+    const root = component("root", "package", [
+      component("ios", "ios-client", [component("ios/home", "screen")]),
+      component("server", "module"),
+    ]);
+    const legacy = architecture({
+      components: [root],
+      stats: { ...architecture().stats, total_components: 3 },
+    });
+    const merged = attachHumanViews(legacy, {});
+    expect(merged.stats.total_components).toBe(4);
+    expect(merged.stats.total_path_components).toBe(3);
+    expect(merged.orientation?.portrait.nodes.find((node) => node.label === "Experiences")?.stable_targets[0]).toBe("ios");
+  });
 });
 
 describe("Support and Security lenses", () => {

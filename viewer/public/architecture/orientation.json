@@ -18,7 +18,7 @@
       "id": "organization",
       "kind": "question"
     },
-    "deterministic_statement": "unamentis contains 178 mapped components across 5 system areas, connected by 168 relationships.",
+    "deterministic_statement": "unamentis contains 256 mapped components across 5 system areas, connected by 168 relationships.",
     "interpreted_statement": {
       "provenance": {
         "derived_from_commit": null,
