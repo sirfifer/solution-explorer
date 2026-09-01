@@ -12,6 +12,9 @@ _generated_at: 2026-03-02T07:22:03.711568+00:00; analyzer_version: 1.0.0; front_
 
 - [manifest.json](./manifest.json): structural entry document (components, relationships, stats, findings, concerns, coverage/activity summaries). Fetch first.
 - data/detail-<safe_id>.json: per-component symbols and files (fetch only the component you drill into).
+- [orientation.json](./orientation.json): human orientation and question routes.
+- [support.json](./support.json): Support and Operations view.
+- [security.json](./security.json): repository-observable Security view.
 
 ## Token economy
 

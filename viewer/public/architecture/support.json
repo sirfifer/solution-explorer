@@ -1,0 +1,834 @@
+{
+  "attention": [
+    {
+      "attention_score": 9,
+      "component_id": "server/web-client/src/lib/providers",
+      "component_name": "providers",
+      "reasons": [
+        "external reliance"
+      ]
+    },
+    {
+      "attention_score": 9,
+      "component_id": "unamentis/services/stt",
+      "component_name": "STT",
+      "reasons": [
+        "external reliance"
+      ]
+    },
+    {
+      "attention_score": 8,
+      "component_id": "server/usm-core/crates/usm-core",
+      "component_name": "usm-core",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 8,
+      "component_id": "server/web/src/app",
+      "component_name": "app",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 7,
+      "component_id": "server/web-client/src/app",
+      "component_name": "app",
+      "reasons": [
+        "configuration",
+        "external reliance"
+      ]
+    },
+    {
+      "attention_score": 6,
+      "component_id": "server/web",
+      "component_name": "web",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 6,
+      "component_id": "server/web-client",
+      "component_name": "unamentis-web-client",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 6,
+      "component_id": "server/web/src/components/dashboard",
+      "component_name": "dashboard",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 6,
+      "component_id": "unamentis/core/routing/models",
+      "component_name": "Models",
+      "reasons": [
+        "external reliance"
+      ]
+    },
+    {
+      "attention_score": 6,
+      "component_id": "unamentis/services/llm",
+      "component_name": "LLM",
+      "reasons": [
+        "external reliance"
+      ]
+    },
+    {
+      "attention_score": 6,
+      "component_id": "unamentis/services/tts",
+      "component_name": "TTS",
+      "reasons": [
+        "external reliance"
+      ]
+    },
+    {
+      "attention_score": 5,
+      "component_id": "scripts",
+      "component_name": "Remote Log Server",
+      "reasons": [
+        "configuration",
+        "external reliance"
+      ]
+    },
+    {
+      "attention_score": 5,
+      "component_id": "unamentis",
+      "component_name": "UnaMentis",
+      "reasons": [
+        "configuration",
+        "external reliance"
+      ]
+    },
+    {
+      "attention_score": 4,
+      "component_id": "server/management",
+      "component_name": "unamentis-management",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 4,
+      "component_id": "server/web/src/components/tts-pregen",
+      "component_name": "tts-pregen",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 4,
+      "component_id": "server/web/src/lib",
+      "component_name": "lib",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 3,
+      "component_id": "server/importers/output",
+      "component_name": "output",
+      "reasons": [
+        "external reliance"
+      ]
+    },
+    {
+      "attention_score": 3,
+      "component_id": "unamentistests/unit/routing",
+      "component_name": "Routing",
+      "reasons": [
+        "external reliance"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "demo/tests",
+      "component_name": "tests",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/database",
+      "component_name": "database",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/devlake",
+      "component_name": "devlake",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/feature-flags",
+      "component_name": "feature-flags",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/importers",
+      "component_name": "unamentis-importers",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/lambda",
+      "component_name": "lambda",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/server-manager/usmxcode/usm",
+      "component_name": "USM",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/usm-core",
+      "component_name": "usm-core",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/usm-core/crates/usm-cli",
+      "component_name": "usm-cli",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/usm-core/crates/usm-ffi",
+      "component_name": "usm-ffi",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/web-client/src/lib/api",
+      "component_name": "api",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/web/src/components/latency-dashboard",
+      "component_name": "latency-dashboard",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "server/web/src/hooks",
+      "component_name": "hooks",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "testresults.xcresult",
+      "component_name": "TestResults.xcresult",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "unamentis-watch-app",
+      "component_name": "UnaMentis",
+      "reasons": [
+        "configuration"
+      ]
+    },
+    {
+      "attention_score": 2,
+      "component_id": "unamentistests",
+      "component_name": "UnaMentisTests",
+      "reasons": [
+        "configuration"
+      ]
+    }
+  ],
+  "configuration": [
+    {
+      "component_id": "server/web/src/app",
+      "component_name": "app",
+      "evidence": {
+        "component_id": "server/web/src/app"
+      },
+      "key": "BACKEND_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/management",
+      "component_name": "unamentis-management",
+      "evidence": {
+        "component_id": "server/management"
+      },
+      "key": "CFG_SCALE",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web-client",
+      "component_name": "unamentis-web-client",
+      "evidence": {
+        "component_id": "server/web-client"
+      },
+      "key": "CI",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/usm-core/crates/usm-core",
+      "component_name": "usm-core",
+      "evidence": {
+        "component_id": "server/usm-core/crates/usm-core"
+      },
+      "key": "HOME",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web-client/src/app",
+      "component_name": "app",
+      "evidence": {
+        "component_id": "server/web-client/src/app"
+      },
+      "key": "MANAGEMENT_API_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web-client",
+      "component_name": "unamentis-web-client",
+      "evidence": {
+        "component_id": "server/web-client"
+      },
+      "key": "NEXT_PUBLIC_API_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/components/dashboard",
+      "component_name": "dashboard",
+      "evidence": {
+        "component_id": "server/web/src/components/dashboard"
+      },
+      "key": "NEXT_PUBLIC_API_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web",
+      "component_name": "web",
+      "evidence": {
+        "component_id": "server/web"
+      },
+      "key": "NEXT_PUBLIC_BACKEND_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/components/tts-pregen",
+      "component_name": "tts-pregen",
+      "evidence": {
+        "component_id": "server/web/src/components/tts-pregen"
+      },
+      "key": "NEXT_PUBLIC_BACKEND_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/lib",
+      "component_name": "lib",
+      "evidence": {
+        "component_id": "server/web/src/lib"
+      },
+      "key": "NEXT_PUBLIC_BACKEND_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/app",
+      "component_name": "app",
+      "evidence": {
+        "component_id": "server/web/src/app"
+      },
+      "key": "NEXT_PUBLIC_FEATURE_FLAG_KEY",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/app",
+      "component_name": "app",
+      "evidence": {
+        "component_id": "server/web/src/app"
+      },
+      "key": "NEXT_PUBLIC_FEATURE_FLAG_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web-client/src/lib/api",
+      "component_name": "api",
+      "evidence": {
+        "component_id": "server/web-client/src/lib/api"
+      },
+      "key": "NEXT_PUBLIC_MANAGEMENT_API_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/components/dashboard",
+      "component_name": "dashboard",
+      "evidence": {
+        "component_id": "server/web/src/components/dashboard"
+      },
+      "key": "NEXT_PUBLIC_MANAGEMENT_API_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/components/latency-dashboard",
+      "component_name": "latency-dashboard",
+      "evidence": {
+        "component_id": "server/web/src/components/latency-dashboard"
+      },
+      "key": "NEXT_PUBLIC_MANAGEMENT_API_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/hooks",
+      "component_name": "hooks",
+      "evidence": {
+        "component_id": "server/web/src/hooks"
+      },
+      "key": "NEXT_PUBLIC_MANAGEMENT_API_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/app",
+      "component_name": "app",
+      "evidence": {
+        "component_id": "server/web/src/app"
+      },
+      "key": "NEXT_PUBLIC_MANAGEMENT_SERVER_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/components/dashboard",
+      "component_name": "dashboard",
+      "evidence": {
+        "component_id": "server/web/src/components/dashboard"
+      },
+      "key": "NEXT_PUBLIC_MANAGEMENT_SERVER_URL",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web",
+      "component_name": "web",
+      "evidence": {
+        "component_id": "server/web"
+      },
+      "key": "NEXT_PUBLIC_USE_MOCK",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/components/tts-pregen",
+      "component_name": "tts-pregen",
+      "evidence": {
+        "component_id": "server/web/src/components/tts-pregen"
+      },
+      "key": "NEXT_PUBLIC_USE_MOCK",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web/src/lib",
+      "component_name": "lib",
+      "evidence": {
+        "component_id": "server/web/src/lib"
+      },
+      "key": "NEXT_PUBLIC_USE_MOCK",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/web-client/src/app",
+      "component_name": "app",
+      "evidence": {
+        "component_id": "server/web-client/src/app"
+      },
+      "key": "OPENAI_API_KEY",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "server/usm-core/crates/usm-core",
+      "component_name": "usm-core",
+      "evidence": {
+        "component_id": "server/usm-core/crates/usm-core"
+      },
+      "key": "PATH",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "scripts",
+      "component_name": "Remote Log Server",
+      "evidence": {
+        "path": "scripts/Gemfile"
+      },
+      "key": "scripts/Gemfile",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/database",
+      "component_name": "database",
+      "evidence": {
+        "path": "server/database/docker-compose.yml"
+      },
+      "key": "server/database/docker-compose.yml",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/devlake",
+      "component_name": "devlake",
+      "evidence": {
+        "path": "server/devlake/docker-compose.yml"
+      },
+      "key": "server/devlake/docker-compose.yml",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/feature-flags",
+      "component_name": "feature-flags",
+      "evidence": {
+        "path": "server/feature-flags/docker-compose.yml"
+      },
+      "key": "server/feature-flags/docker-compose.yml",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/importers",
+      "component_name": "unamentis-importers",
+      "evidence": {
+        "path": "server/importers/pyproject.toml"
+      },
+      "key": "server/importers/pyproject.toml",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/lambda",
+      "component_name": "lambda",
+      "evidence": {
+        "path": "server/lambda/template.yaml"
+      },
+      "key": "server/lambda/template.yaml",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/management",
+      "component_name": "unamentis-management",
+      "evidence": {
+        "path": "server/management/pyproject.toml"
+      },
+      "key": "server/management/pyproject.toml",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/server-manager/usmxcode/usm",
+      "component_name": "USM",
+      "evidence": {
+        "path": "server/server-manager/USMXcode/USM/Info.plist"
+      },
+      "key": "server/server-manager/USMXcode/USM/Info.plist",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/usm-core",
+      "component_name": "usm-core",
+      "evidence": {
+        "path": "server/usm-core/Cargo.toml"
+      },
+      "key": "server/usm-core/Cargo.toml",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/usm-core/crates/usm-cli",
+      "component_name": "usm-cli",
+      "evidence": {
+        "path": "server/usm-core/crates/usm-cli/Cargo.toml"
+      },
+      "key": "server/usm-core/crates/usm-cli/Cargo.toml",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/usm-core/crates/usm-core",
+      "component_name": "usm-core",
+      "evidence": {
+        "path": "server/usm-core/crates/usm-core/Cargo.toml"
+      },
+      "key": "server/usm-core/crates/usm-core/Cargo.toml",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/usm-core/crates/usm-ffi",
+      "component_name": "usm-ffi",
+      "evidence": {
+        "path": "server/usm-core/crates/usm-ffi/Cargo.toml"
+      },
+      "key": "server/usm-core/crates/usm-ffi/Cargo.toml",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/web-client",
+      "component_name": "unamentis-web-client",
+      "evidence": {
+        "path": "server/web-client/package.json"
+      },
+      "key": "server/web-client/package.json",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/web",
+      "component_name": "web",
+      "evidence": {
+        "path": "server/web/package.json"
+      },
+      "key": "server/web/package.json",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "demo/tests",
+      "component_name": "tests",
+      "evidence": {
+        "component_id": "demo/tests"
+      },
+      "key": "SHOTSTACK_API_KEY",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "testresults.xcresult",
+      "component_name": "TestResults.xcresult",
+      "evidence": {
+        "path": "TestResults.xcresult/Info.plist"
+      },
+      "key": "TestResults.xcresult/Info.plist",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "unamentis-watch-app",
+      "component_name": "UnaMentis",
+      "evidence": {
+        "path": "UnaMentis Watch App/Info.plist"
+      },
+      "key": "UnaMentis Watch App/Info.plist",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "unamentis",
+      "component_name": "UnaMentis",
+      "evidence": {
+        "path": "UnaMentis/Info.plist"
+      },
+      "key": "UnaMentis/Info.plist",
+      "kind": "configuration_file"
+    },
+    {
+      "component_id": "server/usm-core/crates/usm-core",
+      "component_name": "usm-core",
+      "evidence": {
+        "component_id": "server/usm-core/crates/usm-core"
+      },
+      "key": "UNAMENTIS_ROOT",
+      "kind": "environment_variable"
+    },
+    {
+      "component_id": "unamentistests",
+      "component_name": "UnaMentisTests",
+      "evidence": {
+        "path": "UnaMentisTests/Info.plist"
+      },
+      "key": "UnaMentisTests/Info.plist",
+      "kind": "configuration_file"
+    }
+  ],
+  "counts": {
+    "attention_components": 34,
+    "configuration": 43,
+    "data_entities": 0,
+    "entry_points": 0,
+    "external_dependencies": 17
+  },
+  "data_handled": [],
+  "entry_points": [],
+  "external_dependencies": [
+    {
+      "category": "ai",
+      "component_id": "unamentis/core/routing/models",
+      "component_name": "Models",
+      "evidence": {
+        "component_id": "unamentis/core/routing/models"
+      },
+      "name": "Anthropic"
+    },
+    {
+      "category": "ai",
+      "component_id": "unamentis/services/llm",
+      "component_name": "LLM",
+      "evidence": {
+        "component_id": "unamentis/services/llm"
+      },
+      "name": "Anthropic"
+    },
+    {
+      "category": "speech",
+      "component_id": "unamentis/services/stt",
+      "component_name": "STT",
+      "evidence": {
+        "component_id": "unamentis/services/stt"
+      },
+      "name": "AssemblyAI"
+    },
+    {
+      "category": "speech",
+      "component_id": "server/web-client/src/lib/providers",
+      "component_name": "providers",
+      "evidence": {
+        "component_id": "server/web-client/src/lib/providers"
+      },
+      "name": "Deepgram"
+    },
+    {
+      "category": "speech",
+      "component_id": "unamentis/services/stt",
+      "component_name": "STT",
+      "evidence": {
+        "component_id": "unamentis/services/stt"
+      },
+      "name": "Deepgram"
+    },
+    {
+      "category": "speech",
+      "component_id": "unamentis/services/tts",
+      "component_name": "TTS",
+      "evidence": {
+        "component_id": "unamentis/services/tts"
+      },
+      "name": "Deepgram"
+    },
+    {
+      "category": "speech",
+      "component_id": "server/web-client/src/lib/providers",
+      "component_name": "providers",
+      "evidence": {
+        "component_id": "server/web-client/src/lib/providers"
+      },
+      "name": "ElevenLabs"
+    },
+    {
+      "category": "speech",
+      "component_id": "unamentis/services/tts",
+      "component_name": "TTS",
+      "evidence": {
+        "component_id": "unamentis/services/tts"
+      },
+      "name": "ElevenLabs"
+    },
+    {
+      "category": "devtools",
+      "component_id": "scripts",
+      "component_name": "Remote Log Server",
+      "evidence": {
+        "component_id": "scripts"
+      },
+      "name": "GitHub"
+    },
+    {
+      "category": "devtools",
+      "component_id": "server/importers/output",
+      "component_name": "output",
+      "evidence": {
+        "component_id": "server/importers/output"
+      },
+      "name": "GitHub"
+    },
+    {
+      "category": "ai",
+      "component_id": "unamentis/services/stt",
+      "component_name": "STT",
+      "evidence": {
+        "component_id": "unamentis/services/stt"
+      },
+      "name": "Groq"
+    },
+    {
+      "category": "ai",
+      "component_id": "server/web-client/src/app",
+      "component_name": "app",
+      "evidence": {
+        "component_id": "server/web-client/src/app"
+      },
+      "name": "OpenAI"
+    },
+    {
+      "category": "ai",
+      "component_id": "server/web-client/src/lib/providers",
+      "component_name": "providers",
+      "evidence": {
+        "component_id": "server/web-client/src/lib/providers"
+      },
+      "name": "OpenAI"
+    },
+    {
+      "category": "ai",
+      "component_id": "unamentis",
+      "component_name": "UnaMentis",
+      "evidence": {
+        "component_id": "unamentis"
+      },
+      "name": "OpenAI"
+    },
+    {
+      "category": "ai",
+      "component_id": "unamentis/core/routing/models",
+      "component_name": "Models",
+      "evidence": {
+        "component_id": "unamentis/core/routing/models"
+      },
+      "name": "OpenAI"
+    },
+    {
+      "category": "ai",
+      "component_id": "unamentis/services/llm",
+      "component_name": "LLM",
+      "evidence": {
+        "component_id": "unamentis/services/llm"
+      },
+      "name": "OpenAI"
+    },
+    {
+      "category": "ai",
+      "component_id": "unamentistests/unit/routing",
+      "component_name": "Routing",
+      "evidence": {
+        "component_id": "unamentistests/unit/routing"
+      },
+      "name": "OpenAI"
+    }
+  ],
+  "method_caveat": "Ranked attention combines observed external reliance, configuration surface, and entry points. It is not incident probability or uptime data.",
+  "schema": "syscorpus.support/v1"
+}
