@@ -102,14 +102,31 @@ export function buildOrientationFallback(architecture: Architecture): Orientatio
     edgeCounts.set(key, row);
   }
   const coverage = architecture.coverage;
-  const parsed = coverage?.summary.parsed ?? 0;
-  const gap = coverage
+  const parsed = typeof coverage?.summary.parsed === "number" ? coverage.summary.parsed : null;
+  const gap = coverage && parsed != null
     ? Object.entries(coverage.summary).reduce(
         (sum, [key, count]) => sum + (key === "parsed" || ["binary", "vendored", "generated", "asset", "non-source"].includes(key) ? 0 : count),
         0,
       )
     : 0;
-  const percent = coverage ? (parsed + gap === 0 ? 100 : Math.round((parsed / (parsed + gap)) * 1000) / 10) : null;
+  const percent = coverage && parsed != null
+    ? (parsed + gap === 0 ? 100 : Math.round((parsed / (parsed + gap)) * 1000) / 10)
+    : null;
+  const inventoryTotal = coverage
+    ? Object.values(coverage.summary).reduce((sum, count) => sum + count, 0)
+    : undefined;
+  const excluded = coverage
+    ? Object.entries(coverage.summary).reduce((sum, [key, count]) => sum + (key.startsWith("excluded:") ? count : 0), 0)
+    : undefined;
+  const producerGapStatus = Object.fromEntries(
+    Object.entries(
+      (architecture.gaps ?? []).reduce<Record<string, number>>((counts, item) => {
+        const status = item.status || "unknown";
+        counts[status] = (counts[status] ?? 0) + 1;
+        return counts;
+      }, {}),
+    ).sort(([left], [right]) => left.localeCompare(right)),
+  );
   const interpreted = architecture.ai_enhance?.summary || architecture.description;
 
   return {
@@ -150,9 +167,21 @@ export function buildOrientationFallback(architecture: Architecture): Orientatio
       { id: "security", label: "What security mechanisms are visible?", target: { lens: "security" }, available: Boolean(architecture.security && Object.values(architecture.security.counts).some((count) => count > 0)) },
     ],
     trust: {
-      source_coverage: { status: !coverage ? "unavailable" : gap ? "has_gaps" : "complete", percent, analyzed: parsed, gaps: gap, target: "coverage.json" },
+      source_coverage: {
+        status: !coverage || parsed == null ? "unavailable" : gap ? "has_gaps" : "complete",
+        percent,
+        ...(parsed == null ? {} : { analyzed: parsed }),
+        ...(coverage && parsed != null ? {
+          gaps: gap,
+          inventory_total: inventoryTotal,
+          excluded,
+          binary: coverage.summary.binary ?? 0,
+        } : {}),
+        target: "coverage.json",
+      },
       interpretation: { status: interpreted ? "present" : "absent", component_count: 0, total_components: components.length },
       producer_gaps: architecture.gaps?.length ?? 0,
+      producer_gap_status: producerGapStatus,
       findings: {
         total: architecture.findings?.length ?? 0,
         unverified: architecture.findings?.filter((finding) => finding.verification_status !== "verified").length ?? 0,

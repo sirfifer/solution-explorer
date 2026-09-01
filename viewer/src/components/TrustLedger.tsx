@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useArchStore } from "../store";
 
 export function TrustLedger({ compact = false }: { compact?: boolean }) {
@@ -8,19 +9,31 @@ export function TrustLedger({ compact = false }: { compact?: boolean }) {
   if (!architecture || !trust) return null;
 
   if (compact) {
+    const mapped = trust.source_coverage.analyzed;
+    const total = trust.source_coverage.inventory_total;
+    const coverageLabel = mapped != null && total
+      ? `${mapped}/${total} files mapped`
+      : trust.source_coverage.percent == null ? "Coverage unavailable" : `${trust.source_coverage.percent}% source parsed`;
+    const statusCounts = trust.producer_gap_status ?? {};
+    const unresolved = statusCounts.unresolved ?? 0;
+    const failed = statusCounts.failed ?? 0;
+    const producerLabel = [
+      unresolved ? `${unresolved} unresolved claims` : "",
+      failed ? `${failed} failed producers` : "",
+    ].filter(Boolean).join(" · ") || "No producer issues";
     return (
       <button onClick={() => setTrustOpen(true)} className={`flex min-h-11 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs sm:min-h-0 sm:text-[10px] ${darkMode ? "border-zinc-800 bg-zinc-900 text-zinc-300" : "border-zinc-200 bg-white text-zinc-600"}`}>
         <i className={`h-2 w-2 rounded-full ${trust.source_coverage.status === "complete" ? "bg-emerald-400" : "bg-amber-400"}`} />
-        <strong>{trust.source_coverage.percent == null ? "Coverage unavailable" : `${trust.source_coverage.percent}% source mapped`}</strong>
-        <span>· {trust.producer_gaps} gaps</span>
+        <strong>{coverageLabel}</strong>
+        <span>· {producerLabel}</span>
       </button>
     );
   }
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <TrustMetric label="Source coverage" value={trust.source_coverage.percent == null ? "Unavailable" : `${trust.source_coverage.percent}%`} note={trust.source_coverage.status.replaceAll("_", " ")} darkMode={darkMode} />
-      <TrustMetric label="Producer gaps" value={String(trust.producer_gaps)} note="failed or absent analyzer units" darkMode={darkMode} />
+      <TrustMetric label="Source parsing" value={trust.source_coverage.analyzed != null && trust.source_coverage.inventory_total ? `${trust.source_coverage.analyzed}/${trust.source_coverage.inventory_total}` : trust.source_coverage.percent == null ? "Unavailable" : `${trust.source_coverage.percent}%`} note={trust.source_coverage.inventory_total ? `${trust.source_coverage.binary ?? 0} binary · ${trust.source_coverage.excluded ?? 0} excluded · ${trust.source_coverage.gaps ?? 0} parse gaps` : trust.source_coverage.status.replaceAll("_", " ")} darkMode={darkMode} />
+      <TrustMetric label="Producer claims" value={String(trust.producer_gaps)} note={Object.entries(trust.producer_gap_status ?? {}).map(([status, count]) => `${count} ${status}`).join(" · ") || "no unresolved or failed claims"} darkMode={darkMode} />
       <TrustMetric label="Findings" value={String(trust.findings.total)} note={`${trust.findings.unverified} remain unverified`} darkMode={darkMode} />
       <TrustMetric label="Direct dependencies" value={String(trust.direct_dependencies)} note="from the observed supply chain" darkMode={darkMode} />
     </div>
@@ -36,6 +49,14 @@ export function TrustDrawer() {
   const setOpen = useArchStore((state) => state.setTrustOpen);
   const architecture = useArchStore((state) => state.architecture);
   const darkMode = useArchStore((state) => state.darkMode);
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [open, setOpen]);
   if (!open || !architecture?.orientation) return null;
   return (
     <div className="fixed inset-0 z-[70] flex justify-end bg-black/45" role="dialog" aria-modal="true" aria-label="Evidence and coverage">

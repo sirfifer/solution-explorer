@@ -305,6 +305,34 @@ def test_noise_ruby_yields_zero_rules():
     assert extract_rules(_NOISE_RB, "ruby", "n.rb") == []
 
 
+def test_json_projection_and_markdown_prose_do_not_enter_code_rule_extractor():
+    projection = json.dumps({
+        "description": "switch mode",
+        "components": [{"code_preview": "switch self { case one: break; case two: break }"}],
+    })
+    assert extract_rules(projection, "json", "architecture/data/detail.json") == []
+    assert extract_rules(
+        "A guide may switch mode between case one and case two.\n",
+        "markdown",
+        "README.md",
+    ) == []
+
+
+def test_rule_summary_is_always_single_line():
+    source = (
+        "func choose(value: Int) {\n"
+        "  switch value {\n"
+        "  case 1:\n    return\n"
+        "  case 2:\n    return\n"
+        "  default:\n    return\n"
+        "  }\n"
+        "}\n"
+    )
+    rules = extract_rules(source, "swift", "Choice.swift")
+    assert rules
+    assert all("\n" not in value["summary"] and "\r" not in value["summary"] for value, _ in rules)
+
+
 def test_internal_error_raise_is_not_validation():
     # Raising a non-validation error on an internal check is error handling,
     # not a rule (the raise allowlist is the load-bearing filter).

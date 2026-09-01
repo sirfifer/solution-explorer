@@ -525,6 +525,42 @@ def test_finding1_gitignored_manifest_is_not_a_shipping_source(tmp_path):
     assert "local-only" not in names  # pruned by .gitignore, like the enumerator
 
 
+def test_generated_projection_and_claude_worktrees_are_not_dependency_sources(tmp_path):
+    (tmp_path / "Package.swift").write_text(
+        '// swift-tools-version:5.9\n.package(url: "https://example.com/real.git", from: "1.0.0")\n'
+    )
+
+    projection = tmp_path / "architecture"
+    (projection / "data").mkdir(parents=True)
+    (projection / "manifest.json").write_text(json.dumps({
+        "analyzer_version": "2.0.0",
+        "generated_at": "2026-09-01T00:00:00Z",
+        "components": [],
+    }))
+    (projection / "Package.swift").write_text(
+        '// swift-tools-version:8.0\n.package(url: "https://example.com/stale.git", from: "9.0.0")\n'
+    )
+
+    nested = tmp_path / ".claude" / "worktrees" / "review"
+    nested.mkdir(parents=True)
+    (nested / "Package.swift").write_text(
+        '// swift-tools-version:8.0\n.package(url: "https://example.com/nested.git", from: "9.0.0")\n'
+    )
+    agent = tmp_path / ".claude" / "skills" / "shipping"
+    agent.mkdir(parents=True)
+    (agent / "Package.swift").write_text(
+        '// swift-tools-version:5.9\n.package(url: "https://example.com/agent-product.git", from: "2.0.0")\n'
+    )
+
+    sc = collect_supply_chain(tmp_path)
+    assert sc is not None
+    assert {d.name for d in sc.dependencies} == {"agent-product", "real"}
+    assert {d.evidence_file for d in sc.dependencies} == {
+        ".claude/skills/shipping/Package.swift", "Package.swift",
+    }
+    assert {(t.kind, t.constraint) for t in sc.targets} == {("swift-tools", "5.9")}
+
+
 def test_finding2_npm_preserves_multiple_versions_of_one_package():
     sc = collect_supply_chain(SBOM / "npm_multiversion")
     dep_a = [d for d in sc.dependencies if d.name == "dep-a"]

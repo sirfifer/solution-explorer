@@ -165,15 +165,144 @@ def _coverage_trust(coverage: Optional[dict]) -> dict:
     if not coverage:
         return {"status": "unavailable", "percent": None, "target": "coverage.json"}
     families = coverage_families(coverage.get("summary") or {})
+    summary = coverage.get("summary") or {}
     analyzed = families["analyzed"]
     gaps = families["gap"]
+    inventory_total = sum(int(value or 0) for value in summary.values())
+    excluded = sum(
+        int(value or 0)
+        for key, value in summary.items()
+        if str(key).startswith("excluded:")
+    )
+    binary = int(summary.get("binary") or 0)
     percent = float(format_source_percent(families))
     return {
         "status": "complete" if gaps == 0 else "has_gaps",
         "percent": percent,
         "analyzed": analyzed,
         "gaps": gaps,
+        "inventory_total": inventory_total,
+        "excluded": excluded,
+        "binary": binary,
         "target": "coverage.json",
+    }
+
+
+def _component_docs_text(component: dict) -> str:
+    docs = component.get("docs") or {}
+    return "\n".join(str(value) for value in docs.values() if value)
+
+
+def _deployment_posture(arch: dict) -> Optional[dict]:
+    """Build an evidence-tiered deployment posture without inventing topology.
+
+    Repository prose is a claim, not runtime proof. Direct provider references
+    extracted from product source are stronger observations. Both remain
+    visible with their distinct statement kinds so contradictory or incomplete
+    repositories degrade to an honest set of claims instead of one false story.
+    """
+    components, _ = _component_index(arch)
+    evidence: list[tuple[str, str]] = []
+    for component in components:
+        docs = component.get("docs") or {}
+        for field in ("claude_md", "readme", "architecture_notes"):
+            value = docs.get(field)
+            if value:
+                evidence.append((f"{component.get('id') or 'root'}.docs.{field}", str(value)))
+    combined = "\n".join(value for _, value in evidence)
+    if not combined:
+        return None
+
+    rows: list[dict] = []
+    standalone = re.search(r"\bstandalone (?:mobile )?app\b", combined, re.I)
+    if standalone:
+        source = next(path for path, text in evidence if re.search(r"\bstandalone (?:mobile )?app\b", text, re.I))
+        rows.append({
+            "id": "primary-runtime",
+            "label": "Standalone application",
+            "posture": "standalone",
+            "statement_kind": "repository_claim",
+            "evidence": {"source": source, "phrase": standalone.group(0)},
+        })
+
+    server = re.search(
+        r"communicates with (?:the )?(.{0,60}?server) via ([^.\n]+)",
+        combined,
+        re.I,
+    )
+    source_independent = re.search(r"zero source-level dependencies on server code", combined, re.I)
+    if standalone and server and source_independent:
+        source = next(path for path, text in evidence if server.group(0) in text)
+        rows.append({
+            "id": "companion-backend",
+            "label": server.group(1).strip(),
+            "posture": "optional",
+            "detail": f"Available via {server.group(2).strip()}; the repository says the client has no source-level dependency on server code.",
+            "statement_kind": "repository_claim",
+            "evidence": {
+                "source": source,
+                "phrase": f"{server.group(0)}; {source_independent.group(0)}",
+            },
+        })
+
+    on_device = re.search(r"\bon-device\b", combined, re.I)
+    if on_device:
+        source = next(path for path, text in evidence if re.search(r"\bon-device\b", text, re.I))
+        rows.append({
+            "id": "on-device",
+            "label": "On-device execution is supported",
+            "posture": "on_device",
+            "statement_kind": "repository_claim",
+            "evidence": {"source": source, "phrase": on_device.group(0)},
+        })
+
+    direct = re.search(
+        r"\b(?:connects?\s+)?direct(?:ly)?\s+to\s+(?:the )?(?:cloud )?provider\b"
+        r"|\bdevice[- ]to[- ]provider\b",
+        combined,
+        re.I,
+    )
+    if direct:
+        source = next(path for path, text in evidence if direct.group(0) in text)
+        rows.append({
+            "id": "direct-provider",
+            "label": "The client can contact providers without an application proxy",
+            "posture": "direct_to_provider",
+            "statement_kind": "repository_claim",
+            "evidence": {"source": source, "phrase": direct.group(0)},
+        })
+
+    # A URL embedded in a client component is direct source evidence that the
+    # client references that provider. It does not prove a production request
+    # occurred, which is why the statement says "references" rather than
+    # "connects" and keeps authentication explicitly observable elsewhere.
+    direct_services: list[dict] = []
+    for component in components:
+        for service in component.get("external_services") or []:
+            if not isinstance(service, dict) or not service.get("name"):
+                continue
+            direct_services.append({
+                "name": str(service["name"]),
+                "protocol": service.get("protocol"),
+                "evidence": service.get("evidence") or {"component_id": component.get("id")},
+            })
+    if direct_services and not any(row["id"] == "direct-provider" for row in rows):
+        names = sorted({row["name"] for row in direct_services})
+        rows.append({
+            "id": "direct-provider",
+            "label": "Direct provider references are present in the client",
+            "posture": "direct_to_provider",
+            "detail": ", ".join(names[:6]) + (" and others" if len(names) > 6 else ""),
+            "statement_kind": "observed_source_reference",
+            "evidence": direct_services[0]["evidence"],
+        })
+
+    if not rows:
+        return None
+    return {
+        "status": "evidence_tiered",
+        "method_caveat": "Repository claims are separated from source-observed provider references. Runtime deployment remains configuration-dependent.",
+        "items": rows,
     }
 
 
@@ -217,17 +346,28 @@ def build_support_view(arch: dict) -> dict:
             if isinstance(service, dict):
                 service_name = service.get("name")
                 category = service.get("category") or "external"
+                protocol = service.get("protocol")
+                port = service.get("port")
+                authentication = service.get("authentication") or "not_observable"
+                service_evidence = service.get("evidence") or {"component_id": component_id}
             else:
                 service_name = str(service)
                 category = "external"
+                protocol = None
+                port = None
+                authentication = "not_observable"
+                service_evidence = {"component_id": component_id}
             if not service_name:
                 continue
             external.append({
                 "name": str(service_name),
                 "category": str(category),
+                "protocol": protocol,
+                "port": port,
+                "authentication": authentication,
                 "component_id": component_id,
                 "component_name": component_name,
-                "evidence": {"component_id": component_id},
+                "evidence": service_evidence,
             })
 
     entry_points: list[dict] = []
@@ -359,6 +499,102 @@ def build_security_view(arch: dict) -> dict:
             "transport_state": transport_state,
             "evidence": {"relationship": [source, target]},
         })
+
+    # External service references are communication boundaries even when the
+    # remote provider is not modeled as a component node. Preserve the scheme,
+    # port, and explicit authentication unknown instead of drawing a blank edge.
+    for component in components:
+        component_id = str(component.get("id") or "")
+        for service in component.get("external_services") or []:
+            if not isinstance(service, dict):
+                continue
+            protocol = str(service.get("protocol") or "unknown").lower()
+            service_name = str(service.get("name") or "external service")
+            boundaries.append({
+                "source": component_id,
+                "source_name": str(component.get("name") or component_id),
+                "target": f"external:{service_name}",
+                "target_name": service_name,
+                "type": "external_service",
+                "protocol": protocol,
+                "port": service.get("port"),
+                "authentication": service.get("authentication") or "not_observable",
+                "transport_state": (
+                    "encrypted_observed" if protocol in {"https", "wss", "tls", "mtls"}
+                    else "cleartext_label_observed" if protocol in {"http", "ws"}
+                    else "not_observable"
+                ),
+                "evidence": service.get("evidence") or {"component_id": component_id},
+            })
+
+    # Platform-local controls do not appear on graph edges. Preserve them as
+    # first-class observed mechanisms when component file facts provide direct
+    # import, path, module-doc, or symbol-name evidence.
+    seen_local: set[tuple[str, str]] = set()
+    file_rows = [row for row in arch.get("files") or [] if isinstance(row, dict)]
+    candidates_by_file: dict[str, list[dict]] = defaultdict(list)
+    for component in components:
+        for row in component.get("files") or []:
+            path = str(row.get("path") or "") if isinstance(row, dict) else str(row)
+            if path:
+                candidates_by_file[path].append(component)
+
+    owned_file_rows: list[tuple[dict, dict]] = []
+    by_path = {str(row.get("path") or ""): row for row in file_rows}
+    for path, candidates in candidates_by_file.items():
+        file_row = by_path.get(path)
+        if file_row is None:
+            file_row = next(
+                (
+                    row for component in candidates
+                    for row in component.get("files") or []
+                    if isinstance(row, dict) and str(row.get("path") or "") == path
+                ),
+                None,
+            )
+        if file_row is None:
+            continue
+        # Component trees may repeat a descendant file on ancestors. Attribute
+        # a local mechanism once, to the deepest explicit owner.
+        owner = max(
+            candidates,
+            key=lambda component: len(str(component.get("path") or "").split("/")),
+        )
+        owned_file_rows.append((owner, file_row))
+
+    for component, file_row in owned_file_rows:
+        component_id = str(component.get("id") or "")
+        path = str(file_row.get("path") or "")
+        imports = {str(value) for value in file_row.get("imports") or []}
+        symbols = " ".join(str(value) for value in file_row.get("symbols") or [])
+        searchable = " ".join([path, str(file_row.get("module_doc") or ""), symbols])
+        local: list[tuple[str, str]] = []
+        if "Security" in imports and re.search(r"keychain|api.?key", searchable, re.I):
+            local.append(("iOS Keychain", "credential storage"))
+        if re.search(r"file.?protection|NSFileProtection", searchable, re.I):
+            local.append(("iOS file protection", "protected local storage"))
+        for mechanism, purpose in local:
+            key = (component_id, mechanism)
+            if key in seen_local:
+                continue
+            seen_local.add(key)
+            mechanisms.append({
+                "source": component_id,
+                "target": "device-security-boundary",
+                "mechanism": mechanism,
+                "purpose": purpose,
+                "confidence": "certain",
+                "evidence": {"file": path, "signal": "import/symbol"},
+            })
+            if mechanism == "iOS Keychain":
+                credentials.append({
+                    "key": "API keys",
+                    "component_id": component_id,
+                    "component_name": str(component.get("name") or component_id),
+                    "claim": "credential storage in iOS Keychain is referenced",
+                    "confidence": "certain",
+                    "evidence": {"file": path, "signal": "Security import and Keychain symbol"},
+                })
 
     sensitive_data: list[dict] = []
     for entity in sorted(arch.get("data_entities") or [], key=lambda e: str(e.get("id", ""))):
@@ -541,6 +777,10 @@ def build_orientation(
     )
     tours = arch.get("tours") or []
     first_tour = tours[0].get("id") if tours else None
+    producer_status: dict[str, int] = defaultdict(int)
+    for gap in arch.get("gaps") or []:
+        producer_status[str(gap.get("status") or "unknown")] += 1
+
     return {
         "schema": "syscorpus.orientation/v1",
         "subject": {
@@ -569,6 +809,7 @@ def build_orientation(
             } if interpreted else None),
             "default_path": ({"kind": "tour", "id": first_tour} if first_tour else {"kind": "question", "id": "organization"}),
         },
+        "deployment_posture": _deployment_posture(arch),
         "portrait": {
             "semantic_level": "system",
             "method": "deterministic component-type and path grouping",
@@ -584,6 +825,7 @@ def build_orientation(
                 "total_components": len(components),
             },
             "producer_gaps": len(arch.get("gaps") or []),
+            "producer_gap_status": dict(sorted(producer_status.items())),
             "findings": {"total": len(finding_rows), "unverified": unverified},
             "direct_dependencies": sum(
                 1

@@ -28,6 +28,14 @@ function StaleMarker({ darkMode }: { darkMode: boolean }) {
   );
 }
 
+function InterpretationMarker({ darkMode }: { darkMode: boolean }) {
+  return (
+    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${darkMode ? "bg-violet-500/15 text-violet-300" : "bg-violet-100 text-violet-700"}`}>
+      guided interpretation
+    </span>
+  );
+}
+
 export function TourPlayer() {
   const darkMode = useArchStore((s) => s.darkMode);
   const toursOpen = useArchStore((s) => s.toursOpen);
@@ -79,6 +87,7 @@ export function TourPlayer() {
             <span>{"\u{1F5FA}️"}</span>
             <h2 className="text-sm font-bold truncate">{activeTour.title}</h2>
             {isTourStale(activeTour) && <StaleMarker darkMode={darkMode} />}
+            {activeTour.statement_kind === "authored_interpretation" && <InterpretationMarker darkMode={darkMode} />}
             <button
               type="button"
               onClick={exitTour}
@@ -103,6 +112,11 @@ export function TourPlayer() {
             <p className={`mt-1 text-xs leading-relaxed ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
               {current.narration}
             </p>
+            {current.verification_status === "unverified" && (
+              <p className={`mt-2 text-[11px] leading-5 ${darkMode ? "text-violet-300" : "text-violet-700"}`}>
+                Teaching narration anchored to source, not a verified runtime assertion.
+              </p>
+            )}
             {current.evidence?.file && (
               <button
                 type="button"
@@ -229,6 +243,7 @@ export function TourPlayer() {
                     {tour.title}
                   </span>
                   {isTourStale(tour) && <StaleMarker darkMode={darkMode} />}
+                  {tour.statement_kind === "authored_interpretation" && <InterpretationMarker darkMode={darkMode} />}
                   <span className={`ml-auto shrink-0 text-[10px] px-1.5 py-0.5 rounded tabular-nums ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
                     {tourStepCount(tour)} step{tourStepCount(tour) !== 1 ? "s" : ""}
                   </span>

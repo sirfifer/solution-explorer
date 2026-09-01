@@ -134,7 +134,10 @@ def _lines_with_offsets(content: str) -> list[tuple[str, int, int]]:
 
 def _value(kind, summary, *, inputs=None, outputs=None, anchor=None,
            framework=None, confidence="inferred", field=None) -> dict:
-    v: dict = {"kind": kind, "summary": summary[:300], "confidence": confidence}
+    # A rule summary is a single mechanical statement. Collapsing whitespace
+    # prevents a malformed multi-line capture from becoming an unreadable card.
+    normalized_summary = " ".join(str(summary).split())
+    v: dict = {"kind": kind, "summary": normalized_summary[:300], "confidence": confidence}
     if inputs:
         v["inputs"] = sorted(dict.fromkeys(inputs))
     if outputs:
@@ -764,6 +767,17 @@ def _dedupe(items: list[tuple[dict, int]]) -> list[tuple[dict, int]]:
 
 def extract_rules(content: str, language: str, path: str) -> list[tuple[dict, int]]:
     """Detect rule-bearing code in one file. Returns ``(value, match_start)``."""
+    # This extractor describes executable/source-schema syntax. JSON and
+    # Markdown remain fully inventoried and are routed through their own
+    # config/schema/documentation extractors; feeding them to these generic
+    # switch/formula regexes turns prose and serialized code previews into
+    # invented runtime rules.
+    supported = {
+        "python", "ruby", "javascript", "typescript", "go", "rust", "swift",
+        "java", "kotlin", "c", "cpp", "csharp", "sql", "prisma",
+    }
+    if language not in supported:
+        return []
     lines = _lines_with_offsets(content)
     out: list[tuple[dict, int]] = []
 

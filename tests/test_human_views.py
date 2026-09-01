@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 
 from analyzer.project import (
     build_orientation,
@@ -34,7 +35,11 @@ def _architecture() -> dict:
             "path": "services/api",
             "docs": {"env_vars": ["DATABASE_URL", "STRIPE_API_KEY"]},
             "config_files": [{"path": "services/api/config.toml"}],
-            "external_services": [{"name": "Stripe", "category": "payments"}],
+            "external_services": [{
+                "name": "Stripe", "category": "payments", "protocol": "https",
+                "port": 443, "authentication": "not_observable",
+                "evidence": {"file": "services/api/payments.py", "line": 8},
+            }],
             "children": [],
         }, {
             "id": "models",
@@ -113,8 +118,58 @@ def test_human_view_builders_are_deterministic_and_evidence_honest():
     assert web_boundary["transport_state"] == "encrypted_observed"
     assert "not a security audit" in security_a["method_caveat"]
     assert security_a["findings"][0]["verification_status"] == "unverified"
+    stripe = next(row for row in security_a["communication_boundaries"] if row["target"] == "external:Stripe")
+    assert stripe["protocol"] == "https" and stripe["port"] == 443
+    assert stripe["authentication"] == "not_observable"
     assert orientation_a["trust"]["source_coverage"]["percent"] == 90.0
     assert len(orientation_a["portrait"]["nodes"]) == 3
+
+
+def test_security_view_detects_platform_local_keychain_mechanism():
+    arch = deepcopy(_architecture())
+    arch["components"][0]["files"] = [{
+        "path": "apps/web/APIKeyManager.swift",
+        "imports": ["Foundation", "Security"],
+        "symbols": ["APIKeyManager", "saveToKeychain"],
+        "module_doc": "Secure API key management using Keychain",
+    }]
+    security = build_security_view(arch)
+    assert any(row["mechanism"] == "iOS Keychain" for row in security["mechanisms"])
+    assert any(row["key"] == "API keys" for row in security["credential_configuration"])
+
+
+def test_security_view_joins_top_level_file_facts_to_component_paths():
+    arch = deepcopy(_architecture())
+    arch["components"][0]["path"] = "apps/web"
+    arch["components"][0]["files"] = ["apps/web/APIKeyManager.swift"]
+    arch["files"] = [{
+        "path": "apps/web/APIKeyManager.swift",
+        "imports": ["Foundation", "Security"],
+        "symbols": ["APIKeyManager", "saveToKeychain"],
+        "module_doc": "Secure API key management using Keychain",
+    }]
+    security = build_security_view(arch)
+    assert any(row["mechanism"] == "iOS Keychain" for row in security["mechanisms"])
+
+
+def test_orientation_exposes_interpreted_deployment_posture():
+    arch = _architecture()
+    arch["components"][0]["docs"] = {
+        "claude_md": (
+            "This is a standalone mobile app. It communicates with the Transit "
+                "server via HTTP REST APIs (port 8766). On-device models are supported. "
+                "It has zero source-level dependencies on server code. "
+                "The device connects directly to the provider."
+        )
+    }
+    orientation = build_orientation(arch)
+    posture = orientation["deployment_posture"]
+    assert posture["status"] == "evidence_tiered"
+    assert {row["posture"] for row in posture["items"]} == {
+        "standalone", "optional", "on_device", "direct_to_provider",
+    }
+    assert all(row["statement_kind"] == "repository_claim" for row in posture["items"])
+    assert all(row["evidence"]["source"].endswith("claude_md") for row in posture["items"])
 
 
 def test_orientation_prefers_credible_area_entry_targets():

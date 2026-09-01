@@ -74,8 +74,12 @@ export function HelpSystem() {
         setShowHelp((v) => !v);
         return;
       }
-      if (e.key === "Escape" && showHelp) {
-        setShowHelp(false);
+      if (e.key === "Escape") {
+        if (showHelp) setShowHelp(false);
+        if (showWelcome) {
+          setShowWelcome(false);
+          localStorage.setItem(HELP_DISMISSED_KEY, "true");
+        }
       }
     };
     const openFromMobileMenu = () => setShowHelp(true);
@@ -85,7 +89,7 @@ export function HelpSystem() {
       window.removeEventListener("keydown", handler);
       window.removeEventListener("arch-viz-open-help", openFromMobileMenu);
     };
-  }, [showHelp]);
+  }, [showHelp, showWelcome]);
 
   const dismissWelcome = () => {
     setShowWelcome(false);

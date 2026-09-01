@@ -74,6 +74,15 @@ describe("human-entry compatibility projection", () => {
     expect(merged.security).toBe(security);
   });
 
+  it("does not turn missing coverage fields into measured zero", () => {
+    const fallback = buildOrientationFallback(architecture({
+      coverage: { summary: {}, total: 0, parsed: 0, rows: [] },
+    }));
+    expect(fallback.trust.source_coverage.status).toBe("unavailable");
+    expect(fallback.trust.source_coverage.percent).toBeNull();
+    expect(fallback.trust.source_coverage.analyzed).toBeUndefined();
+  });
+
   it("normalizes legacy path-only component totals against the classified tree", () => {
     const root = component("root", "package", [
       component("ios", "ios-client", [component("ios/home", "screen")]),

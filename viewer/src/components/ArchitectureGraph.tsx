@@ -123,6 +123,7 @@ export function ArchitectureGraph() {
   // pre-layout grid positions during a URL deep-link restore (F-VW-7).
   const [layoutVersion, setLayoutVersion] = useState(0);
   const [canvasAspectRatio, setCanvasAspectRatio] = useState(1.3);
+  const [canvasReady, setCanvasReady] = useState(false);
   // React Flow measures the real DOM nodes after their themed/device frames
   // render. Feed those dimensions back to ELK; laying out every card as the
   // old 380x250 fallback made tall phone-shaped nodes extend into routes and
@@ -149,6 +150,7 @@ export function ArchitectureGraph() {
       const { width, height } = el.getBoundingClientRect();
       setNodeBudget(nodeBudgetForCanvas(width, height));
       if (width > 0 && height > 0) {
+        setCanvasReady(true);
         // Avoid a fresh ELK pass for sub-pixel panel animation while still
         // following meaningful resize, split-panel, and rotation changes.
         setCanvasAspectRatio(Math.round((width / height) * 20) / 20);
@@ -448,10 +450,11 @@ export function ArchitectureGraph() {
 
   // Apply ELK layout
   useEffect(() => {
+    if (!canvasReady) return;
     if (rawNodes.length === 0) {
       setNodes([]);
       setEdges([]);
-      // Don't return early — let the empty-state panel render below
+      return;
     }
 
     // Clear any pending layout
@@ -540,7 +543,7 @@ export function ArchitectureGraph() {
       if (layoutTimeout.current) clearTimeout(layoutTimeout.current);
       if (readabilityTimeout.current) clearTimeout(readabilityTimeout.current);
     };
-  }, [rawNodes, rawEdges, lens, canvasAspectRatio, selectedComponentId, setNodes, setEdges, fitView, getViewport, setCenter, shrinkNodeBudget]);
+  }, [rawNodes, rawEdges, lens, canvasAspectRatio, canvasReady, selectedComponentId, setNodes, setEdges, fitView, getViewport, setCenter, shrinkNodeBudget]);
 
   // Restore every node and edge to the style the graph build gave it. The one
   // exit path for both shading modes: composing from the baseStyle snapshot
@@ -957,7 +960,6 @@ export function ArchitectureGraph() {
         // from a drag, so clicking is reliable and deliberate dragging still
         // works.
         nodeDragThreshold={5}
-        fitView
         minZoom={GRAPH_MIN_ZOOM}
         maxZoom={GRAPH_MAX_ZOOM}
         proOptions={{ hideAttribution: true }}
@@ -1044,6 +1046,14 @@ export function ArchitectureGraph() {
             </div>
           )}
         </Panel>
+
+        {lens === "structure" && nodes.length > 0 && (
+          <Panel position="top-right">
+            <div className={`rounded-lg border px-3 py-2 text-[11px] shadow-sm ${darkMode ? "border-zinc-800 bg-zinc-950/90 text-zinc-400" : "border-zinc-200 bg-white/90 text-zinc-600"}`}>
+              <strong className={darkMode ? "text-zinc-200" : "text-zinc-800"}>Open a level:</strong> double-click a component
+            </div>
+          </Panel>
+        )}
 
         {/* Empty state — shown when drill level has no visible components */}
         {nodes.length === 0 && !loading && (

@@ -125,11 +125,21 @@ def apply_enrichment_overlay(
             payload = row.get("payload")
             if not isinstance(payload, dict) or not payload.get("steps"):
                 continue
+            steps = []
+            for raw_step in payload.get("steps") or []:
+                if not isinstance(raw_step, dict):
+                    continue
+                step = dict(raw_step)
+                step.setdefault("statement_kind", "authored_interpretation")
+                step.setdefault("verification_status", "unverified")
+                steps.append(step)
             tour = {
                 "id": payload.get("id") or row["target_id"],
                 "title": payload.get("title") or "",
                 "description": payload.get("description") or "",
-                "steps": payload.get("steps") or [],
+                "steps": steps,
+                "statement_kind": payload.get("statement_kind") or "authored_interpretation",
+                "verification_status": payload.get("verification_status") or "unverified",
             }
             # Provenance carries the commit the tour was anchored against, and
             # the stale marker when its anchors have drifted since. A walkthrough

@@ -189,6 +189,7 @@ def _db_drivers(content: str, language: str, mask: StringMask) -> list[SignalRec
 
 def _queue_drivers(content: str, language: str, mask: StringMask) -> list[SignalRecord]:
     out = []
+    driver_observed = False
     for pat, system in MESSAGE_QUEUE_PATTERNS.get(language, []):
         for m in re.finditer(pat, content):
             if mask.in_string(m.start()):
@@ -196,6 +197,7 @@ def _queue_drivers(content: str, language: str, mask: StringMask) -> list[Signal
             out.append(SignalRecord(
                 "queue_driver", {"system": system}, _line_of(content, m.start())
             ))
+            driver_observed = True
             break
     for pat in QUEUE_NAME_PATTERNS:
         for m in re.finditer(pat, content):
@@ -208,6 +210,12 @@ def _queue_drivers(content: str, language: str, mask: StringMask) -> list[Signal
                 direction = "produce"
             else:
                 direction = None
+            # A variable/enum named topic, queue, or channel is far too common
+            # to prove event infrastructure. Assignment-shaped names need a
+            # queue driver in the same file; explicit publish/subscribe calls
+            # are independently meaningful evidence.
+            if direction is None and not driver_observed:
+                continue
             value = {"name": m.group(1)}
             if direction:
                 value["direction"] = direction

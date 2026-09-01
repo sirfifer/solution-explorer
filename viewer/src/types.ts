@@ -641,9 +641,9 @@ export interface CoverageRow {
 
 export interface Coverage {
   // Counts keyed by disposition string (e.g. "parsed", "binary",
-  // "excluded:node_modules", "failed"). This is the pruned-directory reading of
-  // I2: an excluded directory is a single row/count whose rule explains
-  // everything beneath it; failed/binary/oversize are per file.
+  // "excluded:generated", "failed"). Ordinary huge excluded directories may
+  // be represented by one bounded row, while recognized generated projections
+  // are ledgered file by file so their contents remain exactly accountable.
   summary: Record<string, number>;
   total: number;
   parsed: number;
@@ -999,6 +999,18 @@ export interface OrientationProjection {
     } | null;
     default_path: { kind: "tour" | "question"; id: string };
   };
+  deployment_posture?: {
+    status: "evidence_tiered";
+    method_caveat: string;
+    items: Array<{
+      id: string;
+      label: string;
+      posture: "standalone" | "optional" | "on_device" | "direct_to_provider";
+      detail?: string;
+      statement_kind: "repository_claim" | "observed_source_reference";
+      evidence: Record<string, unknown>;
+    }>;
+  } | null;
   portrait: {
     semantic_level: "system";
     method: string;
@@ -1017,10 +1029,14 @@ export interface OrientationProjection {
       percent: number | null;
       analyzed?: number;
       gaps?: number;
+      inventory_total?: number;
+      excluded?: number;
+      binary?: number;
       target: string;
     };
     interpretation: { status: "present" | "absent"; component_count: number; total_components: number };
     producer_gaps: number;
+    producer_gap_status?: Record<string, number>;
     findings: { total: number; unverified: number };
     direct_dependencies: number;
   };
@@ -1040,6 +1056,9 @@ export interface SupportProjection {
   external_dependencies: Array<{
     name: string;
     category: string;
+    protocol?: string | null;
+    port?: number | null;
+    authentication?: string | null;
     component_id: string;
     component_name: string;
     evidence: Record<string, unknown>;
@@ -1095,6 +1114,8 @@ export interface SecurityProjection {
     target_name: string;
     type: string;
     protocol: string;
+    port?: number | null;
+    authentication?: string | null;
     transport_state: "encrypted_observed" | "cleartext_label_observed" | "not_observable";
     evidence: Record<string, unknown>;
   }>;
@@ -1301,6 +1322,8 @@ export interface TourStep {
   title: string;
   narration: string;
   evidence?: TourStepEvidence;
+  statement_kind?: "authored_interpretation" | "verified_claim";
+  verification_status?: "unverified" | "verified";
 }
 
 // Provenance for staleness detection (I5). `derived_from_commit` records the
@@ -1320,6 +1343,8 @@ export interface Tour {
   description: string;
   steps: TourStep[];
   provenance?: TourProvenance;
+  statement_kind?: "authored_interpretation" | "verified_claim";
+  verification_status?: "unverified" | "verified";
 }
 
 // Changelog types for architecture change notifications

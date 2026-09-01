@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useArchStore } from "../store";
 import { interfaceHref } from "../utils/urlState";
 
@@ -16,6 +17,14 @@ const INTERFACES = [
 
 export function ViewerPreferences() {
   const state = useArchStore();
+  useEffect(() => {
+    if (!state.preferencesOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") state.setPreferencesOpen(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [state.preferencesOpen, state.setPreferencesOpen]);
   if (!state.preferencesOpen) return null;
   const dark = state.darkMode;
   return (
