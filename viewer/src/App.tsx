@@ -61,6 +61,12 @@ import type {
 } from "./types";
 import { SOLUTION_MANIFEST_KIND } from "./types";
 
+const MOBILE_NAV_HEIGHT_PX = 72;
+
+function mobileSheetSize(sheetHeight: number): string {
+  return `calc(${sheetHeight}vh - ${(MOBILE_NAV_HEIGHT_PX * sheetHeight) / 100}px)`;
+}
+
 // Session storage keys for UI state persistence
 const STORAGE_KEYS = {
   leftCollapsed: "arch-left-collapsed",
@@ -101,7 +107,9 @@ function MobileBottomSheet({ darkMode, activePanel, bottomSheet }: {
   const { snap, setSnap, sheetHeight, isDragging, dragOffset, handlers } = bottomSheet;
 
   // Compute actual height during drag
-  const windowH = typeof window !== "undefined" ? window.innerHeight : 800;
+  const windowH = typeof window !== "undefined"
+    ? Math.max(320, window.innerHeight - MOBILE_NAV_HEIGHT_PX)
+    : 728;
   const baseHeightPx = (sheetHeight / 100) * windowH;
   const currentHeightPx = isDragging
     ? Math.max(0, Math.min(windowH * 0.95, baseHeightPx - dragOffset))
@@ -113,16 +121,17 @@ function MobileBottomSheet({ darkMode, activePanel, bottomSheet }: {
 
   return (
     <div
+      data-se="mobile-detail-sheet"
       className={`
-        lg:hidden fixed bottom-0 left-0 right-0 z-30
+        lg:hidden fixed left-0 right-0 z-30
         flex flex-col rounded-t-2xl shadow-2xl
         ${darkMode ? "bg-zinc-900 border-t border-zinc-800" : "bg-white border-t border-zinc-200"}
       `}
       style={{
-        height: currentHeightPx,
+        bottom: `calc(${MOBILE_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom))`,
+        height: isDragging ? currentHeightPx : mobileSheetSize(sheetHeight),
         transition: isDragging ? "none" : "height 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
         willChange: isDragging ? "height" : "auto",
-        paddingBottom: `env(safe-area-inset-bottom)`,
       }}
     >
       {/* Drag handle area (full width touch target) */}
@@ -196,7 +205,9 @@ export function MobileLensSheet({ lens, darkMode, bottomSheet }: {
 }) {
   const { isDragging, dragOffset, sheetHeight, handlers } = bottomSheet;
 
-  const windowH = typeof window !== "undefined" ? window.innerHeight : 800;
+  const windowH = typeof window !== "undefined"
+    ? Math.max(320, window.innerHeight - MOBILE_NAV_HEIGHT_PX)
+    : 728;
   const baseHeightPx = (sheetHeight / 100) * windowH;
   const currentHeightPx = isDragging
     ? Math.max(0, Math.min(windowH * 0.95, baseHeightPx - dragOffset))
@@ -204,16 +215,17 @@ export function MobileLensSheet({ lens, darkMode, bottomSheet }: {
 
   return (
     <div
+      data-se="mobile-lens-sheet"
       className={`
-        md:hidden fixed bottom-0 left-0 right-0 z-30
+        md:hidden fixed left-0 right-0 z-30
         flex flex-col rounded-t-2xl shadow-2xl
         ${darkMode ? "bg-zinc-900 border-t border-zinc-800" : "bg-white border-t border-zinc-200"}
       `}
       style={{
-        height: currentHeightPx,
+        bottom: `calc(${MOBILE_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom))`,
+        height: isDragging ? currentHeightPx : mobileSheetSize(sheetHeight),
         transition: isDragging ? "none" : "height 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
         willChange: isDragging ? "height" : "auto",
-        paddingBottom: `env(safe-area-inset-bottom)`,
       }}
     >
       {/* Drag handle area (full width touch target) */}
@@ -387,6 +399,12 @@ export function App() {
     onDismiss: () => useArchStore.getState().setLens("structure"),
     initialSnap: "half" as SnapPoint,
   });
+  const mobileGraphBottomReserve = !isDesktopViewport
+    && (activePanel === "detail" || activePanel === "review")
+    ? mobileSheetSize(bottomSheet.sheetHeight)
+    : shouldShowMobileLensSheet({ isPanelViewport, lens, activePanel })
+      ? mobileSheetSize(lensBottomSheet.sheetHeight)
+      : "0px";
 
   // Collapsible + resizable sidebar widths (restored from session storage)
   const [leftCollapsed, setLeftCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.leftCollapsed, workbenchDensity === "focused"));
@@ -1200,7 +1218,7 @@ export function App() {
           {isPanelViewport && lens === "design" && <DesignPanel />}
           {isPanelViewport && lens === "support" && <SupportPanel />}
           {isPanelViewport && lens === "security" && <SecurityPanel />}
-          <div className="flex-1 relative">
+          <div data-se="graph-frame" className="flex-1 relative" style={{ paddingBottom: mobileGraphBottomReserve }}>
             <ReactFlowProvider>
               <ArchitectureGraph />
             </ReactFlowProvider>
@@ -1286,6 +1304,7 @@ export function App() {
 
       {/* Mobile bottom nav */}
       <nav
+        data-se="mobile-nav"
         className={`
           lg:hidden flex items-center justify-around border-t py-2 shrink-0
           ${darkMode ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"}

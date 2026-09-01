@@ -276,6 +276,18 @@ Reviewed against the live UnaMentis projection on 2026-09-01.
   components. In the reproduced tall-window case, the canvas aspect was 0.89,
   the rendered graph bounds were 0.74, and the selected Database node landed at
   1x with no horizontal page overflow.
+- Relationship labels and their backing boxes now participate in ELK layout;
+  React Flow renders ELK's solved orthogonal routes and label coordinates.
+  Across the wide, tall, and phone matrix for Overview, root and nested
+  selection, Flow, and Support, the rendered audit found no node/node,
+  label/node, or label/label intersections.
+- The selected component is pinned into the visible node budget, so a deep link
+  cannot silently aggregate away its named answer. Actual rendered node sizes
+  are fed back into layout, including tall mobile-device cards.
+- In Fit state, relationship labels become ambient and hide below 0.55 zoom;
+  detail and guided Read states reveal them at readable effective size.
+- Mobile graph space now excludes the open detail/lens sheet and persistent
+  navigation; sheets no longer cover the bottom navigation.
 
 ### Open remediation
 
@@ -286,10 +298,10 @@ Reviewed against the live UnaMentis projection on 2026-09-01.
 2. Theme contrast needs an automated all-theme/light-dark matrix. Several
    legacy `zinc-500` and `zinc-600` text choices are intentionally subdued but
    are not acceptable when the text becomes primary on selection.
-3. Guided focus currently guarantees the selected object, readable relationship
-   labels, and aspect-aware full layout. The bounded focus-collection algorithm
-   must still be implemented for routes whose answer requires two to five
-   widely separated objects.
+3. Guided focus currently guarantees the selected object, collision-aware
+   relationship labels, and aspect-aware full layout. The bounded
+   focus-collection algorithm must still be implemented for routes whose answer
+   requires two to five widely separated objects.
 4. Full 200% text resize, WCAG text-spacing override, 320 px reflow, keyboard
    focus-not-obscured, and reduced-motion runs must become release gates.
 5. Fit state needs a clearer visible distinction from Read state and an
@@ -299,4 +311,3 @@ Reviewed against the live UnaMentis projection on 2026-09-01.
 No open item permits a guided or selected answer to remain microscopic. Until
 the focus-collection work lands, routes that cannot meet the Read floors must
 prefer their ranked list or detail representation over a whole-graph fit.
-

@@ -26,6 +26,33 @@ function getElk(): Promise<ELKInstance> {
 // Largest nodes are ~360x230, so use that plus margin
 const DEFAULT_NODE_WIDTH = 380;
 const DEFAULT_NODE_HEIGHT = 250;
+const DEFAULT_EDGE_LABEL_HEIGHT = 26;
+
+function edgeLabelSize(edge: Edge): { width: number; height: number } | null {
+  if (typeof edge.label !== "string" || edge.label.trim().length === 0) return null;
+  const fontSize = typeof edge.labelStyle?.fontSize === "number"
+    ? edge.labelStyle.fontSize
+    : 13;
+  // ELK needs a real label box in order to reserve collision-free space. SVG
+  // text is measured later by the browser, so use a deliberately conservative
+  // monospace-ish estimate plus the background padding rendered by BaseEdge.
+  return {
+    width: Math.min(280, Math.max(54, edge.label.length * fontSize * 0.64 + 18)),
+    height: Math.max(DEFAULT_EDGE_LABEL_HEIGHT, fontSize + 12),
+  };
+}
+
+function edgePath(sections: Array<{
+  startPoint: { x: number; y: number };
+  endPoint: { x: number; y: number };
+  bendPoints?: Array<{ x: number; y: number }>;
+}> | undefined): string | null {
+  if (!sections?.length) return null;
+  return sections.map((section) => {
+    const points = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint];
+    return points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  }).join(" ");
+}
 
 // Priority order for layout: mobile clients first (top-left), then other clients,
 // then servers below them
@@ -78,6 +105,14 @@ export async function getLayoutedElements(
       "elk.separateConnectedComponents": "true",
       "elk.layered.compaction.connectedComponents": "true",
       "elk.spacing.componentComponent": "60",
+      "elk.edgeRouting": "ORTHOGONAL",
+      // These only work when labels are supplied to ELK (below). Previously
+      // the viewer discarded ELK routes and let React Flow place every label
+      // at an independent midpoint, which made collisions inevitable.
+      "elk.spacing.edgeLabel": "10",
+      "elk.spacing.labelLabel": "14",
+      "elk.spacing.edgeNode": "24",
+      "elk.layered.edgeLabels.centerLabelPlacementStrategy": "SPACE_EFFICIENT_LAYER",
       // Large spacing to prevent overlaps and show relationships clearly
       "elk.spacing.nodeNode": "60",
       "elk.layered.spacing.nodeNodeBetweenLayers": "80",
@@ -104,11 +139,21 @@ export async function getLayoutedElements(
         "elk.priority": String(sortedNodes.length - index),
       },
     })),
-    edges: edges.map((edge) => ({
-      id: edge.id,
-      sources: [edge.source],
-      targets: [edge.target],
-    })),
+    edges: edges.map((edge) => {
+      const labelSize = edgeLabelSize(edge);
+      return {
+        id: edge.id,
+        sources: [edge.source],
+        targets: [edge.target],
+        labels: labelSize ? [{
+          id: `${edge.id}-label`,
+          text: edge.label as string,
+          width: labelSize.width,
+          height: labelSize.height,
+          layoutOptions: { "elk.edgeLabels.placement": "CENTER" },
+        }] : undefined,
+      };
+    }),
   };
 
   const elk = await getElk();
@@ -128,7 +173,31 @@ export async function getLayoutedElements(
     return node;
   });
 
-  return { nodes: layoutedNodes, edges };
+  const layoutEdges = new Map((layout.edges ?? []).map((edge) => [edge.id, edge]));
+  const layoutedEdges = edges.map((edge) => {
+    const elkEdge = layoutEdges.get(edge.id);
+    const path = edgePath(elkEdge?.sections);
+    const label = elkEdge?.labels?.[0];
+    if (!path) return edge;
+    return {
+      ...edge,
+      type: "elk",
+      data: {
+        ...(edge.data ?? {}),
+        elkPath: path,
+        elkLabel: label?.x != null && label?.y != null
+          ? {
+              x: label.x + (label.width ?? 0) / 2,
+              y: label.y + (label.height ?? 0) / 2,
+              width: label.width ?? 0,
+              height: label.height ?? 0,
+            }
+          : undefined,
+      },
+    };
+  });
+
+  return { nodes: layoutedNodes, edges: layoutedEdges };
 }
 
 // Color mapping for component types

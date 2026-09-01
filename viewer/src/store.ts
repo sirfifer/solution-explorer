@@ -844,6 +844,7 @@ function computeDrillLevelView(
   drillLevel: string | null,
   nodeBudget: number,
   relationships: Relationship[],
+  focusId: string | null,
 ): { shown: Component[]; aggregates: AggregateNode[] } {
   const shown: Component[] = [];
   const hiddenByType: Record<string, Component[]> = {};
@@ -868,10 +869,18 @@ function computeDrillLevelView(
   const others = candidates.filter((c) => !isHeroType(c.type));
   // The same ordering the double-tap Read snap uses to pick what to frame
   // (utils/importance), so what is shown and what is framed cannot drift.
-  others.sort((a, b) => compareByImportance(a, b, degree));
+  others.sort((a, b) => {
+    // A deep link, search result, or guided route names a specific identity.
+    // Ranking may decide its neighbors, never whether the named answer exists
+    // on the canvas at all.
+    if (a.id === focusId) return -1;
+    if (b.id === focusId) return 1;
+    return compareByImportance(a, b, degree);
+  });
 
   shown.push(...heroes);
-  const room = Math.max(0, nodeBudget - heroes.length);
+  const focusedNonHero = focusId ? others.some((component) => component.id === focusId) : false;
+  const room = Math.max(focusedNonHero ? 1 : 0, nodeBudget - heroes.length);
   for (const [i, c] of others.entries()) {
     if (i < room) shown.push(c);
     else (hiddenByType[c.type] ??= []).push(c);
@@ -899,6 +908,7 @@ function drillView(
   architecture: Architecture,
   drillLevel: string | null,
   nodeBudget: number,
+  focusId: string | null,
 ): { shown: Component[]; aggregates: AggregateNode[] } {
   if (!drillLevel) {
     const shown = flattenTopLevel(architecture.components, architecture.relationships)
@@ -911,6 +921,7 @@ function drillView(
   const promoted = promoteDrillChildren(children);
   return computeDrillLevelView(
     promoted, drillLevel, nodeBudget, architecture.relationships,
+    focusId,
   );
 }
 
@@ -2227,7 +2238,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   getAggregateNodes: () => {
     const { architecture, drillLevel } = get();
     if (!architecture) return [];
-    return drillView(architecture, drillLevel, get().nodeBudget).aggregates;
+    return drillView(architecture, drillLevel, get().nodeBudget, get().selectedComponentId).aggregates;
   },
 
   loadCoverageRows: async () => {
@@ -2558,7 +2569,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     // onto the canvas; they are browsed as a ranked list in the panel, so the
     // canvas can never degrade into unreadable specks. Nothing is ever hidden
     // without a visible, counted trace.
-    const { shown } = drillView(architecture, drillLevel, get().nodeBudget);
+    const { shown } = drillView(architecture, drillLevel, get().nodeBudget, get().selectedComponentId);
     return shown;
   },
 

@@ -10,6 +10,7 @@ import {
   useReactFlow,
   type Node,
   type Edge,
+  type EdgeTypes,
   type NodeTypes,
   MarkerType,
   Panel,
@@ -34,6 +35,7 @@ import {
 } from "../utils/snapZoom";
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
+import { ElkRoutedEdge } from "./ElkRoutedEdge";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
 import { getLens, capabilityCountsByComponent, ruleCountsByComponent, buildBlastAdjacency, blastRadiusFrom, type CapabilityKindCounts, type RuleKindCounts } from "../lenses";
 import type { Component, Relationship } from "../types";
@@ -41,6 +43,10 @@ import type { Component, Relationship } from "../types";
 const nodeTypes: NodeTypes = {
   component: ComponentNode,
   aggregate: AggregateNode,
+};
+
+const edgeTypes: EdgeTypes = {
+  elk: ElkRoutedEdge,
 };
 
 export function ArchitectureGraph() {
@@ -117,6 +123,12 @@ export function ArchitectureGraph() {
   // pre-layout grid positions during a URL deep-link restore (F-VW-7).
   const [layoutVersion, setLayoutVersion] = useState(0);
   const [canvasAspectRatio, setCanvasAspectRatio] = useState(1.3);
+  // React Flow measures the real DOM nodes after their themed/device frames
+  // render. Feed those dimensions back to ELK; laying out every card as the
+  // old 380x250 fallback made tall phone-shaped nodes extend into routes and
+  // made selection centering use the wrong midpoint.
+  const measuredNodeSizes = useRef(new Map<string, { width: number; height: number }>());
+  const [measurementVersion, setMeasurementVersion] = useState(0);
 
   // Bounded retries for the readability loop, reset per level/lens so a level
   // that needed a small budget does not permanently constrain the next one.
@@ -179,6 +191,21 @@ export function ArchitectureGraph() {
   const onNodesChange = useCallback(
     (changes: Parameters<typeof onNodesChangeBase>[0]) => {
       onNodesChangeBase(changes);
+
+      let measurementsChanged = false;
+      for (const change of changes) {
+        if (change.type !== "dimensions" || !change.dimensions) continue;
+        const previous = measuredNodeSizes.current.get(change.id);
+        if (
+          !previous
+          || Math.abs(previous.width - change.dimensions.width) > 1
+          || Math.abs(previous.height - change.dimensions.height) > 1
+        ) {
+          measuredNodeSizes.current.set(change.id, change.dimensions);
+          measurementsChanged = true;
+        }
+      }
+      if (measurementsChanged) setMeasurementVersion((version) => version + 1);
 
       // If any position changes occurred, recompute handles
       const hasDrag = changes.some((c) => c.type === "position" && c.position);
@@ -269,6 +296,7 @@ export function ArchitectureGraph() {
         position: { x: (i % 4) * 320, y: Math.floor(i / 4) * 200 },
         data: { component: comp },
         selected: comp.id === selectedComponentId,
+        measured: measuredNodeSizes.current.get(comp.id),
       };
       const heat = heatByComponent.get(comp.id);
       if (heat !== undefined) {
@@ -314,6 +342,7 @@ export function ArchitectureGraph() {
         position: { x: (idx % 4) * 320, y: Math.floor(idx / 4) * 200 },
         data: { aggregate: agg },
         selectable: false,
+        measured: measuredNodeSizes.current.get(agg.id),
       };
     });
 
@@ -415,7 +444,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, nodeBudget, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, selectedDesignFindingId, getLensGraph]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, nodeBudget, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, selectedDesignFindingId, getLensGraph, measurementVersion]);
 
   // Apply ELK layout
   useEffect(() => {
@@ -918,6 +947,7 @@ export function ArchitectureGraph() {
         onMoveStart={onMoveStart}
         onMoveEnd={onMoveEnd}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         zoomOnDoubleClick={false}
         // A node's drag behavior consumes the pointer events that would
         // otherwise become a native dblclick, which is why double-click drill
