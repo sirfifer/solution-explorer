@@ -19,4 +19,5 @@ The prototype stores its demonstration preferences under the local-storage key `
 Supporting artifacts:
 
 - `DESIGN-PROPOSAL.md` — rationale, lens decisions, data contracts, execution plan, and acceptance criteria.
+- `MOBILE-AND-CROSS-CLIENT-EXECUTION.md` — rendered mobile assessment, immediate fixes, native interaction model, and the shared web/iOS snapshot and A/B plan.
 - `orientation.v1.example.json` — proposed generated human-orientation projection.

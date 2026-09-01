@@ -20,5 +20,5 @@ export function WorkbenchTrustStrip() {
 }
 
 function chip(dark: boolean): string {
-  return `whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-[10px] ${dark ? "border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200" : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:text-zinc-900"}`;
+  return `min-h-11 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs sm:min-h-0 sm:text-[10px] ${dark ? "border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200" : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:text-zinc-900"}`;
 }

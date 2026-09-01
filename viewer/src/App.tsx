@@ -269,10 +269,12 @@ export function App() {
     fileDeepLinkNotice,
     clearFileDeepLinkNotice,
     experienceMode,
+    setExperienceMode,
     semanticLevel,
     setSemanticLevel,
     workbenchDensity,
     setPreferencesOpen,
+    toggleReviewMode,
   } = useArchStore();
 
   useLiveMonitor();
@@ -664,7 +666,7 @@ export function App() {
       {/* Header */}
       <header
         className={`
-          flex items-center justify-between px-4 py-2 border-b shrink-0 z-30
+          flex items-center justify-between gap-1 px-2 py-2 border-b shrink-0 z-30 sm:gap-3 sm:px-4
           ${darkMode ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"}
           backdrop-blur-sm transition-transform duration-300
         `}
@@ -680,12 +682,13 @@ export function App() {
           <button
             className={`lg:hidden flex items-center justify-center p-2 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="Open architecture tree"
           >
             &#x2630;
           </button>
 
-          <div className="flex items-center gap-2">
-            <h1 className={`font-bold text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+          <div className="hidden min-w-0 items-center gap-2 sm:flex">
+            <h1 className={`max-w-40 truncate font-bold text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
               {displayName}
             </h1>
             <span className={`hidden sm:inline text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
@@ -716,8 +719,8 @@ export function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <ExperienceSwitcher />
+        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+          <ExperienceSwitcher className="hidden sm:flex" />
           {/* Home button - visible when drilled into a component */}
           {drillLevel && (
             <button
@@ -742,7 +745,7 @@ export function App() {
           <button
             onClick={() => setSearchOpen(true)}
             className={`
-              flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm
+              hidden items-center gap-2 px-3 py-1.5 rounded-lg text-sm sm:flex
               min-h-[44px] sm:min-h-0
               ${darkMode
                 ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300"
@@ -770,7 +773,7 @@ export function App() {
           {/* Review mode: reachable on every viewport so the annotation
               workflow works on a phone (GUI run finding V8.8). The button is
               already responsive (icon-only under sm). */}
-          <ReviewModeButton />
+          <div className="hidden sm:block"><ReviewModeButton /></div>
 
           {/* Theme + appearance. Reachable on every viewport, the way the lens
               switcher is: on a phone the dark-mode toggle used to be buried in
@@ -813,6 +816,7 @@ export function App() {
               onClick={() => setMoreMenuOpen(!moreMenuOpen)}
               className={`flex items-center justify-center p-2 rounded-lg min-h-[44px] min-w-[44px] ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
               title="More options"
+              aria-label="More options"
             >
               {"\u22EF"}
             </button>
@@ -831,10 +835,24 @@ export function App() {
                   </button>
                   <button
                     onClick={() => { setPreferencesOpen(true); setMoreMenuOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
+                    className={`min-h-11 w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
                   >
                     <span>◒</span>
                     <span>Viewer preferences</span>
+                  </button>
+                  <button
+                    onClick={() => { toggleReviewMode(); setMoreMenuOpen(false); }}
+                    className={`min-h-11 w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
+                  >
+                    <span>✍️</span>
+                    <span>{reviewMode ? "Exit review mode" : "Review mode"}</span>
+                  </button>
+                  <button
+                    onClick={() => { window.dispatchEvent(new Event("arch-viz-open-help")); setMoreMenuOpen(false); }}
+                    className={`min-h-11 w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
+                  >
+                    <span>?</span>
+                    <span>Help</span>
                   </button>
                   {liveConfig && (
                     <button
@@ -1278,35 +1296,33 @@ export function App() {
           transform: mobileChromeHidden ? "translateY(100%)" : "none",
         }}
       >
-        {drillLevel && (
-          <button
-            onClick={() => navigateToBreadcrumb(-1)}
-            className={`flex flex-col items-center gap-0.5 px-4 py-1 ${darkMode ? "text-blue-400" : "text-blue-500"}`}
-          >
-            <span className="text-lg">&#x1F3E0;</span>
-            <span className="text-[10px]">Home</span>
-          </button>
-        )}
+        <button
+          onClick={() => setExperienceMode("overview")}
+          className={`flex min-h-11 min-w-14 flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
+        >
+          <span className="text-lg">&#x25CE;</span>
+          <span className="text-xs">Overview</span>
+        </button>
         <button
           onClick={() => { setSidebarOpen(true); }}
-          className={`flex flex-col items-center gap-0.5 px-4 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
+          className={`flex min-h-11 min-w-14 flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
         >
           <span className="text-lg">&#x1F4CB;</span>
-          <span className="text-[10px]">Tree</span>
+          <span className="text-xs">Tree</span>
         </button>
         <button
           onClick={() => { setSidebarOpen(false); setActivePanel(null); }}
-          className={`flex flex-col items-center gap-0.5 px-4 py-1 ${!drillLevel ? (darkMode ? "text-blue-400" : "text-blue-500") : (darkMode ? "text-zinc-400" : "text-zinc-500")}`}
+          className={`flex min-h-11 min-w-14 flex-col items-center gap-0.5 px-2 py-1 ${!drillLevel ? (darkMode ? "text-blue-400" : "text-blue-500") : (darkMode ? "text-zinc-400" : "text-zinc-500")}`}
         >
           <span className="text-lg">&#x1F310;</span>
-          <span className="text-[10px]">Graph</span>
+          <span className="text-xs">Graph</span>
         </button>
         <button
           onClick={() => setSearchOpen(true)}
-          className={`flex flex-col items-center gap-0.5 px-4 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
+          className={`flex min-h-11 min-w-14 flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
         >
           <span className="text-lg">&#x1F50D;</span>
-          <span className="text-[10px]">Search</span>
+          <span className="text-xs">Search</span>
         </button>
       </nav>
 

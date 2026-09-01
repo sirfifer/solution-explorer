@@ -9,7 +9,7 @@ export function TrustLedger({ compact = false }: { compact?: boolean }) {
 
   if (compact) {
     return (
-      <button onClick={() => setTrustOpen(true)} className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[10px] ${darkMode ? "border-zinc-800 bg-zinc-900 text-zinc-300" : "border-zinc-200 bg-white text-zinc-600"}`}>
+      <button onClick={() => setTrustOpen(true)} className={`flex min-h-11 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs sm:min-h-0 sm:text-[10px] ${darkMode ? "border-zinc-800 bg-zinc-900 text-zinc-300" : "border-zinc-200 bg-white text-zinc-600"}`}>
         <i className={`h-2 w-2 rounded-full ${trust.source_coverage.status === "complete" ? "bg-emerald-400" : "bg-amber-400"}`} />
         <strong>{trust.source_coverage.percent == null ? "Coverage unavailable" : `${trust.source_coverage.percent}% source mapped`}</strong>
         <span>· {trust.producer_gaps} gaps</span>
@@ -28,7 +28,7 @@ export function TrustLedger({ compact = false }: { compact?: boolean }) {
 }
 
 function TrustMetric({ label, value, note, darkMode }: { label: string; value: string; note: string; darkMode: boolean }) {
-  return <div className={`rounded-xl border p-3 ${darkMode ? "border-zinc-800 bg-zinc-900/70" : "border-zinc-200 bg-white"}`}><span className={`text-[10px] uppercase tracking-wider ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>{label}</span><strong className={`mt-1 block text-xl ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{value}</strong><small className={`block ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>{note}</small></div>;
+  return <div className={`rounded-xl border p-3 ${darkMode ? "border-zinc-800 bg-zinc-900/70" : "border-zinc-200 bg-white"}`}><span className={`text-xs uppercase tracking-wider ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{label}</span><strong className={`mt-1 block text-xl ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{value}</strong><small className={`block text-xs ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{note}</small></div>;
 }
 
 export function TrustDrawer() {
@@ -41,12 +41,12 @@ export function TrustDrawer() {
     <div className="fixed inset-0 z-[70] flex justify-end bg-black/45" role="dialog" aria-modal="true" aria-label="Evidence and coverage">
       <button className="absolute inset-0" aria-label="Close evidence and coverage" onClick={() => setOpen(false)} />
       <aside className={`relative h-full w-full max-w-xl overflow-y-auto border-l p-6 shadow-2xl ${darkMode ? "border-zinc-800 bg-zinc-950" : "border-zinc-200 bg-zinc-50"}`}>
-        <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-500">Trust ledger</p><h2 className={`mt-1 text-xl font-bold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>What this view knows—and what it does not</h2></div><button className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-800/20" onClick={() => setOpen(false)} aria-label="Close">✕</button></div>
+        <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-500">Trust ledger</p><h2 className={`mt-1 text-xl font-bold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>What this view knows—and what it does not</h2></div><button className="min-h-11 min-w-11 rounded-lg p-2 text-zinc-500 hover:bg-zinc-800/20" onClick={() => setOpen(false)} aria-label="Close">✕</button></div>
         <div className="mt-6"><TrustLedger /></div>
         <section className={`mt-6 rounded-xl border p-4 ${darkMode ? "border-violet-500/20 bg-violet-500/5" : "border-violet-200 bg-violet-50"}`}>
           <h3 className={`text-xs font-semibold ${darkMode ? "text-violet-200" : "text-violet-800"}`}>Interpretation</h3>
           <p className={`mt-2 text-sm leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{architecture.orientation.orientation.interpreted_statement?.text ?? "No interpreted system statement is present. The Overview uses only deterministic grouping and counts."}</p>
-          <p className={`mt-2 text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-500"}`}>Status: {architecture.orientation.trust.interpretation.status}. Interpreted copy is presentation context, not a replacement for mapped evidence.</p>
+          <p className={`mt-2 text-xs ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>Status: {architecture.orientation.trust.interpretation.status}. Interpreted copy is presentation context, not a replacement for mapped evidence.</p>
         </section>
         {architecture.security && <section className={`mt-4 rounded-xl border p-4 ${darkMode ? "border-amber-500/20 bg-amber-500/5" : "border-amber-200 bg-amber-50"}`}><h3 className={`text-xs font-semibold ${darkMode ? "text-amber-200" : "text-amber-800"}`}>Security boundary</h3><p className={`mt-2 text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{architecture.security.method_caveat}</p></section>}
       </aside>

@@ -54,6 +54,7 @@ export async function getLayoutedElements(
   nodes: Node[],
   edges: Edge[],
   direction: "RIGHT" | "DOWN" = "DOWN",
+  targetAspectRatio: number = 1.3,
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   // Sort nodes by type priority for better initial layering
   const sortedNodes = [...nodes].sort((a, b) => {
@@ -62,11 +63,21 @@ export async function getLayoutedElements(
     return getTypePriority(aType) - getTypePriority(bType);
   });
 
+  // ELK uses this when it packs disconnected subgraphs. Without a target tied
+  // to the actual canvas, a tall workspace can receive a very wide row of
+  // components; fitView then succeeds geometrically by making every label
+  // microscopic. Clamp pathological panel measurements while preserving the
+  // real portrait/landscape intent.
+  const aspectRatio = Math.min(3, Math.max(0.35, targetAspectRatio));
   const elkGraph = {
     id: "root",
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": direction,
+      "elk.aspectRatio": String(aspectRatio),
+      "elk.separateConnectedComponents": "true",
+      "elk.layered.compaction.connectedComponents": "true",
+      "elk.spacing.componentComponent": "60",
       // Large spacing to prevent overlaps and show relationships clearly
       "elk.spacing.nodeNode": "60",
       "elk.layered.spacing.nodeNodeBetweenLayers": "80",

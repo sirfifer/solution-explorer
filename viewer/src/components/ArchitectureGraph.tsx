@@ -28,6 +28,7 @@ import {
   FIT_PADDING,
   GRAPH_MAX_ZOOM,
   GRAPH_MIN_ZOOM,
+  READ_SNAP_ZOOM,
   SNAP_DURATION_MS,
   type SnapState,
 } from "../utils/snapZoom";
@@ -96,6 +97,10 @@ export function ArchitectureGraph() {
   const readabilityTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobileRef = useRef(false);
+  // Guided selections must snap to a readable view. A direct graph click must
+  // not move the node before a second click can complete a double-click drill,
+  // so keep the source of the most recent node selection distinct.
+  const lastNodeClickRef = useRef<{ id: string; x: number; y: number; t: number } | null>(null);
   // Double-tap snap zoom state (see utils/snapZoom and the gesture effect
   // below). pendingSnapRef survives a re-layout so a Read snap is not fitted
   // over; applySnapRef lets the layout effect re-apply it without taking the
@@ -111,6 +116,7 @@ export function ArchitectureGraph() {
   // depends on it so it re-runs after ELK resolves instead of centering on
   // pre-layout grid positions during a URL deep-link restore (F-VW-7).
   const [layoutVersion, setLayoutVersion] = useState(0);
+  const [canvasAspectRatio, setCanvasAspectRatio] = useState(1.3);
 
   // Bounded retries for the readability loop, reset per level/lens so a level
   // that needed a small budget does not permanently constrain the next one.
@@ -130,6 +136,11 @@ export function ArchitectureGraph() {
     const measure = () => {
       const { width, height } = el.getBoundingClientRect();
       setNodeBudget(nodeBudgetForCanvas(width, height));
+      if (width > 0 && height > 0) {
+        // Avoid a fresh ELK pass for sub-pixel panel animation while still
+        // following meaningful resize, split-panel, and rotation changes.
+        setCanvasAspectRatio(Math.round((width / height) * 20) / 20);
+      }
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -355,7 +366,9 @@ export function ArchitectureGraph() {
           label: edgeLabel || undefined,
           labelStyle: {
             fill: darkMode ? "var(--color-zinc-400)" : "var(--color-zinc-500)",
-            fontSize: category === "communication" ? 11 : 10,
+            // Relationship text is part of the answer in a focused view. Fit
+            // is allowed to make it ambient; the 1x Read snap is not.
+            fontSize: category === "communication" ? 14 : 13,
             fontFamily: category === "communication" ? "ui-monospace, monospace" : undefined,
           },
           labelBgStyle: {
@@ -424,7 +437,7 @@ export function ArchitectureGraph() {
     // the Flow lens left-to-right for a walkable diagram (P6-2). Default "DOWN".
     const direction = getLens(lens)?.layoutDirection ?? "DOWN";
 
-    getLayoutedElements(rawNodes, rawEdges, direction).then(({ nodes: ln, edges: le }) => {
+    getLayoutedElements(rawNodes, rawEdges, direction, canvasAspectRatio).then(({ nodes: ln, edges: le }) => {
       // Discard a stale layout: a newer run superseded this one while ELK was
       // computing (rapid drill navigation), so its positions are obsolete.
       if (myGen !== layoutGenRef.current) return;
@@ -463,6 +476,22 @@ export function ArchitectureGraph() {
         pendingSnapRef.current = null;
         if (pending && pending.state === "read" && Date.now() - pending.at < 1200) {
           applySnapRef.current("read");
+        } else if (selectedComponentId) {
+          const selected = ln.find((node) => node.id === selectedComponentId);
+          const graphClick = lastNodeClickRef.current;
+          const wasDirectGraphClick = graphClick?.id === selectedComponentId
+            && Date.now() - graphClick.t < 700;
+          if (selected && !wasDirectGraphClick) {
+            const width = selected.measured?.width ?? 280;
+            const height = selected.measured?.height ?? 140;
+            setCenter(
+              selected.position.x + width / 2,
+              selected.position.y + height / 2,
+              { zoom: Math.max(READ_SNAP_ZOOM, getViewport().zoom), duration: SNAP_DURATION_MS },
+            );
+          } else {
+            fitView({ padding: FIT_PADDING, duration: SNAP_DURATION_MS });
+          }
         } else {
           fitView({ padding: FIT_PADDING, duration: SNAP_DURATION_MS });
         }
@@ -482,7 +511,7 @@ export function ArchitectureGraph() {
       if (layoutTimeout.current) clearTimeout(layoutTimeout.current);
       if (readabilityTimeout.current) clearTimeout(readabilityTimeout.current);
     };
-  }, [rawNodes, rawEdges, lens, setNodes, setEdges, fitView, getViewport, shrinkNodeBudget]);
+  }, [rawNodes, rawEdges, lens, canvasAspectRatio, selectedComponentId, setNodes, setEdges, fitView, getViewport, setCenter, shrinkNodeBudget]);
 
   // Restore every node and edge to the style the graph build gave it. The one
   // exit path for both shading modes: composing from the baseStyle snapshot
@@ -678,8 +707,6 @@ export function ArchitectureGraph() {
   // dblclick ever reaches the node. Double-click is therefore detected from two
   // presses at the same screen point rather than from the browser's event
   // (comprehension-study S5).
-  const lastNodeClickRef = useRef<{ id: string; x: number; y: number; t: number } | null>(null);
-
   const onNodeClick = useCallback(
     (event: React.MouseEvent, node: Node) => {
       // Aggregate nodes handle their own expand/collapse (P6-4); they are not

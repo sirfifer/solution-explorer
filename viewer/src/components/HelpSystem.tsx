@@ -78,8 +78,13 @@ export function HelpSystem() {
         setShowHelp(false);
       }
     };
+    const openFromMobileMenu = () => setShowHelp(true);
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("arch-viz-open-help", openFromMobileMenu);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      window.removeEventListener("arch-viz-open-help", openFromMobileMenu);
+    };
   }, [showHelp]);
 
   const dismissWelcome = () => {
@@ -93,7 +98,7 @@ export function HelpSystem() {
       <button
         onClick={() => setShowHelp(true)}
         className={`
-          fixed bottom-4 right-4 z-20 w-8 h-8 rounded-full flex items-center justify-center
+          fixed bottom-4 right-4 z-20 hidden w-8 h-8 rounded-full sm:flex items-center justify-center
           text-sm font-bold shadow-lg transition-all hover:scale-110
           ${darkMode
             ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 border border-zinc-700"
@@ -190,7 +195,8 @@ export function HelpSystem() {
               <h2 className={`font-bold text-lg ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>Help</h2>
               <button
                 onClick={() => setShowHelp(false)}
-                className={`p-1 rounded-lg ${darkMode ? "hover:bg-zinc-800 text-zinc-500" : "hover:bg-zinc-100 text-zinc-400"}`}
+                className={`min-h-11 min-w-11 p-1 rounded-lg ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"}`}
+                aria-label="Close help"
               >
                 &#x2715;
               </button>
@@ -202,7 +208,7 @@ export function HelpSystem() {
                 <button
                   key={tab}
                   onClick={() => setActiveHelpTab(tab)}
-                  className={`flex-1 px-3 py-2 text-xs font-medium capitalize ${
+                  className={`min-h-11 flex-1 px-3 py-2 text-sm font-medium capitalize ${
                     activeHelpTab === tab
                       ? darkMode
                         ? "border-b-2 border-blue-500 text-blue-400"
@@ -228,7 +234,7 @@ export function HelpSystem() {
                         <h3 className={`text-sm font-semibold mb-0.5 ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
                           {step.title}
                         </h3>
-                        <p className={`text-xs leading-relaxed ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
+                        <p className={`text-sm leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                           {step.description}
                         </p>
                       </div>
@@ -265,7 +271,7 @@ export function HelpSystem() {
                     Architecture Visualizer automatically analyzes your codebase and generates an interactive, navigable architecture diagram.
                   </p>
                   <div className={`p-3 rounded-lg text-xs space-y-1.5 ${darkMode ? "bg-zinc-800" : "bg-zinc-50"}`}>
-                    <div className={`${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>Features:</div>
+                    <div className={`${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>Features:</div>
                     <ul className={`space-y-1 ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                       <li>Multi-language support (Swift, Python, Rust, TypeScript, Go)</li>
                       <li>Automatic component detection from marker files</li>
@@ -279,7 +285,7 @@ export function HelpSystem() {
                       <li>GitHub Actions workflow for CI integration</li>
                     </ul>
                   </div>
-                  <p className={`text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                  <p className={`text-xs ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                     Analyzer core uses only Python stdlib. Optional dependencies for advanced features.
                     Viewer built with React, React Flow, and TailwindCSS.
                   </p>
@@ -296,7 +302,7 @@ export function HelpSystem() {
                   setShowWelcome(true);
                   setCurrentStep(0);
                 }}
-                className={`text-xs ${darkMode ? "text-zinc-600 hover:text-zinc-400" : "text-zinc-400 hover:text-zinc-600"}`}
+                className={`min-h-11 text-xs ${darkMode ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-800"}`}
               >
                 Replay welcome guide
               </button>

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useArchStore } from "../store";
 import { buildOrientationFallback, attachHumanViews } from "../utils/orientation";
 import { getLens, listAvailableLenses } from "../lenses";
@@ -147,6 +147,15 @@ describe("experience aperture", () => {
     expect(screen.queryByText("Welcome to Architecture Visualizer")).toBeNull();
   });
 
+  it("opens Help from the compact mobile-menu event", () => {
+    useArchStore.setState({ overviewHandoff: true });
+    render(<HelpSystem />);
+    act(() => {
+      window.dispatchEvent(new Event("arch-viz-open-help"));
+    });
+    expect(screen.getByRole("heading", { name: "Help" })).toBeTruthy();
+  });
+
   it("renders the production Overview, changes direction, and hands context to Workbench", () => {
     const arch = attachHumanViews(architecture(), {});
     useArchStore.setState({
@@ -167,5 +176,21 @@ describe("experience aperture", () => {
     expect(useArchStore.getState().experienceMode).toBe("workbench");
     expect(useArchStore.getState().lens).toBe("structure");
     expect(useArchStore.getState().semanticLevel).toBe("system");
+  });
+
+  it("does not carry a stale specialist lens through a portrait-area handoff", () => {
+    const arch = attachHumanViews(architecture(), {});
+    useArchStore.setState({
+      architecture: arch,
+      experienceMode: "overview",
+      overviewDirection: "portrait",
+      lens: "support",
+      publication: null,
+    });
+    render(<SystemOverview displayName="Transit" />);
+    fireEvent.click(screen.getByRole("button", { name: /Data & persistence/i }));
+    expect(useArchStore.getState().experienceMode).toBe("workbench");
+    expect(useArchStore.getState().lens).toBe("structure");
+    expect(useArchStore.getState().selectedComponentId).toBe("trip-model");
   });
 });

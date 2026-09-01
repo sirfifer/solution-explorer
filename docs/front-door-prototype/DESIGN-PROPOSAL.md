@@ -2,6 +2,11 @@
 
 ## Recommendation
 
+Implementation and review are governed by the permanent
+[Readability and usability standard](../standards/READABILITY-USABILITY-STANDARD.md),
+including its distinct Fit versus Read graph contract and aspect-aware focus
+geometry.
+
 Build one adaptive product shell with two durable places:
 
 1. **Overview** establishes what the system is, what it does, what is known, and where useful paths begin.
