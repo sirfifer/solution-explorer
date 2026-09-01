@@ -107,6 +107,60 @@ _GROUP_META = {
 }
 
 
+def _representative_rank(group_id: str, component: dict) -> tuple:
+    """Rank credible entry targets ahead of incidental descendants.
+
+    A system-area card is an orientation promise, so its first target must be a
+    recognizable application or subsystem boundary. Alphabetical order made a
+    nested generated-output folder the representative Experience in a real
+    project. Keep the order deterministic while preferring role-appropriate,
+    structurally meaningful containers near the root.
+    """
+    component_id = str(component.get("id") or "")
+    component_type = str(component.get("type") or "").lower()
+    searchable = " ".join(
+        str(component.get(key) or "") for key in ("id", "name", "path")
+    ).lower()
+    depth = component_id.count("/")
+    child_count = len(component.get("children") or [])
+
+    type_priority = 2
+    semantic_priority = 1
+    if group_id == "experience":
+        type_priority = 0 if component_type in {
+            "ios-client", "android-client", "mobile-client", "desktop-app",
+            "watch-app", "web-client",
+        } else 1
+    elif group_id == "services":
+        type_priority = {
+            "api-server": 0, "service": 1, "worker": 2, "server": 2,
+        }.get(component_type, 3)
+    elif group_id == "data":
+        if re.search(r"(?:^|[/ _-])database$", searchable):
+            semantic_priority = 0
+        elif re.search(r"(?:^|[/ _-])migrations?(?:$|[/ _-])", searchable):
+            semantic_priority = 1
+        else:
+            semantic_priority = 2
+        type_priority = 0 if component_type in {"module", "package"} else 1
+    elif group_id == "operations":
+        type_priority = 0 if component_type == "infrastructure" else 1
+    else:
+        type_priority = 0 if component_type in {"module", "package", "library"} else 1
+
+    # A synthetic projection root can be a useful graph target, but it is not a
+    # useful example of one area inside that graph.
+    synthetic_root = 1 if component_id == "root" else 0
+    return (
+        synthetic_root,
+        semantic_priority,
+        type_priority,
+        depth,
+        -child_count,
+        component_id,
+    )
+
+
 def _coverage_trust(coverage: Optional[dict]) -> dict:
     if not coverage:
         return {"status": "unavailable", "percent": None, "target": "coverage.json"}
@@ -387,7 +441,11 @@ def build_orientation(
         if not members:
             continue
         label, role = _GROUP_META[group_id]
-        member_ids = sorted(str(c.get("id")) for c in members if c.get("id"))
+        member_ids = [
+            str(component.get("id"))
+            for component in sorted(members, key=lambda row: _representative_rank(group_id, row))
+            if component.get("id")
+        ]
         portrait_nodes.append({
             "id": f"orientation:{group_id}",
             "label": label,

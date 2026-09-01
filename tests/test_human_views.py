@@ -117,6 +117,41 @@ def test_human_view_builders_are_deterministic_and_evidence_honest():
     assert len(orientation_a["portrait"]["nodes"]) == 3
 
 
+def test_orientation_prefers_credible_area_entry_targets():
+    arch = _architecture()
+    arch["components"] = [{
+        "id": "root",
+        "name": "Product",
+        "type": "package",
+        "children": [{
+            "id": "server/importers/output",
+            "name": "Generated output",
+            "type": "web-client",
+            "children": [],
+        }, {
+            "id": "ios-app",
+            "name": "Product iOS",
+            "type": "ios-client",
+            "children": [{
+                "id": "ios-app/home",
+                "name": "Home",
+                "type": "screen",
+                "children": [],
+            }],
+        }, {
+            "id": "server",
+            "name": "Server",
+            "type": "module",
+            "children": [],
+        }],
+    }]
+    orientation = build_orientation(arch)
+    nodes = {row["id"]: row for row in orientation["portrait"]["nodes"]}
+
+    assert nodes["orientation:experience"]["stable_targets"][0] == "ios-app"
+    assert nodes["orientation:core"]["stable_targets"][0] == "server"
+
+
 def test_empty_architecture_emits_explicit_empty_views():
     arch = {"name": "Empty", "components": [], "relationships": []}
     support = build_support_view(arch)

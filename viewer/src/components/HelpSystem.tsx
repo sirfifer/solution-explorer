@@ -47,7 +47,7 @@ const KEYBOARD_SHORTCUTS = [
 ];
 
 export function HelpSystem() {
-  const { darkMode } = useArchStore();
+  const { darkMode, overviewHandoff } = useArchStore();
   const [showHelp, setShowHelp] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -56,10 +56,13 @@ export function HelpSystem() {
   // Show welcome on first visit
   useEffect(() => {
     const dismissed = localStorage.getItem(HELP_DISMISSED_KEY);
-    if (!dismissed) {
+    // Overview is now the first-run guide. Replacing it immediately with the
+    // legacy five-step modal makes a deliberate handoff feel like a restart.
+    // Keep the modal for people who enter Workbench directly.
+    if (!dismissed && !overviewHandoff) {
       setShowWelcome(true);
     }
-  }, []);
+  }, [overviewHandoff]);
 
   // ? key toggles help; Escape closes it. The help dialog lists its own
   // shortcuts, so Escape not closing it read as broken (comprehension-study

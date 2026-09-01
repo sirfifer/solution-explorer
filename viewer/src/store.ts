@@ -265,6 +265,7 @@ interface ArchStore {
   workbenchDensity: WorkbenchDensity;
   rememberNavigation: boolean;
   semanticLevel: SemanticLevel;
+  overviewHandoff: boolean;
   trustOpen: boolean;
   preferencesOpen: boolean;
   setExperienceMode: (mode: ExperienceMode) => void;
@@ -1116,6 +1117,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   workbenchDensity: initialExperiencePreferences.workbenchDensity,
   rememberNavigation: initialExperiencePreferences.rememberNavigation,
   semanticLevel: "system",
+  overviewHandoff: false,
   trustOpen: false,
   preferencesOpen: false,
   setExperienceMode: (mode) => {
@@ -1130,7 +1132,10 @@ export const useArchStore = create<ArchStore>((set, get) => ({
         lastMode: mode,
       });
     }
-    set({ experienceMode: mode });
+    set({
+      experienceMode: mode,
+      overviewHandoff: state.experienceMode === "overview" && mode === "workbench",
+    });
   },
   setOverviewDirection: (overviewDirection) => {
     const state = get();

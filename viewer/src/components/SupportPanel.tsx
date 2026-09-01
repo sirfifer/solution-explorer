@@ -71,8 +71,8 @@ function CompactGroup({ title, rows, darkMode, onOpen }: {
     <section>
       <h3 className={`mb-1 text-[10px] font-semibold uppercase tracking-wider ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>{title}</h3>
       <ul className="space-y-1">
-        {rows.slice(0, 12).map((row) => (
-          <li key={row.key}>
+        {rows.slice(0, 12).map((row, index) => (
+          <li key={`${row.key}:${row.componentId ?? "global"}:${index}`}>
             <button
               disabled={!row.componentId}
               onClick={() => row.componentId && onOpen(row.componentId)}

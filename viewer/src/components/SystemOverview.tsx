@@ -84,11 +84,15 @@ export function SystemOverview({ displayName }: { displayName: string }) {
 function Portrait({ orientation, darkMode, onTarget, onComponent, onTrust }: { orientation: OrientationProjection; darkMode: boolean; onTarget: (target: OrientationTarget, question?: string) => void; onComponent: (id?: string) => void; onTrust: () => void }) {
   const architecture = useArchStore((state) => state.architecture)!;
   const primary = orientation.question_routes.filter((route) => route.available).slice(0, 3);
-  return <div className="grid gap-8 py-8 xl:grid-cols-[0.9fr_1.1fr] xl:items-center">
+  const interpreted = orientation.orientation.interpreted_statement?.text;
+  const openingStatement = conciseOverviewStatement(interpreted ?? orientation.orientation.deterministic_statement);
+  const hasLongerDescription = Boolean(interpreted && interpreted.trim() !== openingStatement);
+  return <div className="grid gap-8 py-8 xl:grid-cols-[minmax(0,0.88fr)_minmax(560px,1.12fr)] xl:items-start">
     <section>
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-500">{orientation.subject.name} at a glance</p>
-      <h2 className={`mt-4 max-w-3xl text-3xl font-black leading-[1.08] sm:text-5xl ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{orientation.orientation.interpreted_statement?.text ?? orientation.orientation.deterministic_statement}</h2>
-      {orientation.orientation.interpreted_statement && <p className={`mt-4 max-w-2xl text-sm leading-7 ${darkMode ? "text-zinc-500" : "text-zinc-600"}`}>{orientation.orientation.deterministic_statement}</p>}
+      <h2 className={`mt-4 max-w-3xl text-3xl font-black leading-[1.08] sm:text-4xl xl:text-[3.25rem] ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{openingStatement}</h2>
+      <p className={`mt-4 max-w-2xl text-sm leading-7 ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{orientation.orientation.deterministic_statement}</p>
+      {hasLongerDescription && <details className={`mt-3 max-w-2xl text-xs leading-6 ${darkMode ? "text-zinc-500" : "text-zinc-600"}`}><summary className="cursor-pointer font-semibold text-cyan-500">Read the full system description</summary><p className="mt-2">{interpreted}</p></details>}
       <div className="mt-7 grid gap-2 sm:grid-cols-3">{primary.map((route, index) => <button data-se="card" key={route.id} onClick={() => onTarget(route.target, route.id)} className={`group rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 ${index === 0 ? darkMode ? "border-cyan-400/40 bg-cyan-400/10" : "border-cyan-300 bg-cyan-50" : darkMode ? "border-zinc-800 bg-zinc-900/70" : "border-zinc-200 bg-white"}`}><span className="text-[9px] font-semibold uppercase tracking-wider text-cyan-500">{index === 0 ? "Best first step" : "Explore"}</span><strong className={`mt-2 block text-sm ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{route.label}</strong><span className="mt-4 block text-cyan-500 transition group-hover:translate-x-1">→</span></button>)}</div>
       <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4"><Scale value={architecture.stats.total_components} label="components" dark={darkMode} /><Scale value={architecture.stats.total_files} label="files" dark={darkMode} /><Scale value={architecture.stats.total_relationships} label="relationships" dark={darkMode} /><Scale value={architecture.stats.lines_by_class?.code ?? architecture.stats.total_lines} label="code lines" dark={darkMode} /></div>
     </section>
@@ -124,6 +128,16 @@ function Atlas({ orientation, darkMode, onTarget, onComponent }: { orientation: 
 
 function Scale({ value, label, dark }: { value: number | string; label: string; dark: boolean }) {
   return <div data-se="stat" className={`rounded-xl border p-3 ${dark ? "border-zinc-800 bg-zinc-900/60" : "border-zinc-200 bg-white"}`}><strong className={`block text-lg ${dark ? "text-zinc-100" : "text-zinc-900"}`}>{typeof value === "number" ? formatNumber(value) : value}</strong><span data-se="stat-key" className="text-[10px] text-zinc-500">{label}</span></div>;
+}
+
+export function conciseOverviewStatement(value: string, limit = 180): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  const firstSentence = normalized.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim();
+  const candidate = firstSentence && firstSentence.length >= 24 ? firstSentence : normalized;
+  if (candidate.length <= limit) return candidate;
+  const bounded = candidate.slice(0, limit + 1);
+  const lastSpace = bounded.lastIndexOf(" ");
+  return `${bounded.slice(0, lastSpace > limit * 0.65 ? lastSpace : limit).replace(/[,:;.!?]+$/, "")}…`;
 }
 
 function answerFor(id: string, architecture: Architecture, orientation: OrientationProjection): { title: string; body: string; facts: Array<[number | string, string]> } {

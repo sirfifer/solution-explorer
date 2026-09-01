@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useArchStore } from "../store";
 import { buildOrientationFallback, attachHumanViews } from "../utils/orientation";
 import { getLens, listAvailableLenses } from "../lenses";
 import { ExperienceSwitcher } from "../components/ExperienceSwitcher";
-import { SystemOverview } from "../components/SystemOverview";
+import { conciseOverviewStatement, SystemOverview } from "../components/SystemOverview";
+import { HelpSystem } from "../components/HelpSystem";
+import { SupportPanel } from "../components/SupportPanel";
 import type { Architecture, Component, SecurityProjection, SupportProjection } from "../types";
 
 function component(id: string, type = "module", children: Component[] = []): Component {
@@ -92,9 +94,28 @@ describe("Support and Security lenses", () => {
     expect(getLens("support")?.getGraph(context).nodes.map((node) => node.id).sort()).toEqual(["api", "web"]);
     expect(getLens("security")?.getGraph(context).nodes.map((node) => node.id).sort()).toEqual(["api", "web"]);
   });
+
+  it("renders repeated configuration names without React identity collisions", () => {
+    const duplicateConfiguration = {
+      ...support,
+      configuration: [support.configuration[0], support.configuration[0]],
+    };
+    useArchStore.setState({ architecture: architecture({ support: duplicateConfiguration }) });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    render(<SupportPanel />);
+    expect(screen.getAllByText("API_URL")).toHaveLength(2);
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
 });
 
 describe("experience aperture", () => {
+  it("bounds rich project prose before using it as the opening headline", () => {
+    const prose = "A focused first sentence that explains the product. A much longer implementation inventory follows with every language, service, database, and operational detail.";
+    expect(conciseOverviewStatement(prose)).toBe("A focused first sentence that explains the product.");
+    expect(conciseOverviewStatement("word ".repeat(80))).toMatch(/…$/);
+  });
+
   it("switches without clearing Workbench navigation and persists the last mode", () => {
     useArchStore.setState({ architecture: architecture(), selectedComponentId: "api" });
     render(<ExperienceSwitcher />);
@@ -102,6 +123,13 @@ describe("experience aperture", () => {
     expect(useArchStore.getState().experienceMode).toBe("workbench");
     expect(useArchStore.getState().selectedComponentId).toBe("api");
     expect(JSON.parse(localStorage.getItem("arch-experience-preferences-v1") ?? "{}").lastMode).toBe("workbench");
+    expect(useArchStore.getState().overviewHandoff).toBe(true);
+  });
+
+  it("does not stack the legacy welcome modal on an Overview handoff", () => {
+    useArchStore.setState({ overviewHandoff: true });
+    render(<HelpSystem />);
+    expect(screen.queryByText("Welcome to Architecture Visualizer")).toBeNull();
   });
 
   it("renders the production Overview, changes direction, and hands context to Workbench", () => {
