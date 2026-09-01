@@ -1,8 +1,9 @@
 # Viewer themes: the launch wardrobe and the expansion rack
 
-Status: LAUNCH WARDROBE SHIPPED, 2026-08-31. The token seam exists and all
-four themes are live in the viewer, switchable from the header: Signal,
-Ledger, Atlas and Fold. Lumen moves to the front of the backlog. The expansion rack (Relay, Brassworks, Grimoire)
+Status: FIVE-THEME WARDROBE IN PRODUCTION IMPLEMENTATION, 2026-08-31. The token
+seam exists and Signal, Ledger, Atlas and Fold are implemented. Lumen is now
+the fifth supported production theme rather than a backlog candidate. The
+expansion rack (Relay, Brassworks, Grimoire)
 is designed and specimen-proven, kept as built options that may surface on
 non-flagship demos such as our own project. Originally written as a proposal
 2026-08-22. The full visual

@@ -13,7 +13,7 @@
  * blocks, and nothing else.
  */
 
-export const THEME_NAMES = ["signal", "ledger", "atlas", "fold"] as const;
+export const THEME_NAMES = ["signal", "ledger", "atlas", "fold", "lumen"] as const;
 
 export type ThemeName = (typeof THEME_NAMES)[number];
 
@@ -94,6 +94,17 @@ export const THEMES: Record<ThemeName, ThemeMeta> = {
     canvas: { variant: "dots", gap: 30, size: 1, lineWidth: 1 },
     defaultDark: false,
     heroGlow: false,
+  },
+  lumen: {
+    name: "lumen",
+    label: "Lumen",
+    tagline: "The living reef",
+    swatch: ["#041521", "#4fe3c1", "#b78bff"],
+    // Sparse light points at depth. The atmosphere belongs to CSS; React Flow
+    // owns the one panning structural ground, as it does for every theme.
+    canvas: { variant: "dots", gap: 24, size: 1.4, lineWidth: 1 },
+    defaultDark: true,
+    heroGlow: true,
   },
 };
 

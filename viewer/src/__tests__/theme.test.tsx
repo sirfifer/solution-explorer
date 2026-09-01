@@ -26,11 +26,13 @@ beforeEach(() => {
 
 describe("theme registry", () => {
   it("ships the full launch wardrobe", () => {
-    // Signal, Ledger, Atlas, Fold: the four the owner decided on 2026-08-22.
+    // Three launch foundations plus the two material explorations retained for
+    // production: Fold and Lumen.
     expect(THEME_NAMES).toContain("signal");
     expect(THEME_NAMES).toContain("ledger");
     expect(THEME_NAMES).toContain("atlas");
     expect(THEME_NAMES).toContain("fold");
+    expect(THEME_NAMES).toContain("lumen");
   });
 
   it("gives every theme a label, a tagline, and three swatches for the chip", () => {
@@ -98,6 +100,7 @@ describe("theme store", () => {
     expect(THEMES.ledger.heroGlow).toBe(false);
     expect(THEMES.atlas.heroGlow).toBe(false);
     expect(THEMES.fold.heroGlow).toBe(false);
+    expect(THEMES.lumen.heroGlow).toBe(true);
   });
 
   it("leaves the theme alone when appearance changes", () => {
@@ -173,6 +176,7 @@ describe("canvas ground", () => {
     // Atlas draws marks rather than rules: a ruled grid and its contour arcs
     // are different geometries at the same weight and fight each other.
     expect(THEMES.atlas.canvas.variant).toBe("cross");
+    expect(THEMES.lumen.canvas.variant).toBe("dots");
   });
 
   it("keeps every ground fine-pitched and lightly struck", () => {

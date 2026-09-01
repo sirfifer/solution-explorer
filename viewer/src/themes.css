@@ -505,3 +505,104 @@ html[data-theme="fold"] [data-se="summary"] {
   background-color: var(--se-page);
   border-bottom-color: color-mix(in srgb, var(--color-zinc-900) 12%, transparent);
 }
+
+/* ---------------------------------------------------------------------------
+ * Lumen: the map as a living reef at depth.
+ *
+ * Light is the information carrier. The geometry remains disciplined and the
+ * content hierarchy unchanged, but panels feel grown rather than machined.
+ * The light variant is a sunlit shallows, not an inverted control room.
+ * ------------------------------------------------------------------------ */
+
+html[data-theme="lumen"] {
+  --font-sans: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  --font-serif: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 26px;
+  --radius-3xl: 32px;
+  --radius-4xl: 38px;
+  --xy-node-border-radius: 18px;
+}
+
+html[data-theme="lumen"] .react-flow {
+  background-image:
+    radial-gradient(ellipse 42% 34% at 16% 82%, var(--se-lumen-green), transparent 68%),
+    radial-gradient(ellipse 38% 32% at 86% 16%, var(--se-lumen-violet), transparent 66%),
+    radial-gradient(circle at 48% 44%, var(--se-lumen-blue), transparent 52%);
+}
+
+html[data-theme="lumen"].dark {
+  --se-lumen-green: color-mix(in srgb, var(--color-emerald-400) 7%, transparent);
+  --se-lumen-violet: color-mix(in srgb, var(--color-violet-400) 7%, transparent);
+  --se-lumen-blue: color-mix(in srgb, var(--color-sky-400) 4%, transparent);
+}
+
+html[data-theme="lumen"].light {
+  --se-lumen-green: color-mix(in srgb, var(--color-emerald-500) 9%, transparent);
+  --se-lumen-violet: color-mix(in srgb, var(--color-violet-500) 7%, transparent);
+  --se-lumen-blue: color-mix(in srgb, var(--color-sky-500) 8%, transparent);
+}
+
+html[data-theme="lumen"] [data-se="card"] {
+  background-color: color-mix(in srgb, var(--se-raise) 91%, transparent);
+  border-width: 1px;
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, currentColor 20%, transparent),
+    0 0 24px -8px color-mix(in srgb, currentColor 54%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-white) 10%, transparent);
+  backdrop-filter: blur(12px) saturate(1.08);
+}
+
+html[data-theme="lumen"] [data-se="badge"] {
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 999px;
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+  letter-spacing: 0.025em;
+}
+
+html[data-theme="lumen"] [data-se="name"] {
+  letter-spacing: 0.008em;
+  text-shadow: 0 0 16px color-mix(in srgb, currentColor 32%, transparent);
+}
+
+html[data-theme="lumen"] .react-flow__edge-path {
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 38%, transparent));
+}
+
+html[data-theme="lumen"] [data-se="panel"] {
+  background-color: color-mix(in srgb, var(--se-page) 88%, transparent);
+  border-left-color: color-mix(in srgb, var(--color-cyan-400) 28%, transparent);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+html[data-theme="lumen"] [data-se="stat"] {
+  border: 1px solid color-mix(in srgb, var(--color-cyan-400) 18%, transparent);
+  border-radius: 14px;
+  background-color: color-mix(in srgb, var(--color-cyan-500) 8%, transparent);
+}
+
+html[data-theme="lumen"] [data-se="row"] {
+  border-radius: 12px;
+  background-color: color-mix(in srgb, var(--color-sky-500) 7%, transparent);
+}
+
+html[data-theme="lumen"] [data-se="method"] {
+  border-radius: 999px;
+  box-shadow: 0 0 12px color-mix(in srgb, currentColor 25%, transparent);
+}
+
+html[data-theme="lumen"] [data-se="summary"] {
+  background:
+    radial-gradient(ellipse at 20% 50%, color-mix(in srgb, var(--color-emerald-500) 8%, transparent), transparent 56%),
+    var(--se-page);
+  border-bottom-color: color-mix(in srgb, var(--color-cyan-400) 22%, transparent);
+}

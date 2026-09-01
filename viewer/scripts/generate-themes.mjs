@@ -197,6 +197,49 @@ const THEMES = {
       amber: "ochre", yellow: "ochre", orange: "ochre",
     },
   },
+
+  lumen: {
+    label: "Lumen",
+    // Living light at depth. The neutral ladder stays blue-green in both
+    // variants; the light version is a sunlit shallows rather than an inversion.
+    light: {
+      neutral: [
+        [0.012, 184], [0.016, 186], [0.020, 188], [0.024, 190], [0.026, 194],
+        [0.028, 198], [0.030, 202], [0.032, 206], [0.034, 210], [0.036, 214],
+        [0.038, 218],
+      ],
+      white: "oklch(98.5% 0.012 184)",
+      black: "oklch(12% 0.038 218)",
+      page: "oklch(96.2% 0.020 190)",
+      grid: "oklch(89.5% 0.026 194)",
+      raise: "oklch(99% 0.010 184)",
+    },
+    dark: {
+      neutral: [
+        [0.018, 210], [0.022, 210], [0.026, 212], [0.030, 212], [0.034, 214],
+        [0.038, 214], [0.042, 216], [0.046, 216], [0.050, 218], [0.052, 218],
+        [0.054, 220],
+      ],
+      white: "oklch(96.8% 0.016 184)",
+      black: "oklch(8.5% 0.040 220)",
+      page: "oklch(14.5% 0.042 218)",
+      grid: "oklch(22.5% 0.040 210)",
+      raise: "oklch(19.5% 0.044 214)",
+    },
+    inks: {
+      biolume: { c: 0.145, h: 174 },
+      ray: { c: 0.110, h: 220 },
+      medusa: { c: 0.145, h: 298 },
+      coral: { c: 0.135, h: 32 },
+    },
+    families: {
+      blue: "ray", indigo: "medusa", sky: "ray", cyan: "ray",
+      violet: "medusa", purple: "medusa", fuchsia: "medusa",
+      emerald: "biolume", green: "biolume", teal: "biolume", lime: "biolume",
+      red: "coral", rose: "coral", pink: "medusa",
+      amber: "coral", yellow: "coral", orange: "coral",
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
