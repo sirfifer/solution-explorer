@@ -122,9 +122,13 @@ def test_a_ladder_registry_entry_runs_the_ladder_with_its_own_bindings(
     ]
     assert "p2b_escalated=anthropic-claude-cli:opus" in bindings
     assert len(bindings) == len(corpus["enrichment"]["models"])
-    # The registry's ceiling still applies to the whole ladder.
-    assert "--max-cost-usd" in cmd
-    assert cmd[cmd.index("--max-cost-usd") + 1] == str(corpus["budget"]["max_cost_usd"])
+    # The high registry threshold is a resumable runaway checkpoint, not a
+    # quality- or work-limiting ceiling.
+    assert "--max-cost-usd" not in cmd
+    assert cmd[cmd.index("--pause-at-cost-usd") + 1] == str(
+        corpus["budget"]["max_cost_usd"]
+    )
+    assert "--max-wall-minutes" not in cmd
 
 
 def test_an_entry_without_the_block_runs_the_classic_pass_untouched(
@@ -146,6 +150,42 @@ def test_registry_operator_checkpoint_reaches_the_ladder_cli(
     corpus["budget"]["pause_at_cost_usd"] = 75.0
     cmd = _capture_cmd(ds, monkeypatch, corpus, tmp_path)
     assert cmd[cmd.index("--pause-at-cost-usd") + 1] == "75.0"
+
+
+def test_observed_continuation_carries_banked_store_and_recovery_sources(
+    ds, monkeypatch, tmp_path
+):
+    corpus = ds.load_registry("vscode")
+    store = tmp_path / "banked.db"
+    store.write_text("")
+    run_dir = tmp_path / "continuation"
+    ledger = tmp_path / "parent-ledger.jsonl"
+    transcripts = tmp_path / "transcripts"
+    ledger.write_text("")
+    transcripts.mkdir()
+    captured = {}
+
+    class FakeResult:
+        returncode = 0
+
+    def fake_run(cmd, *args, **kwargs):
+        captured["cmd"] = cmd
+        return FakeResult()
+
+    monkeypatch.setattr(ds.subprocess, "run", fake_run)
+    ds.run_enhance(
+        corpus,
+        tmp_path,
+        store_override=store,
+        run_dir_override=run_dir,
+        recovery_ledger=ledger,
+        transcript_root=transcripts,
+    )
+    cmd = captured["cmd"]
+    assert cmd[cmd.index("--store") + 1] == str(store)
+    assert cmd[cmd.index("--run-dir") + 1] == str(run_dir)
+    assert cmd[cmd.index("--recover-rejected-from-ledger") + 1] == str(ledger)
+    assert cmd[cmd.index("--claude-transcript-root") + 1] == str(transcripts)
 
 
 # --- the gate reads the truth instrument ----------------------------------------

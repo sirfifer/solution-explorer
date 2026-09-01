@@ -5,6 +5,14 @@ interrupted VS Code enrichment run. It exists so another session can recover
 the work without relying on chat history and, critically, without repurchasing
 the completed bulk work.
 
+Validated update, 2026-08-31 at 20:30 PDT: the resume implementation and paid-
+transcript recovery described below are now implemented and tested. No provider
+was invoked during this work. The full deterministic suite passes (2,353 passed,
+4 skipped, 1 expected failure), and a disposable copy of the real 974 MB
+checkpoint successfully reconstructed and recovered through the real evidence
+validator. Use the observed continuation command in this document; the old raw
+engine command is retained only as historical context.
+
 ## Stop condition
 
 The run is stopped. No Solution Explorer enrichment process is active. Claude
@@ -70,6 +78,13 @@ e3c32537ab3c119e9cc7ef5e79bef9b40b57f3e78f0457a85202ad8519e4e47a  run/report.jso
 a60eeef5564307dec8a7f883fbdd897d9040521bb7f870d181028aa224acb4f3  run/ledger.jsonl
 ```
 
+The mutable database file hash later differed because SQLite rewrote physical
+pages, but this is not a logical-store difference: both mutable and checkpoint
+stores pass `PRAGMA integrity_check`, carry the identical target-kind counts and
+contract census, and produce the same SHA-256
+`ceffd132c8d65b778cf4377d78ffc2a9191f59ea171a8e7dbc108ae5a0281c7a`
+over every enrichment column ordered by `(target_kind, target_id)`.
+
 SQLite `PRAGMA integrity_check` returned `ok`. The store has 12,049 enrichment
 rows: 571 component products, 5,453 relationship products, 6,024 contract
 states, and one subject brief. Thus every planned target has a durable contract
@@ -88,9 +103,21 @@ API-equivalent subscription usage:
 | Residue / Fable | 29 | $7.1848 |
 | Total ledger | 432 | $141.8577 |
 
-There were 37 failed invocations: 25 response-byte-guard failures (21 Opus and
-4 Fable) and 12 Fable provider-capacity failures. The byte guard is repaired by
-`ebd4fcd`; provider capacity requires the account reset.
+There were 37 non-success ledger rows, but calling all 37 model failures is
+incorrect. Twenty-five were paid, parseable model responses rejected solely by
+our local 4,440-byte rule (21 Opus and 4 Fable). Twelve were genuine provider
+capacity rejections saying the session limit had been reached and naming its
+reset time; they returned zero tokens and zero cost. The retry classifier treated
+those capacity responses as transient HTTP 429s and repeated every logical call
+three times, which was useless. The current code recognizes an explicit
+reset-bearing capacity response immediately, opens the resumable provider
+circuit on the first one, and does not retry it.
+
+Delivered response size is now efficiency telemetry, not an answer-validity
+boundary. A response that passes JSON, compact-schema, exact-coverage and
+evidence checks is retained even when verbose. Its overrun remains visible in
+the ledger, Run Report and audit as a warning. This is the quality-first rule:
+verbosity can trigger investigation, but cannot destroy valid paid work.
 
 Exact durable target state:
 
@@ -104,8 +131,41 @@ Exact durable target state:
 | escalate@opus | 0 | 180 | 180 |
 | **Total** | **571** | **5,453** | **6,024** |
 
-Therefore 5,651 targets are grounded (93.8%), 27 are honest gaps, and exactly
-346 relationships remain unfinished. No component remains unfinished.
+Therefore 5,651 targets were grounded (93.8%), 27 were honest gaps, and exactly
+346 relationships were unfinished at the interruption. No component was
+unfinished.
+
+### Deterministic transcript recovery result
+
+All 25 locally rejected responses were recovered from their explicit Claude
+session transcripts. Every response passed the closed prompt-menu, schema,
+exact-ID-coverage and real evidence checks before the disposable store was
+mutated. Two responses used the component repair envelope for relationship-only
+menus; a closed alias translates them only when the menu contains relationships
+exclusively, the IDs match exactly, and the entries contain only the relationship
+`flow`/`why` questions. Adversarial tests prove that mixed menus, wrong IDs and
+extra fields cannot take this path.
+
+The 25 responses contained 109 attempts that were still relevant at the
+checkpoint. Recovery grounded 62 relationships, converted 7 terminal attempts
+to honest gaps, and preserved 40 evidence-valid escalations. Exact post-recovery
+state on the disposable full-store copy:
+
+| State | Total |
+|---|---:|
+| grounded@sonnet | 5,203 |
+| grounded@opus | 482 |
+| grounded@fable | 28 |
+| honest-gap | 34 |
+| escalate@sonnet | 66 |
+| escalate@opus | 209 |
+| escalate@fable | 2 |
+| **Total** | **6,024** |
+
+Thus 5,713 are grounded (94.84%), 34 are honest gaps, and 277 relationships
+remain unfinished. Recovery closed 69 unfinished relationships without a model
+call. It did not force the other 40 to pass; their evidence verdicts remain the
+ordinary ladder's work.
 
 The following work has not run and must still run after residue completion:
 
@@ -123,11 +183,11 @@ The following work has not run and must still run after residue completion:
 The current partial output is not publishable. Determination is `UNKNOWN`, no
 adjudication disagreement rate exists, and the audit correctly fails.
 
-## Critical resume defect: fix this before invoking Claude
+## Critical resume defect: fixed and validated
 
-Do **not** run the generic ladder command with `--update` yet.
+Do not use an engine checkout older than this validated change set.
 
-As of `23f4bea`, `enhance_cli.py` parses `--update` but passes it only into the
+At `23f4bea`, `enhance_cli.py` parsed `--update` but passed it only into the
 classic `EnhanceConfig`. `_run_ladder_path()` does not pass it into
 `LadderConfig`, `LadderConfig` has no update/resume field, and `LadderPhase.run()`
 always starts with an empty `LadderOutcome` and executes rung 2a over every
@@ -135,8 +195,7 @@ partition. The comment saying “`--update` resumes, skipping everything already
 enriched” is aspirational on the ladder path. Issuing that command now would
 repurchase the 5,678 completed terminal outcomes instead of continuing them.
 
-The banked data is sufficient for a true continuation; the missing piece is a
-small deterministic loader and routing seam. Implement and test all of the
+The banked data was sufficient. The current implementation now does all of the
 following before a live call:
 
 1. Add an explicit ladder resume/update flag to `LadderConfig` and wire the CLI
@@ -149,11 +208,12 @@ following before a live call:
 4. Preserve the existing generated subject brief, or deliberately reload it
    into P1’s phase result. Do not buy a replacement orientation merely because
    the controller restarted.
-5. Skip rung 2a entirely. Send only the 166 `escalate@sonnet` relationships to
-   Opus. Do not send the 180 `escalate@opus` relationships back through Opus.
-6. After that bounded Opus pass, send every still-escalating relationship to
-   Fable. The maximum initial Fable scope is 346 targets, about 70 five-target
-   batches; successful Opus repairs reduce it.
+5. Skip rung 2a entirely. After transcript recovery, send only the 66 remaining
+   `escalate@sonnet` relationships to Opus. Do not send the 209
+   `escalate@opus` or 2 `escalate@fable` relationships back through Opus.
+6. After that Opus pass, send every still-escalating relationship to Fable.
+   Evidence-valid Opus repairs reduce that scope; nothing is demoted merely to
+   make the count smaller.
 7. Rebuild and persist the final census, then proceed normally through P3–P5.
 8. Write the continuation into a **new** run directory. Never append to or
    overwrite the original run evidence.
@@ -161,15 +221,16 @@ following before a live call:
    original 432-call/$141.857663 parent run from continuation calls while also
    presenting cumulative calls, tokens, failures, and API-equivalent usage.
 
-## Required zero-cost tests for the resume seam
+## Zero-cost validation completed
 
-Before provider capacity is used, the resume implementation must prove:
+Before provider capacity is used, the resume implementation has proved:
 
 - Loading the checkpoint reconstructs exactly 6,024 states and the state table
   above.
 - No grounded or honest-gap target is dispatched at rung 2a, Opus, or Fable.
-- The 180 `escalate@opus` targets bypass Opus and remain eligible for Fable.
-- The 166 `escalate@sonnet` targets enter Opus; only their survivors enter
+- The `escalate@opus` and `escalate@fable` targets bypass Opus and remain
+  eligible for Fable.
+- The `escalate@sonnet` targets enter Opus; only their survivors enter
   Fable.
 - A missing or extra contract row, changed source commit, malformed state, or
   missing product row aborts before the fake invoker is called.
@@ -203,29 +264,25 @@ shasum -a 256 \
 Then verify Claude interactively and confirm that the weekly capacity has reset.
 Do not use the enrichment run itself as the capacity probe.
 
-After the resume seam and its tests land, use a new directory and an explicit
-policy. The intended command shape is:
+Use the observed demo harness, not a raw `analyze.py enhance` command. This path
+creates a Processing run, starts `LedgerWatch`, publishes completed-call and
+in-flight state to `http://127.0.0.1:4200/#processing`, and writes continuation
+evidence into a new directory:
 
 ```bash
-python3 analyze.py enhance /Volumes/Studio/dev/.demo-corpus/vscode \
-  --store /Volumes/Studio/dev/solution-explorer/.testboard/live/vscode-full-20260831-5f6a814/index.db \
-  --ladder \
-  --update \
-  --run-dir /Volumes/Studio/dev/solution-explorer/.testboard/live/vscode-full-20260831-5f6a814/run-continuation-20260831 \
-  --max-parallel 4 \
-  --pause-at-cost-usd 100 \
-  --cache-policy adaptive \
-  --min-rounds 1 \
-  --max-rounds 2 \
-  --spot-check-fraction 0.1 \
-  --max-spot-checks 25
+.venv/bin/python scripts/demo-site.py enhance vscode \
+  --resume-store /Volumes/Studio/dev/solution-explorer/.testboard/live/vscode-full-20260831-5f6a814/index.db \
+  --run-dir /Volumes/Studio/dev/solution-explorer/.testboard/live/vscode-full-20260831-5f6a814/run-continuation-20260901 \
+  --recover-ledger /Volumes/Studio/dev/solution-explorer/.testboard/live/vscode-full-20260831-5f6a814/run/ledger.jsonl \
+  --transcript-root /Users/ramerman/.claude/projects/-Volumes-Studio-dev-solution-explorer
 ```
 
-The `$100` value is a resumable disaster checkpoint, not a hard answer budget.
-It is above the current $30–$60 continuation estimate. If reached, in-flight
-answers bank and the control plane pauses before launching more work; quality is
-not truncated. Raising it must be an informed operator decision based on the
-dashboard and continuation ledger.
+The VS Code registry's 200 API-equivalent threshold is passed to the ladder as a
+resumable runaway checkpoint, not `--max-cost-usd`. No wall-time stop is passed.
+If the checkpoint is reached, in-flight answers bank and the control plane waits
+for an operator decision; quality is not truncated. A healthy run that is simply
+larger or slower than expected is resumed. A broken or explosively duplicating
+run is cancelled only after the dashboard evidence establishes that diagnosis.
 
 ## Live stop/iterate policy
 
@@ -254,10 +311,25 @@ continuation rather than shortening answers blindly.
 
 ## Expected remaining scale
 
-The best current estimate is 45–90 minutes and $30–$60 API-equivalent after
-capacity returns. This is a range, not a ceiling. It covers the 346 unresolved
-relationships, adjudication, synthesis, determination, and bounded improvement
-work. Actual Opus acceptance and repair rates determine the result.
+The earlier 45–90 minute / $30–$60 estimate omitted repository-scale P3 work
+and is withdrawn. The latest deterministic VS Code projection contains 2,694
+inferred edges and 2,322 findings. At the current quality-preserving group sizes,
+P3 alone has at least 108 edge-verification groups, 93 finding-verification
+groups, 6 identity groups, 25 grounding spot checks and at most 13 substitution
+checks before any targeted recheck requested by an improvement round.
+
+The best current estimate is **1.75–3 hours** and **15–24 percentage points of
+the normal weekly general allowance** after reset. The percentage range uses the
+only observed same-day anchor: the account moved from roughly 74% to 99% while
+the interrupted run ledgered 141.86 API-equivalent units. Other Claude sessions
+were active, so 25 points is an upper bound on what this run itself consumed,
+not a universal dollar conversion. Take `/usage` immediately before and after
+the continuation; those readings supersede this forecast. Fable has its own
+displayed allowance and must be recorded separately.
+
+This is an expectation, not a resource boundary. If the continuation is healthy
+and takes more, it continues. The dashboard exists so the extra work is visible
+and explainable rather than surprising.
 
 ## Evidence index
 

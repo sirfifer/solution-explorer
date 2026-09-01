@@ -507,10 +507,10 @@ def execute_work_order(
             response_bytes = len(result.text.encode("utf-8"))
             if response_bytes > output_budget:
                 outcome.notes.append(
-                    f"partition response exceeded compact budget: "
-                    f"{response_bytes} > {output_budget} UTF-8 bytes"
+                    "efficiency warning: partition response exceeded its expected "
+                    f"compact size ({response_bytes} > {output_budget} UTF-8 bytes); "
+                    "validated paid work was retained"
                 )
-                break
             # Canonical object maps remain the compatibility seam for injected
             # providers and stored replays. Live compact arrays receive the same
             # field-level validation and sibling salvage as the ordinary ladder.

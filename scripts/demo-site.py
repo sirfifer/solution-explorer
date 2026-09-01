@@ -632,9 +632,15 @@ def run_enhance(
     max_partitions: Optional[int] = None,
     dry_run: bool = False,
     watch: Optional[object] = None,
+    store_override: Optional[Path] = None,
+    run_dir_override: Optional[Path] = None,
+    recovery_ledger: Optional[Path] = None,
+    transcript_root: Optional[Path] = None,
 ) -> int:
-    """`analyze.py enhance --update` with the registry's cost ceiling and
-    quality threshold. Returns the subprocess exit code (0 success/dry-run, 1 a
+    """Run `analyze.py enhance --update` under the registry quality policy.
+
+    Ladder runs use a resumable runaway checkpoint; classic runs retain their
+    historical cost ceiling. Returns the subprocess exit code (0 success/dry-run, 1 a
     real but non-crashing failure such as a failed partition or an unmet
     quality gate) rather than raising, so a caller can decide what a
     "successful enhance run that failed its own gate" means without catching
@@ -648,7 +654,7 @@ def run_enhance(
     """
     slug = corpus["slug"]
     root = _src_dir(slug, corpus_dir)
-    store_path = _store_path(slug, corpus_dir)
+    store_path = Path(store_override) if store_override else _store_path(slug, corpus_dir)
     if not store_path.exists():
         raise FileNotFoundError(f"no fact store for '{slug}' at {store_path}; run: analyze {slug}")
     report_path = _out_dir(slug, corpus_dir) / "enhance-report.json"
@@ -657,7 +663,6 @@ def run_enhance(
         sys.executable, str(ANALYZE_SCRIPT), "enhance", str(root),
         "--store", str(store_path),
         "--update",
-        "--max-cost-usd", str(corpus["budget"]["max_cost_usd"]),
         "--threshold", str(corpus["gates"]["min_enrichment_score"]),
         "--report", str(report_path),
     ]
@@ -667,19 +672,25 @@ def run_enhance(
     # a reader who opens one date opens everything that happened on it.
     enrichment = corpus.get("enrichment") or {}
     if enrichment.get("pipeline") == "ladder":
-        run_dir = _run_dir(slug, runs_dir=None) / "enrichment"
+        run_dir = (
+            Path(run_dir_override)
+            if run_dir_override else _run_dir(slug, runs_dir=None) / "enrichment"
+        )
         cmd += ["--ladder", "--run-dir", str(run_dir)]
-        # The registry wall budget now reaches the run. Enforced INSIDE the
-        # engine (stop launching, finish in flight, honest partial report),
-        # never as a subprocess kill that would lose the Run Report. The first
-        # real run went 10.8 hours against a 45-minute registry budget that
-        # this path silently dropped.
-        wall = corpus.get("budget", {}).get("max_wall_minutes")
-        if wall is not None:
-            cmd += ["--max-wall-minutes", str(wall)]
+        # A ladder is never stopped merely because good work took longer or
+        # used more than predicted.  The registry's high usage threshold is a
+        # resumable runaway checkpoint: finish in-flight calls, show decision
+        # support on the board, and wait for an operator.  Classic enrichment
+        # retains its historical hard ceiling below.
         pause_at = corpus.get("budget", {}).get("pause_at_cost_usd")
+        if pause_at is None:
+            pause_at = corpus.get("budget", {}).get("max_cost_usd")
         if pause_at is not None:
             cmd += ["--pause-at-cost-usd", str(pause_at)]
+        if recovery_ledger is not None:
+            cmd += ["--recover-rejected-from-ledger", str(recovery_ledger)]
+        if transcript_root is not None:
+            cmd += ["--claude-transcript-root", str(transcript_root)]
         if enrichment.get("max_parallel") is not None:
             cmd += ["--max-parallel", str(enrichment["max_parallel"])]
         if enrichment.get("invoke_timeout_seconds") is not None:
@@ -699,6 +710,9 @@ def run_enhance(
             ]
         if enrichment.get("max_spot_checks") is not None:
             cmd += ["--max-spot-checks", str(enrichment["max_spot_checks"])]
+
+    else:
+        cmd += ["--max-cost-usd", str(corpus["budget"]["max_cost_usd"])]
 
     if max_partitions is not None:
         cmd += ["--max-partitions", str(max_partitions)]
@@ -2086,6 +2100,18 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
 
 def _cmd_enhance(args: argparse.Namespace) -> int:
     corpus = load_registry(args.slug)
+    if bool(args.recover_ledger) != bool(args.transcript_root):
+        print(
+            "error: --recover-ledger and --transcript-root must be supplied together",
+            file=sys.stderr,
+        )
+        return 2
+    if args.recover_ledger and (not args.resume_store or not args.run_dir):
+        print(
+            "error: transcript recovery requires --resume-store and a new --run-dir",
+            file=sys.stderr,
+        )
+        return 2
     mode = "dry run" if args.dry_run else "live, spends real usage"
     # total=0 means "denominator not known yet", which the board renders as a
     # count rather than a percentage. The engine publishes the real one (every
@@ -2099,6 +2125,14 @@ def _cmd_enhance(args: argparse.Namespace) -> int:
         rc = run_enhance(
             corpus, max_partitions=args.max_partitions, dry_run=args.dry_run,
             watch=run,
+            store_override=Path(args.resume_store).resolve()
+            if args.resume_store else None,
+            run_dir_override=Path(args.run_dir).resolve()
+            if args.run_dir else None,
+            recovery_ledger=Path(args.recover_ledger).resolve()
+            if args.recover_ledger else None,
+            transcript_root=Path(args.transcript_root).resolve()
+            if args.transcript_root else None,
         )
         if run:
             run.finish_step(
@@ -2250,10 +2284,24 @@ def _build_parser() -> argparse.ArgumentParser:
     p_analyze.add_argument("slug")
     p_analyze.set_defaults(func=_cmd_analyze)
 
-    p_enhance = sub.add_parser("enhance", help="analyze.py enhance --update, cost-ceilinged")
+    p_enhance = sub.add_parser(
+        "enhance", help="observed enrichment with a resumable runaway checkpoint"
+    )
     p_enhance.add_argument("slug")
     p_enhance.add_argument("--max-partitions", type=int, default=None, help="passthrough to analyze.py enhance")
     p_enhance.add_argument("--dry-run", action="store_true", help="passthrough to analyze.py enhance")
+    p_enhance.add_argument(
+        "--resume-store", help="existing banked fact store for an observed ladder continuation"
+    )
+    p_enhance.add_argument(
+        "--run-dir", help="new ladder run directory for the continuation evidence"
+    )
+    p_enhance.add_argument(
+        "--recover-ledger", help="prior ledger containing locally rejected paid responses"
+    )
+    p_enhance.add_argument(
+        "--transcript-root", help="provider transcript directory used by deterministic recovery"
+    )
     p_enhance.set_defaults(func=_cmd_enhance)
 
     p_validate = sub.add_parser("validate", help="the 3.6 checklist plus the section 2 graduation gate")

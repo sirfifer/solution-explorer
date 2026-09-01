@@ -284,6 +284,25 @@ def test_every_invocation_ledgers_phase_rung_model_tokens_and_cost():
     assert row.ok is True
 
 
+def test_compact_size_overrun_is_telemetry_not_paid_work_rejection():
+    ctx = _context(
+        invoker_factory=lambda _model: (
+            lambda _prompt: InvokeResult(ok=True, text='{"answer":"valid"}')
+        )
+    )
+    invoker = ctx.invoker(
+        "p2b_escalated", phase="p2_ladder", rung="opus",
+        targets=1, output_budget_bytes=4,
+    )
+
+    result = invoker("prompt")
+
+    assert result.ok is True
+    assert ctx.ledger[-1].ok is True
+    assert ctx.ledger[-1].output_budget_ok is False
+    assert any("was not discarded" in note for note in ctx.notes)
+
+
 def test_ledger_preserves_ttl_split_and_the_resolved_cache_policy():
     selected = []
 

@@ -517,8 +517,54 @@ def validate_compact_response(
     schema = compact_json_schema(prefix, user)
     if schema is None:
         return obj, [], []
+    obj, aliases = _repair_misbranched_relationship_repairs(obj, user=user)
     sanitized, stripped = _strip_unknown(obj, schema)
-    return sanitized, _schema_issues(sanitized, schema), stripped
+    return sanitized, _schema_issues(sanitized, schema), [*aliases, *stripped]
+
+
+def _repair_misbranched_relationship_repairs(
+    obj: Any, *, user: str,
+) -> tuple[Any, list[str]]:
+    """Move an unmistakable relationship-only repair out of `components`.
+
+    Two live VS Code repair calls returned the exact requested relationship ids
+    and the exact `flow`/`why` delta shape, but used the component envelope's
+    `i`/`q` spelling. Translation is safe only for a closed ITEMS menu holding
+    relationships exclusively, with exact id coverage and no existing
+    relationship entries. Anything less specific remains a validation error.
+    """
+    if not isinstance(obj, dict):
+        return obj, []
+    items = _extract_payload(user, "ITEMS")
+    if not isinstance(items, list) or not items:
+        return obj, []
+    expected = [
+        str(item.get("target_id") or "") for item in items
+        if isinstance(item, dict) and item.get("target_kind") == "relationship"
+    ]
+    if len(expected) != len(items) or not all(expected):
+        return obj, []
+    components = obj.get("components")
+    relationships = obj.get("relationships")
+    if not isinstance(components, list) or relationships not in ([], None):
+        return obj, []
+    converted = []
+    observed = []
+    for entry in components:
+        if not isinstance(entry, dict) or set(entry) - {"i", "q"}:
+            return obj, []
+        questions = entry.get("q")
+        if not isinstance(questions, dict) or set(questions) - {"flow", "why"}:
+            return obj, []
+        key = str(entry.get("i") or "")
+        observed.append(key)
+        converted.append({"k": key, **questions})
+    if len(observed) != len(set(observed)) or set(observed) != set(expected):
+        return obj, []
+    repaired = dict(obj)
+    repaired["components"] = []
+    repaired["relationships"] = converted
+    return repaired, ["$.components relationship-repair envelope alias"]
 
 
 def salvage_compact_response(

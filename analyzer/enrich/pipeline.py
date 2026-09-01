@@ -414,6 +414,16 @@ class BudgetMeter:
                 self._consecutive_identical = 0
                 self._last_error_shape = None
                 return
+            # A subscription limit with an explicit reset time is already a
+            # conclusive run-wide diagnosis.  Waiting for five identical
+            # logical failures merely fans the same unavailable capacity out
+            # across more calls; pause before the next launch immediately.
+            from .retry import is_capacity_limit
+            if is_capacity_limit(error):
+                self._systemic_error = str(error)[:300]
+                self._last_error_shape = " ".join(str(error).lower().split())[:300]
+                self._consecutive_identical = 1
+                return
             shape = " ".join(str(error).lower().split())[:300]
             if shape == self._last_error_shape:
                 self._consecutive_identical += 1
@@ -813,21 +823,21 @@ class MeteredInvoker:
         # the cache boundary must not claim a prefix the provider never saw.
         prefix_tokens_est = round(result.prefix_chars / PREFIX_CHARS_PER_TOKEN)
         response_bytes = len((result.text or "").encode("utf-8"))
-        # The caller declared this a compact-budgeted call. That declaration,
-        # not the response's self-reported shape, makes the byte ceiling apply.
-        # Otherwise prose or a placeholder object can evade the exact gate.
+        # The caller declared an expected compact response size.  This is
+        # efficiency telemetry, not an answer-validity boundary: a verbose but
+        # schema-valid, evidence-valid answer is still paid work and must reach
+        # the contract validator.  Rejecting it here caused the VS Code run to
+        # discard 25 usable responses and buy the same work again.
         budget_applies = self.output_budget_bytes is not None
         output_budget_ok = (
             response_bytes <= self.output_budget_bytes
             if budget_applies and self.output_budget_bytes is not None else None
         )
         if output_budget_ok is False and result.ok:
-            result = replace(
-                result, ok=False,
-                error=(
-                    f"response exceeded its delivered-byte budget: "
-                    f"{response_bytes:,} > {self.output_budget_bytes:,} UTF-8 bytes"
-                ),
+            self._ctx.notes.append(
+                "efficiency warning: a validatable response exceeded its expected "
+                f"compact size ({response_bytes:,} > "
+                f"{self.output_budget_bytes:,} UTF-8 bytes); it was not discarded"
             )
         self._ctx.record_ledger_row(
             LedgerRow(
@@ -1046,6 +1056,12 @@ class RunContext:
     commit_sha: Optional[str] = None
     seed: int = 0
     dry_run: bool = False
+    # Resume a previously banked ladder state.  This is deliberately distinct
+    # from a fresh run: P1 is reused, rung 2a is never regenerated, and only
+    # unresolved targets are eligible for the next rung.
+    update: bool = False
+    recovery_ledger: Optional[Path] = None
+    transcript_root: Optional[Path] = None
     clock: Clock = iso_now
     timer: Callable[[], float] = time.monotonic
     scorer: Any = None
@@ -1352,6 +1368,12 @@ class LadderConfig:
     run_dir: Path
     policy: LadderPolicy = field(default_factory=LadderPolicy)
     dry_run: bool = False
+    update: bool = False
+    # Optional, explicit recovery source for paid compact JSON that an earlier
+    # local byte guard rejected.  Both paths are required together; recovery is
+    # deterministic and happens before any new invocation.
+    recovery_ledger: Optional[Path] = None
+    transcript_root: Optional[Path] = None
     seed: int = 0
     # Cap the number of bulk targets, for cheap smoke runs. None means everything.
     max_partitions: Optional[int] = None
@@ -1433,6 +1455,9 @@ def build_run_context(
             commit_sha=current_commit_sha(str(root)),
             seed=config.seed,
             dry_run=config.dry_run,
+            update=config.update,
+            recovery_ledger=config.recovery_ledger,
+            transcript_root=config.transcript_root,
             max_partitions=config.max_partitions,
             max_lines=config.max_lines,
             max_components=config.max_components,

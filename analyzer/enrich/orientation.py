@@ -471,6 +471,26 @@ class OrientationPhase:
     name = "p1_orientation"
 
     def run(self, ctx: RunContext) -> PhaseResult:
+        if ctx.update:
+            brief = load_brief(ctx.store)
+            if brief is None:
+                raise RuntimeError(
+                    "ladder --update requires the previously banked subject brief; "
+                    "refusing to buy a replacement orientation"
+                )
+            try:
+                ctx.run_path("subject-brief.json").write_text(
+                    json.dumps(brief.to_dict(), indent=2), encoding="utf-8"
+                )
+            except OSError as exc:  # pragma: no cover - filesystem edge
+                ctx.notes.append(f"subject brief file not written: {exc}")
+            return PhaseResult(
+                name=self.name,
+                status="ok",
+                notes=["resume: reused the banked subject brief; no provider call"],
+                data={"brief": brief},
+            )
+
         ranking = rank_components(ctx.store)
         readme = _collect_readme(ctx.arch, ctx.root)
         selected_slice = None

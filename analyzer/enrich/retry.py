@@ -99,6 +99,22 @@ _TRANSIENT_MARKERS = (
     "server error", "internal error",
 )
 
+# Subscription-capacity stops are not ordinary 429s.  The provider has already
+# told us that no request can succeed until a named reset time, so retrying the
+# same call seconds later can only create more failed subprocesses.  Check this
+# before the structured-status branch because Claude may report the stop as 429.
+_CAPACITY_LIMIT_MARKERS = (
+    "session limit",
+    "weekly limit",
+    "usage limit",
+)
+
+
+def is_capacity_limit(error: Optional[str]) -> bool:
+    """True when the provider explicitly says capacity is unavailable until reset."""
+    low = str(error or "").lower()
+    return "reset" in low and any(marker in low for marker in _CAPACITY_LIMIT_MARKERS)
+
 
 def classify_outcome(result: InvokeResult) -> RetryDecision:
     """Classify one invoke outcome. Pure function, exhaustively tested.
@@ -112,6 +128,8 @@ def classify_outcome(result: InvokeResult) -> RetryDecision:
     err = result.error or ""
     # Parse failure: a well-formed run returned non-JSON. Never retried here.
     if err.startswith(PARSE_FAILURE_PREFIX):
+        return RetryDecision.DETERMINISTIC
+    if is_capacity_limit(err):
         return RetryDecision.DETERMINISTIC
     # Structured API status is the primary, unambiguous signal.
     if result.status_code is not None:
@@ -257,4 +275,5 @@ __all__ = [
     "classify_outcome",
     "SPAWN_FAILURE_PREFIX",
     "PARSE_FAILURE_PREFIX",
+    "is_capacity_limit",
 ]

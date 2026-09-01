@@ -53,10 +53,14 @@ def test_same_corpus_output_gate_has_a_narrow_inclusive_boundary(tmp_path):
     )
 
 
-def test_compact_byte_violation_fails_the_run(tmp_path):
+def test_compact_byte_violation_warns_without_failing_quality(tmp_path):
     report = _audit_module().audit(_run_dir(tmp_path, output=10, budget_ok=False))
     assert report["output_gate"]["compact_budget_violations"] == 1
     assert any(
+        f["level"] == "warn" and f["check"] == "compact-output"
+        for f in report["findings"]
+    )
+    assert not any(
         f["level"] == "fail" and f["check"] == "compact-output"
         for f in report["findings"]
     )

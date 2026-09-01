@@ -1279,3 +1279,55 @@ def test_second_evidence_alias_and_fact_component_are_preserved():
         0,
     ]
     assert not any(path.endswith(".component") for path in stripped)
+
+
+def test_relationship_only_repair_envelope_alias_is_unambiguous_and_repaired():
+    items = [
+        {"target_kind": "relationship", "target_id": "a|b|uses", "todo": ["flow", "why"]},
+        {"target_kind": "relationship", "target_id": "b|c|uses", "todo": ["flow", "why"]},
+    ]
+    prompt = build_compact_escalation_prompt(items, terminal=False)
+    prefix, user = split_cached_prompt(prompt)
+    obj = {
+        "components": [
+            {"i": item["target_id"], "q": {
+                "flow": {"t": "Calls cross this edge.", "e": [0]},
+                "why": {"t": "The dependency is required.", "e": [0]},
+            }}
+            for item in items
+        ],
+        "relationships": [],
+    }
+
+    cleaned, errors, stripped = validate_compact_response(
+        obj, prefix=prefix, user=user
+    )
+
+    assert errors == []
+    assert cleaned["components"] == []
+    assert [entry["k"] for entry in cleaned["relationships"]] == [
+        "a|b|uses", "b|c|uses",
+    ]
+    assert "$.components relationship-repair envelope alias" in stripped
+
+
+@pytest.mark.parametrize("mutation", ["mixed-menu", "wrong-id", "extra-field"])
+def test_relationship_repair_envelope_alias_remains_closed(mutation):
+    items = [
+        {"target_kind": "relationship", "target_id": "a|b|uses", "todo": ["flow"]},
+    ]
+    if mutation == "mixed-menu":
+        items.append({"target_kind": "component", "target_id": "a", "todo": ["purpose"]})
+    prompt = build_compact_escalation_prompt(items, terminal=False)
+    prefix, user = split_cached_prompt(prompt)
+    entry = {
+        "i": "wrong|id|uses" if mutation == "wrong-id" else "a|b|uses",
+        "q": {"flow": {"t": "Calls cross this edge.", "e": [0]}},
+    }
+    if mutation == "extra-field":
+        entry["unexpected"] = True
+    obj = {"components": [entry], "relationships": []}
+
+    _, _, stripped = validate_compact_response(obj, prefix=prefix, user=user)
+
+    assert "$.components relationship-repair envelope alias" not in stripped

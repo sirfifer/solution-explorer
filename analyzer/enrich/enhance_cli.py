@@ -145,6 +145,19 @@ def build_parser() -> argparse.ArgumentParser:
         "into (default: <root>/.solution-explorer/runs/<timestamp>). Ladder only.",
     )
     parser.add_argument(
+        "--recover-rejected-from-ledger",
+        default=None,
+        help="On --ladder --update, deterministically revalidate paid JSON that "
+        "an earlier run rejected only at its local response-byte guard. Pass "
+        "that run's ledger.jsonl; no provider call is made for recovered rows.",
+    )
+    parser.add_argument(
+        "--claude-transcript-root",
+        default=None,
+        help="Claude project transcript directory containing <session-id>.jsonl "
+        "for --recover-rejected-from-ledger.",
+    )
+    parser.add_argument(
         "--phase-model",
         action="append",
         default=None,
@@ -452,6 +465,15 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
         run_dir=run_dir,
         policy=policy,
         dry_run=args.dry_run,
+        update=args.update,
+        recovery_ledger=(
+            Path(args.recover_rejected_from_ledger).resolve()
+            if args.recover_rejected_from_ledger else None
+        ),
+        transcript_root=(
+            Path(args.claude_transcript_root).resolve()
+            if args.claude_transcript_root else None
+        ),
         max_partitions=args.max_partitions,
         max_lines=args.max_lines,
         max_components=args.max_components,

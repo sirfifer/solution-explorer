@@ -114,7 +114,33 @@ class ScriptedOrder:
                     "substitution_check": f"only {cid} does this",
                 },
             }
-        body = {"components": components, "relationships": {}}
+        relationships = {}
+        relationship_key = self.world["relationship"]
+        if f'"{relationship_key}"' in prompt:
+            source, target, edge_type = relationship_key.split("|", 2)
+            edge = {
+                "kind": "edge", "source": source, "target": target,
+                "edge_type": edge_type,
+            }
+            relationships[relationship_key] = {
+                "data_flow_description": f"{source} calls {target}.",
+                CONTRACT_KEY: {
+                    "parser_first": [],
+                    "answers": {
+                        "flow": {
+                            "claim": f"{source} calls {target} over {edge_type}.",
+                            "status": "answered", "evidence": [edge],
+                        },
+                        "why": {
+                            "claim": "The dependency is required by the caller.",
+                            "status": "answered", "evidence": [edge],
+                        },
+                    },
+                    "self_state": "grounded",
+                    "substitution_check": "the named endpoints establish this edge",
+                },
+            }
+        body = {"components": components, "relationships": relationships}
         if self.duplicate and ids:
             cid = ids[0]
             duplicate = {

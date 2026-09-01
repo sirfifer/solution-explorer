@@ -236,8 +236,9 @@ def audit(
     compact_violations = [r for r in compact_rows if r.get("output_budget_ok") is False]
     if compact_violations:
         finding(
-            "fail", "compact-output",
-            f"{len(compact_violations)} compact response(s) exceeded their declared delivered-output budget",
+            "warn", "compact-output",
+            f"{len(compact_violations)} compact response(s) exceeded their expected "
+            "delivered-output size; valid responses were retained",
         )
     cache_groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for row in ledger:

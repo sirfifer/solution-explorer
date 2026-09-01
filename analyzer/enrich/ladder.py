@@ -36,6 +36,7 @@ import json
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
 
 from ..derive.importance import ImportanceRanking, rank_components, store_ranking
@@ -434,7 +435,7 @@ class LadderPhase:
     # --- entry ---------------------------------------------------------------
 
     def run(self, ctx: RunContext) -> PhaseResult:
-        outcome = LadderOutcome()
+        outcome = self._load_resume_outcome(ctx) if ctx.update else LadderOutcome()
         validator = EvidenceValidator(ctx.store, root=ctx.root)
         ranking = rank_components(ctx.store)
         store_ranking(ctx.store, ranking)
@@ -482,7 +483,16 @@ class LadderPhase:
                 )
             },
         })
-        self._rung_2a(ctx, partitions, validator, facts_by_id, brief, outcome)
+        if ctx.update and ctx.recovery_ledger is not None:
+            self._recover_rejected_responses(
+                ctx, validator, facts_by_id, outcome
+            )
+        if ctx.update:
+            outcome.notes.append(
+                "resume: reconstructed all banked contract states and skipped rung 2a"
+            )
+        else:
+            self._rung_2a(ctx, partitions, validator, facts_by_id, brief, outcome)
         self._rung_escalated(
             ctx, validator, facts_by_id, brief, outcome,
             rung="opus", key="p2b_escalated", terminal=False,
@@ -509,6 +519,247 @@ class LadderPhase:
             notes=list(outcome.notes),
             data={"ladder": outcome, "census": outcome.census},
         )
+
+    def _recover_rejected_responses(
+        self, ctx: RunContext, validator: EvidenceValidator,
+        facts_by_id: dict, outcome: LadderOutcome,
+    ) -> None:
+        """Revalidate transcript-backed paid JSON before buying it again.
+
+        This accepts only rows whose provider result was rejected solely by the
+        old delivered-byte guard.  Every transcript must contain the exact
+        escalation ITEMS menu and a schema-valid, exact-coverage JSON response;
+        the whole recovery set is validated before the store is mutated.
+        """
+        from .compact import validate_compact_response
+        from .prompts import _COMPACT_ESCALATION_PREFIX
+
+        ledger_path = Path(ctx.recovery_ledger)
+        transcript_root = (
+            Path(ctx.transcript_root) if ctx.transcript_root is not None else None
+        )
+        if transcript_root is None:
+            raise RuntimeError(
+                "transcript recovery requires --claude-transcript-root"
+            )
+        try:
+            rows = [
+                json.loads(line) for line in ledger_path.read_text().splitlines()
+                if line.strip()
+            ]
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"could not read recovery ledger: {exc}") from exc
+        candidates = [
+            row for row in rows
+            if row.get("ok") is False
+            and row.get("output_budget_ok") is False
+            and str(row.get("error") or "").startswith(
+                "response exceeded its delivered-byte budget:"
+            )
+        ]
+        prepared: list[tuple[str, dict, list[str], list[str]]] = []
+        for row in candidates:
+            session_id = str(row.get("session_id") or "")
+            rung = str(row.get("rung") or "")
+            if not session_id or rung not in {"opus", "fable"}:
+                raise RuntimeError("recovery ledger row lacks a usable session/rung")
+            transcript_path = transcript_root / f"{session_id}.jsonl"
+            try:
+                events = [
+                    json.loads(line)
+                    for line in transcript_path.read_text().splitlines()
+                    if line.strip()
+                ]
+            except (OSError, json.JSONDecodeError) as exc:
+                raise RuntimeError(
+                    f"could not read recovery transcript {session_id}: {exc}"
+                ) from exc
+            users = [
+                event.get("message", {}).get("content")
+                for event in events if event.get("type") == "user"
+                and isinstance(event.get("message", {}).get("content"), str)
+            ]
+            texts = [
+                str(block.get("text") or "")
+                for event in events if event.get("type") == "assistant"
+                for block in (event.get("message", {}).get("content") or [])
+                if isinstance(block, dict) and block.get("type") == "text"
+            ]
+            if len(users) != 1 or not texts:
+                raise RuntimeError(
+                    f"recovery transcript {session_id} has an unexpected turn shape"
+                )
+            user = users[0]
+            marker = "ITEMS:\n"
+            end_marker = "\nReturn the JSON object now."
+            if marker not in user or end_marker not in user:
+                raise RuntimeError(f"recovery transcript {session_id} has no ITEMS menu")
+            try:
+                items = json.loads(
+                    user.split(marker, 1)[1].rsplit(end_marker, 1)[0]
+                )
+            except (json.JSONDecodeError, IndexError) as exc:
+                raise RuntimeError(
+                    f"recovery transcript {session_id} has an invalid ITEMS menu"
+                ) from exc
+            component_ids = [
+                str(item.get("target_id")) for item in items
+                if isinstance(item, dict) and item.get("target_kind") == "component"
+            ]
+            relationship_keys = [
+                str(item.get("target_id")) for item in items
+                if isinstance(item, dict) and item.get("target_kind") == "relationship"
+            ]
+            obj = _parse_json_object("".join(texts), expect_keys=PARTITION_KEYS)
+            prefix = (
+                "You are the LAST rung of an enrichment ladder.\n"
+                if rung == "fable" else
+                "You are a HIGHER RUNG of an enrichment ladder.\n"
+            ) + _COMPACT_ESCALATION_PREFIX
+            clean, schema_errors, _ = validate_compact_response(
+                obj, prefix=prefix, user=user
+            )
+            if obj is None or schema_errors:
+                raise RuntimeError(
+                    f"recovery transcript {session_id} failed compact validation: "
+                    + "; ".join(schema_errors[:6])
+                )
+            normalized = normalize_compact_response(
+                clean, facts=ctx.facts,
+                component_ids=component_ids,
+                relationship_keys=relationship_keys,
+            )
+            issues = coverage_issues(
+                normalized,
+                component_ids=component_ids,
+                relationship_keys=relationship_keys,
+            )
+            if any(issues.values()):
+                raise RuntimeError(
+                    f"recovery transcript {session_id} failed exact coverage: "
+                    + json.dumps(issues, sort_keys=True)
+                )
+            prepared.append((rung, normalized, component_ids, relationship_keys))
+
+        recovered = 0
+        for rung, normalized, component_ids, relationship_keys in prepared:
+            eligible_components = [
+                target_id for target_id in component_ids
+                if (state := outcome.states.get(("component", target_id))) is not None
+                and state.state == "escalate"
+                and (rung != "opus" or state.rung == "sonnet")
+            ]
+            eligible_relationships = [
+                target_id for target_id in relationship_keys
+                if (state := outcome.states.get(("relationship", target_id))) is not None
+                and state.state == "escalate"
+                and (rung != "opus" or state.rung == "sonnet")
+            ]
+            if not eligible_components and not eligible_relationships:
+                continue
+            filtered = {
+                "components": {
+                    key: value for key, value in (normalized.get("components") or {}).items()
+                    if key in set(eligible_components)
+                },
+                "relationships": {
+                    key: value for key, value in (normalized.get("relationships") or {}).items()
+                    if key in set(eligible_relationships)
+                },
+            }
+            self._absorb(
+                ctx, filtered, validator, facts_by_id, outcome,
+                rung=rung,
+                component_ids=eligible_components,
+                relationship_keys=eligible_relationships,
+                terminal=rung == "fable",
+            )
+            recovered += len(eligible_components) + len(eligible_relationships)
+        ctx.store.commit()
+        outcome.notes.append(
+            f"resume: deterministically revalidated {len(candidates)} paid "
+            f"transcript response(s) and recovered {recovered} unresolved target(s)"
+        )
+
+    def _load_resume_outcome(self, ctx: RunContext) -> LadderOutcome:
+        """Reconstruct the exact durable ladder state, or abort before invocation."""
+        attempted = ctx.attempted_scope()
+        expected_components = set(attempted["components"])
+        expected_relationships = set(attempted["relationships"])
+        expected = {
+            *(('component', value) for value in expected_components),
+            *(('relationship', value) for value in expected_relationships),
+        }
+        rows = ctx.store.enrichment()
+        products = {
+            (str(row.get("target_kind")), str(row.get("target_id"))): row
+            for row in rows
+            if row.get("target_kind") in {"component", "relationship"}
+        }
+        contracts = [
+            row for row in rows if row.get("target_kind") == CONTRACT_TARGET_KIND
+        ]
+        contracts_by_id = {str(row.get("target_id")): row for row in contracts}
+        observed: dict[tuple[str, str], tuple[dict, dict]] = {}
+        problems: list[str] = []
+        for row in contracts:
+            data = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+            state = ContractState.from_dict(data)
+            key = (state.target_kind, state.target_id)
+            if row.get("target_id") != f"{state.target_kind}:{state.target_id}":
+                problems.append(f"contract row id disagrees with payload: {row.get('target_id')}")
+                continue
+            if key in observed:
+                problems.append(f"duplicate contract state: {key[0]}:{key[1]}")
+                continue
+            product = products.get(key)
+            if product is None:
+                problems.append(f"missing product row: {key[0]}:{key[1]}")
+                continue
+            for candidate, label in ((row, "contract"), (product, "product")):
+                if ctx.commit_sha and candidate.get("commit_sha") != ctx.commit_sha:
+                    problems.append(
+                        f"{label} source commit mismatch: {key[0]}:{key[1]}"
+                    )
+            expected_digest = ctx.index.for_target(*key)
+            if product.get("derived_from_hash") != expected_digest:
+                problems.append(f"stale product provenance: {key[0]}:{key[1]}")
+            observed[key] = (state, product)
+
+        missing = sorted(expected - set(observed))
+        foreign = sorted(set(observed) - expected)
+        if missing:
+            problems.append(f"missing {len(missing)} planned contract state(s)")
+        if foreign:
+            problems.append(f"found {len(foreign)} foreign contract state(s)")
+        if problems:
+            raise RuntimeError(
+                "ladder resume preflight failed before provider work: "
+                + "; ".join(problems[:12])
+            )
+
+        outcome = LadderOutcome()
+        for key in sorted(expected):
+            state, product_row = observed[key]
+            contract_row = contracts_by_id[f"{key[0]}:{key[1]}"]
+            contract_payload = contract_row.get("payload") or {}
+            payload = dict(product_row.get("payload") or {})
+            payload["contract"] = {
+                "answers": dict(contract_payload.get("answers") or {})
+            }
+            outcome.states[key] = state
+            outcome.payloads[key] = payload
+            outcome.rung_counts[state.rung] = outcome.rung_counts.get(state.rung, 0) + 1
+            for finding in state.parser_first:
+                outcome.parser_findings.append({
+                    "target_kind": state.target_kind,
+                    "target_id": state.target_id,
+                    "rung": state.rung,
+                    "finding": finding,
+                })
+        outcome.census = build_census(list(outcome.states.values()))
+        outcome.honest_gaps = outcome.census.honest_gaps
+        return outcome
 
     # --- planning ------------------------------------------------------------
 
@@ -663,17 +914,12 @@ class LadderPhase:
                         "recovered JSON payload from nonzero transport exit: "
                         f"{result.error}"
                     )
-                if (
-                    output_budget is not None
-                    and response_bytes > output_budget
-                ):
-                    # Do not buy a second oversized response.  Shape drift is a
-                    # hard efficiency failure, not a parse failure that more
-                    # generation can repair.
-                    return (
-                        job_id, None,
-                        f"response exceeded deterministic compact budget: "
-                        f"{response_bytes:,} > {output_budget:,} UTF-8 bytes",
+                efficiency_note = None
+                if output_budget is not None and response_bytes > output_budget:
+                    efficiency_note = (
+                        "response exceeded its expected compact size "
+                        f"({response_bytes:,} > {output_budget:,} UTF-8 bytes); "
+                        "validated paid work was retained"
                     )
                 obj = parsed_candidate
                 if obj is not None:
@@ -685,7 +931,10 @@ class LadderPhase:
                     if isinstance(obj.get("components"), dict) or isinstance(
                         obj.get("relationships"), dict
                     ):
-                        return job_id, obj, transport_note
+                        note = transport_note
+                        if efficiency_note:
+                            note = efficiency_note + ("; " + note if note else "")
+                        return job_id, obj, note
                     obj, schema_errors, stripped = validate_compact_response(
                         obj, prefix=compact_prefix, user=compact_user
                     )
@@ -696,6 +945,8 @@ class LadderPhase:
                         )
                         if transport_note:
                             note = transport_note + ("; " + note if note else "")
+                        if efficiency_note:
+                            note = efficiency_note + ("; " + note if note else "")
                         return job_id, obj, note
                     last_error = "compact schema rejected: " + "; ".join(schema_errors[:8])
                     salvaged, rejected = salvage_compact_response(
@@ -953,7 +1204,9 @@ class LadderPhase:
         brief, outcome: LadderOutcome, *, rung: str, key: str, terminal: bool,
     ) -> None:
         pending = [
-            state for state in outcome.states.values() if state.state == "escalate"
+            state for state in outcome.states.values()
+            if state.state == "escalate"
+            and (rung != "opus" or state.rung == "sonnet")
         ]
         pending.sort(key=lambda s: (s.target_kind, s.target_id))
         if not pending:
