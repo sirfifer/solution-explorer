@@ -1,0 +1,116 @@
+{
+  "schema": "syscorpus.orientation/v1",
+  "subject": {
+    "id": "repo:unamentis-ios",
+    "name": "UnaMentis",
+    "kind": "voice-first learning system",
+    "scope": "iOS client and its mapped architectural context",
+    "snapshot": {
+      "generated_at": "2026-08-28T14:47:00Z",
+      "revision": "example-revision",
+      "default_branch": "main"
+    }
+  },
+  "orientation": {
+    "deterministic_statement": "A system with learning clients, curriculum and session components, voice and model providers, persistence, and operational services.",
+    "interpreted_statement": {
+      "text": "A voice-first learning system that turns conversation into structured teaching.",
+      "status": "verified_interpretation",
+      "evidence_refs": [
+        "component:unamentis",
+        "capability:learning-session",
+        "tour:voice-learning-loop"
+      ]
+    },
+    "default_path": "journey:voice-learning-loop"
+  },
+  "portrait": {
+    "semantic_level": "system",
+    "nodes": [
+      {
+        "id": "portrait:experience",
+        "label": "Learning experiences",
+        "role": "client-facing products",
+        "stable_targets": ["component:unamentis", "component:watch-app", "component:web-client"],
+        "evidence_refs": ["component:unamentis"]
+      },
+      {
+        "id": "portrait:learning-core",
+        "label": "Learning core",
+        "role": "curriculum, sessions, and rules",
+        "stable_targets": ["concern:curriculum", "concern:sessions"],
+        "evidence_refs": ["capability:learning-session"]
+      },
+      {
+        "id": "portrait:providers",
+        "label": "Voice & intelligence",
+        "role": "replaceable provider boundaries",
+        "stable_targets": ["concern:voice", "concern:model-providers"],
+        "evidence_refs": ["relationship-set:voice-learning-loop"]
+      },
+      {
+        "id": "portrait:operations",
+        "label": "Data & operations",
+        "role": "persistence and service foundation",
+        "stable_targets": ["entity-set:persistence", "component:management-server"],
+        "evidence_refs": ["entity-set:persistence"]
+      }
+    ],
+    "edges": [
+      {"source": "portrait:experience", "target": "portrait:learning-core", "relationship_set": "relationship-set:voice-learning-loop"},
+      {"source": "portrait:learning-core", "target": "portrait:providers", "relationship_set": "relationship-set:voice-learning-loop"},
+      {"source": "portrait:learning-core", "target": "portrait:operations", "relationship_set": "relationship-set:session-persistence"}
+    ]
+  },
+  "question_routes": [
+    {
+      "id": "how-it-works",
+      "label": "How does the core experience work?",
+      "answer_kind": "guided_path",
+      "target": {"lens": "flow", "tour_id": "voice-learning-loop", "semantic_level": "domain"}
+    },
+    {
+      "id": "what-it-can-do",
+      "label": "What can this system do?",
+      "answer_kind": "ranked_capabilities",
+      "target": {"lens": "capability", "rank": "navigation_importance"}
+    },
+    {
+      "id": "where-to-look",
+      "label": "Where should I look first?",
+      "answer_kind": "ranked_attention",
+      "target": {"surface": "findings", "include": ["findings", "producer_gaps", "hotspots"]}
+    },
+    {
+      "id": "where-data-lives",
+      "label": "Where does data live?",
+      "answer_kind": "entity_access",
+      "target": {"lens": "data", "semantic_level": "domain"}
+    },
+    {
+      "id": "external-reliance",
+      "label": "What does it rely on?",
+      "answer_kind": "dependency_summary",
+      "target": {"lens": "inventory", "surface": "supply_chain"}
+    }
+  ],
+  "trust": {
+    "source_coverage": {"percent": 100, "status": "complete", "target": "coverage.json"},
+    "interpretation_coverage": {"enriched_components": 28, "total_components": 168, "status": "partial"},
+    "producer_gaps": {"count": 42, "target": "manifest.json#.producer_gaps"},
+    "findings": {"count": 85, "verification_states": {"unverified": 85}, "target": "manifest.json#.findings"},
+    "dependencies": {"direct": 7, "target": "sbom.json"}
+  },
+  "launch_targets": {
+    "overview": {"route": "#/overview"},
+    "workbench": {"route": "#/workbench", "lens": "structure", "semantic_level": "system"},
+    "search": {"route": "#/search"}
+  },
+  "provenance": {
+    "generator": "solution-explorer",
+    "orientation_version": 1,
+    "deterministic_inputs": ["manifest.json", "coverage.json", "sbom.json"],
+    "interpreted_inputs": ["manifest.json#.ai_enhance", "manifest.json#.tours"],
+    "contract": "Every portrait node, answer, and launch target resolves to stable projected identity or explicit evidence."
+  }
+}

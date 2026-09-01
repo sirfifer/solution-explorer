@@ -7,6 +7,8 @@ import { DetailPanel } from "./components/DetailPanel";
 import { SearchOverlay } from "./components/SearchOverlay";
 import { HelpSystem } from "./components/HelpSystem";
 import { ReviewModeButton } from "./components/ReviewModeButton";
+import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { applyThemeToDocument } from "./utils/themes";
 import { AnnotationInput } from "./components/AnnotationInput";
 import { ReviewSummary } from "./components/ReviewSummary";
 import { AdminDashboard } from "./components/AdminDashboard";
@@ -228,6 +230,7 @@ export function App() {
     loading,
     error,
     darkMode,
+    theme,
     activePanel,
     reviewMode,
     annotatingComponentId,
@@ -238,7 +241,6 @@ export function App() {
     setError,
     setSearchOpen,
     setActivePanel,
-    toggleDarkMode,
     enhancedFrames,
     toggleEnhancedFrames,
     navigateToBreadcrumb,
@@ -544,14 +546,23 @@ export function App() {
     }
   }, [activePanel, bottomSheet.setSnap]);
 
-  // Apply dark mode class
+  // Apply the dress (data-theme) and the time of day (dark/light) to the root
+  // element. Both are pure CSS switches: every themed value in the viewer is a
+  // Tailwind utility that resolves through a custom property, and themes.css
+  // redefines those properties under these selectors. Nothing about data,
+  // layout, or interaction changes with either.
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-    document.documentElement.classList.toggle("light", !darkMode);
+    // The store applies this synchronously when either setting changes; this
+    // covers first mount and any path that sets state without going through
+    // those actions. Idempotent either way.
+    applyThemeToDocument(theme, darkMode);
+    // The page ground comes from the theme rather than a hardcoded utility, so
+    // the paper and parchment themes are not sitting on a white or near-black
+    // slab that belongs to Signal.
     document.body.className = darkMode
-      ? "bg-zinc-950 text-zinc-100 antialiased"
-      : "bg-white text-zinc-900 antialiased";
-  }, [darkMode]);
+      ? "bg-[var(--se-page)] text-zinc-100 antialiased"
+      : "bg-[var(--se-page)] text-zinc-900 antialiased";
+  }, [darkMode, theme]);
 
   if (loading) {
     return (
@@ -712,6 +723,12 @@ export function App() {
               already responsive (icon-only under sm). */}
           <ReviewModeButton />
 
+          {/* Theme + appearance. Reachable on every viewport, the way the lens
+              switcher is: on a phone the dark-mode toggle used to be buried in
+              the overflow menu, and the dress is the first thing a demo
+              audience asks to see changed. */}
+          <ThemeSwitcher />
+
           {/* Desktop: remaining secondary buttons inline */}
           <div className="hidden sm:flex items-center gap-2">
             {liveConfig && (
@@ -727,14 +744,6 @@ export function App() {
                 )}
               </button>
             )}
-
-            <button
-              onClick={toggleDarkMode}
-              className={`p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
-              title={darkMode ? "Light mode" : "Dark mode"}
-            >
-              {darkMode ? "\u2600" : "\u263E"}
-            </button>
 
             <button
               onClick={toggleEnhancedFrames}
@@ -762,13 +771,6 @@ export function App() {
                 ${darkMode ? "bg-zinc-900 border-zinc-700" : "bg-white border-zinc-200"}
               `}>
                 <div className="py-1">
-                  <button
-                    onClick={() => { toggleDarkMode(); setMoreMenuOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
-                  >
-                    <span>{darkMode ? "\u2600" : "\u263E"}</span>
-                    <span>{darkMode ? "Light mode" : "Dark mode"}</span>
-                  </button>
                   <button
                     onClick={() => { toggleEnhancedFrames(); setMoreMenuOpen(false); }}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
@@ -853,7 +855,7 @@ export function App() {
 
       {/* AI summary banner */}
       {architecture.ai_enhance?.summary && !summaryDismissed && (
-        <div className={`
+        <div data-se="summary" className={`
           px-4 py-2 text-xs shrink-0
           ${darkMode ? "bg-indigo-950/30 border-b border-indigo-800/30 text-indigo-300" : "bg-indigo-50 border-b border-indigo-200 text-indigo-700"}
         `}>
@@ -1128,6 +1130,7 @@ export function App() {
             states; comprehension-study S4). */}
         {isDesktopViewport && (activePanel === "detail" || activePanel === "review") && (
           <aside
+            data-se="panel"
             className={`
               hidden lg:flex flex-col shrink-0 border-l relative
               ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"}

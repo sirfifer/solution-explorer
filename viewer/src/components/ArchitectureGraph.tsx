@@ -17,6 +17,8 @@ import {
   getViewportForBounds,
 } from "@xyflow/react";
 import { useArchStore, nodeBudgetForCanvas, READABLE_ZOOM } from "../store";
+import { useThemeTokens } from "../hooks/useThemeTokens";
+import { THEMES } from "../utils/themes";
 import { buildDegreeIndex } from "../utils/importance";
 import {
   nextSnapState,
@@ -48,6 +50,7 @@ export function ArchitectureGraph() {
     selectedComponentId,
     breadcrumbs,
     darkMode,
+    theme,
     lens,
     flowEntryId,
     flowStep,
@@ -68,6 +71,21 @@ export function ArchitectureGraph() {
     shrinkNodeBudget,
     nodeBudget,
   } = useArchStore();
+
+  // React Flow's Background and MiniMap take colors as props rather than from
+  // CSS, so the theme's values are read back out of the root element. Every
+  // other color on this canvas resolves through var() in inline SVG style.
+  const canvasTokens = useThemeTokens({
+    grid: "--se-grid",
+    application: "--color-blue-500",
+    service: "--color-emerald-500",
+    library: "--color-violet-500",
+    package: "--color-amber-500",
+    module: "--color-cyan-500",
+    infrastructure: "--color-rose-500",
+    fallback: "--color-zinc-500",
+  });
+  const canvas = THEMES[theme].canvas;
 
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -257,12 +275,12 @@ export function ArchitectureGraph() {
         node.data = { ...node.data, ruleBadges: rules };
       }
       if (comp.id === flowStepNodeId) {
-        node.style = { boxShadow: "0 0 0 3px #2DD4BF", borderRadius: 14 };
+        node.style = { boxShadow: "0 0 0 3px var(--color-teal-400)", borderRadius: 14 };
       } else if (comp.id === flowEntryNodeId) {
-        node.style = { boxShadow: "0 0 0 3px #818CF8", borderRadius: 14 };
+        node.style = { boxShadow: "0 0 0 3px var(--color-indigo-400)", borderRadius: 14 };
       } else if (comp.id === dataOwnerNodeId) {
         // Ring the ego-view hub (the entity's owning component) under the Data lens.
-        node.style = { boxShadow: "0 0 0 3px #818CF8", borderRadius: 14 };
+        node.style = { boxShadow: "0 0 0 3px var(--color-indigo-400)", borderRadius: 14 };
       }
       // The style this node returns to when a shading mode releases it. The
       // selection and blast-radius effects both paint over `style`; painting
@@ -336,12 +354,12 @@ export function ArchitectureGraph() {
           animated: style.animated,
           label: edgeLabel || undefined,
           labelStyle: {
-            fill: darkMode ? "#9CA3AF" : "#6B7280",
+            fill: darkMode ? "var(--color-zinc-400)" : "var(--color-zinc-500)",
             fontSize: category === "communication" ? 11 : 10,
             fontFamily: category === "communication" ? "ui-monospace, monospace" : undefined,
           },
           labelBgStyle: {
-            fill: darkMode ? "#18181B" : "#FFFFFF",
+            fill: "var(--se-raise)",
             fillOpacity: 0.9,
           },
           style: {
@@ -610,7 +628,7 @@ export function ArchitectureGraph() {
       // anchor. It is shown as a dependent, because "this could break" is the
       // claim that matters for a change.
       const ring = isAnchor
-        ? "0 0 0 3px #818CF8"
+        ? "0 0 0 3px var(--color-indigo-400)"
         : isDependent
           ? "0 0 0 3px rgba(244,63,94,0.85)"
           : isDependency
@@ -889,10 +907,17 @@ export function ArchitectureGraph() {
         className={darkMode ? "dark" : "light"}
       >
         <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
-          color={darkMode ? "#27272A" : "#E4E4E7"}
+          variant={
+            canvas.variant === "lines"
+              ? BackgroundVariant.Lines
+              : canvas.variant === "cross"
+                ? BackgroundVariant.Cross
+                : BackgroundVariant.Dots
+          }
+          gap={canvas.gap}
+          size={canvas.size}
+          lineWidth={canvas.lineWidth}
+          color={canvasTokens.grid}
         />
         <Controls
           showInteractive={false}
@@ -906,14 +931,14 @@ export function ArchitectureGraph() {
             const comp = (node.data as { component?: { type?: string } })?.component;
             const type = comp?.type || "module";
             const colorMap: Record<string, string> = {
-              application: "#3B82F6",
-              service: "#10B981",
-              library: "#8B5CF6",
-              package: "#F59E0B",
-              module: "#06B6D4",
-              infrastructure: "#F43F5E",
+              application: canvasTokens.application,
+              service: canvasTokens.service,
+              library: canvasTokens.library,
+              package: canvasTokens.package,
+              module: canvasTokens.module,
+              infrastructure: canvasTokens.infrastructure,
             };
-            return colorMap[type] || "#6B7280";
+            return colorMap[type] || canvasTokens.fallback;
           }}
           maskColor={darkMode ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.7)"}
           style={{ height: 100, width: 150 }}

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@xyflow/react/dist/style.css";
+@import "./themes.css";
 
 /* Custom theme for React Flow */
 :root {

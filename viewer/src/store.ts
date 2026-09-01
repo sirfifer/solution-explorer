@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { THEME_NAMES, THEMES, applyThemeToDocument, type ThemeName } from "./utils/themes";
 import type {
   Architecture,
   Annotation,
@@ -70,6 +71,7 @@ import { generateDirective, type DirectiveModel } from "./utils/directiveGenerat
 // Storage key for dark mode preference (localStorage for persistence across sessions)
 const DARK_MODE_KEY = "arch-dark-mode";
 const ENHANCED_FRAMES_KEY = "arch-enhanced-frames";
+const THEME_KEY = "arch-theme";
 const CHANGELOG_READ_KEY = "arch-changelog-read";
 
 // High-water mark + sparse read set for efficient read tracking.
@@ -134,6 +136,30 @@ function getStoredDarkMode(): boolean {
 function saveStoredDarkMode(value: boolean): void {
   try {
     localStorage.setItem(DARK_MODE_KEY, JSON.stringify(value));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+// The theme (the dress) is an axis of its own, orthogonal to light/dark (the
+// time of day). Every theme carries both variants, so the two are stored and
+// switched independently.
+function getStoredTheme(): ThemeName {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored !== null && (THEME_NAMES as readonly string[]).includes(stored)) {
+      return stored as ThemeName;
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  // Signal is the original dress and stays the developer default.
+  return "signal";
+}
+
+function saveStoredTheme(value: ThemeName): void {
+  try {
+    localStorage.setItem(THEME_KEY, value);
   } catch {
     // Ignore storage errors
   }
@@ -269,6 +295,7 @@ interface ArchStore {
 
   // Theme
   darkMode: boolean;
+  theme: ThemeName;
   enhancedFrames: boolean;
 
   // Mobile UI
@@ -306,6 +333,7 @@ interface ArchStore {
   setSearchQuery: (query: string) => void;
 
   toggleDarkMode: () => void;
+  setTheme: (theme: ThemeName) => void;
   toggleEnhancedFrames: () => void;
 
   // Review actions
@@ -1024,6 +1052,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   searchQuery: "",
 
   darkMode: getStoredDarkMode(),
+  theme: getStoredTheme(),
   enhancedFrames: getStoredEnhancedFrames(),
 
   componentDetailCache: {},
@@ -1459,8 +1488,23 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   toggleDarkMode: () => set((s) => {
     const newValue = !s.darkMode;
     saveStoredDarkMode(newValue);
+    applyThemeToDocument(s.theme, newValue);
     return { darkMode: newValue };
   }),
+  setTheme: (theme) => {
+    saveStoredTheme(theme);
+    // Move to the variant the theme was drawn in. Signal is a control room and
+    // is conceived dark; Ledger and Atlas are paper and parchment and are
+    // conceived light. Picking a dress and staying in the previous theme's
+    // time of day is why a paper theme can look like a recoloured Signal.
+    // The appearance control still overrides, and the choice is remembered.
+    const nextDark = THEMES[theme].defaultDark;
+    saveStoredDarkMode(nextDark);
+    // Synchronously, before React commits: the canvas resolves its grid colour
+    // by reading this off the root, and its effect runs before App's.
+    applyThemeToDocument(theme, nextDark);
+    set({ theme, darkMode: nextDark });
+  },
   toggleEnhancedFrames: () => set((s) => {
     const newValue = !s.enhancedFrames;
     saveStoredEnhancedFrames(newValue);

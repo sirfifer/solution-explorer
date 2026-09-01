@@ -321,33 +321,38 @@ export function getEdgeCategory(type: string): EdgeCategory {
 // Relationship type to edge style
 // Communication edges: colored, animated, solid lines with arrows
 // Structural edges: gray, not animated, dashed to clearly differentiate
+//
+// Colors are palette variables rather than literal hex so that edges are part
+// of the theme seam: React Flow puts these into inline SVG style, where var()
+// resolves, so a theme redresses the wiring between components along with the
+// components themselves.
 const EDGE_STYLES: Record<string, { color: string; animated: boolean; dash: string; strokeWidth: number }> = {
-  import:    { color: "#6B7280", animated: false, dash: "6 4",  strokeWidth: 1.2 },
+  import:    { color: "var(--color-zinc-500)", animated: false, dash: "6 4",  strokeWidth: 1.2 },
   // D5: component-to-component type-usage edges (a symbol reference resolved to
   // its owning component). Structural, like import; a slate dashed line.
-  uses:      { color: "#64748B", animated: false, dash: "3 3",  strokeWidth: 1.3 },
-  http:      { color: "#3B82F6", animated: true,  dash: "",     strokeWidth: 2 },
-  websocket: { color: "#8B5CF6", animated: true,  dash: "",     strokeWidth: 2 },
-  grpc:      { color: "#10B981", animated: true,  dash: "",     strokeWidth: 2 },
-  ffi:       { color: "#F59E0B", animated: false, dash: "4 3",  strokeWidth: 1.2 },
-  database:  { color: "#EC4899", animated: true,  dash: "",     strokeWidth: 2 },
-  file:      { color: "#6B7280", animated: true,  dash: "8 4",  strokeWidth: 1.5 },
-  navigation:{ color: "#06B6D4", animated: false, dash: "",     strokeWidth: 1.5 },
-  tab:       { color: "#818CF8", animated: false, dash: "4 2",  strokeWidth: 1.2 },
-  modal:         { color: "#A78BFA", animated: false, dash: "6 3",  strokeWidth: 1.5 },
+  uses:      { color: "var(--color-slate-500)", animated: false, dash: "3 3",  strokeWidth: 1.3 },
+  http:      { color: "var(--color-blue-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  websocket: { color: "var(--color-violet-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  grpc:      { color: "var(--color-emerald-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  ffi:       { color: "var(--color-amber-500)", animated: false, dash: "4 3",  strokeWidth: 1.2 },
+  database:  { color: "var(--color-pink-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  file:      { color: "var(--color-zinc-500)", animated: true,  dash: "8 4",  strokeWidth: 1.5 },
+  navigation:{ color: "var(--color-cyan-500)", animated: false, dash: "",     strokeWidth: 1.5 },
+  tab:       { color: "var(--color-indigo-400)", animated: false, dash: "4 2",  strokeWidth: 1.2 },
+  modal:         { color: "var(--color-violet-400)", animated: false, dash: "6 3",  strokeWidth: 1.5 },
   // Flow lens (P6-2): synthetic edges for UIAction target_view links. A teal
   // dotted line distinguishes an in-screen action tap from a real navigation edge.
-  action:        { color: "#2DD4BF", animated: false, dash: "2 3",  strokeWidth: 1.4 },
-  embed:         { color: "#94A3B8", animated: false, dash: "1 4",  strokeWidth: 1.2 },
+  action:        { color: "var(--color-teal-400)", animated: false, dash: "2 3",  strokeWidth: 1.4 },
+  embed:         { color: "var(--color-slate-400)", animated: false, dash: "1 4",  strokeWidth: 1.2 },
   // Data lens (P6-3): read/write access edges in the entity ego view. Read is
   // green, write is amber (the card's colors); an inferred edge is dashed via the
   // ai_discovered channel in ArchitectureGraph.
-  reads:         { color: "#10B981", animated: true,  dash: "",     strokeWidth: 1.8 },
-  writes:        { color: "#F59E0B", animated: true,  dash: "",     strokeWidth: 1.8 },
-  message_queue: { color: "#F59E0B", animated: true,  dash: "",     strokeWidth: 2 },
-  pubsub:        { color: "#D946EF", animated: true,  dash: "",     strokeWidth: 2 },
-  event_bus:     { color: "#A855F7", animated: true,  dash: "4 4",  strokeWidth: 1.8 },
-  cache:         { color: "#EF4444", animated: true,  dash: "",     strokeWidth: 1.8 },
+  reads:         { color: "var(--color-emerald-500)", animated: true,  dash: "",     strokeWidth: 1.8 },
+  writes:        { color: "var(--color-amber-500)", animated: true,  dash: "",     strokeWidth: 1.8 },
+  message_queue: { color: "var(--color-amber-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  pubsub:        { color: "var(--color-fuchsia-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  event_bus:     { color: "var(--color-purple-500)", animated: true,  dash: "4 4",  strokeWidth: 1.8 },
+  cache:         { color: "var(--color-red-500)", animated: true,  dash: "",     strokeWidth: 1.8 },
 };
 
 export function getEdgeStyle(type: string) {
