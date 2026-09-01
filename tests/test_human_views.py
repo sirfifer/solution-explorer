@@ -134,6 +134,9 @@ def test_empty_architecture_emits_explicit_empty_views():
     assert security["not_observable"]
     assert orientation["portrait"]["nodes"] == []
     assert orientation["trust"]["source_coverage"]["status"] == "unavailable"
+    availability = {row["id"]: row["available"] for row in orientation["question_routes"]}
+    assert availability["support"] is False
+    assert availability["security"] is False
 
 
 def test_split_and_monolith_emit_sidecars_and_embed_sections(tmp_path):

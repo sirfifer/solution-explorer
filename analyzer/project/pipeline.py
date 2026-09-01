@@ -575,16 +575,16 @@ def project_split(
         activity_path = output_dir / "activity.json"
         iso.run("project.activity-json", _dump_json, activity_path, activity, indent)
 
+    orientation_path, support_path, security_path = _emit_human_views(
+        prepared, output_dir, coverage, iso, indent
+    )
+
     ai_json_path, llms_txt_path = iso.run(
         "project.frontdoor", write_front_door, prepared, output_dir, mode="split",
         coverage=coverage, activity=activity,
         search_manifest=(search_manifest if search_ok else None),
         supply_chain=sbom_section, cra_present=cra_result is not None, indent=indent,
         default=(None, None),
-    )
-
-    orientation_path, support_path, security_path = _emit_human_views(
-        prepared, output_dir, coverage, iso, indent
     )
 
     # The manifest is the split-mode main artifact: written last, carrying every
@@ -703,15 +703,15 @@ def project_monolith(
     # AI front door (P8-3): emitted beside the single architecture.json, with the
     # endpoint map pointing at that one file (no shards in monolith mode). Runs
     # before the monolith write so its gap, if any, rides on the monolith.
+    orientation_path, support_path, security_path = _emit_human_views(
+        prepared, output_path.parent, coverage, iso, indent
+    )
+
     ai_json_path, llms_txt_path = iso.run(
         "project.frontdoor", write_front_door, prepared, output_path.parent,
         mode="monolith", coverage=coverage, activity=activity,
         supply_chain=sbom_section, cra_present=cra_result is not None,
         monolith_filename=output_path.name, indent=indent, default=(None, None),
-    )
-
-    orientation_path, support_path, security_path = _emit_human_views(
-        prepared, output_path.parent, coverage, iso, indent
     )
 
     _apply_project_gaps(prepared, derive_gaps, gaps)

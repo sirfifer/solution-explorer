@@ -459,13 +459,17 @@ def build_orientation(
             "id": "support",
             "label": "What could make this fail in operation?",
             "target": {"lens": "support"},
-            "available": support is not None,
+            "available": bool(support) and any(
+                int(value or 0) > 0 for value in (support.get("counts") or {}).values()
+            ),
         },
         {
             "id": "security",
             "label": "What security mechanisms are visible?",
             "target": {"lens": "security"},
-            "available": security is not None,
+            "available": bool(security) and any(
+                int(value or 0) > 0 for value in (security.get("counts") or {}).values()
+            ),
         },
     ]
 
@@ -523,7 +527,11 @@ def build_orientation(
             },
             "producer_gaps": len(arch.get("gaps") or []),
             "findings": {"total": len(finding_rows), "unverified": unverified},
-            "direct_dependencies": len((arch.get("supply_chain") or {}).get("dependencies") or []),
+            "direct_dependencies": sum(
+                1
+                for dependency in (arch.get("supply_chain") or {}).get("dependencies") or []
+                if dependency.get("scope") == "direct"
+            ),
         },
         "launch_targets": {
             "overview": {"mode": "overview"},
