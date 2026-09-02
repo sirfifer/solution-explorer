@@ -470,7 +470,7 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": "689c9442300a50689eef6365744468170a7011c65652a808a623c1ee41cfe102",
+      "prefix_hash": "311831b7aa4629ca885b60041c2d718dc2e5c5ded2d7ad74c055590e2675c3f8",
       "prefix_tokens_est": 0,
       "response_bytes": 1314,
       "output_budget_bytes": 20000,
@@ -656,7 +656,7 @@
       "num_turns": 1,
       "partition_id": null,
       "session_id": null,
-      "prefix_hash": "689c9442300a50689eef6365744468170a7011c65652a808a623c1ee41cfe102",
+      "prefix_hash": "311831b7aa4629ca885b60041c2d718dc2e5c5ded2d7ad74c055590e2675c3f8",
       "prefix_tokens_est": 0,
       "response_bytes": 1314,
       "output_budget_bytes": 20000,
@@ -1281,6 +1281,16 @@
         "1 honest gap(s)"
       ],
       "reasoning": "all 1 honest gap(s) carry a reason a reader can act on"
+    },
+    {
+      "criterion_id": "u4",
+      "statement": "The published narrative represents the analyzed repository at its recorded snapshot identity without inventing a fork, upstream/downstream, or special-version relationship.",
+      "verdict": "met",
+      "evidence": [
+        "subject mode=canonical_repository_snapshot; repository=polyglot; snapshot_commit_recorded=True",
+        "published narrative contains no unsupported whole-subject identity claim"
+      ],
+      "reasoning": "The published narrative is consistent with the deterministic snapshot identity and any explicit operator declaration."
     }
   ],
   "determination": {
@@ -1288,7 +1298,7 @@
     "reasoning": "The census shows the map supports a reader orienting and finding the service boundary. It does not yet support reasoning about failure modes.",
     "rounds_run": 1,
     "rounds_recorded": 1,
-    "criteria_met": 4,
+    "criteria_met": 5,
     "criteria_unmet": 0,
     "criteria_unknown": 0,
     "notes": [
@@ -1352,7 +1362,7 @@
       "name": "p1_orientation",
       "status": "ok",
       "notes": [
-        "subject brief written: 1 subject criteria plus 3 universal gates",
+        "subject brief written: 1 subject criteria plus 4 universal gates",
         "1 idiom warning(s) declared up front, so confusion on them is expected rather than shameful"
       ]
     },
@@ -1962,8 +1972,8 @@
       "read_write_ratio": 0.0,
       "prefix_hashes": [
         "1700d6d1099cb0867fddcd6325b57c67377c2fbcf99581bf49d4cdecfa7a73ab",
+        "311831b7aa4629ca885b60041c2d718dc2e5c5ded2d7ad74c055590e2675c3f8",
         "67921f353cd5a70051a997681f2814f00148923a1f2f5f198052991446d7036a",
-        "689c9442300a50689eef6365744468170a7011c65652a808a623c1ee41cfe102",
         "733698024c1c01a8659c33f089844a6b3dc99ef8e4889d27b9fb489ec5feda23",
         "7434cee98cd8cd384951a7edbb8f7db74b3b5fc387f03b2794a6838a9fc4e996",
         "7a13091aa7163a88b9d6ffc35e7037d2bf37535eab49fff2c189a478972f71e2",

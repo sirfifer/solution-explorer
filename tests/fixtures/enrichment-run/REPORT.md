@@ -79,6 +79,7 @@ For each trigger, the question worth asking before the next run is not "was the 
 | u1 | MET | Every enrichment target reached a terminal contract state. | every enrichment target reached a terminal contract state |
 | u2 | MET | Claims are grounded in evidence that checks out. | 90.9% of items grounded; adjudication would not stand behind 0.0% of the claims it sampled |
 | u3 | MET | What could not be established is visible as an honest gap, with a reason a reader can act on. | all 1 honest gap(s) carry a reason a reader can act on |
+| u4 | MET | The published narrative represents the analyzed repository at its recorded snapshot identity without inventing a fork, upstream/downstream, or special-version relationship. | The published narrative is consistent with the deterministic snapshot identity and any explicit operator declaration. |
 
 ## Escalations
 
@@ -193,4 +194,3 @@ Scrub-safe abstractions only: patterns and counts, never the subject's paths, id
 - **parser-first**: deterministic processing could have answered this (count=3, of_total=11)
 - **inter-tier-disagreement**: claims adjudication would not stand behind (rate=0.0, sampled=22)
 - **forced-iteration**: a forced improvement round produced no measurable gain (round=1)
-

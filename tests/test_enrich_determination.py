@@ -47,7 +47,7 @@ from analyzer.enrich.determine import (
     evaluate_universal,
 )
 from analyzer.enrich.engine import InvokeResult
-from analyzer.enrich.orientation import universal_criteria
+from analyzer.enrich.orientation import Criterion, universal_criteria
 from analyzer.enrich.partition import flatten_components
 from analyzer.enrich.pipeline import (
     IterationPolicy,
@@ -912,6 +912,44 @@ def test_an_unknown_criterion_qualifies_a_done_verdict(world):
     report = json.loads((world["run_dir"] / "report.json").read_text())
     assert report["determination"]["verdict"] == "done-with-reservations"
     assert any("s1:unknown" in n for n in report["determination"]["notes"])
+
+
+def test_model_criterion_id_alias_is_normalized_without_losing_the_verdict():
+    outcome = DeterminationOutcome()
+    criterion = Criterion(id="s4", statement="The vendored boundary is clear.")
+
+    DeterminationPhase()._merge_verdicts(
+        outcome,
+        [criterion],
+        {},
+        {"criteria": [{
+            "id": "s4",
+            "verdict": "unmet",
+            "evidence": ["the component entry remains an honest gap"],
+            "reasoning": "The criterion was answered under the documented alias.",
+        }]},
+    )
+
+    assert outcome.verdicts[0].criterion_id == "s4"
+    assert outcome.verdicts[0].verdict == "unmet"
+    assert any("normalized" in note for note in outcome.notes)
+
+
+def test_conflicting_criterion_ids_fail_closed():
+    outcome = DeterminationOutcome()
+    criterion = Criterion(id="s4", statement="The vendored boundary is clear.")
+
+    DeterminationPhase()._merge_verdicts(
+        outcome,
+        [criterion],
+        {},
+        {"criteria": [{
+            "criterion_id": "s4", "id": "s5", "verdict": "met",
+        }]},
+    )
+
+    assert outcome.verdicts[0].verdict == "unknown"
+    assert any("disagreed" in note for note in outcome.notes)
 
 
 def test_all_met_after_a_real_round_settles_done_and_retains_follow_up():

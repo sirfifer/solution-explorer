@@ -915,7 +915,16 @@ def _validate_identity(obj: dict) -> list[str]:
             )
             continue
         if status == "corrected":
-            if entry.get("value") in (None, ""):
+            # Framework and port are optional identity fields.  Removing a
+            # false deterministic label is a real correction, represented by
+            # an explicit JSON null.  Name and type, in contrast, may never be
+            # removed from a published component identity.
+            if "value" not in entry or (
+                fname in {"name", "type"} and entry.get("value") in (None, "")
+            ) or (
+                fname in {"framework", "port"}
+                and entry.get("value") == ""
+            ):
                 errs.append(f"fields.{fname}: corrected requires a value")
             if not (entry.get("reason") or "").strip():
                 errs.append(f"fields.{fname}: corrected requires a reason")
@@ -940,6 +949,23 @@ def _validate_identity(obj: dict) -> list[str]:
                 ):
                     errs.append(f"prose_issues[{i}] needs claim and fact")
     return errs
+
+
+def _normalize_identity_optional_nulls(obj: dict) -> dict:
+    """Canonicalize explicit prose sentinels for absent optional fields."""
+    fields = obj.get("fields")
+    if not isinstance(fields, dict):
+        return obj
+    for fname in ("framework", "port"):
+        entry = fields.get(fname)
+        if not isinstance(entry, dict) or entry.get("status") != "corrected":
+            continue
+        value = entry.get("value")
+        if isinstance(value, str) and value.strip().lower() in {
+            "none", "none detected", "not applicable", "n/a", "null",
+        }:
+            entry["value"] = None
+    return obj
 
 
 def verify_identity(
@@ -1031,6 +1057,7 @@ def verify_identity(
                     ]
                     report.outcomes.append(outcome)
                     continue
+                entry = _normalize_identity_optional_nulls(entry)
                 field_errors = _validate_identity(entry)
                 if field_errors:
                     outcome.errors = field_errors

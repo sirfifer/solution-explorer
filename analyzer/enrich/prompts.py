@@ -21,6 +21,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Optional
 
 from .partition import Partition
+from .subject_identity import subject_identity_prompt
 
 __all__ = [
     "StoreFacts",
@@ -1327,7 +1328,12 @@ def build_partition_prompt(partition: Partition, facts: StoreFacts) -> str:
     return "\n".join(parts)
 
 
-def build_architecture_prompt(facts: StoreFacts, *, changelog: Optional[list] = None) -> str:
+def build_architecture_prompt(
+    facts: StoreFacts,
+    *,
+    changelog: Optional[list] = None,
+    subject_identity: Optional[dict] = None,
+) -> str:
     """Build the architecture-level (root) enhancement prompt."""
     arch = facts.arch
     summary_components = []
@@ -1359,12 +1365,25 @@ through the system end to end.",
 }
 
 summary and data_flow_narrative are REQUIRED and must be non-empty. Group the \
-top-level components into meaningful layers. Do not add fields beyond those shown.
+top-level components into meaningful layers. The summary describes the subject \
+identified below, not the local mechanics used to acquire or analyze it. Do not \
+add fields beyond those shown.
 """
+    identity = subject_identity or {
+        "mode": "canonical_repository_snapshot",
+        "name": arch.get("name"),
+        "repository": arch.get("repository"),
+        "default_branch": arch.get("default_branch") or "main",
+        "commit_sha": None,
+    }
     parts = [
         "You are writing the architecture-level summary for a software system.",
         "",
         contract,
+        "",
+        "AUTHORITATIVE SUBJECT IDENTITY (this overrides in-repository package "
+        "names and any inference from the checkout):",
+        subject_identity_prompt(identity),
         "",
         "TOP-LEVEL COMPONENTS:",
         json.dumps(summary_components, indent=2, default=str),
@@ -1786,6 +1805,9 @@ RULES:
 - corrected: the evidence contradicts the claim and shows what the value
   should be. "value" (the corrected value), "reason" (one sentence), and
   "evidence" (a file from the evidence below, line if known) are REQUIRED.
+  For optional "framework" and "port" claims, use an explicit JSON null value
+  when the correction is to remove a false label. Never use null for "name" or
+  "type".
   For "type", correct toward the neutral end when in doubt: a test suite,
   docs tree, or script collection is "module" or "package", never a server.
 - uncertain: the evidence cannot decide. "reason" is REQUIRED. Never guess.
@@ -2437,6 +2459,11 @@ RULES:
 - Judge every component INDEPENDENTLY, using only its own facts.
 - Return one entry for EVERY id below, using the id exactly as written.
 - Every one of the four fields must be present for every component.
+- confirmed: omit value, reason, and evidence.
+- corrected: include value, a one-sentence reason, and evidence.file. For the
+  optional framework and port fields, value may be explicit JSON null to remove
+  a false label; name and type may never be null.
+- uncertain: include a reason and never guess.
 - Do not invent evidence. Where a claim cannot be checked from the facts given,
   say uncertain.
 """

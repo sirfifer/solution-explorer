@@ -368,6 +368,26 @@ def test_operator_pause_and_checkpoint_survive_process_reconstruction(tmp_path):
     assert reconstructed.pause_at_usd == 12.0
 
 
+def test_terminal_control_snapshot_carries_final_accounting_and_no_actions(tmp_path):
+    control = tmp_path / "control.json"
+    meter = BudgetMeter()
+    meter.configure_control(control, None)
+    meter.spent = 12.5
+    meter.charges = 7
+
+    meter.finish_control(
+        state="incomplete",
+        reason="publication criterion s4 remains unmet",
+        recommendation="Review the report; no call remains in flight.",
+    )
+
+    packet = json.loads(control.read_text())
+    assert packet["state"] == "incomplete"
+    assert packet["spent_usd"] == 12.5
+    assert packet["completed_calls"] == 7
+    assert packet["actions"] == []
+
+
 def test_cost_reservations_cannot_sum_past_the_run_ceiling():
     meter = BudgetMeter(ceiling=2.0)
     reservations = [meter.reserve(slots=4) for _ in range(4)]

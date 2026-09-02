@@ -294,7 +294,11 @@ class BudgetMeter:
             "reserved_usd": round(self.reserved, 6),
             "completed_calls": self.charges,
             "wall_elapsed_s": self.wall_elapsed_s(),
-            "actions": ["resume-with-new-checkpoint", "cancel"],
+            "actions": (
+                ["resume-with-new-checkpoint", "cancel"]
+                if state in {"running", "paused"}
+                else []
+            ),
             "revision": int(current.get("revision") or 0) + 1,
             "updated_at": time.time(),
         }
@@ -309,6 +313,23 @@ class BudgetMeter:
                 tmp.unlink(missing_ok=True)
             except OSError:
                 pass
+
+    def finish_control(
+        self, *, state: str, reason: str, recommendation: str
+    ) -> None:
+        """Persist a terminal control-plane snapshot with final accounting.
+
+        The dashboard run record and the engine control packet are independent
+        artifacts.  Leaving the latter as ``running`` after the process exits
+        makes a completed run look resumable and freezes its call total one
+        tick behind the ledger.  Only terminal states are accepted here so a
+        caller cannot accidentally use this seam as another pause mechanism.
+        """
+        if state not in {"complete", "incomplete", "failed", "cancelled"}:
+            raise ValueError(f"not a terminal control state: {state!r}")
+        self._write_control(
+            state=state, reason=reason, recommendation=recommendation
+        )
 
     def _refresh_control(self) -> None:
         """Persist current spend/reservations without changing operator intent."""
@@ -439,6 +460,10 @@ class BudgetMeter:
     @property
     def systemic_failure(self) -> Optional[str]:
         return self._systemic_error
+
+    @property
+    def cancelled(self) -> bool:
+        return self._cancelled
 
     def under(self) -> bool:
         """True while new work may be launched and operator control permits it."""
@@ -1566,6 +1591,43 @@ def run_ladder(
             )
             write_run_report(ctx, result)
         result.notes = list(ctx.notes)
+        if ctx.budget.cancelled:
+            control_state = "cancelled"
+            control_reason = "run cancelled by the operator"
+        elif result.quality_status == "complete":
+            control_state = "complete"
+            control_reason = "run finished and passed its quality audit"
+        else:
+            control_state = "incomplete"
+            control_reason = (
+                "run finished, but publication criteria or the quality audit "
+                "remain incomplete"
+            )
+        try:
+            ctx.budget.finish_control(
+                state=control_state,
+                reason=control_reason,
+                recommendation=(
+                    "Review REPORT.md and report.json; no model call remains in flight."
+                ),
+            )
+        except OSError:
+            # The report is already durable. Observability may miss its final
+            # tick, but it must never turn completed work into a failed run.
+            pass
         return result
+    except Exception:
+        try:
+            ctx.budget.finish_control(
+                state="failed",
+                reason="run exited before a final report and audit were completed",
+                recommendation=(
+                    "Inspect the terminal error and ledger.jsonl; resume with --update "
+                    "after correcting the operational failure."
+                ),
+            )
+        except OSError:
+            pass
+        raise
     finally:
         ctx.store.close()

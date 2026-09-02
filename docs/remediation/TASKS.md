@@ -1777,6 +1777,17 @@ Phase 4 cards are execution-ready. Phase 5 to 9 cards are scoped but intentional
 - Scope: run the store-provenance enrichment path in parallel with the drift-tolerant merge script across real deploys (this repo's own pipeline plus at least one downstream deploy), comparing preservation outcomes each run; after N consecutive parity runs (N=3 suggested, record the decision), swap CI and action.yml to the provenance path and remove the merge step, keeping scripts/merge-ai-enhancements.py available out-of-pipeline for one release cycle. Requires the downstream stale-pin fix (owner) to have landed for the um-arch leg to count.
 - Evidence:
 
+### P7-6: Provider-portable enrichment profiles
+- Status: TODO (accepted and deliberately parked 2026-08-30; not a gate on the current Claude-backed UnaMentis run)
+- Priority order: quality first; learning and exit observability second; efficiency third. No provider is accepted through a quality tradeoff.
+- Design and research plan: [AI-PROVIDER-PORTABILITY-RESEARCH-PLAN.md](../quality/rearchitecture/AI-PROVIDER-PORTABILITY-RESEARCH-PLAN.md)
+- Scope: make the enrichment provider selectable with one named profile (`claude-max` or `chatgpt-pro`) while retaining per-rung overrides and the provider-neutral ladder contracts. Add an isolated Codex CLI invoker for ChatGPT subscription-backed execution; generalize accounting, cache capabilities, diagnostics, and Run Report wording; prove transport failure recovery and context isolation; live-probe structured output, cache behavior, and throttling; then compare the same canary and two diverse UnaMentis partitions before enabling full ChatGPT-backed runs.
+- Deliberate boundary: direct Anthropic/OpenAI API profiles, tenant billing, secrets, rate-limit operations, and customer-facing execution are a later commercial/operational phase. Design for that extension, but do not make it part of the subscription-backed acceptance gate.
+- Estimate when resumed: 1.5-2.5 focused engineering days including live calibration. The first safe stopping point is the cross-provider canary and cross-review.
+- Re-entry trigger: schedule when subscription diversification is needed, before demo volume makes one subscription a constraint, or before enrichment is operated for other people.
+- Accept: named-profile selection is one command and stamps the resolved provider/model/effort; Claude profile is behavior-compatible; Codex has no ambient repo/tool/session behavior; successful paid output survives recoverable failure paths; quality and learning gates match or exceed the Claude control; accounting distinguishes measured, calculated, and unavailable metrics; cache claims are backed by observed provider data; pause/resume preserves accepted work; two diverse UnaMentis partitions pass before a full ChatGPT-backed run.
+- Evidence:
+
 ## Phase 8: The query surface
 
 ### P8-1: MCP server

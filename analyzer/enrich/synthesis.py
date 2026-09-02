@@ -44,6 +44,7 @@ from .overlay import TOUR_TARGET_KIND
 from .partition import flatten_components
 from .pipeline import PhaseResult, RunContext
 from .provenance import stamp_enrichment
+from .subject_identity import build_subject_identity
 from .workorder import WorkOrder, parse_work_orders
 
 __all__ = [
@@ -428,7 +429,10 @@ class SynthesisPhase:
             output_budget_bytes=12_000,
         )
         payload, _cost, errors = _enhance_architecture(
-            ctx.facts, ctx.scorer, invoker, ctx.clock
+            ctx.facts, ctx.scorer, invoker, ctx.clock,
+            subject_identity=build_subject_identity(
+                ctx.arch, root=ctx.root, commit_sha=ctx.commit_sha
+            ),
         )
         if payload is None:
             outcome.notes.append(
