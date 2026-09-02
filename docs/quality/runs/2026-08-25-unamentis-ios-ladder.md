@@ -7,9 +7,14 @@ This records the first live enrichment after the 2026-08-25 fix set. Scope was
 3 of 18 partitions, 129 contract targets. Every figure is read from the run's
 own ledger and report.
 
+Extended by `2026-08-30-unamentis-ios-full-run.md`, which runs the same engine
+on the same commit at full scale (18 partitions, 626 targets) with the
+adjudication and improvement machinery this run did not exercise. The figures
+below remain true for the partial run and are not superseded.
+
 ## What the fixes did, measured on live calls
 
-| defect | 2026-08-25 VS Code run | this run |
+| defect | 2026-08-25 private large-repository validation corpus run | this run |
 |---|---|---|
 | effort in force | xhigh, inherited from user settings | `low` on every row, pinned |
 | responses truncated at ceiling | 11 of 31 partitions (35%) | 0 |

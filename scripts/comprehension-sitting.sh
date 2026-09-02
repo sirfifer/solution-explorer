@@ -18,8 +18,21 @@
 #     the served mirror's raw files, and without web tools it cannot look the
 #     subject up instead of learning it from the site
 #
-# Verified 2026-08-19: under this profile a session reports exactly
-# ToolSearch, Write, TodoWrite, mcp__playwriter__execute, mcp__playwriter__reset.
+# Transport, changed 2026-09-01: the browser is the standard Playwright MCP
+# server, which launches and owns its own Chromium with --isolated (profile held
+# in memory, never written to disk). It replaces the playwriter extension, which
+# attached to the operator's already-running Chrome. That older transport made
+# every sitting share one browser, forced sittings to run sequentially, required
+# a manual extension click, and on 2026-09-01 degraded and then killed P1's tab
+# at ~25 of 90 minutes, which in turn left P2 and P3 with no browser at all. The
+# viewer was independently soak-tested over 60 lens cycles during that incident
+# and showed a flat heap and constant render time, so the fault was the
+# transport. Consequences of the change, both good: storage isolation is now
+# structural rather than an instruction the persona must remember to follow,
+# and sittings can run concurrently because no two share a browser.
+#
+# Verified 2026-08-19 on the previous transport: under this profile a session
+# reports exactly the browser tools plus ToolSearch, Write and TodoWrite.
 #
 # Usage: comprehension-sitting.sh <persona> <url> <sitting-dir> <brief-file>
 
@@ -38,14 +51,20 @@ case "$DIR" in
     exit 1 ;;
 esac
 
-mkdir -p "$DIR/evidence"
-cat > "$DIR/.mcp.json" <<'JSON'
+mkdir -p "$DIR/evidence" "$DIR/artifacts"
+cat > "$DIR/.mcp.json" <<JSON
 {
   "mcpServers": {
-    "playwriter": {
+    "playwright": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "playwriter@latest"],
+      "args": [
+        "-y", "@playwright/mcp@latest",
+        "--isolated",
+        "--headless",
+        "--viewport-size", "1440x900",
+        "--output-dir", "$DIR/artifacts"
+      ],
       "env": {}
     }
   }
@@ -70,7 +89,7 @@ claude -p \
   --strict-mcp-config \
   --disable-slash-commands \
   --permission-mode acceptEdits \
-  --allowedTools "mcp__playwriter,Write,TodoWrite" \
+  --allowedTools "mcp__playwright,Write,TodoWrite" \
   --disallowedTools "$DENY" \
   < BRIEF.md 2>&1 | tee "$DIR/TRANSCRIPT.txt"
 

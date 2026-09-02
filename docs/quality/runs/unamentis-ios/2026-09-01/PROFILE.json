@@ -1,0 +1,127 @@
+{
+  "measured_at": "2026-09-01",
+  "subject": "unamentis-ios",
+  "charter_version": "comprehension-review/v1",
+  "dataset_chosen": {
+    "served_url": "http://127.0.0.1:5173/?mode=overview",
+    "served_dir": "/private/tmp/solution-explorer-frontdoor-live.Uc6lbM",
+    "snapshot_copy": "/private/tmp/comprehension-20260901-rerun/frontdoor-snapshot",
+    "frontdoor_sha256_at_launch": "daf37a22b202adb77ea969f10d9e8ab53fc55baa73bb0fbcc7051e641a7ef585",
+    "manifest_sha256": "c8d92a18d2176fd7b108971a8f37a47524bd69c3141d8b6649bf9008ea7935b8",
+    "canonical_run": "/Volumes/Studio/dev/solution-explorer/.testboard/live/unamentis-ios-full-20260830-a5717bf",
+    "subject_commit": "a5717bf00918be39e8e5d1bbc0662ea11ebd7b9c",
+    "manifest_generated_at": "2026-08-31T05:50:03.252151+00:00",
+    "analyzer_version": "1.2.0",
+    "ai_enhanced_at": "2026-08-31T05:17:36.184340+00:00",
+    "ai_enhance_version": 2,
+    "interface": "wt/frontdoor-production @ 06a3fc3 (Bind front door to canonical UnaMentis iOS data), production build 2026-09-01 13:43 local, bundle index-C6xwYDXp.js",
+    "why_chosen": "The owner supplied the URL and the branch's CANONICAL-UNAMENTIS-IOS-DEMO.md names this exact manifest hash as the canonical review dataset. Manifest, orientation, support and security sidecar hashes all match that document. Verified served bytes equal the snapshot at launch."
+  },
+  "size": {
+    "files": 751,
+    "lines": 199807,
+    "lines_by_class": {
+      "code": 160953,
+      "config": 844,
+      "data": 29556,
+      "docs": 8454
+    },
+    "symbols": 7617,
+    "size_bytes": 21424684
+  },
+  "language_mix": {
+    "by_language_lines": {
+      "coredata": 171,
+      "json": 29938,
+      "markdown": 8454,
+      "python": 588,
+      "ruby": 349,
+      "shell": 2448,
+      "storyboard": 47,
+      "swift": 157350,
+      "yaml": 462
+    },
+    "tiers": {
+      "full_parse_share_percent": 79.22
+    },
+    "tiers_code_only": {
+      "full_parse_share_percent": 98.34,
+      "note": "Full-parse languages here are swift, python, ruby; all fall in the code class, so the numerator is the same 158,287 lines either way. Data class is 29,556 lines of JSON, docs 8,454 markdown."
+    }
+  },
+  "components": {
+    "count": 168,
+    "path_components": 86,
+    "derived_ui_flow_nodes": 82,
+    "max_drill_depth": 5,
+    "note": "168 nodes by tree walk, equal to stats.total_components and len(component_detail_index). Root counted as depth 1; deepest node at depth 5."
+  },
+  "relationships": {
+    "count": 458,
+    "array_length": 458,
+    "types": {
+      "uses": 381,
+      "navigation": 34,
+      "import": 26,
+      "modal": 12,
+      "tab": 5
+    },
+    "with_port_or_protocol": 0,
+    "note": "No edge in this projection carries a port or protocol. Client-to-backend transport facts, if surfaced at all, come from enrichment prose or symbol search, not from the graph."
+  },
+  "documentation_density": {
+    "doc_lines_per_code_line": 0.0525
+  },
+  "external_dependency_count": 7,
+  "external_dependency_note": "supply_chain present: 7 direct Swift packages (client-sdk-swift/LiveKit, komondor, llama.cpp, swift-collections, swift-log, swift-readability, swiftmath). Evidence paths point into .claude/worktrees/agent-a47f3b12323d6bde3/Package.swift, a stray agent worktree inside the subject checkout, not the repo root Package.swift.",
+  "external_services_named": {
+    "support_lens_rows": 9,
+    "distinct": [
+      "Anthropic",
+      "Deepgram",
+      "Google AI",
+      "Groq",
+      "OpenAI"
+    ]
+  },
+  "enrichment_coverage": {
+    "components_enriched": 168,
+    "of": 168,
+    "relationships_enriched": 458,
+    "of_relationships": 458,
+    "producer_gaps": 82,
+    "gaps_note": "All 82 gaps are enrich.verify-identity abstentions (framework 37, name 33, type 11, port 1). None is an analyzer failure."
+  },
+  "coverage_ledger": {
+    "complete": true,
+    "parsed": 757,
+    "total": 810,
+    "summary": {
+      "binary": 34,
+      "excluded:gitignored": 3,
+      "excluded:skipped_directory": 5,
+      "excluded:unsupported_extension": 11,
+      "parsed": 757
+    }
+  },
+  "sidecars_present": {
+    "orientation": true,
+    "support": true,
+    "security": true,
+    "coverage": true,
+    "activity": true,
+    "sbom": true,
+    "cra_readiness": true,
+    "tours": 4,
+    "findings": 85,
+    "capabilities": 3,
+    "data_entities": 13
+  },
+  "viewport_fit_zoom": {
+    "desktop": null,
+    "mobile": null,
+    "mobile_landscape": null,
+    "note": "not measured this run"
+  },
+  "difference_from_previous_runs": "Previous runs (2026-08-17, 2026-08-19, 2026-09-01 morning) measured the unamentis monorepo (four repos, 254 to 256 components, 1.1M to 3.8M lines). This run measures the iOS client alone on a projection from the rebuilt engine. Scores are not comparable to those runs without stating this difference."
+}

@@ -1,0 +1,70 @@
+{
+  "charter_version": "comprehension-review/v1",
+  "subject": "unamentis-ios",
+  "run_date": "2026-09-01",
+  "persona": "P1",
+  "minutes_to_orientation": 1,
+  "verdict": "B- (persona's own grade). Scored 16/24. Nineteen minutes to a correctly ordered investigation plan, one step of which rests on code the app never runs.",
+  "dimensions": {
+    "orientation": {
+      "score": 4,
+      "evidence": "FINDINGS.md section 1; evidence/02-full-system-description.png",
+      "note": "Correct one-paragraph description at t+1m, one click from cold start. The persona later re-checked that paragraph against everything it found and reported it accurate in every particular tested."
+    },
+    "model_accuracy": {
+      "score": 3,
+      "evidence": "FINDINGS.md section 3, Q1 to Q5, graded against ANSWER-KEY-unamentis-ios.md P1.1 to P1.5",
+      "note": "Q1 correct: purpose, audience, and every moving part the key requires, including Core Data, the four protocols, the discovery ladder, on-device models and the test harnesses. Q2 partial: direct-to-provider HTTPS and WSS is right; self-hosted STT over WebSocket is right for GLM-ASR; but the management server is described as HTTPS with no port where the key has plain HTTP on hardcoded 8766 with no auth token, and the persona was blunt that the tool could not give it a port (O11). Q3 partial: the look-list is well ordered and steps 1, 3, 4 and 5 are sound; step 2, the leading hypothesis, is FallbackLLMService, which the key shows is never constructed by the app, and the key's first-order fact (no mid-session error surface at all, SessionView.swift:1457-1833) was not reached. Q4 correct: Core Data with 13 entities, Keychain, on-device model files, in-memory context, and a provider list that reconciled the Support lens's five with the tours' additional names; the LiveKit-unreferenced lead is confirmed by the key. Q5 correct: shape right, blanks stated as blanks, and the persona named the backend as the thing it could not draw."
+    },
+    "navigation_efficiency": {
+      "score": 3,
+      "evidence": "FINDINGS.md section 1 (19 minutes), section 4; 42 screenshots",
+      "note": "Reached every named target. Lost time to the name-only search, to the Structure lens at System and Domain levels, and to abandoning the New interface for the Classic workbench, where the persona says every useful thing it learned came from."
+    },
+    "trust": {
+      "score": 1,
+      "evidence": "FINDINGS.md section 5; evidence/36 (Rules), 28 (Capability), 23 (Auth concern), 20 vs 40 (Security vs Keychain), 19 (Data lens writers), 21 vs 10 (external reliance), 39 (management server)",
+      "note": "Two verified high incidents (Rules lens, Capability lens), two verified medium-high (Auth concern keyword noise, Security lens zero), the incomplete external-reliance list, and the posture omission (O5). The persona's statement that it 'had to spend a meaningful share of my session working out which parts of the tool to believe' is the verify-everything anchor. Held at 1 rather than 0 because the persona also reported that every fact in the orientation paragraph it checked held."
+    },
+    "unaided_recovery": {
+      "score": 3,
+      "evidence": "FINDINGS.md section 4 items 2, 3, 6; section 5",
+      "note": "Detected and discounted both garbage lenses, recognised the contamination pattern and discounted it, resolved the Keychain contradiction from the tool's own symbol view, and worked around name-only search by guessing which doc comments would carry URLs. Not 4 because it built its leading bug hypothesis on the tour's FallbackLLMService narrative, which describes dead code (O7), and because it attributed the contamination to the analyzer indexing its own output when the directory belongs to the subject (O9)."
+    },
+    "advertised_paths": {
+      "score": 2,
+      "evidence": "FINDINGS.md section 6; orchestrator probe5.mjs and probe6.mjs",
+      "note": "Escape does not close the trust drawer, verified (O13); the persona's 'no visible close control' is REFUTED, TrustDrawer renders a Close button top right. Structure lens at System and Domain levels: see REVIEW for the probe result. Source excerpts truncating with no full-file view is a product limit rather than a failed feature; recorded as the persona's top blocker and carried into the findings. Name-only search: the box is labelled 'Search everything', so the expectation was reasonable; recorded. EXCLUDED: clicking an off-screen graph node fails for an automation driver and pans for a person (rule 8); the two load-time 404s are by design for this bundle; the guided-paths chip did open the modal, which the persona itself records as its own error."
+    }
+  },
+  "battery": [
+    {"question": 1, "verdict": "correct", "confidence": "high", "source": "evidence/01, 02, 29, 30, 35, 04, 07-11"},
+    {"question": 2, "verdict": "partial", "confidence": "high", "source": "evidence/22, 13, 14, 32, 31, 15, 16, 25, 39, 35", "note": "No port for the backend (key: 8766), and HTTPS assumed where the key has plain HTTP. The projection carries no port or protocol on any edge (O11)."},
+    {"question": 3, "verdict": "partial", "confidence": "high", "source": "evidence/17, 41, 16, 37, 33, 34, 04", "note": "Step 2 rests on FallbackLLMService, never constructed by the app. Steps 1, 3, 4, 5 and the telemetry step are sound, and the cached-home-LAN-server hypothesis in step 5 is a genuine contribution the key did not anticipate."},
+    {"question": 4, "verdict": "correct", "confidence": "high", "source": "evidence/18, 19, 12, 21, 40, 39, 11", "note": "Package count 7 is the vestigial Package.swift figure; the tool induced it."},
+    {"question": 5, "verdict": "correct", "confidence": "medium", "source": "FINDINGS.md Q5", "note": "Shape correct; blanks honest; the backend named as the blank that matters."}
+  ],
+  "trust_incidents": [
+    {"what": "Rules lens presents 778 'rules the system enforces' that are inferred switch and formula sites, 54 with multi-line code fragments as inputs or outputs and 73 read from the subject's committed architecture directory", "severity": "high", "evidence": "evidence/36; manifest.rules; verified O12, O9"},
+    {"what": "Capability lens presents Swift string-interpolation fragments as the system's three capabilities, and the New interface routes 'What can this system do?' to it", "severity": "high", "evidence": "evidence/28, 27; verified O1"},
+    {"what": "Auth concern lists 15 members on 'auth library imports' whose evidence is policy-rule signals in an error-description switch, a Core Data class and three of the tool's JSON files", "severity": "medium", "evidence": "evidence/23; verified: AudioEngineConfig.swift:274 is an errorDescription switch (O12)"},
+    {"what": "Security lens reports zero mechanisms and zero credential inputs while APIKeyManager, readable in the same tool, stores keys in the Keychain", "severity": "medium", "evidence": "evidence/20 vs 40; verified structural (O2)"},
+    {"what": "'Communication boundaries (458)' are internal module edges, not communication boundaries", "severity": "medium", "evidence": "evidence/20; verified: all 458 edges are uses/navigation/import/modal/tab with no protocol (O11)"},
+    {"what": "Data lens lists the tool's own directories among TranscriptEntry's writers and reports zero readers", "severity": "medium", "evidence": "evidence/19; see REVIEW for the entity_access check (O9)"},
+    {"what": "Three dependency counts with three meanings and no gloss (7 direct, 5 external and 0 ports, 9 external reliance)", "severity": "medium", "evidence": "evidence/12, 35, 21; confirmed: SPM packages, distinct vendors, vendor-by-component rows"},
+    {"what": "Support lens names five vendors; the tours name ElevenLabs, AssemblyAI and others that never appear in it", "severity": "medium", "evidence": "evidence/21 vs 10; verified against the key: nine wired external services"},
+    {"what": "Guided tour and AI Insights disagree on whether AudioEngine captures the mic", "severity": "low", "evidence": "evidence/08 vs 38; see REVIEW for the narrative check"},
+    {"what": "Dependency evidence cites a scratch worktree", "severity": "low", "evidence": "evidence/12; verified O6"},
+    {"what": "No summary surface mentions that the client talks to a first-party backend, or that the backend is optional", "severity": "medium", "evidence": "evidence/39; verified O5. The persona found the server at minute nineteen by opening CurriculumService on a hunch"},
+    {"what": "The tour's FallbackLLMService narrative describes a chain the app never constructs; the persona built its leading hypothesis on it", "severity": "medium", "evidence": "evidence/41; verified against source (O7). Not raised by the persona; added by the orchestrator"}
+  ],
+  "blocked_paths": [
+    {"feature": "Full source view: symbol excerpts truncate and no line-range viewer exists", "evidence": "evidence/14, 16, 26. Status: product limit, confirmed; the persona's worst blocker and the reason it could not read the subnet-scan port list"},
+    {"feature": "Search for content rather than names ('port' returns export and import)", "evidence": "FINDINGS.md section 6 item 2. Status: confirmed by design; the box is labelled Search everything"},
+    {"feature": "Structure lens at System and Domain semantic levels renders one node", "evidence": "FINDINGS.md section 4 item 5. Status: see REVIEW probe6 result"},
+    {"feature": "Clicking an off-screen graph node", "evidence": "FINDINGS.md section 6 item 4. Status: EXCLUDED under rule 8, automation modality"},
+    {"feature": "Escape does not close the trust drawer", "evidence": "orchestrator probe5.mjs. Status: verified; the 'no visible close control' part is refuted, a Close button exists"},
+    {"feature": "Two 404s on every load", "evidence": "FINDINGS.md section 6 item 6. Status: by design for this bundle, excluded"},
+    {"feature": "Guided-paths chip appeared to do nothing", "evidence": "FINDINGS.md section 6 item 7. Status: withdrawn by the persona; the modal had opened"}
+  ]
+}

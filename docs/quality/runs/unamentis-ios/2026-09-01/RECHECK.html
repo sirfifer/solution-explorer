@@ -1,0 +1,160 @@
+<title>Front Door Re-check, unamentis-ios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:ital,wght@0,400;0,500;0,600;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#F5F6F4; --surface:#FFFFFF; --ink:#1D2429; --muted:#5C6770; --rule:#D9DDD8; --rule-strong:#B9C0BC;
+  --ok:#0F766E; --ok-bg:#E3F1EE; --part:#B45309; --part-bg:#F8ECDC; --open:#9F2E24; --open-bg:#F6E3E0; --new:#3B5BA9; --new-bg:#E4E9F7;
+  --sans:"Libre Franklin",system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --ground:#12171B; --surface:#1A2126; --ink:#E6E9E4; --muted:#9AA5AC; --rule:#2A333A; --rule-strong:#3C474F;
+  --ok:#3FB8AC; --ok-bg:#123632; --part:#E0A64C; --part-bg:#3A2A12; --open:#E2705F; --open-bg:#3B1E1A; --new:#8FA6E6; --new-bg:#1E2A44;
+}}
+:root[data-theme="dark"]{
+  --ground:#12171B; --surface:#1A2126; --ink:#E6E9E4; --muted:#9AA5AC; --rule:#2A333A; --rule-strong:#3C474F;
+  --ok:#3FB8AC; --ok-bg:#123632; --part:#E0A64C; --part-bg:#3A2A12; --open:#E2705F; --open-bg:#3B1E1A; --new:#8FA6E6; --new-bg:#1E2A44;
+}
+html{background:var(--ground)}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1040px;margin:0 auto;padding:40px 24px 80px}
+.prose{max-width:70ch}
+h1,h2,h3{text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:clamp(28px,4vw,40px);font-weight:800;letter-spacing:-0.01em}
+h2{font-size:22px;font-weight:700;margin-top:56px;padding-top:20px;border-top:1px solid var(--rule-strong)}
+h3{font-size:17px;font-weight:600;margin-top:24px}
+p{margin:12px 0}
+.eyebrow{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.thesis{font-size:20px;line-height:1.45;font-weight:500;max-width:60ch;margin:18px 0 0}
+.prov{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 28px;margin:28px 0 0;padding:18px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);font-size:13px}
+.prov b{display:block;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+code{font-family:var(--mono);font-size:0.92em}
+table{border-collapse:collapse;width:100%;font-size:14.5px;margin:16px 0}
+th{text-align:left;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);padding:8px 10px 8px 0;border-bottom:1px solid var(--rule-strong);vertical-align:bottom}
+td{padding:10px 10px 10px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+td.id{font-family:var(--mono);white-space:nowrap;color:var(--muted)}
+.tscroll{overflow-x:auto}
+.chip{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:0.06em;padding:2px 8px;border-radius:3px;white-space:nowrap;vertical-align:middle}
+.chip.ok{color:var(--ok);background:var(--ok-bg)}
+.chip.part{color:var(--part);background:var(--part-bg)}
+.chip.open{color:var(--open);background:var(--open-bg)}
+.chip.new{color:var(--new);background:var(--new-bg)}
+.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:18px 0}
+.stat div{background:var(--surface);border:1px solid var(--rule);padding:12px 14px}
+.stat b{display:block;font-family:var(--mono);font-size:26px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin:18px 0}
+.panel{background:var(--surface);border:1px solid var(--rule);padding:18px 20px}
+.panel h3{margin-top:0}
+.panel .eyebrow{margin-bottom:6px}
+.callout{border-left:3px solid var(--open);padding:4px 0 4px 18px;margin:18px 0}
+ol{padding-left:22px;margin:10px 0} li{margin:6px 0}
+.foot{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule-strong);font-size:13px;color:var(--muted)}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+<p class="eyebrow">Comprehension Review · re-check of the live build · 2026-09-01, evening · follows the afternoon review</p>
+<h1>Most of it is fixed. The first sentence now disagrees with the number under it.</h1>
+<p class="thesis">An orchestrator pass over what is live now, checked against every finding in the afternoon review, with no persona sittings. Nineteen of twenty-eight trust incidents are closed and every high-severity one is gone, including the deployment posture gap. The remediation also introduced one contradiction on the first screen, and none of it is committed.</p>
+
+<div class="prov">
+  <div><b>Served now</b><code>wt/comprehension-review-remediation</code>, uncommitted<br>31 files modified, 4 new · bundle <code>index-B17SXsyU.js</code></div>
+  <div><b>Projection</b>regenerated 2026-09-01 23:14Z, same commit <code>a5717bf</code><br>same 2026-08-31 enrichment · no model spend</div>
+  <div><b>Method</b>live JSON snapshot, viewer and analyzer source, headless browser probes<br>154 analyzer tests pass in the touched files</div>
+  <div><b>Against</b>the afternoon review's O1 to O18 and the three persona cards<br>same URL, <code>127.0.0.1:5173/?mode=overview</code></div>
+</div>
+
+<div class="stat">
+  <div><b>19</b><span>trust incidents fixed or switched off</span></div>
+  <div><b>3</b><span>improved, not closed</span></div>
+  <div><b>5</b><span>unchanged</span></div>
+  <div><b>1</b><span>new, on the first screen</span></div>
+  <div><b>0</b><span>high-severity incidents remaining from the run</span></div>
+</div>
+
+<h2>The posture gap is closed on the tool's side</h2>
+<div class="grid2">
+  <div class="panel">
+    <p class="eyebrow">What the Overview now shows</p>
+    <p>A "Deployment posture" block sits directly beneath the system description, labelled evidence-tiered, with four items: <b>Standalone application</b> (standalone), <b>UnaMentis server</b> (optional, "available via HTTP REST APIs (port 8766) but has zero source-level dependencies on server code"), <b>On-device execution is supported</b>, and <b>Direct provider references are present in the client</b> (Anthropic, AssemblyAI, Deepgram, ElevenLabs, Google AI, Groq and others).</p>
+    <p>Each item says whether it is a repository claim or an observed source reference, with the file and line, and the block closes with its caveat: runtime deployment remains configuration-dependent.</p>
+    <p><span class="chip ok">fixed</span></p>
+  </div>
+  <div class="panel">
+    <p class="eyebrow">What it settles</p>
+    <p>The first item cites the subject's own sentence from <code>CLAUDE.md:19</code>. Once the generator looked for a posture claim, the repository's documentation was sufficient to state it; the code vocabulary ("finding the backend server") was never the only source available. For this subject, the misrepresentation was the tool not carrying a fact the repository stated. The enrichment prose still calls it a backend server, and now sits under a frame that says the server is optional.</p>
+    <p>The executive's board brief and the engineer's design review would both have come out right on this build.</p>
+  </div>
+</div>
+
+<h2>Every finding, then and now</h2>
+<div class="tscroll">
+<table>
+<thead><tr><th>#</th><th>Afternoon finding</th><th>Now</th><th>Evidence on the live build</th></tr></thead>
+<tbody>
+<tr><td class="id">O1</td><td>Capability lens is string-interpolation fragments</td><td><span class="chip ok">fixed</span></td><td>Zero capabilities; the question route is unavailable; the lens is gone from the switcher and its deep link falls back to Structure; the <code>queue_name</code> rule is guarded</td></tr>
+<tr><td class="id">O2</td><td>Security lens cannot see a Keychain</td><td><span class="chip ok">fixed</span></td><td>Two mechanisms (iOS Keychain from <code>APIKeyManager.swift</code>, iOS file protection), one credential configuration; boundaries now include nine https and three wss provider references</td></tr>
+<tr><td class="id">O3</td><td>Ledger calls 82 abstentions "failed analyzer units"</td><td><span class="chip ok">fixed</span></td><td>"Producer claims 80 · 80 unresolved"; chip reads "80 unresolved claims"</td></tr>
+<tr><td class="id">O4</td><td>"100% source mapped", 53 rows hidden</td><td><span class="chip ok">fixed</span></td><td>"559/810 files mapped"; drawer reads "34 binary · 217 excluded · 0 parse gaps"</td></tr>
+<tr><td class="id">O5</td><td>Deployment posture never stated</td><td><span class="chip ok">fixed</span></td><td>Above</td></tr>
+<tr><td class="id">O6</td><td>SBOM cites an agent worktree; tools version eight times</td><td><span class="chip part">one part open</span></td><td>Evidence now <code>Package.swift</code> at the root; one tools property; <code>.claude/worktrees</code> pruned. Still reads the vestigial manifest (7 packages) where <code>project.yml</code> (6) builds the app; <code>Package.resolved</code> unread, so transitive stays 0</td></tr>
+<tr><td class="id">O7</td><td>Tour counts and a fallback the app never runs</td><td><span class="chip ok">fixed by overlay</span></td><td>Seven exact-value edits in <code>demos/review-corrections/unamentis-ios.json</code>, bound to the commit, recorded in <code>manifest.review_corrections</code>, refused if stale. The fallback sentence now says the review found no evidence the app constructs it</td></tr>
+<tr><td class="id">O8</td><td>Six CI files owned by nothing</td><td><span class="chip ok">fixed</span></td><td>Owned by <code>root</code>; 559 files in stats, search and coverage</td></tr>
+<tr><td class="id">O9</td><td>Subject's committed snapshot read as source</td><td><span class="chip ok">fixed</span></td><td>198 files <code>excluded:generated</code>; no <code>architecture/*</code> components; 698 rules with none from it; Data lens access edges 112 to 69. One residual: <code>component_groups</code> still lists the removed id</td></tr>
+<tr><td class="id">O10</td><td>Front door unlinked; <code>llms.txt</code> incomplete</td><td><span class="chip part">half</span></td><td><code>llms.txt</code> and <code>ai.json</code> now list orientation, support and security. Still no link from either shell</td></tr>
+<tr><td class="id">O11</td><td>No edge carries port, protocol or auth</td><td><span class="chip open">unchanged</span></td><td>458 edges, same five types. Parser work</td></tr>
+<tr><td class="id">O12</td><td>Rules lens presents inferred sites as rules</td><td><span class="chip ok">switched off</span></td><td>Gone from the switcher; deep link falls back; data retained with an inferred marker in the panel code</td></tr>
+<tr><td class="id">O13</td><td>Escape, overlays, dead chip</td><td><span class="chip ok">fixed</span></td><td>Escape closes the trust drawer and the onboarding modal; the header is no longer blocked; the guided-paths chip is hidden while a tour runs</td></tr>
+<tr><td class="id">O14</td><td>Flow lens NaN rendering</td><td><span class="chip open">open, not reproduced</span></td><td>Zero NaN on deep link and on lens switch, as before; nothing in the diff addresses it</td></tr>
+<tr><td class="id">O15</td><td>Phone Support answer in a 199 px scroller</td><td><span class="chip open">unchanged</span></td><td>Heading at y=585, content in a 199 px window, External reliance 1,491 px down</td></tr>
+<tr><td class="id">O16</td><td>Structure lens one node at every level</td><td><span class="chip part">hint added</span></td><td>Still one node, no edges; the panel now says "Open a level: double-click a component"</td></tr>
+<tr><td class="id">O17</td><td><code>core/audio</code> help text contradicts its description</td><td><span class="chip open">unchanged</span></td><td>Not in the corrections file</td></tr>
+<tr><td class="id">O18</td><td>Component-panel GitHub link is a directory</td><td><span class="chip open">unchanged</span></td><td></td></tr>
+<tr><td class="id"></td><td>Support lens names five vendors</td><td><span class="chip part">improved</span></td><td>Seven (AssemblyAI and ElevenLabs added) against the key's nine; parser-debris entry points gone</td></tr>
+<tr><td class="id"></td><td>"Search everything" label</td><td><span class="chip part">half</span></td><td>Workbench says "Search"; the Overview header still says "Search everything"</td></tr>
+<tr><td class="id"></td><td>Static "Answer assembled from mapped evidence" banner; <code>?? 0</code> fallbacks</td><td><span class="chip open">unchanged, latent</span></td><td>Neither fires on this projection</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>New on the live build</h2>
+<div class="callout prose">
+<h3>N1. The first screen contradicts itself, on files. High.</h3>
+<p>The Overview headline is the interpreted statement: "~161K lines of code across <b>751 files</b>". The stat tile directly beneath it reads "<b>559 files</b>", as do the header and the coverage chip. The prose is the 2026-08-31 enrichment; the measurement changed when O9 excluded the committed snapshot. <code>orientation.json</code> now stamps the statement <code>stale: true</code>, and the interface renders no stale marker anywhere: not on the Overview, not in the full-description expansion, not in the trust drawer.</p>
+<p>This is the afternoon report's item 3 exactly, a numeral in prose shadowing a structured field. The tours were corrected by overlay; the interpreted statement was not; and there is still no generation-time rule that binds or strips numerals. The overlay fixed seven sentences. The class is open, and this is the proof.</p>
+</div>
+<div class="prose">
+<h3>N2. Dangling group member. Low.</h3>
+<p><code>ai_enhance.component_groups</code> still names <code>architecture</code> under "Documentation &amp; Tooling" after the component was excluded.</p>
+<h3>N3. Weak evidence pointer on a new mechanism. Low.</h3>
+<p>"iOS file protection" cites <code>PRE_BETA_AUDIT.md</code> with signal "import/symbol". The source has it at <code>PersistenceController.swift:101-102</code>; the lens should point there.</p>
+<h3>N4. The corrections overlay: right shape, wrong long-term home.</h3>
+<p>Exact-value, commit-bound, recorded in the manifest, refused when stale. This is how a hand correction should be done, and it is not "hand-editing March prose" in the sense the morning report warned against. It is also seven sentences. The class closes when generation enforces the rule and re-enrichment replaces the vintage.</p>
+<h3>N5. Nothing is committed.</h3>
+<p>All of this is the working tree of <code>wt/comprehension-review-remediation</code>. A stash or a checkout loses it.</p>
+</div>
+
+<h2>What would change for the three personas</h2>
+<div class="prose">
+<p>Of the 28 distinct trust incidents across the three cards, 19 are fixed or switched off, 3 improved, 5 unchanged (O11, O15, O17, O18, and the split between three portrait areas and seven enrichment groups), and 1 new. P2's single high incident and P3's two are closed; P1's two are closed or hidden. The executive would no longer withdraw confidence from "we operate almost no infrastructure", and the engineer would no longer build a hypothesis on a fallback chain the app does not run. The engineer's worst blocker, no full-file source view, is untouched by design, and the ports question still has no route (O11).</p>
+<p>Not re-checked, because none was in the diff: the Auth concern's keyword members, the labels on the three dependency counts, and the token-economy shard sizes.</p>
+</div>
+
+<h2>Before the next demo, in order</h2>
+<div class="prose">
+<ol>
+<li><b>Fix N1.</b> Render the stale flag on the interpreted statement, or bind its file and line counts to <code>stats</code> at assembly time, or both. It is the first sentence a buyer reads and it disagrees with the number under it.</li>
+<li><b>Commit the remediation branch</b> with the corrections file, before anything else touches that worktree.</li>
+<li><b>Then the deferred items:</b> <code>project.yml</code> and <code>Package.resolved</code> in the SBOM; a link to <code>llms.txt</code> in the shell; the phone Support ordering; the audio help-text contradiction through the same overlay; the dangling group id; the "Search everything" label on the Overview.</li>
+<li><b>Rerun the personas only after 1 and 2,</b> as a calibration run against the 2026-09-01 cards with the same answer key. Expect the trust dimension to move; expect O11 and the source-view limit to keep P1 off the top.</li>
+</ol>
+</div>
+
+<div class="foot">
+<p>Orchestrator re-check, no persona sittings. Live data snapshot at <code>/private/tmp/comprehension-20260901-rerun/frontdoor-live-recheck/</code>, probes in <code>orchestrator2/</code>. Record: <code>docs/quality/runs/unamentis-ios/2026-09-01/RECHECK.md</code>. Preceding review: <code>REVIEW.md</code>, <code>ORCHESTRATOR-FINDINGS.md</code>, <code>REPORT.html</code> in the same directory.</p>
+</div>
+</div>

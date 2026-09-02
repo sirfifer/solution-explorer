@@ -1,0 +1,313 @@
+<title>Front Door Review, unamentis-ios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:ital,wght@0,400;0,500;0,600;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#F5F6F4; --surface:#FFFFFF; --ink:#1D2429; --muted:#5C6770; --rule:#D9DDD8; --rule-strong:#B9C0BC;
+  --measured:#0F766E; --measured-bg:#E3F1EE; --narrated:#B45309; --narrated-bg:#F8ECDC;
+  --high:#9F2E24; --high-bg:#F6E3E0; --med:#B45309; --low:#5C6770;
+  --gen:#3B5BA9; --enr:#8A4FB5; --seam:#0F766E; --glass:#B45309;
+  --sans:"Libre Franklin",system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --ground:#12171B; --surface:#1A2126; --ink:#E6E9E4; --muted:#9AA5AC; --rule:#2A333A; --rule-strong:#3C474F;
+  --measured:#3FB8AC; --measured-bg:#123632; --narrated:#E0A64C; --narrated-bg:#3A2A12;
+  --high:#E2705F; --high-bg:#3B1E1A; --med:#E0A64C; --low:#9AA5AC;
+  --gen:#8FA6E6; --enr:#C39BE0; --seam:#3FB8AC; --glass:#E0A64C;
+}}
+:root[data-theme="dark"]{
+  --ground:#12171B; --surface:#1A2126; --ink:#E6E9E4; --muted:#9AA5AC; --rule:#2A333A; --rule-strong:#3C474F;
+  --measured:#3FB8AC; --measured-bg:#123632; --narrated:#E0A64C; --narrated-bg:#3A2A12;
+  --high:#E2705F; --high-bg:#3B1E1A; --med:#E0A64C; --low:#9AA5AC;
+  --gen:#8FA6E6; --enr:#C39BE0; --seam:#3FB8AC; --glass:#E0A64C;
+}
+html{background:var(--ground)}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1040px;margin:0 auto;padding:40px 24px 80px}
+.prose{max-width:70ch}
+h1,h2,h3{text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:clamp(28px,4vw,40px);font-weight:800;letter-spacing:-0.01em}
+h2{font-size:22px;font-weight:700;margin-top:56px;padding-top:20px;border-top:1px solid var(--rule-strong)}
+h3{font-size:17px;font-weight:600;margin-top:28px}
+p{margin:12px 0}
+.eyebrow{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.thesis{font-size:20px;line-height:1.45;font-weight:500;max-width:60ch;margin:18px 0 0}
+.prov{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 28px;margin:28px 0 0;padding:18px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);font-size:13px}
+.prov b{display:block;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.prov code{font-family:var(--mono);font-size:12.5px}
+code,.mono{font-family:var(--mono);font-size:0.92em}
+table{border-collapse:collapse;width:100%;font-size:14.5px;margin:16px 0}
+th{text-align:left;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);padding:8px 10px 8px 0;border-bottom:1px solid var(--rule-strong);vertical-align:bottom}
+td{padding:10px 10px 10px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tscroll{overflow-x:auto}
+.chip{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:0.06em;padding:2px 8px;border-radius:3px;white-space:nowrap;vertical-align:middle}
+.chip.measured{color:var(--measured);background:var(--measured-bg)}
+.chip.narrated{color:var(--narrated);background:var(--narrated-bg)}
+.chip.high{color:var(--high);background:var(--high-bg)}
+.chip.med{color:var(--med);background:var(--narrated-bg)}
+.chip.low{color:var(--low);background:var(--rule)}
+.side{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase}
+.side.gen{color:var(--gen)}.side.enr{color:var(--enr)}.side.seam{color:var(--seam)}.side.glass{color:var(--glass)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin:18px 0}
+.panel{background:var(--surface);border:1px solid var(--rule);padding:18px 20px}
+.panel h3{margin-top:0}
+.panel .eyebrow{margin-bottom:6px}
+blockquote{margin:14px 0;padding:2px 0 2px 16px;border-left:3px solid var(--rule-strong);color:var(--ink);font-style:italic}
+blockquote .who{display:block;font-style:normal;font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:4px}
+.fix{border-top:1px solid var(--rule);padding:16px 0 16px 0;display:grid;grid-template-columns:44px 1fr;gap:0 14px}
+.fix:last-child{border-bottom:1px solid var(--rule)}
+.fix .n{font-family:var(--mono);font-size:22px;font-weight:600;line-height:1.1;color:var(--muted);font-variant-numeric:tabular-nums}
+.fix .meta{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:4px}
+.fix h3{margin:0;font-size:16.5px}
+.fix p{margin:6px 0 0;font-size:15px}
+.fix p.do{color:var(--ink)}
+.fix p.do b{font-weight:600}
+ul{padding-left:20px;margin:10px 0}
+li{margin:6px 0}
+.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:18px 0}
+.stat div{background:var(--surface);border:1px solid var(--rule);padding:12px 14px}
+.stat b{display:block;font-family:var(--mono);font-size:26px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--muted)}
+.foot{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule-strong);font-size:13px;color:var(--muted)}
+.foot code{font-size:12px}
+.legend{display:flex;flex-wrap:wrap;gap:10px 18px;font-size:13px;color:var(--muted);margin:8px 0 0}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--measured);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+<p class="eyebrow">Comprehension Review · charter v1 · run 2026-09-01, afternoon · supersedes the morning run</p>
+<h1>The front door teaches the system in minutes. It cannot say the one thing that matters most.</h1>
+<p class="thesis">Three cold Opus personas met the rebuilt Overview on the canonical UnaMentis iOS data. All three had a correct picture inside two minutes and all three finished early. None of them learned that this app needs nobody's server, and two of them carried a false sentence from the interface into a deliverable.</p>
+
+<div class="prov">
+  <div><b>Subject</b><code>unamentis-ios @ a5717bf</code><br>168 components · 751 files · 161K code lines</div>
+  <div><b>Projection</b>generated 2026-08-31, enriched the same day<br>manifest <code>c8d92a18…</code>, the canonical full run</div>
+  <div><b>Interface</b><code>wt/frontdoor-production @ 06a3fc3</code><br>served at <code>127.0.0.1:5173/?mode=overview</code></div>
+  <div><b>Sittings</b>P1, P2, P3 on Opus, concurrent, isolated Chromium<br>25 min wall clock · 82 screenshots · data hash unchanged</div>
+  <div><b>Ground truth</b>new answer key read from the iOS source alone<br>947 lines, no access to this repo or any projection</div>
+</div>
+
+<h2>Result</h2>
+<div class="prose">
+<p>Scored by the orchestrator, never by the persona. Six dimensions, four points each. Read as a set, not an average. These numbers are <b>not comparable</b> to any earlier run: every previous sitting measured the four-repository monorepo on older data with a different persona model. The comparison with this morning is in kind only, further down.</p>
+</div>
+<div class="tscroll">
+<table>
+<thead><tr><th>Persona</th><th class="num">Score</th><th>Battery</th><th class="num">Trust incidents</th><th class="num">Blocked paths</th><th>Own grade</th><th>Sitting</th></tr></thead>
+<tbody>
+<tr><td><b>P1</b> senior backend engineer, cannot read Swift</td><td class="num">16 / 24</td><td>3 correct · 2 partial</td><td class="num">12 (2 high)</td><td class="num">7</td><td>B−</td><td>19 min · 42 shots</td></tr>
+<tr><td><b>P2</b> executive, briefs a board</td><td class="num">14 / 24</td><td>1 correct · 4 partial</td><td class="num">8 (1 high)</td><td class="num">7</td><td>B−</td><td>6 min · 23 shots</td></tr>
+<tr><td><b>P3</b> staff engineer, chases one fact down every route</td><td class="num">16 / 24</td><td>5 correct</td><td class="num">8 (1 high)</td><td class="num">6</td><td>B−</td><td>78 min · 17 shots</td></tr>
+</tbody>
+</table>
+</div>
+<div class="prose">
+<p><b>Orientation is solved.</b> Fifteen seconds, one minute, two minutes. Every fact in the opening paragraph that any persona later checked held. All three named the four-protocol seam and its 33 dependents as the idea that makes the codebase make sense, and the source agrees.</p>
+<p><b>The measured layer is consistent.</b> P3 chased the component count through seven routes and one component's metrics through four; everything agreed to the digit. The morning's headline defect, two totals for one repository on one screen, did not recur. Regenerating the data on the current pipeline fixed that class.</p>
+<p><b>The narrated layer broke trust in every sitting.</b> All three personas graded B minus for the same reason in different words. P3 said it best: the JSON labels inferred and interpreted content correctly, and the interface strips the labels off, so <i>an agent reading ai.json is better protected than a person clicking the app</i>.</p>
+</div>
+
+<h2>The finding you asked for: the map never says what this app needs to run</h2>
+<div class="prose">
+<p>You stated it during the run and the source states it in one sentence. The app is standalone-first. The backend is optional, exists for organizational use, and is never required. Cloud inference, when the on-device model is not enough, goes straight from the device to the provider with the user's key. No proxy, no third party in between.</p>
+</div>
+<div class="grid2">
+  <div class="panel">
+    <p class="eyebrow">What the repository says</p>
+    <p><code>CLAUDE.md:19</code>: "This is a standalone mobile app. It communicates with the UnaMentis server via HTTP REST APIs (port 8766) but has zero source-level dependencies on server code."</p>
+    <p>The self-hosted path is gated behind a settings flag. Every provider call goes direct from the device over HTTPS or WSS with the Keychain key. Nothing in the audio path traverses the backend. Ten provider key slots, nine services wired, all called from the phone.</p>
+    <p><span class="chip measured">unambiguous</span></p>
+  </div>
+  <div class="panel">
+    <p class="eyebrow">What the projection and interface say</p>
+    <p><code>orientation.json</code>, the document that drives the front door, contains neither "standalone" nor "server". The word "standalone" appears in the manifest eight times, all inside doc excerpts buried in component fields.</p>
+    <p>The enrichment describes discovery as "finding the backend server". A tour says a manager "tracks the self-hosted server". Neither says whether that server is required. No lens, headline, tour or ledger states deployment posture at all.</p>
+    <p><span class="chip narrated">silent</span></p>
+  </div>
+</div>
+<div class="prose">
+<p>The consequence in the sittings was exactly what you would fear.</p>
+<blockquote>I would not stand up in front of a board claiming "no infrastructure of our own" until someone answers this.<span class="who">P2, having reached the right conclusion and then withdrawn confidence from it</span></blockquote>
+<blockquote>Had I stopped at minute fifteen, a completely reasonable place to stop, I would have walked into a design review confidently describing a client that talks only to third-party AI vendors.<span class="who">P1, which found the backend at minute nineteen by opening CurriculumService on a hunch</span></blockquote>
+<p>P1 also spent part of its sitting looking for a WebSocket to the backend, because the earlier monorepo review had taught the orchestrator to expect one. There is none. The link is plain HTTP REST on 8766, and the projection carries no port, protocol or authentication on any of its 458 edges.</p>
+<p><b>Attribution.</b> The repository is unambiguous, so the misrepresentation is on the tool's side, and it is on both halves of the tool. The generator has no concept of deployment posture, meaning what must exist for the system to run and what is optional, so it cannot emit one. The interface has no surface that would show it if it did. This morning's monorepo run made the mirror-image error for the same reason: it presented the backend as something the clients "fail without", because criticality is inferred from fan-in rather than from what the subject says is required. Two runs, two opposite wrong answers, one missing fact.</p>
+</div>
+
+<h2>The systemic defect: narrated content wearing measured clothes</h2>
+<div class="prose">
+<p>Seven separate incidents across this run reduce to one pattern. The data model stratifies what it knows into three kinds and mostly labels them: <span class="chip measured">measured</span> counts, metrics and edges; <span class="chip narrated">inferred</span> capabilities, rules and concerns carrying a confidence field; and <span class="chip narrated">interpreted</span> enrichment prose and tours stamped with status and provenance. The interface renders all three with the same authority.</p>
+</div>
+<div class="tscroll">
+<table>
+<thead><tr><th>Where</th><th>What the reader sees</th><th>What it is</th><th>Verified cause</th></tr></thead>
+<tbody>
+<tr><td>Capability lens, and the landing page's "What can this system do?"</td><td>"3 capabilities · 0 proven by tests": <code>t-\(index)</code>, <code>topic</code>, <code>topic-\(index)</code></td><td>Swift string-interpolation fragments from a telemetry test and a todo enum</td><td><code>derive/capabilities.py:200</code> turns every <code>queue_name</code> signal into an event; the Swift extractor fires on a <code>topic:</code> argument label. The UI drops the <code>inferred</code> label</td></tr>
+<tr><td>Rules lens</td><td>"778 rules the system enforces"</td><td>560 switch statements and 217 formulas, 54 with multi-line code fragments as inputs, 73 read from the subject's committed <code>architecture/</code> directory</td><td>Inferred anchors rendered as enforced rules; the Auth concern's evidence is an error-description switch</td></tr>
+<tr><td>Security lens</td><td>"CONFIRMED MECHANISMS (0)", "CREDENTIAL INPUTS (0)"</td><td>An app that keeps ten API keys in the Keychain, which the tool's own tour says</td><td><code>build_security_view</code> reads mechanisms only from edge auth fields and credentials only from env-var names. A Keychain app scores zero by construction</td></tr>
+<tr><td>Trust ledger</td><td>"82 producer gaps: failed or absent analyzer units"</td><td>82 enrichment identity-verification abstentions; no analyzer unit failed</td><td>Caption hard-coded in <code>TrustLedger.tsx:23</code>. P2 wrote "82 analyzer passes failed" into its board brief</td></tr>
+<tr><td>Guided tour, "How seventeen providers coexist"</td><td>Seventeen providers; six STT; seven TTS; a fallback chain that degrades a failed call to the next tier</td><td>Eight STT actors, six TTS, five real LLM providers; <code>FallbackLLMService</code> is never constructed by the app</td><td>Prose numbers were not derived from the per-step evidence the tour cites. P1 built its leading bug hypothesis on the fallback claim</td></tr>
+<tr><td>Trust ledger and header chip</td><td>"100% source mapped"</td><td>757 parsed of 810; 34 binary and 19 excluded removed from the denominator</td><td>Defensible definition, undisclosed inside a panel titled "what this view knows and what it does not"</td></tr>
+<tr><td>Support lens, external reliance</td><td>Five vendors</td><td>Nine services are wired from the device; the tours name ElevenLabs and AssemblyAI</td><td>Detection is a domain-literal match; the list is presented as complete</td></tr>
+</tbody>
+</table>
+</div>
+<div class="prose">
+<p>What makes this worse than the morning's count contradictions is that it survives the reader who is looking for it. P3 was sent to catch derived information presented as fact and caught most of it. P2, who reads headlines, caught the capability debris and then repeated the ledger caption. P1 caught four instances and built its investigation plan on a fifth.</p>
+</div>
+
+<h2>What to fix, in order</h2>
+<div class="prose">
+<p>Each item names the side that owns it. <span class="side gen">generation</span> is the deterministic parser and derivers. <span class="side enr">enrichment</span> is model-written prose and tours. <span class="side seam">seam</span> is the contract between data and interface. <span class="side glass">glass</span> is the interface alone.</p>
+</div>
+
+<div class="fix"><div class="n">1</div><div>
+  <div class="meta"><span class="chip high">high</span><span class="side gen">generation</span><span class="side seam">seam</span><span class="side glass">glass</span></div>
+  <h3>Make deployment posture a first-class fact</h3>
+  <p>What must exist for this system to run, what is optional, and where inference happens. The source states it; the projection does not carry it; the interface has nowhere to show it. On this subject it is the most important commercial fact there is, and two runs in one day got it wrong in opposite directions.</p>
+  <p class="do"><b>Do:</b> add a posture block to <code>orientation.json</code> (required, optional, on-device, direct-to-provider) derived from the subject's own docs and config, mark it interpreted where it is, and render it on the Overview beside the interpreted statement. Never infer "critical" from fan-in alone when the subject says otherwise.</p>
+</div></div>
+
+<div class="fix"><div class="n">2</div><div>
+  <div class="meta"><span class="chip high">high</span><span class="side gen">generation</span><span class="side glass">glass</span></div>
+  <h3>Switch off the Capability and Rules lenses until they have a threshold</h3>
+  <p>Both present inferred signals as inventory. On this subject the capability inventory is three parser fragments and the rules inventory is 778 switch sites. All three personas stopped using both lenses; one of them is the destination of a landing-page question.</p>
+  <p class="do"><b>Do:</b> the <code>queue_name</code> event rule must not fire on Swift argument labels; a <code>policy-rule</code> signal must not fire on JSON. Until a lens has a confidence floor, hide it or label it "3 inferred event names, low confidence" rather than "3 capabilities · 0 proven by tests".</p>
+</div></div>
+
+<div class="fix"><div class="n">3</div><div>
+  <div class="meta"><span class="chip high">high</span><span class="side enr">enrichment</span><span class="side seam">seam</span></div>
+  <h3>No numeral, and no runtime claim, in prose that the data does not hold</h3>
+  <p>"Seventeen providers", "six STT", "seven TTS", and a fallback chain the app never runs, all inside a tour that cites a commit and a file and line per step. The furniture of derivation around underived sentences is the most dangerous shape in the product, and it is the same class as the morning's "over 140 endpoints".</p>
+  <p class="do"><b>Do:</b> bind counts in tours and help text to structured fields at generation time or strip them; treat "X handles failure at runtime" as a claim requiring a call site, not a declaration. Add the check to <code>lint-projection.py</code> so it fails a build.</p>
+</div></div>
+
+<div class="fix"><div class="n">4</div><div>
+  <div class="meta"><span class="chip med">medium</span><span class="side seam">seam</span><span class="side glass">glass</span></div>
+  <h3>Render what the JSON already knows about confidence</h3>
+  <p>The data carries <code>confidence: inferred</code>, <code>status: interpreted</code> and <code>derived_from_commit: null</code>. The interface renders none of them. This is the single change that turns most of the table above from trust incidents into labelled hypotheses.</p>
+  <p class="do"><b>Do:</b> a visible mark on every inferred or interpreted value, in every lens, on the ledger and in tours. Same idiom as the disabled "not observed" question routes, which every persona praised.</p>
+</div></div>
+
+<div class="fix"><div class="n">5</div><div>
+  <div class="meta"><span class="chip med">medium</span><span class="side gen">generation</span></div>
+  <h3>The Security lens must say what it cannot see</h3>
+  <p>Zero mechanisms is structurally guaranteed for any client that stores credentials on-device, because the detector only reads edge authentication fields and env-var names. Printing that zero as "CONFIRMED" is the finding P2 called career-limiting.</p>
+  <p class="do"><b>Do:</b> detect Keychain, Security framework and file-protection use as mechanisms; and when the projection has no edges with protocols, say "no network mechanisms observable" instead of a count.</p>
+</div></div>
+
+<div class="fix"><div class="n">6</div><div>
+  <div class="meta"><span class="chip med">medium</span><span class="side glass">glass</span></div>
+  <h3>Fix the trust ledger's own captions</h3>
+  <p>"Failed or absent analyzer units" over enrichment abstentions; "100% source mapped" over a denominator that dropped 53 rows; no way to open the 82. The panel built to communicate limits is where the product overstates itself most cleanly.</p>
+  <p class="do"><b>Do:</b> caption gaps by producer ("82 identity claims the enrichment could not confirm"); print "757 of 810 files parsed, 34 binary, 19 excluded"; make the count a link to the list.</p>
+</div></div>
+
+<div class="fix"><div class="n">7</div><div>
+  <div class="meta"><span class="chip med">medium</span><span class="side gen">generation</span></div>
+  <h3>Recognise a projection inside the subject, and skip stray worktrees</h3>
+  <p>The subject commits a July snapshot of this tool's own output, and the analyzer read it as source: three components, 73 rules, 34 AI-surface entries including an API-key name at confidence "certain", and "architecture" listed as a writer of TranscriptEntry. Separately, the SBOM walked seven untracked agent worktrees, cited one of them as evidence for every dependency, and listed the tools version eight times.</p>
+  <p class="do"><b>Do:</b> exclude any directory carrying <code>ai.json</code> or a front-door manifest; prune <code>.claude</code> and untracked nested git worktrees in the SBOM walk exactly as the coverage enumerator already does; read <code>project.yml</code> where XcodeGen is the build, and <code>Package.resolved</code> for transitives.</p>
+</div></div>
+
+<div class="fix"><div class="n">8</div><div>
+  <div class="meta"><span class="chip med">medium</span><span class="side gen">generation</span></div>
+  <h3>Own every parsed file</h3>
+  <p>Six CI workflow files are parsed, credited to coverage, assigned to no component and invisible to search, the tree and every lens. Ask this tool anything about CI and every route returns silence while the coverage figure takes credit for having read it.</p>
+  <p class="do"><b>Do:</b> a parsed file with no owner is a lint failure; give repository-level files a home.</p>
+</div></div>
+
+<div class="fix"><div class="n">9</div><div>
+  <div class="meta"><span class="chip med">medium</span><span class="side glass">glass</span></div>
+  <h3>Escape, the onboarding modal, and the phone</h3>
+  <p>Escape does not close the trust drawer, and the drawer's backdrop then swallows header clicks. The Classic workbench's first-visit modal behaves the same way, on desktop and phone. The guided-paths chip does nothing while a tour is running. On the phone the Support answer lives in a 199-pixel scroll window under the diagram.</p>
+  <p class="do"><b>Do:</b> key handlers on both overlays; the tours chip returns to the list; the phone puts the answer above the diagram when a question route sets a lens.</p>
+</div></div>
+
+<div class="fix"><div class="n">10</div><div>
+  <div class="meta"><span class="chip med">medium</span><span class="side glass">glass</span></div>
+  <h3>Flow lens rendering</h3>
+  <p>P2's harness console captured 118 NaN path and rect attribute errors the moment it switched to Flow. Five orchestrator attempts by every route P2 could have taken rendered 78 clean paths. Real, intermittent, most plausibly a layout pass before the canvas has a measured size.</p>
+  <p class="do"><b>Do:</b> guard the layout against zero-size containers; keep the harness console captures, they were the only evidence.</p>
+</div></div>
+
+<div class="fix"><div class="n">11</div><div>
+  <div class="meta"><span class="chip low">low</span><span class="side glass">glass</span></div>
+  <h3>Link the machine front door, and complete it</h3>
+  <p>Nothing in either shell links <code>llms.txt</code> or <code>ai.json</code>. P3 found them through a directory listing that only exists on a development server. <code>llms.txt</code> omits <code>orientation.json</code>, the 11 KB file that best answers "what is this system", and the support and security sidecars the app itself fetches.</p>
+  <p class="do"><b>Do:</b> a footer link, and add the three sidecars to the endpoint list.</p>
+</div></div>
+
+<div class="fix"><div class="n">12</div><div>
+  <div class="meta"><span class="chip low">low</span><span class="side glass">glass</span></div>
+  <h3>Smaller things every persona hit</h3>
+  <p>The Structure lens shows one node and no edges at System, Domain and Component levels until you double-click, which nothing tells you. Search is name-only under a box labelled "Search everything". Symbol excerpts truncate with no full-file view, which is why P1 could not read the subnet-scan port list. Three dependency counts (7, 5, 9) sit on adjacent screens with no gloss. The review export hides behind an unlabelled clipboard glyph. The <code>?? 0</code> fallbacks from the morning are still in the code and will fire on the next projection missing a sidecar.</p>
+</div></div>
+
+<h2>What is genuinely working, earned</h2>
+<div class="grid2">
+  <div class="panel"><h3>Orientation in seconds</h3><p>P2 in fifteen seconds, from the interpreted statement. P1 in one minute. P3 in two, from the headline alone with zero clicks. P1 later checked that paragraph against everything it found and reported it accurate in every particular.</p></div>
+  <div class="panel"><h3>The guided walkthroughs</h3><p>All three personas called them the best thing in the product. "Mic to spoken reply" walks eight steps, each on a real file and line, each saying why the stop matters. P2: "this is where I stopped reciting and started understanding." The defects in the tours are the numbers, not the teaching.</p></div>
+  <div class="panel"><h3>Consistent measurement</h3><p>168 across seven routes; metrics matching to the digit across four; "33 components depend on the protocols" exactly right. P3: "when this tool counts something, it counts it consistently." The review export cross-checked clean on every number.</p></div>
+  <div class="panel"><h3>Honest idioms, where they are applied</h3><p>Lens caveats placed exactly where the mistake would be made; findings that display "refuted" next to the tool's own output; a ledger that volunteers what is not observable. P2 had never seen a vendor tool do this. The task is to apply the same idiom to the lenses that lack it.</p></div>
+  <div class="panel"><h3>The agent front door</h3><p>P3 answered a real question from <code>ai.json</code> and one detail shard and called it "the first agent front door I have read that anticipated the questions rather than dumping a schema." Its one caveat is size: a 4 MB entry document and one shard larger than the source it projects.</p></div>
+  <div class="panel"><h3>Activity and citations</h3><p>P1 would open the Activity lens first on a Monday: hotspots, co-change pairs, and "86 components with bus factor 1". P3 timed search to a line-ranged GitHub permalink at fourteen seconds. Deep links held everywhere.</p></div>
+</div>
+
+<h2>This morning, then this afternoon</h2>
+<div class="prose">
+<p>The morning run measured a March projection of the monorepo with Sonnet personas. Its findings were right about what it saw. What it saw was stale, which you found and fixed. Same interface, current data, stronger personas, and this is what moved.</p>
+</div>
+<div class="tscroll">
+<table>
+<thead><tr><th>Morning finding, March data</th><th>This build, August data</th></tr></thead>
+<tbody>
+<tr><td>Two component totals and two relationship totals on one screen</td><td><span class="chip measured">gone</span> 168 across seven routes, 458 across every route</td></tr>
+<tr><td>Trust ledger prints 0 for absent sidecars</td><td><span class="chip measured">did not fire</span> every sidecar exists; the fallbacks remain in code</td></tr>
+<tr><td>Enrichment undercounts endpoints by 46%</td><td><span class="chip narrated">same class</span> now as tour counts and a dead fallback chain</td></tr>
+<tr><td>"Answer assembled from mapped evidence" over a redirect</td><td><span class="chip narrated">banner still static</span> but four tours now give the route content</td></tr>
+<tr><td>Scripts directory presented as a Ruby service</td><td><span class="chip narrated">analogue</span> the subject's committed snapshot became three components</td></tr>
+<tr><td>Staleness not flagged</td><td><span class="chip measured">fixed</span> "Generated 1d ago" renders; P3 called it good</td></tr>
+<tr><td>Four load-time 404s</td><td>two, by design of this bundle</td></tr>
+<tr><td>Search is exact-substring</td><td>unchanged; P1 hit it again</td></tr>
+</tbody>
+</table>
+</div>
+<div class="prose">
+<p>The class that dominated the morning, absence rendered as a confident number, is absent here because the data is complete. The class that dominates this afternoon was present in the morning too and was drowned out by the count contradictions. Regeneration removed the noise; this is the signal underneath.</p>
+</div>
+
+<h2>The instrument</h2>
+<div class="prose">
+<ul>
+<li><b>Concurrent Opus sittings on the isolated Playwright transport worked without incident.</b> Twenty-five minutes for all three, no browser loss. The harness's console captures decided one finding the orchestrator could not reproduce.</li>
+<li><b>Every persona finished early and said why.</b> Six, nineteen and seventy-eight minutes of ninety. The box is an upper bound now; the stop reason is the better signal.</li>
+<li><b>The subject changed, so the key changed.</b> The 2026-08-19 key required a WebSocket endpoint that does not exist in the iOS repository. A new key was built from the iOS source alone by an agent with no access to this repository. It is in the run record and reusable.</li>
+<li><b>Your two mid-run statements</b> (standalone-first; direct-to-provider) were checked against the source before use and both held. Recorded as owner statements, not as ground truth on their own.</li>
+<li><b>Persona reliability split held.</b> Every data claim verified exactly. Of the interface-perception claims, two refuted, two corrected, one automation artifact excluded. Rule 7 earned its place again.</li>
+</ul>
+</div>
+
+<div class="stat">
+  <div><b>48</b><span>persona claims checked</span></div>
+  <div><b>34</b><span>verified or confirmed</span></div>
+  <div><b>3</b><span>refuted or not a defect</span></div>
+  <div><b>8</b><span>excluded: by design, harness, or withdrawn</span></div>
+  <div><b>3</b><span>corrected in attribution or measurement</span></div>
+  <div><b>3</b><span>incidents added by the orchestrator that no persona raised</span></div>
+</div>
+
+<h2>Bottom line</h2>
+<div class="prose">
+<p><b>For orientation, ship it.</b> Three strangers, one who cannot read Swift, one who does not read code at all, each had a correct model of a 161,000-line application in minutes, and the executive wrote a board brief.</p>
+<p><b>For citation, not with these lenses on.</b> Every persona's condition for using the output was the same: trust the numbers, verify the sentences. That is a reasonable discipline for a skeptic and an unreasonable one to require of a buyer. Items one through four are what separate the two sentences, and none is a redesign. Item one is the fact you asked about, and it is missing from both halves of the product.</p>
+</div>
+
+<div class="foot">
+<p>Comprehension Review charter v1. Personas ran cold on Opus: no repository access, no shell, no web search, no sight of each other's output, each in its own headless Chromium. Scorecards authored by the orchestrator; every load-bearing claim verified against the projection snapshot, the interface source or the subject's source before scoring.</p>
+<p>Run record: <code>docs/quality/runs/unamentis-ios/2026-09-01/</code> (REVIEW.md, ORCHESTRATOR-FINDINGS.md with O1 to O18, PROFILE.json, P1 to P3 cards, ANSWER-KEY.md). Raw sittings, 82 screenshots, journals, transcripts and console captures: <code>/private/tmp/comprehension-20260901-rerun/</code>. Front door snapshot hash <code>daf37a22…</code> at launch and at close.</p>
+</div>
+</div>

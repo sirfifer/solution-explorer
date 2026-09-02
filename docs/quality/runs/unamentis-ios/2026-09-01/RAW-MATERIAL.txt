@@ -1,0 +1,13 @@
+url=url=http://127.0.0.1:5173/?mode=overview
+sittings=/private/tmp/comprehension-20260901-rerun (P1, P2, P3: JOURNAL.md, FINDINGS.md, evidence/, artifacts/console-*.log, TRANSCRIPT.txt)
+frontdoor_snapshot=/private/tmp/comprehension-20260901-rerun/frontdoor-snapshot
+orchestrator_probes=/private/tmp/comprehension-20260901-rerun/orchestrator
+url=http://127.0.0.1:5173/?mode=overview
+frontdoor_dir=/private/tmp/solution-explorer-frontdoor-live.Uc6lbM
+frontdoor_sha_at_launch=daf37a22b202adb77ea969f10d9e8ab53fc55baa73bb0fbcc7051e641a7ef585
+model=opus
+launched_utc=2026-09-01T21:05:39Z
+P1 pid 64541
+P2 pid 64543
+P3 pid 64545
+all sittings finished 2026-09-01T21:30:13Z

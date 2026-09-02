@@ -1,0 +1,144 @@
+{
+  "charter_version": "comprehension-review/v1",
+  "subject": "unamentis-ios",
+  "run_date": "2026-09-01",
+  "persona": "P3",
+  "minutes_to_orientation": 2,
+  "verdict": "B- (persona's own grade). Scored 16/24. 'Trust the numbers, verify the sentences.'",
+  "dimensions": {
+    "orientation": {
+      "score": 4,
+      "evidence": "FINDINGS.md section 1; evidence/01-first-load.png",
+      "note": "Correct description in two minutes from the landing headline, zero clicks."
+    },
+    "model_accuracy": {
+      "score": 3,
+      "evidence": "FINDINGS.md section 3; every counted claim re-derived by the orchestrator from the frontdoor snapshot",
+      "note": "For P3 this dimension measures whether its claims survived verification. Q1: 168 across seven routes, and the 751 versus 757 split, both verified exactly (the six are the .github/workflows files, parsed for coverage and owned by no component). Q2: sizes verified (manifest 4,053,892 bytes; STT shard 129,710 bytes against 123,474 source bytes), with one correction: code_preview accounts for 26,648 of those characters, the rest is symbol metadata. Q3: (a) verified; (b) verified, percent is parsed over parsed plus failed; (c) verified against the source, eight STTService actors and six TTSService actors where the tour says six and seven, and the tour's FallbackLLMService claim describes dead code; (d) verified as contamination but mis-attributed: the analyzer did not scan its own output directory, the subject repository commits a July 2026 architecture/ snapshot and the analyzer treated it as source. Q4 and Q5 are reasoning, accepted."
+    },
+    "navigation_efficiency": {
+      "score": 3,
+      "evidence": "FINDINGS.md section 4 items 1 to 3; Q4 timing",
+      "note": "Fourteen seconds from search to a citable permalink is the optimum path. Eight minutes finding the machine front door and four finding the export control are real costs, though the first is partly a harness artifact (see advertised_paths)."
+    },
+    "trust": {
+      "score": 1,
+      "evidence": "FINDINGS.md section 5 table; orchestrator verification O1, O4, O7, O8, O9",
+      "note": "Seven verified incidents, two rated high by the persona and upheld as high and medium-high by the orchestrator. The persona's operating rule, verify every sentence before citing it, is the verify-everything anchor. Scored 1 rather than 0 because the persona demonstrated, and the orchestrator confirmed, that the measured layer is consistent across every route tried."
+    },
+    "unaided_recovery": {
+      "score": 3,
+      "evidence": "FINDINGS.md section 4 item 3; Q1 set-difference; Q3(b) denominator derivation",
+      "note": "Reconstructed the coverage denominator and the six-file gap from the tool's own JSON without external help. One attribution error (self-contamination blamed on the analyzer scanning its output directory rather than on the subject's committed snapshot) keeps this off 4."
+    },
+    "advertised_paths": {
+      "score": 2,
+      "evidence": "FINDINGS.md section 6",
+      "note": "The review export is advertised and works, but only behind an unlabelled clipboard glyph that appears after the first annotation (worked after a workaround, the anchor for 2). llms.txt omits orientation.json, support.json and security.json, verified. The deep-link plus capability-lens combination selects a node the lens does not draw, verified by design. EXCLUDED: the root /llms.txt and /ai.json 404s are a property of this assembled bundle, which strips root copies by design; the /architecture/ directory listing that rescued the persona is a python http.server default and would not exist on the production origin, so 'found the front door by luck' is partly a harness artifact and is recorded rather than scored. The two load-time 404s are by design."
+    }
+  },
+  "battery": [
+    {
+      "question": 1,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "evidence/01, 03, 06, 12; manifest, coverage, search shards",
+      "note": "751 versus 757 verified exactly by the orchestrator."
+    },
+    {
+      "question": 2,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "evidence/14, 15; byte measurements",
+      "note": "Sizes verified. Attribution of the shard bloat to code_preview is only partly right."
+    },
+    {
+      "question": 3,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "evidence/02, 03, 07, 08, 09",
+      "note": "All four claims verified; (d) corrected in attribution."
+    },
+    {
+      "question": 4,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "evidence/04, 05, 12"
+    },
+    {
+      "question": 5,
+      "verdict": "correct",
+      "confidence": "medium",
+      "source": "evidence/12, 03, 02, 08",
+      "note": "Not graded against facts; the conditions are the content."
+    }
+  ],
+  "trust_incidents": [
+    {
+      "what": "Capability lens presents string-interpolation fragments as capabilities with quality verdicts attached",
+      "severity": "high",
+      "evidence": "evidence/02; verified O1"
+    },
+    {
+      "what": "'100% source mapped' where parsed over total is 757/810; the 34 binary and 19 excluded rows are removed from the denominator without disclosure inside the Trust ledger",
+      "severity": "medium",
+      "evidence": "evidence/03; verified: format_source_percent counts parsed over parsed plus failed. The definition is defensible, the non-disclosure inside a trust panel is the defect (O4)"
+    },
+    {
+      "what": "Tour headline and step titles carry counts (seventeen providers, six STT, seven TTS) that match neither the tool's own index nor the source",
+      "severity": "medium",
+      "evidence": "evidence/07, 08, 09; verified against source: eight STTService actors, six TTSService actors, seven LLMService actors of which two are Mock and Fallback (O7)"
+    },
+    {
+      "what": "Two file counts six apart, 751 everywhere in the UI and 757 in coverage; the six CI workflow files are invisible to every pathway",
+      "severity": "medium",
+      "evidence": "verified by set difference over coverage.rows and the search shards (O8)"
+    },
+    {
+      "what": "Self-contamination: architecture, architecture/data and architecture/search are three of the 168 components and ANTHROPIC_API_KEY is reported with confidence certain from a JSON file the tool wrote",
+      "severity": "medium",
+      "evidence": "verified with corrected attribution: the subject commits a July 2026 architecture/ output (git 2112f12) and the analyzer treats it as source; 73 of 778 rules and 34 of 176 ai_surface entries come from it (O9)"
+    },
+    {
+      "what": "Token-economy contract not met at the granularity ai.json recommends",
+      "severity": "medium",
+      "evidence": "verified sizes"
+    },
+    {
+      "what": "Two taxonomies for system shape: three portrait areas in the UI, seven ai_enhance component groups in the JSON",
+      "severity": "medium",
+      "evidence": "verified from manifest.ai_enhance.component_groups and orientation.portrait.nodes"
+    },
+    {
+      "what": "ai_surface has 176 entries against 168 components",
+      "severity": "low",
+      "evidence": "RESOLVED by orchestrator: ai_surface is a list of AI-related signals (141 model ids, 14 provider endpoints, 7 env vars, 7 assistant configs, 6 OpenAI-compatible, 1 MCP), not a per-component table; the excess is not a defect"
+    }
+  ],
+  "blocked_paths": [
+    {
+      "feature": "/architecture/publication.json and /live-config.json 404 on every load",
+      "evidence": "evidence/17, 01. Status: by design for this bundle, excluded"
+    },
+    {
+      "feature": "/llms.txt at the site root 404s",
+      "evidence": "evidence/14. Status: EXCLUDED: the assembled bundle strips root copies by design; nothing in the UI links the /architecture/ copy, which stands as a finding (O10)"
+    },
+    {
+      "feature": "Review export control is an unlabelled clipboard glyph that appears only after the first annotation",
+      "evidence": "evidence/11, 12. Status: confirmed from the persona's screenshots; worked once found"
+    },
+    {
+      "feature": "llms.txt endpoint list omits orientation.json, support.json, security.json",
+      "evidence": "evidence/14; frontdoor-snapshot/architecture/llms.txt. Status: verified"
+    },
+    {
+      "feature": "Deep link with lens=capability selects a component the lens does not draw",
+      "evidence": "evidence/05. Status: verified by design"
+    },
+    {
+      "feature": "Clipboard read denied",
+      "evidence": "FINDINGS.md section 4 item 4. Status: harness, excluded by the persona itself"
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "charter_version": "comprehension-review/v1",
+  "subject": "unamentis-ios",
+  "run_date": "2026-09-01",
+  "persona": "P2",
+  "minutes_to_orientation": 1,
+  "verdict": "B- (persona's own grade). Scored 14/24. Six minutes of browsing produced a board brief the persona would deliver; two sentences in that brief are false and both were induced by the interface.",
+  "dimensions": {
+    "orientation": {
+      "score": 4,
+      "evidence": "JOURNAL.md '[t+0.2m] The moment I could describe the system'; evidence/02-full-system-description.png",
+      "note": "Correct one-paragraph description about fifteen seconds after first load, from the Overview's interpreted statement. Corroborated by the in-page clock the persona read at start."
+    },
+    "model_accuracy": {
+      "score": 2,
+      "evidence": "FINDINGS.md section 3, Q1 to Q5 with confidence and source per answer, graded against ANSWER-KEY-unamentis-ios.md",
+      "note": "Q1 correct. Q2 partial: named the critical voice loop and the on-device floor, but stated an automatic LLM fallback chain that the key shows is never constructed by the app (FallbackLLMService is test-only), and did not reach the two specific unprotected cases the key requires (Pocket TTS deliberately has no fallback; mid-session network loss has no handling). Q3 partial: five vendors named where the key counts nine wired; the tool's Support lens lists exactly those five and its tour names ElevenLabs, which the persona did not carry over; package count 7 is the vestigial Package.swift number, the build uses 6. Q4 partial: concentration in one central component and keys-on-device are correct in substance; the key's cleartext unauthenticated LAN link, the broken coverage gate, the disabled lint and the missing privacy policy are all doc-or-config facts the tool does not surface. Q5 partial: the brief's shape is right and its self-assessment honest, but it carries '82 analyzer passes failed' (false, induced by the Trust ledger label) and 'automatic fallback on the language model' (dead code)."
+    },
+    "navigation_efficiency": {
+      "score": 3,
+      "evidence": "FINDINGS.md section 1 (6m12s browsing); JOURNAL.md; 23 screenshots across Overview, five lenses, Trust ledger, SBOM, findings, concerns, four tours, and the phone check",
+      "note": "Reached every named target in six minutes, largely by taking the question routes and the guided walkthroughs. Cost real minutes to a wrong conclusion on the phone (that Support drops its panel) and to the Escape/modal interaction."
+    },
+    "trust": {
+      "score": 1,
+      "evidence": "FINDINGS.md section 5; evidence/17-capability-lens-artifacts.png, 10-security-lens.png, 06-supply-chain-sbom.png, 09-trust-ledger.png, 22-keys-servers-pricing.png",
+      "note": "Three verified high or medium incidents the persona caught (capability lens debris, Security lens zero mechanisms against the tool's own Keychain narrative, SBOM evidence pointing into an agent worktree), one verified incident it did not catch and carried into its brief (the ledger's 'failed or absent analyzer units' label over 82 enrichment abstentions), and one enrichment overclaim it repeated (the LLM fallback chain). The persona's own conclusion, 'I cannot take any screen at face value', is the verify-everything anchor."
+    },
+    "unaided_recovery": {
+      "score": 3,
+      "evidence": "FINDINGS.md section 4 items 7, 8, 9; JOURNAL.md '[t+0.85m] A contradiction I chased and was wrong about'",
+      "note": "Detected and correctly dismissed the capability debris, resolved the three dependency numbers, resolved 'seventeen providers' into implementations versus vendors, and resolved '100% mapped / 82 gaps' by opening the ledger, all from inside the tool. Not 4 because it built on the ledger's false label for the 82 and could not resolve the Security lens contradiction."
+    },
+    "advertised_paths": {
+      "score": 1,
+      "evidence": "FINDINGS.md section 6; artifacts/console-2026-09-01T21-05-53-748Z.log (118 NaN SVG errors at 158s); orchestrator probe5.mjs (Escape leaves the trust drawer open and its backdrop blocks the header); TourPlayer.tsx:178-182 (active tour suppresses the list)",
+      "note": "Capability lens never worked and has no workaround. Flow lens diagram threw 118 NaN attribute errors on first open, confirmed from the harness's own console capture; the orchestrator could not reproduce it in five attempts and treats it as real but intermittent; the text panel gave the answer. Escape does not close the trust drawer and the drawer then blocks header clicks (verified in code and browser). The guided-paths button does nothing while a tour is active (verified in code). Mobile Support: EXCLUDED as stated; the ranked-attention heading is in the viewport at 390x844, the content sits in a 199px scroll window beneath the diagram, so the persona's '1,700 pixels below the fold' is a misreading of an inner scroller. The two load-time 404s are by design for this bundle and not scored."
+    }
+  },
+  "battery": [
+    {
+      "question": 1,
+      "verdict": "correct",
+      "confidence": "high",
+      "source": "evidence/02, 11, 12, 19-23"
+    },
+    {
+      "question": 2,
+      "verdict": "partial",
+      "confidence": "high",
+      "source": "evidence/05, 19, 20, 23",
+      "note": "LLM fallback chain asserted from the tour; the key shows it is not in the runtime path. Silent Apple-speech substitution for STT and cloud TTS, and the deliberate no-fallback for Pocket TTS, not reached."
+    },
+    {
+      "question": 3,
+      "verdict": "partial",
+      "confidence": "high",
+      "source": "evidence/05, 06, 10, 22",
+      "note": "Five of nine wired providers; the five are exactly what the Support lens lists. Self-hosted server correctly flagged as unsized; the key confirms it is optional and absent from this repository."
+    },
+    {
+      "question": 4,
+      "verdict": "partial",
+      "confidence": "high",
+      "source": "evidence/05, 07, 08, 10, 21, 22",
+      "note": "Correct on concentration and on keys living on the device. Missed the cleartext LAN link, the non-functional coverage gate, the disabled formatter and the missing privacy policy, none of which the projection carries as a first-class fact."
+    },
+    {
+      "question": 5,
+      "verdict": "partial",
+      "confidence": "high",
+      "source": "FINDINGS.md Q5",
+      "note": "Brief would leave a correct overall picture; two induced false sentences noted in model_accuracy."
+    }
+  ],
+  "trust_incidents": [
+    {
+      "what": "Capability lens presents 3 capabilities named t-\\(index), topic, topic-\\(index), which are Swift string-interpolation fragments and an enum case from a test file and a todo enum",
+      "severity": "high",
+      "evidence": "evidence/17; manifest.capabilities; verified as the queue_name event rule in analyzer/derive/capabilities.py firing on Swift telemetry event strings (O1)"
+    },
+    {
+      "what": "Security lens reports zero confirmed mechanisms and zero credential inputs while the tour states APIKeyManager holds keys in the Keychain and the Concerns tab lists an Auth group",
+      "severity": "medium",
+      "evidence": "evidence/10, 08, 22; verified structural: build_security_view derives mechanisms only from relationship authentication/middleware fields and credentials only from env-var names, so a Keychain-based iOS app can never score above zero (O2)"
+    },
+    {
+      "what": "The map omits the backend server the tool's own tour names, while presenting itself as 100% mapped",
+      "severity": "medium",
+      "evidence": "evidence/22, 11; verified: the server is a separate repository and the projection states no deployment posture anywhere, see O5"
+    },
+    {
+      "what": "SBOM evidence cites .claude/worktrees/agent-a47f3b12323d6bde3/Package.swift",
+      "severity": "medium",
+      "evidence": "evidence/06; verified: the supply-chain walk prunes neither .claude nor untracked nested worktrees, and dedup keeps the lexicographically smallest evidence path (O6)"
+    },
+    {
+      "what": "82 producer gaps and 82 duplication findings, suspected as one number wired twice",
+      "severity": "low",
+      "evidence": "evidence/07, 09; REFUTED: coincidence, the gaps are 82 enrich.verify-identity abstentions and the findings are 82 duplication clusters"
+    },
+    {
+      "what": "0 transitive dependencies",
+      "severity": "low",
+      "evidence": "evidence/06; unverified either way: the collector reads Package.swift manifests only and does not read the committed Package.resolved, so transitive is a non-measurement rendered as zero"
+    },
+    {
+      "what": "'Swift tools version 6.0' listed eight times",
+      "severity": "low",
+      "evidence": "evidence/06; verified: one entry per Package.swift found, the root plus seven nested agent worktrees"
+    },
+    {
+      "what": "Trust ledger labels 82 gaps as 'failed or absent analyzer units'; all 82 are enrichment identity-verification abstentions and no analyzer unit failed. The persona repeated the label in its brief",
+      "severity": "medium",
+      "evidence": "evidence/09; manifest.gaps producer field; TrustLedger.tsx:23. Not raised by the persona; added by the orchestrator (O3)"
+    }
+  ],
+  "blocked_paths": [
+    {
+      "feature": "Flow lens diagram rendered with 118 NaN SVG attribute errors on first open",
+      "evidence": "evidence/12; artifacts/console-2026-09-01T21-05-53-748Z.log. Status: confirmed from console capture, not reproduced by orchestrator"
+    },
+    {
+      "feature": "Capability lens returned parser artifacts",
+      "evidence": "evidence/17. Status: verified"
+    },
+    {
+      "feature": "Escape does not close the trust drawer; its backdrop then intercepts header clicks",
+      "evidence": "orchestrator probe5.mjs; TrustLedger.tsx has no key handler. Status: verified"
+    },
+    {
+      "feature": "Guided-paths button does nothing while a tour is active",
+      "evidence": "TourPlayer.tsx:178-182. Status: verified"
+    },
+    {
+      "feature": "Producer gaps count cannot be drilled",
+      "evidence": "evidence/09; TrustLedger.tsx. Status: verified, no drill exists"
+    },
+    {
+      "feature": "Two 404s on every load",
+      "evidence": "artifacts console log. Status: by design for this bundle, excluded"
+    },
+    {
+      "feature": "Mobile Support panel buried 1,700px below the fold",
+      "evidence": "evidence/14-16; orchestrator probe3.mjs. Status: EXCLUDED as stated: heading in viewport, content in a 199px inner scroller"
+    }
+  ]
+}
