@@ -38,6 +38,7 @@ import { ExperienceSwitcher } from "./components/ExperienceSwitcher";
 import { WorkbenchTrustStrip } from "./components/WorkbenchTrustStrip";
 import { TrustDrawer } from "./components/TrustLedger";
 import { ViewerPreferences } from "./components/ViewerPreferences";
+import { LegacyInterfaceNotice } from "./components/LegacyInterfaceNotice";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useBottomSheet } from "./hooks/useBottomSheet";
@@ -689,6 +690,7 @@ export function App() {
       {/* Publication header banner (always region), rendered at the very top per
           the placement contract. Absent-file behavior: renders nothing. */}
       <PublicationBanner />
+      <LegacyInterfaceNotice />
 
       {/* Header */}
       <header
@@ -936,7 +938,7 @@ export function App() {
             </div>
           )}
 
-          {/* Solution Explorer link */}
+          {/* SysCorpus project link */}
           <a
             href="https://github.com/sirfifer/solution-explorer"
             target="_blank"
@@ -948,10 +950,10 @@ export function App() {
                 : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
               }
             `}
-            title="Built with Solution Explorer"
+            title="Built with SysCorpus"
           >
             <span>&#x2699;&#xFE0F;</span>
-            <span>Solution Explorer</span>
+            <span>SysCorpus</span>
           </a>
         </div>
       </header>

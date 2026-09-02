@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Comprehension-first Overview**: The production viewer now opens on a bounded system portrait with guided questions, atlas entry, and trust context over the same projection used by the detailed tools.
+
 - **v2 analysis engine (now the default)**: An extract, derive, project pipeline over a persistent content-hash fact store. It parses each file once, derives components and relationships from the store without re-reading source, and projects the same `architecture.json` or split output the viewer already renders. Incremental by construction (the store is the baseline), so `--incremental` and its sibling flags are accepted as no-ops. No symbol cap.
 - **Coverage ledger**: The v2 engine accounts for every file under the root exactly once (parsed, skipped for a stated reason, or inside a pruned directory recorded as a single row) and writes a `coverage.json` the viewer surfaces as a coverage badge, so a silent gap is not possible.
 - **Inbound deep links**: `?file=&line=` URLs drill to the owning component and select the symbol at that line, with graceful handling of ambiguous and missing targets.
@@ -27,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Design signals in the machine front door**: `ai.json` advertises the signals term-first with the plain sentence as the description, and adds a walk order for planning safe parallel changes. Three new MCP tools (`se_design`, `se_design_component`, `se_blast_radius`) bring the registry to twelve. Both surfaces derive from one function over one store, so their numbers agree by construction.
 
 ### Changed
+
+- **Interface status**: Overview is the primary/default SysCorpus interface. The former dense workspace remains under the compatible `workbench` route value but is explicitly deprecated and retained temporarily for historical comparison, deep-link compatibility, and validation.
+- **Private demo planning boundary**: Subject-specific registries, run records, calibration artifacts, and forward demo plans are no longer tracked. Local working copies live under the ignored `.local-private/demo-planning/` tree; public documentation uses anonymized validation evidence and does not announce a subject before its map is ready.
 
 - Default single-repo and multi-repo paths (`npx`, `build.sh`, the GitHub Action, the workflows) emit uncapped `--split` output; single-file mode still warns loudly when it truncates, naming the count and the flags that lift the cap.
 - External dependency counts are labelled as detected, not complete, so the viewer no longer overclaims exhaustive coverage of a project's dependencies.

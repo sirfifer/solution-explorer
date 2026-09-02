@@ -92,7 +92,7 @@ class MCPServer:
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {"name": "solution-explorer-mcp", "version": __version__},
             "instructions": (
-                "Query a Solution Explorer fact store. Start with se_overview, "
+                "Query a SysCorpus fact store. Start with se_overview, "
                 "then se_search to locate ids, then se_component / se_symbol / "
                 "se_refs / se_impact for detail. Every answer cites file:line "
                 "evidence and marks confidence and AI staleness."

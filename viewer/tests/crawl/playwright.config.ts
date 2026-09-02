@@ -35,7 +35,7 @@ export default defineConfig({
   // The sweeps are long by construction (one navigation per component, then one
   // click per tab it offers), so the per-test timeout is generous while the
   // per-action timeout below stays tight: a slow suite is acceptable, a hung
-  // assertion is not. At VS Code's scale (573 components, ten-ish tabs each)
+  // assertion is not. At private large-repository validation corpus's scale (573 components, ten-ish tabs each)
   // a full unbudgeted tab sweep is an hour-scale job, which is why this is
   // measured in hours rather than minutes.
   timeout: 2 * 60 * 60 * 1000,

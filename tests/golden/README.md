@@ -42,7 +42,7 @@ as drift.
   duplication noise; the `fastapi/` package and `tests/` already exercise the
   full lens surface). The baseline is about 6.6 MB, committed by design.
 
-`vscode` stays a separate scale proof, not a daily-diff corpus.
+`large-repository-validation` stays a separate scale proof, not a daily-diff corpus.
 
 ## Using the harness
 

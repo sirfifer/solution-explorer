@@ -6,7 +6,7 @@ that was metered against a Claude Max subscription. No card is charged. That
 makes them useful for comparing one run against another and useless for the
 question that actually governs the week:
 
-    if I regenerate VS Code and Kubernetes four times, have I spent Tuesday or
+    if I regenerate two large reference repositories four times, have I spent Tuesday or
     have I spent the whole week?
 
 A Max subscription is not a dollar balance, it is an allowance that refills

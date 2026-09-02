@@ -2385,7 +2385,7 @@ function RelationshipsTab({
 // The file and symbol views carry their own identity, parallel to the component
 // view's data-testid="detail-panel". Without them the crawl had no way to assert
 // "a symbol result opened its symbol", so it asserted the component panel
-// instead and reported 15 false failures on VS Code. A selector contract that
+// instead and reported 15 false failures on private large-repository validation corpus. A selector contract that
 // only covers one of three detail kinds invites exactly that mistake.
 function FileDetail({ file }: { file: FileInfo }) {
   const { darkMode, closeDetail, architecture } = useArchStore();

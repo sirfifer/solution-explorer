@@ -16,7 +16,7 @@ name: Demo Domain
 #
 # The reason this exists at all: `demo.syscorpus.com` puts each demo one level
 # deeper than Cloudflare's free Universal SSL wildcard reaches. `*.syscorpus.com`
-# does not match `vscode.demo.syscorpus.com`, wildcards do not cascade, and
+# does not match `sample.demo.syscorpus.com`, wildcards do not cascade, and
 # Cloudflare's docs say Advanced Certificate Manager does not apply to Pages
 # custom domains. That is documentation, not a test on this account, and the
 # `check` action below is the test.
@@ -25,11 +25,11 @@ on:
   workflow_dispatch:
     inputs:
       project:
-        description: Cloudflare Pages project name (e.g. syscorpus-vscode)
+        description: Cloudflare Pages project name (e.g. syscorpus-sample)
         required: true
         type: string
       hostname:
-        description: Custom hostname to attach (e.g. vscode.demo.syscorpus.com)
+        description: Custom hostname to attach (e.g. sample.demo.syscorpus.com)
         required: true
         type: string
       action:

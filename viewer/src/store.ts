@@ -956,7 +956,7 @@ const LAYOUT_SPREAD = 1.75;
  * The hard ceiling on nodes handed to graph layout, whatever a lens returns.
  *
  * Layout cost is superlinear in node and edge count, and elk will happily
- * accept a graph it can never finish. Measured on the VS Code projection: the
+ * accept a graph it can never finish. Measured on the private large-repository validation corpus projection: the
  * Rules lens fed 194 owner components and 2,892 edges into layout, which pinned
  * the browser at 100% CPU indefinitely. The app never painted at all, not the
  * panel and not even the tree beside it. Every other lens entered in under

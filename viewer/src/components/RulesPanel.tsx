@@ -317,7 +317,7 @@ function FocusedRule({ rule }: { rule: Rule }) {
  *
  * Flat because the cost is in the TOTAL number of rendered rows, not in any one
  * bucket. The first attempt at this virtualized each owner bucket separately,
- * which did almost nothing: on VS Code the 3,745 rules are spread over 265
+ * which did almost nothing: on private large-repository validation corpus the 3,745 rules are spread over 265
  * owner buckets and only 5 of them exceed the threshold, so 260 buckets still
  * rendered eagerly and the lens still hung. Measured, not assumed: 200 rules
  * rendered in 328 ms, 800 in 2.6 s, and 2,000 never finished at all, which is
@@ -403,7 +403,7 @@ export function RulesPanel({ mobile = false }: { mobile?: boolean } = {}) {
   // VirtualList (the same threshold and the same reason as the symbols tab in
   // DetailPanel). Below it, keep the plain list so common cases are unchanged.
   //
-  // This is not a nicety. On the VS Code projection the Rules lens carries
+  // This is not a nicety. On the private large-repository validation corpus projection the Rules lens carries
   // 3,745 rules, and rendering them all synchronously blocked the main thread
   // so completely that the app never painted at all: not the panel, not even
   // the tree beside it. Every other lens entered in under 600 ms while this one

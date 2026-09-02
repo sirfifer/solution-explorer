@@ -851,7 +851,7 @@ class MeteredInvoker:
         # The caller declared an expected compact response size.  This is
         # efficiency telemetry, not an answer-validity boundary: a verbose but
         # schema-valid, evidence-valid answer is still paid work and must reach
-        # the contract validator.  Rejecting it here caused the VS Code run to
+        # the contract validator.  Rejecting it here caused the private large-repository validation corpus run to
         # discard 25 usable responses and buy the same work again.
         budget_applies = self.output_budget_bytes is not None
         output_budget_ok = (

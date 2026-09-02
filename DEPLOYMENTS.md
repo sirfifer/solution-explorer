@@ -1,4 +1,4 @@
-# Solution Explorer Deployments
+# SysCorpus Deployments
 
 Tracks where solution-explorer is installed and how to redeploy after changes.
 

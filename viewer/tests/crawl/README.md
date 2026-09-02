@@ -18,7 +18,7 @@ half. Neither replaces the other.
 The crawl exists because the defects that actually hurt us were coverage
 defects, not aesthetic ones: the data was whole and the UI still could not get
 you to it. That question is exhaustively checkable by machine, and checking it
-by hand across a subject the size of VS Code is not realistic.
+by hand across a subject the size of private large-repository validation corpus is not realistic.
 
 ## Running it
 
@@ -126,7 +126,7 @@ what the data holds.
    way further down without restarting from the top. `expandedIds` was local to
    `TreeNavigator` and nothing reacted to `selectedComponentId`, so URL, search
    and graph-click selection all left the tree untouched.
-2. **The same fix was incomplete, and only VS Code showed it.** Revealing the
+2. **The same fix was incomplete, and only private large-repository validation corpus showed it.** Revealing the
    ancestor chain was not enough for components under an "Internal Components"
    folder, because `collectOtherComponents` puts a component in a group and
    never recurses into its children. At depth 5 the thing in the group is an
@@ -136,13 +136,13 @@ what the data holds.
 3. **The Files tab rendered blank** for a component with zero files instead of
    saying so. A blank panel and a broken panel look identical, and that
    ambiguity teaches people to distrust every empty surface in the product.
-4. **The Rules lens hung the browser indefinitely on VS Code.** Isolating panel
+4. **The Rules lens hung the browser indefinitely on private large-repository validation corpus.** Isolating panel
    load from graph load found it: 3,745 rules under one owner render in 636 ms,
    while 335 rules under 194 owners never finish. `getLensGraph` never applied
    the node budget the viewer already had, so the lens handed elk 194 nodes and
    2,892 edges. Bounding nodes alone was not enough, since the kept nodes carry
    the edges with them; edges are the real driver. Now bounded centrally, so no
-   lens can do this again. Full VS Code Rules lens: 1.5 s.
+   lens can do this again. Full private large-repository validation corpus Rules lens: 1.5 s.
 
 **Two lessons about the harness itself, both paid for:**
 
@@ -153,7 +153,7 @@ what the data holds.
   the suite hung exactly as the product had. A harness that hangs instead of
   reporting is the same failure as a product that hangs instead of rendering.
 - **Do not pick the biggest thing as your representative.** The lens sweep chose
-  the component with the most files, which on VS Code is `src/vs/workbench`, so
+  the component with the most files, which on private large-repository validation corpus is `src/vs/workbench`, so
   every lens failed for the same unrelated reason and the sweep proved nothing
   about lenses. It now uses an upper-middle component, and the pathological end
   gets its own test where being the worst case is the point.

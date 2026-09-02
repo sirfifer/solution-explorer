@@ -88,7 +88,6 @@ export function ReviewSummary() {
       await navigator.clipboard.writeText(prompt);
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
-      window.open("vscode://");
     } catch {
       const w = window.open("", "_blank", "width=600,height=500");
       if (w) {

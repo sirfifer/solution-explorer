@@ -15,7 +15,7 @@ export interface GenerateOptions {
 
 export async function generate(options: GenerateOptions): Promise<void> {
   console.log();
-  console.log(pc.bold("Solution Explorer"));
+  console.log(pc.bold("SysCorpus"));
   console.log();
 
   // Step 1: Detect Python

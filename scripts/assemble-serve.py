@@ -10,7 +10,7 @@ Two decisions worth stating, because both were mistakes at some point today:
   tests code that no longer exists, and the failure looks exactly like a real
   defect. Pass --no-build only when you have just built it yourself.
 
-  The projection is SYMLINKED, not copied. VS Code's is 268 MB, and copying it
+  The projection is SYMLINKED, not copied. private large-repository validation corpus's is 268 MB, and copying it
   for every crawl is a minute of disk churn per run for no benefit. Python's
   http.server follows symlinks, so the served bytes are identical. When a
   canonical projection predates the human-first sidecars, assembly creates a

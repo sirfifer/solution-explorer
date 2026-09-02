@@ -9,7 +9,7 @@ own ledger and report.
 
 ## What the fixes did, measured on live calls
 
-| defect | 2026-08-25 VS Code run | this run |
+| defect | 2026-08-25 private large-repository validation corpus run | this run |
 |---|---|---|
 | effort in force | xhigh, inherited from user settings | `low` on every row, pinned |
 | responses truncated at ceiling | 11 of 31 partitions (35%) | 0 |

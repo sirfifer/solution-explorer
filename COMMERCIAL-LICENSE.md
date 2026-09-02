@@ -1,11 +1,11 @@
 # Commercial licensing
 
-Solution Explorer is source available under the
+SysCorpus is source available under the
 [PolyForm Noncommercial License 1.0.0](LICENSE). You can read it, run it, study
 it, modify it, and share it, for noncommercial purposes.
 
 **Commercial use requires a written license from the copyright holder.** That
-includes running Solution Explorer on a company's own source code, using it
+includes running SysCorpus on a company's own source code, using it
 inside a commercial product or service, using its output in commercial work
 product, and using it in the course of paid consulting. If a for-profit
 organization benefits from it, it needs a license.
@@ -61,7 +61,7 @@ Pricing is quoted per engagement. There is no public rate card yet.
 
 ## Compliance
 
-If you discover that your organization has been using Solution Explorer without
+If you discover that your organization has been using SysCorpus without
 a license, contact us. The license itself provides 32 days from written notice
 to come into compliance without losing your rights. The intent here is to know
 who the users are and to be paid by companies, not to litigate.

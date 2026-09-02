@@ -1110,7 +1110,7 @@ def test_max_partitions_actually_bounds_the_ladder(world):
 
     Fail-before: LadderConfig declared max_partitions "for cheap smoke runs"
     and nothing on the ladder path read it, so a --max-partitions 3 smoke run
-    against the real VS Code store (2026-08-22) ran all 57 partitions to the
+    against the real private large-repository validation corpus store (2026-08-22) ran all 57 partitions to the
     $45 ceiling. The flag must cap the ordered partition list, keep the most
     important partitions, and declare the exclusion in the run's notes.
     """

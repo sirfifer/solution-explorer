@@ -1,6 +1,6 @@
 """Software Bill of Materials for a projected repository (P10-1, VISION.md).
 
-The owner's hard requirement: every Solution Explorer site ships an accurate,
+The owner's hard requirement: every SysCorpus site ships an accurate,
 complete SBOM. All dependencies with versions and pin status, plus the
 language-specific target/SDK versions surfaced separately, built deterministically
 by parsing manifests and lockfiles only (no package-manager execution, no

@@ -181,14 +181,15 @@ def test_validate_registry_unknown_cadence_is_an_error():
     assert any("cadence" in e for e in errors)
 
 
-def test_real_vscode_registry_entry_loads_and_validates():
-    """The committed demos/registry/vscode.json must itself be a valid entry."""
-    doc = ds.load_registry("vscode", REPO_ROOT / "demos" / "registry")
-    assert doc["slug"] == "vscode"
-    # Pinned to a release tag by /repo-story on 2026-08-25 (see
-    # docs/publication/repo-stories/vscode.md): the demo, its screenshots and
-    # its enrichment should describe a commit that still exists later. The pin
-    # value moves release to release; its SHAPE is the contract.
+def test_a_pinned_registry_entry_loads_and_validates(_isolated_dirs):
+    """Pinned-release behavior is tested without committing an unpublished subject."""
+    registry_dir, *_ = _isolated_dirs
+    entry = _write_registry(registry_dir, slug="pinned-fixture")
+    entry["policy"]["follow"] = "pinned"
+    entry["policy"]["pin"] = "1.2.3"
+    (registry_dir / "pinned-fixture.json").write_text(json.dumps(entry), encoding="utf-8")
+    doc = ds.load_registry("pinned-fixture", registry_dir)
+    assert doc["slug"] == "pinned-fixture"
     assert doc["policy"]["follow"] == "pinned"
     import re
     assert re.fullmatch(r"1\.\d+\.\d+", doc["policy"]["pin"] or "")
@@ -258,33 +259,33 @@ def test_is_due_ignores_a_run_that_did_not_succeed(_isolated_dirs):
 
 
 def test_fingerprint_format():
-    fp = ds.finding_fingerprint("vscode", "coverage_ledger_complete", "3 files unaccounted")
-    assert fp.startswith("demo-finding:vscode:coverage_ledger_complete:")
+    fp = ds.finding_fingerprint("large-repository-validation", "coverage_ledger_complete", "3 files unaccounted")
+    assert fp.startswith("demo-finding:large-repository-validation:coverage_ledger_complete:")
     digest = fp.rsplit(":", 1)[-1]
     assert len(digest) == 12
 
 
 def test_fingerprint_stable_across_calls():
-    a = ds.finding_fingerprint("vscode", "coverage_ledger_complete", "3 files unaccounted")
-    b = ds.finding_fingerprint("vscode", "coverage_ledger_complete", "3 files unaccounted")
+    a = ds.finding_fingerprint("large-repository-validation", "coverage_ledger_complete", "3 files unaccounted")
+    b = ds.finding_fingerprint("large-repository-validation", "coverage_ledger_complete", "3 files unaccounted")
     assert a == b
 
 
 def test_fingerprint_differs_by_slug():
-    a = ds.finding_fingerprint("vscode", "check", "detail")
+    a = ds.finding_fingerprint("large-repository-validation", "check", "detail")
     b = ds.finding_fingerprint("kubernetes", "check", "detail")
     assert a != b
 
 
 def test_fingerprint_differs_by_check():
-    a = ds.finding_fingerprint("vscode", "check_a", "detail")
-    b = ds.finding_fingerprint("vscode", "check_b", "detail")
+    a = ds.finding_fingerprint("large-repository-validation", "check_a", "detail")
+    b = ds.finding_fingerprint("large-repository-validation", "check_b", "detail")
     assert a != b
 
 
 def test_fingerprint_differs_by_detail():
-    a = ds.finding_fingerprint("vscode", "check", "detail A")
-    b = ds.finding_fingerprint("vscode", "check", "detail B")
+    a = ds.finding_fingerprint("large-repository-validation", "check", "detail A")
+    b = ds.finding_fingerprint("large-repository-validation", "check", "detail B")
     assert a != b
 
 
@@ -380,7 +381,7 @@ def test_license_review_gate_fails_a_published_demo_without_owner_countersignatu
         "track": "published",
         "license_review": {
             "reviewer": "Claude (Opus 5), N3", "date": "2026-08-20", "spdx": "MIT",
-            "record": "docs/publication/license-reviews/vscode.md",
+            "record": "docs/publication/LICENSE-REVIEW.md",
             "countersigned_by_owner": False,
         },
     })
@@ -393,7 +394,7 @@ def test_license_review_gate_passes_when_recorded_and_countersigned():
         "track": "published",
         "license_review": {
             "reviewer": "Claude (Opus 5), N3", "date": "2026-08-20", "spdx": "MIT",
-            "record": "docs/publication/license-reviews/vscode.md",
+            "record": "docs/publication/LICENSE-REVIEW.md",
             "countersigned_by_owner": True,
         },
     })
@@ -868,7 +869,7 @@ def _manifest_with_languages(arch_dir: Path, languages: dict) -> None:
 
 
 def test_detect_only_share_excludes_json_and_markdown_from_the_denominator(_isolated_dirs):
-    """The VS Code shape: mostly TypeScript, ~18% JSON, a sliver of unparsed code.
+    """The private large-repository validation corpus shape: mostly TypeScript, ~18% JSON, a sliver of unparsed code.
 
     Counting JSON and Markdown as detect-only "languages" turns 0.1% into 21.9%
     and puts a healthy subject three points from failing the theater gate for

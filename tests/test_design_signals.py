@@ -1101,7 +1101,7 @@ def test_inferred_imports_and_uses_edges_do_not_feed_the_metrics():
     """The method caveat made executable.
 
     The caveat promises "static import and declared communication edges only".
-    On the VS Code vet run (2026-08-21), name-matched edges (a TypeScript
+    On the private large-repository validation corpus vet run (2026-08-21), name-matched edges (a TypeScript
     import of ``util`` resolved to the Rust CLI's util component; npm package
     names resolved to unrelated local components) merged three real cycles of
     119, 23 and 20 members into one reported 209-member cycle. Edges of that

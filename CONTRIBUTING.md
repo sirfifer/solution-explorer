@@ -1,6 +1,6 @@
-# Contributing to Solution Explorer
+# Contributing to SysCorpus
 
-Thank you for your interest in contributing to Solution Explorer! This guide will help you get started.
+Thank you for your interest in contributing to SysCorpus! This guide will help you get started.
 
 ## Licensing of contributions
 

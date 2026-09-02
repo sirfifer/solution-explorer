@@ -188,7 +188,7 @@ export function sampleComponents(
  * A component substantial enough to exercise a surface, without being the one
  * pathological node in the subject.
  *
- * Picking "the biggest" seems obviously right and is a trap. On VS Code the
+ * Picking "the biggest" seems obviously right and is a trap. On private large-repository validation corpus the
  * biggest component is src/vs/workbench: 3,625 files and 47,339 symbols in a
  * 50 MB shard, which locks the browser. Every lens then failed for the same
  * reason, and the lens sweep spent its whole budget rediscovering one defect

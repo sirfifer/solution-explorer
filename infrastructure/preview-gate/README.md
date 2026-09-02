@@ -1,6 +1,6 @@
 # Private-preview gate
 
-Server-side gating for an unpublished Solution Explorer demo, as
+Server-side gating for an unpublished SysCorpus demo, as
 `docs/publication/DISCLOSURE-POLICY.md` step 3 requires:
 
 > Deploy gated, never public. Acceptable gates: Cloudflare Access (email

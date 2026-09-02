@@ -2,7 +2,7 @@
 """Audit one enrichment run against what it was supposed to cost and do.
 
 Written to be adversarial. Every number here is read from the run's own
-artifacts, and every check is one the 2026-08-25 VS Code disaster would have
+artifacts, and every check is one the 2026-08-25 private large-repository validation corpus disaster would have
 failed. A run that passes this has earned the claim that it worked; a run that
 merely finished has not.
 

@@ -1,4 +1,4 @@
-name: 'Solution Explorer'
+name: 'SysCorpus'
 description: 'Generate interactive architecture diagrams from any codebase. Supports multi-repo solutions.'
 branding:
   icon: 'git-branch'
@@ -38,7 +38,7 @@ inputs:
     required: false
     default: 'false'
   version:
-    description: 'Solution Explorer version override (e.g., v0.3.0, beta). Defaults to the action ref tag.'
+    description: 'SysCorpus version override (e.g., v0.3.0, beta). Defaults to the action ref tag.'
     required: false
     default: ''
   artifact-name:
@@ -80,7 +80,7 @@ runs:
       with:
         node-version: '22'
 
-    - name: Checkout Solution Explorer
+    - name: Checkout SysCorpus
       uses: actions/checkout@v4
       with:
         repository: 'sirfifer/solution-explorer'

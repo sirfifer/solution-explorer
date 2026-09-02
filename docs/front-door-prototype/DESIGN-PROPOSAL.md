@@ -1,5 +1,7 @@
 # SysCorpus comprehension-first viewer proposal
 
+Status: **historical design record**. The production Overview now implements this direction and is the primary/default interface. The detailed workspace described below remains under the internal `workbench` route value only for deep-link compatibility, historical comparison, and validation; it is deprecated as an independent interface.
+
 ## Recommendation
 
 Implementation and review are governed by the permanent
@@ -10,9 +12,9 @@ geometry.
 Build one adaptive product shell with two durable places:
 
 1. **Overview** establishes what the system is, what it does, what is known, and where useful paths begin.
-2. **Workbench** provides the existing depth: lenses, ranked lists, graph navigation, evidence, source detail, findings, review, sets, and directives.
+2. **Detailed workspace** provides the existing depth: lenses, ranked lists, graph navigation, evidence, source detail, findings, review, sets, and directives.
 
-They are not beginner and expert products. They are two apertures onto the same stable model. Every transition preserves subject, selected object, question, lens, semantic level, filters, tour step, and evidence state. A returning visitor can choose Overview, Workbench, or Resume as the default launch behavior.
+This proposal originally treated the two apertures as peers. The implemented product direction supersedes that point: Overview is primary, and the detailed legacy workspace is a temporary compatibility and validation surface. Transitions still preserve subject, selected object, question, lens, semantic level, filters, tour step, and evidence state.
 
 The prototype implements three opening directions because they serve genuinely different arrival states:
 

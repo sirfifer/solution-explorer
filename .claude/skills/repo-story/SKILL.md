@@ -12,7 +12,7 @@ Run this **once per new subject, before the first fetch.** Its output is the
 
 "Pull the latest" is a guess that happens to be right some of the time.
 
-For a project like VS Code it is probably fine: `main` is heavily protected,
+For a project like reference editor repository it is probably fine: `main` is heavily protected,
 nothing lands without CI and review, and HEAD is close to a release candidate.
 For a project whose `main` is a working branch, HEAD can be broken for days at a
 stretch, and the only version anyone stands behind is a tag or the last green

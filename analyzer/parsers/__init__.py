@@ -4,7 +4,7 @@ There is no fallback tier, by decision and after an incident.
 
 This registry used to install the regex parsers as a baseline and then "upgrade"
 to tree-sitter where the import happened to succeed, each attempt wrapped in
-`except ImportError: pass`. On 2026-08-24 a VS Code regeneration ran under an
+`except ImportError: pass`. On 2026-08-24 a private large-repository validation corpus regeneration ran under an
 interpreter without tree-sitter installed, and all 3.8M lines of TypeScript were
 read by the regex parser without a single line of output saying so. The analyzer
 reported "Coverage: 100% of source analyzed, 0 gaps" and meant it: every file was

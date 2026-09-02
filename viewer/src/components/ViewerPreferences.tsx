@@ -5,13 +5,13 @@ import { interfaceHref } from "../utils/urlState";
 const INTERFACES = [
   {
     mode: "overview" as const,
-    label: "New front door",
-    description: "Comprehension-first orientation, guided questions, and atlas entry.",
+    label: "Overview (primary)",
+    description: "The default comprehension-first orientation, guided questions, and atlas entry.",
   },
   {
     mode: "workbench" as const,
-    label: "Classic explorer",
-    description: "The original dense graph, lenses, tree, and detail workspace.",
+    label: "Legacy workspace (deprecated)",
+    description: "Retained temporarily for historical comparison, deep-link compatibility, and validation.",
   },
 ];
 
@@ -36,7 +36,7 @@ export function ViewerPreferences() {
           <div className="flex items-end justify-between gap-4">
             <div>
               <h3 id="interface-heading" className={`text-sm font-semibold ${dark ? "text-zinc-200" : "text-zinc-800"}`}>Interface</h3>
-              <p className={`mt-1 text-xs leading-relaxed ${dark ? "text-zinc-400" : "text-zinc-600"}`}>Switch this tab, or open both interfaces side by side.</p>
+              <p className={`mt-1 text-xs leading-relaxed ${dark ? "text-zinc-400" : "text-zinc-600"}`}>Overview is the product interface. The legacy workspace remains available while migration and parity checks finish.</p>
             </div>
             <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${dark ? "bg-cyan-400/10 text-cyan-300" : "bg-cyan-50 text-cyan-700"}`}>Same data</span>
           </div>
@@ -77,7 +77,7 @@ export function ViewerPreferences() {
             Comparing <strong className={dark ? "text-zinc-300" : "text-zinc-700"}>{state.architecture?.name ?? "the current projection"}</strong>. Only the <code>mode</code> parameter changes; the data URL and navigation parameters stay the same.
           </p>
         </section>
-        <PreferenceSelect label="Start interface" value={state.startView} options={[{ value: "overview", label: "New front door" }, { value: "workbench", label: "Classic explorer" }, { value: "last", label: "Last used" }]} onChange={(value) => state.setStartView(value as typeof state.startView)} dark={dark} />
+        <PreferenceSelect label="Start interface" value={state.startView} options={[{ value: "overview", label: "Overview (primary)" }, { value: "workbench", label: "Legacy workspace (testing only)" }, { value: "last", label: "Last used" }]} onChange={(value) => state.setStartView(value as typeof state.startView)} dark={dark} />
         <PreferenceSelect label="Overview direction" value={state.overviewDirection} options={["portrait", "questions", "atlas"]} onChange={(value) => state.setOverviewDirection(value as typeof state.overviewDirection)} dark={dark} />
         <PreferenceSelect label="Workbench density" value={state.workbenchDensity} options={["focused", "dense"]} onChange={(value) => state.setWorkbenchDensity(value as typeof state.workbenchDensity)} dark={dark} />
         <label className={`mt-5 flex min-h-11 items-center justify-between rounded-xl border p-4 ${dark ? "border-zinc-800 bg-zinc-900" : "border-zinc-200 bg-white"}`}><span><strong className={`block text-sm ${dark ? "text-zinc-200" : "text-zinc-800"}`}>Remember navigation</strong><small className={dark ? "text-zinc-400" : "text-zinc-600"}>Resume the last aperture when Start interface is Last used.</small></span><input className="h-6 w-6" type="checkbox" checked={state.rememberNavigation} onChange={(event) => state.setRememberNavigation(event.target.checked)} /></label>

@@ -52,7 +52,7 @@ technical surface:
 ## SBOM (2026-07-20 enhancement, hard requirement)
 
 A Software Bill of Materials, as accurate and complete as possible, built by
-the tool and included in every Solution Explorer site. All dependencies with
+the tool and included in every SysCorpus site. All dependencies with
 versions and pin status; language-specific target/SDK versioning surfaced
 both inside the SBOM and separately in the supply chain view.
 

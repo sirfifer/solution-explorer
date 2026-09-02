@@ -166,7 +166,7 @@ def test_no_grammar_stops_the_run_rather_than_dropping_a_tier(tmp_path):
     """There is no regex tier to fall to any more.
 
     The old behaviour marked such symbols ``via_regex`` and carried no parent
-    references, which is exactly the shape that made a degraded VS Code
+    references, which is exactly the shape that made a degraded private large-repository validation corpus
     projection look plausible: fewer facts, all of them structurally valid.
     """
     from analyzer.parsers import DegradedParserError

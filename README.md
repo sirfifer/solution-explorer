@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/screenshots/architecture-overview.png" alt="Solution Explorer - Architecture visualization" width="800">
+  <img src="docs/screenshots/architecture-overview.png" alt="SysCorpus architecture visualization" width="800">
 </p>
 
-<h1 align="center">Solution Explorer</h1>
+<h1 align="center">SysCorpus</h1>
 
 <p align="center">
   <strong>Interactive architecture visualization for any codebase</strong>
@@ -26,7 +26,7 @@
 
 ---
 
-Solution Explorer is a static analysis tool that scans codebases to extract components, relationships, and metrics, then renders them as an interactive architecture diagram. It supports solutions that span multiple repositories and works with many languages.
+SysCorpus is a static analysis and comprehension system that maps codebases into evidence-linked components, relationships, metrics, findings, and human- and machine-readable views. It supports solutions that span multiple repositories and works with many languages.
 
 ## Screenshots
 
@@ -177,6 +177,8 @@ pip install -e ".[all]"          # Everything above
 | **SwiftUI Flows** | TabView tabs, NavigationLink targets, sheet/fullScreenCover destinations, embedded view composition |
 
 ## Viewer Features
+
+The comprehension-first **Overview is the primary and default interface**. It establishes the system portrait, offers guided questions, and opens focused technical paths without requiring the reader to understand the stack first. The former dense workspace remains reachable through `?mode=workbench`, but it is deprecated and retained temporarily only for historical comparison, deep-link compatibility, and validation. Both surfaces read the same projection and route state; see [viewer/README.md](viewer/README.md).
 
 - **Hierarchical drill-down**: Click to see details, double-click to drill into sub-components
 - **Breadcrumb navigation**: Always know where you are, click to jump back
@@ -401,7 +403,7 @@ Two properties come from this design:
 - **Coverage ledger.** Every file under the root is accounted for exactly once: parsed, skipped for a stated reason, or inside a pruned directory recorded as a single row. Split output writes a `coverage.json` the viewer surfaces as a coverage badge, so a silent gap is not possible. There is no symbol cap in v2.
 - **Incremental by construction.** The fact store is the baseline. A warm run re-parses only the files whose content changed, so `--incremental`, `--base-sha`, `--head-sha`, and `--baseline` are accepted as compatibility no-ops.
 
-On a large repository the engine holds up: analyzing the VS Code codebase (4,936,720 lines) took 136.5 seconds cold and produced a complete coverage ledger.
+On a private 4,936,720-line validation corpus, a cold analysis took 136.5 seconds and produced a complete coverage ledger. The corpus identity is intentionally unpublished until its map is ready.
 
 The legacy **v1** single-pass scanner is still available with `--engine v1` for rollback. It is scheduled for removal at a later gate. Rollback is a flag flip; nothing else changes.
 
@@ -464,7 +466,7 @@ List responses are bounded: each takes a `limit` and appends an explicit "N more
 
 ## AI Enhancement
 
-Solution Explorer supports optional AI-powered enhancement of architecture data. The `/ai-assist` Claude Code skill analyzes source files and enriches the architecture JSON with:
+SysCorpus supports optional AI-powered enhancement of architecture data. The `/ai-assist` Claude Code skill analyzes source files and enriches the architecture JSON with:
 
 - **Component descriptions**: Contextual help text, architectural role classification, criticality ratings
 - **Relationship annotations**: Data flow descriptions, importance ratings, AI-discovered connections
@@ -484,7 +486,7 @@ If tree-sitter is not available, the analyzer falls back to regex parsers silent
 
 ## Live Monitoring
 
-When enabled, Solution Explorer can continuously update architecture data as the codebase changes:
+When enabled, SysCorpus can continuously update architecture data as the codebase changes:
 
 - **Incremental analysis** in CI rescans only changed files and their importers
 - **CI status collection** overlays build pass/fail indicators on components

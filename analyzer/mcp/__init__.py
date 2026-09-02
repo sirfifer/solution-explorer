@@ -1,4 +1,4 @@
-"""The Solution Explorer MCP server (TARGET-ARCHITECTURE section 8, LENS-DESIGN
+"""The SysCorpus MCP server (TARGET-ARCHITECTURE section 8, LENS-DESIGN
 section 6): a curated, twelve-tool query surface over the v2 fact store for AI
 agents.
 

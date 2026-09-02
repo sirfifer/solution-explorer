@@ -1,9 +1,13 @@
 # SysCorpus front door and adaptive viewer execution plan
 
-Status: ACTIVE IMPLEMENTATION  
-Branch: `wt/frontdoor-production`  
+Status: **COMPLETE — historical execution record**
+
+Integrated: `main`
+
 Prototype: `docs/front-door-prototype/`  
 Design authority: `docs/front-door-prototype/DESIGN-PROPOSAL.md`
+
+Current interface policy: Overview is the primary/default SysCorpus interface. The internal `workbench` route is deprecated and retained temporarily for historical comparison, compatible deep links, and validation. This file records the implementation path; it is not a second active product plan.
 
 ## 1. Outcome
 
@@ -11,7 +15,7 @@ Ship one production viewer with two durable apertures over the same projection:
 
 - **Overview** establishes identity, purpose, system shape, useful questions,
   trustworthy scope, and a first journey.
-- **Workbench** preserves the full expert surface: ranked lenses, graph,
+- **Detailed workspace** preserves the full expert surface: ranked lenses, graph,
   inspector, evidence, source, findings, review, sets, directives, and search.
 
 The transition is lossless. Subject, question, lens, semantic level, selected
@@ -19,7 +23,7 @@ object, tour step, filters, and panels are route state. Start posture, density,
 theme, appearance, and restore behavior are user preferences.
 
 The work is additive. Old projections open into a generated fallback Overview.
-Old deep links still open the Workbench at the requested object. The same stable
+Old deep links still open the deprecated detailed workspace at the requested object. The same stable
 IDs continue to key annotations, sets, tours, and URLs.
 
 ## 2. Product invariants
@@ -36,7 +40,9 @@ IDs continue to key annotations, sets, tours, and URLs.
 9. No model calls at query time.
 10. Static and local-first delivery remains intact.
 
-## 3. Worktree and integration strategy
+## 3. Historical worktree and integration strategy
+
+The following bullets describe the completed implementation workflow and are retained only as a record.
 
 - Develop and test on `wt/frontdoor-production` only.
 - Preserve the existing theme implementation as the baseline; do not rebuild it

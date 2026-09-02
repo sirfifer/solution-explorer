@@ -8,7 +8,7 @@ a failed analyze demand completely different responses. A red test says the
 product is wrong. A failed analyze says the product did not get built at all.
 
 Processing runs are the ones most worth watching, because they are the long
-ones. An analyze of VS Code is minutes of silence; an enhance is longer and
+ones. An analyze of private large-repository validation corpus is minutes of silence; an enhance is longer and
 costs real money. Before this, the only way to know how either was going was to
 watch the terminal you started it in, which is exactly the blindness the board
 exists to remove.
@@ -23,7 +23,7 @@ exists. Same two files, same fields, same meanings:
 Used as a context manager, so a step that raises still closes its record out
 honestly instead of leaving a phantom "running" row on the board forever:
 
-    with ProcessingRun("analyze", slug="vscode", data_dir=arch_dir) as run:
+    with ProcessingRun("analyze", slug="large-repository-validation", data_dir=arch_dir) as run:
         run.step("scan", "walking the source tree")
         ...
         run.finish_step(detail="15,366 files")

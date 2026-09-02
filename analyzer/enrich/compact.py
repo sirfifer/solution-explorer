@@ -33,7 +33,7 @@ COMPACT_WIRE_VERSION = "compact/v1"
 COMPONENT_RESPONSE_BYTES = 3_600
 RELATIONSHIP_RESPONSE_BYTES = 720
 # Repair prompts carry failed-question history, current product, and
-# replacement evidence. The VS Code full run measured 2,007 bytes/target at
+# replacement evidence. The private large-repository validation corpus full run measured 2,007 bytes/target at
 # p99 in the terminal repair rung; applying the bulk 720-byte contract there
 # rejected otherwise delivered work. Keep bulk tight, but make the repair guard
 # a runaway boundary with roughly 20% p99 headroom.
@@ -527,7 +527,7 @@ def _repair_misbranched_relationship_repairs(
 ) -> tuple[Any, list[str]]:
     """Move an unmistakable relationship-only repair out of `components`.
 
-    Two live VS Code repair calls returned the exact requested relationship ids
+    Two live private large-repository validation corpus repair calls returned the exact requested relationship ids
     and the exact `flow`/`why` delta shape, but used the component envelope's
     `i`/`q` spelling. Translation is safe only for a closed ITEMS menu holding
     relationships exclusively, with exact id coverage and no existing

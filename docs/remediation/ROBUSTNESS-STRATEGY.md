@@ -48,7 +48,7 @@ server, which is the one genuinely long-running service.
 The industry has settled on trunk-based development plus gating over long-lived
 branches; a v1-maintenance / v2-development branch split is the merge-debt trap
 for a solo dev and is already rejected in our practice (short-lived worktrees,
-same-day merges). The disciplined gating model is the Kubernetes / Rust maturity
+same-day merges). The disciplined gating model is the large-infrastructure / Rust maturity
 model, not a SaaS feature-flag platform:
 
 - Each gateable feature declares a stability: experimental, beta, or stable.

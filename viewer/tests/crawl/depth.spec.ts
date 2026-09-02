@@ -187,7 +187,7 @@ test.describe("depth", () => {
 
     // Every lens is entered under its own hard budget.
     //
-    // Learned the expensive way: on the VS Code projection one lens spun the
+    // Learned the expensive way: on the private large-repository validation corpus projection one lens spun the
     // renderer at 100% CPU and 900 MB for over half an hour, and because the
     // step had no bound the SUITE hung with it, reporting nothing. A harness
     // that hangs instead of reporting is the same failure as a product that
@@ -255,7 +255,7 @@ test.describe("depth", () => {
     // The worst case, tested deliberately and once.
     //
     // The biggest component is usually the most interesting thing in the whole
-    // subject and therefore among the likeliest clicks. On VS Code it is
+    // subject and therefore among the likeliest clicks. On private large-repository validation corpus it is
     // src/vs/workbench, 3,625 files and 47,339 symbols in a 50 MB shard, and
     // opening it pins the browser at 100% CPU indefinitely. A demo where the
     // most obvious thing to click kills the tab is worse than one missing it.

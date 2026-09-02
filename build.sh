@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Solution Explorer build script
+# SysCorpus build script
 # Runs the analyzer and builds the static viewer.
 # Output: viewer/dist/ (deploy anywhere)
 

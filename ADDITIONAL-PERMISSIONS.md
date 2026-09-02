@@ -45,7 +45,7 @@ legal and compliance teams can verify it from the repository itself:
 
 - Granted: <YYYY-MM-DD>
 - Scope: <exactly what is permitted, e.g. "internal non-production evaluation
-  of Solution Explorer by employees of Grantee, on Grantee's own source code">
+  of SysCorpus by employees of Grantee, on Grantee's own source code">
 - Versions covered: <version range or "all versions published during the term">
 - Term: <fixed end date, or "until revoked in writing">
 - Conditions: <attribution, no redistribution, feedback, whatever applies>

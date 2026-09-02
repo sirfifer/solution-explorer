@@ -837,7 +837,7 @@ def gate_coverage_complete(store_path: Path, src: Path) -> GateResult:
 
     Cross-references a real filesystem walk against the store's coverage
     ledger, exactly the method scripts/benchmark-engine.py's `_ledger_report`
-    already proved against VS Code (TASKS.md: "16,482 files walked, EVERY file
+    already proved against private large-repository validation corpus (TASKS.md: "16,482 files walked, EVERY file
     accounted for exactly once, zero unaccounted"). Reused rather than
     reinvented: a pruned directory's single ledger row stands for everything
     beneath it (the pruned-directory ruling), so a file under an
@@ -899,7 +899,7 @@ def gate_detect_only_share(arch_dir: Path, gates_cfg: dict) -> GateResult:
 
     The denominator is deliberately restricted to `analyzer.constants.CODE_LANGUAGES`
     and is the whole point of the gate. `manifest.stats.languages` counts every
-    file type, so on VS Code it is 76% TypeScript and **18% JSON**, plus markdown,
+    file type, so on private large-repository validation corpus it is 76% TypeScript and **18% JSON**, plus markdown,
     css, yaml and html. Measuring the detect-only share against that total makes
     JSON and Markdown read as "languages we cannot parse" and yields 21.9%
     against a 25% limit; measuring it against code lines yields **0.10%**.
@@ -1766,7 +1766,7 @@ VIEWER_DIR = REPO_ROOT / "viewer"
 PREVIEW_GATE_MIDDLEWARE = REPO_ROOT / "infrastructure" / "preview-gate" / "_middleware.js"
 
 # Upstream files worth carrying into the bundle beside UPSTREAM-LICENSE.txt.
-# LICENSE-REVIEW.md step 4 asks for the NOTICE analogue; VS Code ships
+# LICENSE-REVIEW.md step 4 asks for the NOTICE analogue; private large-repository validation corpus ships
 # ThirdPartyNotices.txt rather than a file literally called NOTICE.
 UPSTREAM_LICENSE_CANDIDATES = ("LICENSE", "LICENSE.txt", "LICENSE.md", "COPYING")
 UPSTREAM_NOTICE_CANDIDATES = ("NOTICE", "NOTICE.txt", "ThirdPartyNotices.txt")

@@ -1,6 +1,6 @@
 """Watching a run that takes hours.
 
-The 2026-08-25 VS Code run enhanced 569 components and 5,453 relationships and
+The 2026-08-25 private large-repository validation corpus run enhanced 569 components and 5,453 relationships and
 published a progress bar that read "0 of 1" for 100 minutes, with a status line
 that named no component and could not distinguish "working" from "wedged".
 

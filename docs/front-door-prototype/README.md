@@ -1,6 +1,6 @@
 # SysCorpus front-door prototype
 
-This is a dependency-free interactive prototype for the comprehension-first SysCorpus redesign.
+This is the historical dependency-free prototype that informed the comprehension-first SysCorpus Overview. The production viewer is now authoritative: Overview is the primary interface, while the former dense workspace is deprecated and retained temporarily for compatibility and validation.
 
 Run it from the repository root:
 
@@ -21,6 +21,5 @@ Supporting artifacts:
 - `DESIGN-PROPOSAL.md` — rationale, lens decisions, data contracts, execution plan, and acceptance criteria.
 - `MOBILE-AND-CROSS-CLIENT-EXECUTION.md` — rendered mobile assessment, immediate fixes, native interaction model, and the shared web/iOS snapshot and A/B plan.
 - `GRAPH-ENGINE-EVALUATION.md` — current 2D engine decision, corrected routing integration, limits, replacement thresholds, and the shared 2D/3D scene contract.
-- `INTERFACE-COMPARISON-AND-VSCODE-ROLLOUT.md` — one-data-stack New/Classic comparison contract and the staged plan for graduating the new interface onto the VS Code demo and then `main`.
 - `CANONICAL-UNAMENTIS-IOS-DEMO.md` — canonical run identity, safe assembly contract, derived human-view provenance, validation evidence, and local review URLs.
 - `orientation.v1.example.json` — proposed generated human-orientation projection.

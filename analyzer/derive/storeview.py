@@ -86,7 +86,7 @@ class StoreView:
 
         # The derivation-visible filesystem includes ordinary excluded/binary
         # marker files because their existence can still define a real project.
-        # Generated Solution Explorer files remain in the coverage/inventory
+        # Generated SysCorpus files remain in the coverage/inventory
         # ledger but are deliberately absent here: their manifest/package-like
         # names must not create active components from serialized tool output.
         all_paths = [

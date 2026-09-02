@@ -37,11 +37,50 @@ def ds():
     return _load_module()
 
 
+@pytest.fixture(autouse=True)
+def generic_registry(ds, tmp_path, monkeypatch):
+    """Exercise registry wiring without publishing a real or planned subject."""
+    registry_dir = tmp_path / "registry"
+    registry_dir.mkdir()
+    entry = {
+        "slug": "fixture",
+        "subject": {
+            "name": "Private validation fixture",
+            "repo": "https://example.invalid/private-validation.git",
+            "license": "MIT",
+            "governance": "test",
+        },
+        "track": "validation",
+        "policy": {"follow": "pinned", "pin": "fixture-1", "exclude": [], "history": "full"},
+        "hosting": {"cf_project": "syscorpus-fixture", "url": "https://fixture.invalid"},
+        "cadence": "weekly",
+        "budget": {"max_cost_usd": 200.0, "max_wall_minutes": 240},
+        "enrichment": {
+            "pipeline": "ladder",
+            "models": {
+                "p1_orientation": "anthropic-claude-cli:fable",
+                "p2a_bulk": "anthropic-claude-cli:sonnet",
+                "p2b_escalated": "anthropic-claude-cli:opus",
+                "p2c_residue": "anthropic-claude-cli:fable",
+                "p3_adjudication": "anthropic-claude-cli:opus",
+                "p4_synthesis": "anthropic-claude-cli:fable",
+                "p5_determination": "anthropic-claude-cli:fable",
+                "workorder": "anthropic-claude-cli:sonnet",
+            },
+            "iteration": {"min_rounds": 1, "max_rounds": 2},
+        },
+        "gates": {"coverage": "complete", "max_detect_only_line_share": 0.25, "min_enrichment_score": 85},
+        "consent": {"required": False, "state": "n/a", "contacted": None},
+    }
+    (registry_dir / "fixture.json").write_text(json.dumps(entry), encoding="utf-8")
+    monkeypatch.setattr(ds, "REGISTRY_DIR", registry_dir)
+
+
 # --- the registry block --------------------------------------------------------
 
 
-def test_the_vscode_entry_carries_the_wave_one_forced_iteration_decision(ds):
-    entry = ds.load_registry("vscode")
+def test_the_fixture_entry_carries_the_wave_one_forced_iteration_decision(ds):
+    entry = ds.load_registry("fixture")
     enrichment = entry["enrichment"]
     assert enrichment["pipeline"] == "ladder"
     assert enrichment["iteration"]["min_rounds"] == 1, (
@@ -54,7 +93,7 @@ def test_the_vscode_entry_carries_the_wave_one_forced_iteration_decision(ds):
 def test_the_registry_bindings_resolve_to_real_tier_bindings(ds):
     from analyzer.enrich.pipeline import DEFAULT_MODELS, resolve_models
 
-    entry = ds.load_registry("vscode")
+    entry = ds.load_registry("fixture")
     models = resolve_models(entry["enrichment"]["models"])
     assert set(models) >= set(DEFAULT_MODELS)
     assert models["p2a_bulk"].label == "anthropic-claude-cli:sonnet"
@@ -67,7 +106,7 @@ def test_the_registry_bindings_resolve_to_real_tier_bindings(ds):
 
 def test_an_entry_with_no_enrichment_block_is_still_valid(ds):
     """The block is optional: an older entry runs the classic bulk pass."""
-    entry = ds.load_registry("vscode")
+    entry = ds.load_registry("fixture")
     del entry["enrichment"]
     assert ds.validate_registry(entry) == []
 
@@ -105,7 +144,7 @@ def _capture_cmd(ds, monkeypatch, corpus, tmp_path):
 def test_a_ladder_registry_entry_runs_the_ladder_with_its_own_bindings(
     ds, monkeypatch, tmp_path
 ):
-    corpus = ds.load_registry("vscode")
+    corpus = ds.load_registry("fixture")
     cmd = _capture_cmd(ds, monkeypatch, corpus, tmp_path)
 
     assert "--ladder" in cmd
@@ -134,7 +173,7 @@ def test_a_ladder_registry_entry_runs_the_ladder_with_its_own_bindings(
 def test_an_entry_without_the_block_runs_the_classic_pass_untouched(
     ds, monkeypatch, tmp_path
 ):
-    corpus = ds.load_registry("vscode")
+    corpus = ds.load_registry("fixture")
     del corpus["enrichment"]
     cmd = _capture_cmd(ds, monkeypatch, corpus, tmp_path)
     assert "--ladder" not in cmd
@@ -146,7 +185,7 @@ def test_an_entry_without_the_block_runs_the_classic_pass_untouched(
 def test_registry_operator_checkpoint_reaches_the_ladder_cli(
     ds, monkeypatch, tmp_path
 ):
-    corpus = ds.load_registry("vscode")
+    corpus = ds.load_registry("fixture")
     corpus["budget"]["pause_at_cost_usd"] = 75.0
     cmd = _capture_cmd(ds, monkeypatch, corpus, tmp_path)
     assert cmd[cmd.index("--pause-at-cost-usd") + 1] == "75.0"
@@ -155,7 +194,7 @@ def test_registry_operator_checkpoint_reaches_the_ladder_cli(
 def test_observed_continuation_carries_banked_store_and_recovery_sources(
     ds, monkeypatch, tmp_path
 ):
-    corpus = ds.load_registry("vscode")
+    corpus = ds.load_registry("fixture")
     store = tmp_path / "banked.db"
     store.write_text("")
     run_dir = tmp_path / "continuation"
@@ -217,7 +256,7 @@ def _gate(ds, tmp_path, report, monkeypatch):
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "report.json").write_text(json.dumps(report))
     monkeypatch.setattr(ds, "enrichment_run_dir", lambda slug, **kw: run_dir)
-    return ds.gate_enrichment_quality("vscode", tmp_path, {"min_enrichment_score": 85})
+    return ds.gate_enrichment_quality("fixture", tmp_path, {"min_enrichment_score": 85})
 
 
 def test_a_healthy_ladder_run_passes_on_census_and_disagreement(ds, tmp_path, monkeypatch):
@@ -294,7 +333,7 @@ def test_a_corrupt_run_report_fails_loudly(ds, tmp_path, monkeypatch):
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "report.json").write_text("{not json")
     monkeypatch.setattr(ds, "enrichment_run_dir", lambda slug, **kw: run_dir)
-    result = ds.gate_enrichment_quality("vscode", tmp_path, {"min_enrichment_score": 85})
+    result = ds.gate_enrichment_quality("fixture", tmp_path, {"min_enrichment_score": 85})
     assert result.state == "FAIL"
     assert "not valid JSON" in result.detail
 
@@ -302,12 +341,12 @@ def test_a_corrupt_run_report_fails_loudly(ds, tmp_path, monkeypatch):
 def test_without_a_ladder_report_the_classic_gate_still_works(ds, tmp_path, monkeypatch):
     """A registry entry with no ladder must behave exactly as it did before."""
     monkeypatch.setattr(ds, "enrichment_run_dir", lambda slug, **kw: tmp_path / "absent")
-    out = ds._out_dir("vscode", tmp_path)
+    out = ds._out_dir("fixture", tmp_path)
     out.mkdir(parents=True, exist_ok=True)
     (out / "enhance-report.json").write_text(json.dumps({
         "failed_partitions": [], "scorer_pass": True, "scorer_summary": "score 91.0",
     }))
-    result = ds.gate_enrichment_quality("vscode", tmp_path, {"min_enrichment_score": 85})
+    result = ds.gate_enrichment_quality("fixture", tmp_path, {"min_enrichment_score": 85})
     assert result.state == "PASS"
     assert "score 91.0" in result.detail
 

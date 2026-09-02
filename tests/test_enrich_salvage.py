@@ -1,9 +1,7 @@
 """Salvaging a response that the transport damaged or the ceiling cut short.
 
-Every case here is drawn from the 2026-08-25 VS Code run, where 10 of 31
-completed rung-2a partitions were paid for and then discarded because the
-parser gave up on text that was mostly intact. The corpus lives at
-``demos/runs/vscode/2026-08-25/enrichment/failures/``.
+The cases reproduce transport damage observed in private large-repository
+validation without embedding or depending on the unpublished subject corpus.
 
 The suite asserts both directions. Salvage has to recover what the model
 actually wrote, and it has to REFUSE anything that would let a partition be
@@ -13,19 +11,12 @@ recorded as answered while storing nothing.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from analyzer.enrich.engine import _parse_json_object, _repair_truncated, _strip_fences
 
 # The top-level keys a contract partition response must carry. Passed as the
 # shape guard everywhere the ladder parses one.
 PARTITION_KEYS = ("components", "relationships")
-
-FAILURES = (
-    Path(__file__).resolve().parents[1]
-    / "demos/runs/vscode/2026-08-25/enrichment/failures"
-)
-
 
 def _payload(components: int = 8, relationships: int = 6) -> dict:
     """A response shaped like a real rung-2a answer."""
@@ -164,23 +155,15 @@ def test_an_inner_fragment_is_not_a_response():
         assert _parse_json_object(fragment, expect_keys=PARTITION_KEYS) is None
 
 
-def test_the_real_discarded_tails_are_refused_not_faked():
-    """The ten real discarded responses, asserted honestly.
-
-    `--output-format json` returns only the FINAL turn, so each of these files
-    begins mid-string and the earlier turn, where the components were actually
-    written, is not in the file at all. No runtime salvage can recover them:
-    the information is not present. They are here to prove salvage refuses
-    them rather than inventing a hollow success, and the real defence against
-    this class is upstream (pinned effort, the ceiling tripwire, and the retry).
-    """
-    if not FAILURES.is_dir():
-        return
-    tails = sorted(FAILURES.glob("*.txt"))
-    assert tails, "the discarded-response corpus should be committed"
-    for path in tails:
-        obj = _parse_json_object(path.read_text(), expect_keys=PARTITION_KEYS)
-        assert obj is None, f"{path.name} is a mid-object tail and must not 'recover'"
+def test_mid_object_tails_are_refused_not_faked():
+    """A final-turn tail lacks the earlier component data and cannot be salvaged."""
+    tails = (
+        'continued explanation", "evidence": [{"kind": "file", "path": "src/a.ts"}]}}}',
+        '"status": "answered", "evidence": []}, "self_state": "grounded"}}',
+        'remaining relationship prose without a top-level response object',
+    )
+    for tail in tails:
+        assert _parse_json_object(tail, expect_keys=PARTITION_KEYS) is None
 
 
 def test_prose_is_not_an_object():

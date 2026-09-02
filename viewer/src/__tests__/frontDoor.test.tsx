@@ -6,6 +6,7 @@ import { getLens, listAvailableLenses } from "../lenses";
 import { ExperienceSwitcher } from "../components/ExperienceSwitcher";
 import { conciseOverviewStatement, SystemOverview } from "../components/SystemOverview";
 import { ViewerPreferences } from "../components/ViewerPreferences";
+import { LegacyInterfaceNotice } from "../components/LegacyInterfaceNotice";
 import { HelpSystem } from "../components/HelpSystem";
 import { SupportPanel } from "../components/SupportPanel";
 import type { Architecture, Component, SecurityProjection, SupportProjection } from "../types";
@@ -169,7 +170,7 @@ describe("experience aperture", () => {
   it("switches without clearing Workbench navigation and persists the last mode", () => {
     useArchStore.setState({ architecture: architecture(), selectedComponentId: "api" });
     render(<ExperienceSwitcher />);
-    fireEvent.click(screen.getByRole("button", { name: "Classic interface" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deprecated legacy interface" }));
     expect(useArchStore.getState().experienceMode).toBe("workbench");
     expect(useArchStore.getState().selectedComponentId).toBe("api");
     expect(JSON.parse(localStorage.getItem("arch-experience-preferences-v1") ?? "{}").lastMode).toBe("workbench");
@@ -189,19 +190,27 @@ describe("experience aperture", () => {
     expect(screen.getByText("Same data")).toBeTruthy();
     expect(screen.getByText(/Comparing/).textContent).toContain("Transit");
     const classicNewTab = screen.getByRole("link", {
-      name: "Open Classic explorer in a new tab with the same data",
+      name: "Open Legacy workspace (deprecated) in a new tab with the same data",
     });
     expect(classicNewTab.getAttribute("href")).toBe(
       "/demo?data=.%2Farchitecture&component=api&lens=support&mode=workbench#compare",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Switch to Classic explorer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Legacy workspace (deprecated)" }));
     expect(useArchStore.getState().experienceMode).toBe("workbench");
     expect(useArchStore.getState().preferencesOpen).toBe(false);
   });
 
   it("defaults a fresh session to the new front door", () => {
     expect(useArchStore.getState().startView).toBe("overview");
+    expect(useArchStore.getState().experienceMode).toBe("overview");
+  });
+
+  it("marks the legacy surface deprecated and returns to the primary Overview", () => {
+    useArchStore.setState({ experienceMode: "workbench" });
+    render(<LegacyInterfaceNotice />);
+    expect(screen.getByText("Deprecated interface.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Return to primary Overview" }));
     expect(useArchStore.getState().experienceMode).toBe("overview");
   });
 

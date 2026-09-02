@@ -200,7 +200,7 @@ def cmd_write_malformed(path: Path) -> int:
 PUBLICATION_PAYLOAD = {
     "publication_version": 1,
     "publisher": {
-        "name": "Solution Explorer Demo",
+        "name": "SysCorpus Demo",
         "contact": "demo@example.com",
         "url": "",
     },

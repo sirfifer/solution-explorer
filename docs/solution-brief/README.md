@@ -1,6 +1,6 @@
 # SysCorpus product and vision overview
 
-Current working collateral, dated August 27, 2026.
+Current working collateral, updated September 1, 2026.
 
 - `index.html` is the screen and browser-print version.
 - `syscorpus-product-overview.pdf` is the ready-to-print, six-page US Letter version.

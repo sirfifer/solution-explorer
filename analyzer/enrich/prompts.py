@@ -136,7 +136,7 @@ metadata, password hashes"
 """
 
 
-# Character budgets for one component's fact block. The 569-block VS Code mean is
+# Character budgets for one component's fact block. The 569-block private large-repository validation corpus mean is
 # 1,417 characters, so these bound the pathological tail without touching a
 # normal block. A prompt that cannot fit in a context window is not a quality
 # choice, it is a failed call.
@@ -622,7 +622,7 @@ class StoreFacts:
 
         Bounded in BYTES before it is returned, not just in item counts. Every
         list here was already capped by length, which is no protection at all
-        when one entry is enormous: on the VS Code snapshot a single `cli`
+        when one entry is enormous: on the private large-repository validation corpus snapshot a single `cli`
         capability carried a 366,116-character `detail` full of inferred test
         records, making `cli/src/util` a 373,027-character block, 263 times the
         569-block mean and larger on its own than any context window this runs
