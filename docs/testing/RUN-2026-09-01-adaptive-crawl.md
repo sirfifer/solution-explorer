@@ -286,3 +286,82 @@ where without the fix it went 414 px to 325 px and the node moved 22 px. Half
 and full still reserve, the 62 percent content area with nothing selected is
 untouched, and the mobile J1 case passed ten runs out of ten followed by a clean
 56 of 56 quick run.
+
+## Engine audit, 2026-09-02
+
+The viewer is React Flow over ELK, and those two own layout, viewport,
+positioning and hit testing. This pass went back over the fixes above and moved
+everything that had reimplemented one of those onto the engine's own API. Two
+crawl runs of 56 of 56 with no findings, the mobile J1 case five for five, lint
+clean, 632 unit tests, build clean.
+
+**Pan to selection.** Was: the node's screen rectangle rebuilt by hand from
+`viewport.x/y/zoom` and the container rect, a hand-written rectangle
+containment and overlap test in `utils/graphVisibility`, and `setCenter` on a
+midpoint computed from a guessed 280x140 when the node's measured size was
+missing. Now: the canvas and each overlay are converted to flow coordinates
+with `screenToFlowPosition`, the node is tested against them with
+`isNodeIntersecting` (`partially: false` for "wholly inside the canvas",
+`partially: true` for "touches an overlay"), the node's bounds come from the
+instance form of `getNodesBounds`, which reports what React Flow measured in
+the DOM, and the move is `fitView({ nodes: [selected], padding, minZoom: zoom,
+maxZoom: zoom, duration })` with the zoom pinned to the zoom already on screen,
+so it pans and never scales. Both behavioural rules are unchanged: a visible,
+unobstructed selection is never re-centred (S5), and a node picked on the
+canvas is never moved even when obstructed.
+
+Guessing a size is now a bug rather than a fallback. The first version of this
+refactor read `measured` off the node object in React state, which a fresh
+layout can leave undefined for a render or two, and treated that as "not
+visible": every direct tap on a phone then re-framed the level and slid the node
+out from under the second tap, and the mobile J1 case failed at every hop, twice
+in a row. Reading the bounds from React Flow's node lookup instead fixed it, and
+where there is no measurement yet the view is now left exactly where it is,
+because the next layout re-runs the effect anyway.
+
+**Node hover preview.** Was: a `position: fixed` portal into `document.body` at
+coordinates worked out from the trigger's client rect, clamped by hand to the
+`.react-flow` box. Now: React Flow's `NodeToolbar` carries it, so the anchor,
+the offset, the "does not scale with zoom" and the portal are the engine's, and
+the card follows the node through a pan instead of going stale. `NodeToolbar`
+has no notion of the canvas edges (`getNodeToolbarTransform` is the node rect,
+the viewport, the position, the offset and the alignment and nothing else), and
+`align` moves the card by whole node and card widths, which cannot hold a 360px
+card inside a 390px phone canvas. So two residual decisions remain, both fed
+from measured screen rects rather than from any viewport arithmetic: which
+`Position` to hand `NodeToolbar` (Top, flipping to Bottom when there is no room
+above, which is what keeps the popup off the header), and how far to slide the
+card off centre to clear either side. `graph.preview_covers_header` still
+passes, with the run recording a preview that actually opened.
+
+**Drill hint and breadcrumb bar.** Both were already Panels at `top-left` and
+`top-right`, which is the engine placing them; the iteration 2 fix caps the
+breadcrumb Panel's width and hides the hint below `sm` at depth rather than
+repositioning either. Panel placement alone cannot solve the overlap, because
+two Panels are independent absolutely positioned boxes and React Flow arbitrates
+nothing between them. The 15rem cap checks out against the 15px margin React
+Flow gives every Panel. Left as it is.
+
+**The double-tap drill detector stays, and here is why.** Measured on the
+review projection at the crawl's own 1280x720 desktop viewport, after every fix
+on this branch: selecting a node still moves it 160px at depth 2 (0px at the
+root, 3px at depth 1), because the detail panel opening resizes the canvas,
+which re-budgets and re-lays out the level. That is more than the 5px the
+detector allows and it is the S5 cause itself, still present and outside the pan
+effect's control. The native `onNodeDoubleClick` is wired and does fire, so the
+two paths overlap, but removing the custom detector would leave the 160px case
+depending on how fast the reader's second click is. Report only, as instructed.
+
+**Everything else that computes geometry.** `readViewport` in `utils/snapZoom`
+does viewport arithmetic by hand and is kept: it centres on the priority node
+and then slides back inside the content bounds, which `getViewportForBounds`
+cannot express. `fitZoomNow` already uses `getNodesBounds` and
+`getViewportForBounds` and was left alone. `computeOptimalHandles` in
+`utils/layout` picks a handle pair from relative node positions, which React
+Flow has no primitive for; kept. `collectCanvasObstructions` reads a
+`getBoundingClientRect` per overlay, which is the one thing with no engine
+answer, and is now the only hand geometry left in the visibility path.
+`ElkRoutedEdge` decides whether a label fits the canvas by transforming the
+label box with `viewport.x/y/zoom` by hand; it predates this branch and was left
+alone, but it is the one remaining reimplementation of the viewport transform in
+the viewer and should move to `flowToScreenPosition`.

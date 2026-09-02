@@ -37,7 +37,7 @@ import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
 import { ElkRoutedEdge } from "./ElkRoutedEdge";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
-import { isUnobstructed, collectCanvasObstructions } from "../utils/graphVisibility";
+import { isSelectionUnobstructed, collectCanvasObstructions } from "../utils/graphVisibility";
 import { getLens, capabilityCountsByComponent, ruleCountsByComponent, buildBlastAdjacency, blastRadiusFrom, type CapabilityKindCounts, type RuleKindCounts } from "../lenses";
 import type { Component, Relationship } from "../types";
 
@@ -103,7 +103,14 @@ export function ArchitectureGraph() {
 
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { fitView, setCenter, setViewport, getNodes, getEdges, getViewport } = useReactFlow();
+  const {
+    fitView, setCenter, setViewport, getNodes, getEdges, getViewport,
+    screenToFlowPosition, isNodeIntersecting,
+    // The instance form, which resolves ids against React Flow's node lookup
+    // and so reports the size it measured in the DOM. The module-level import
+    // above cannot do that and is used only for whole-graph bounds.
+    getNodesBounds: getMeasuredNodeBounds,
+  } = useReactFlow();
   // Measures the canvas so a selection can be tested for on-screen visibility.
   const containerRef = useRef<HTMLDivElement>(null);
   const layoutTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -596,25 +603,23 @@ export function ArchitectureGraph() {
     // sheet). Containment alone parked a tour stop under the minimap. A node
     // that is inside and unobstructed still does not move, which is what S5
     // above requires.
-    const nodeWidth = selectedNode.measured?.width ?? 280;
-    const nodeHeight = selectedNode.measured?.height ?? 140;
-    const centerX = selectedNode.position.x + nodeWidth / 2;
-    const centerY = selectedNode.position.y + nodeHeight / 2;
-    const viewport = getViewport();
+    //
+    // Both halves are React Flow's own questions: the canvas and each overlay
+    // are converted to flow coordinates with screenToFlowPosition, and the node
+    // is tested against them with isNodeIntersecting. Nothing here rebuilds the
+    // viewport transform or the node's bounds, so a node whose real measured
+    // size differs from any assumption cannot be misjudged.
     const container = containerRef.current;
-    let fullyVisible = false;
-    if (container) {
-      const containerRect = container.getBoundingClientRect();
-      // Node bounds in client space under the current viewport transform.
-      const left = containerRect.left + selectedNode.position.x * viewport.zoom + viewport.x;
-      const top = containerRect.top + selectedNode.position.y * viewport.zoom + viewport.y;
-      const nodeRect = {
-        left,
-        top,
-        right: left + nodeWidth * viewport.zoom,
-        bottom: top + nodeHeight * viewport.zoom,
-      };
-      const insideCanvas = isUnobstructed(nodeRect, containerRect, []);
+    // The node's bounds as React Flow measured them in the DOM. A node it has
+    // not measured yet cannot be judged, and fitView could not frame it either,
+    // so the view is left exactly where it is: measurement bumps
+    // measurementVersion, which re-lays out and re-runs this effect through
+    // layoutVersion. Never guess a size here. Guessing one and centering on it
+    // moves a node out from under the reader's second click, which is S5.
+    const bounds = getMeasuredNodeBounds([selectedComponentId]);
+    const measured = bounds.width > 0 && bounds.height > 0;
+    let bringIntoView = false;
+    if (container && measured) {
       // A node the reader picked ON THE CANVAS never moves, obstructed or not.
       // Moving it under the cursor is exactly what S5 above is about, and the
       // overlay test would otherwise reintroduce it for any node sitting over
@@ -628,13 +633,29 @@ export function ArchitectureGraph() {
       // a clock that a slow re-layout can outrun.
       const recentClick = lastNodeClickRef.current;
       const wasDirectGraphClick = recentClick?.id === selectedComponentId;
-      fullyVisible =
-        insideCanvas &&
-        (wasDirectGraphClick ||
-          isUnobstructed(nodeRect, containerRect, collectCanvasObstructions()));
+      bringIntoView = !isSelectionUnobstructed({
+        node: bounds,
+        paneRect: container.getBoundingClientRect(),
+        obstructions: wasDirectGraphClick ? [] : collectCanvasObstructions(),
+        screenToFlowPosition,
+        isNodeIntersecting,
+      });
     }
-    if (!fullyVisible) {
-      setCenter(centerX, centerY, { duration: 400 });
+    if (bringIntoView) {
+      // fitView IS the engine's "bring these nodes into view". Pinning minZoom
+      // and maxZoom to the zoom already on screen makes it a pan and nothing
+      // else, which both the S5 rule and the double-tap detector depend on: a
+      // node must not change size or scale under the reader's pointer. It also
+      // frames the node from React Flow's own measured bounds rather than from
+      // a guessed 280x140.
+      const { zoom } = getViewport();
+      void fitView({
+        nodes: [{ id: selectedComponentId }],
+        padding: FIT_PADDING,
+        minZoom: zoom,
+        maxZoom: zoom,
+        duration: 400,
+      });
     }
 
     // Blast-radius mode owns the shading while it is on (D5): the pan above
@@ -677,7 +698,9 @@ export function ArchitectureGraph() {
     })));
     // layoutVersion: re-run once ELK has applied real positions so a deep-link
     // restore centers on the laid-out node, not its pre-layout grid slot (F-VW-7).
-  }, [selectedComponentId, layoutVersion, blastRadiusMode, restoreBaseStyles, getNodes, getEdges, setCenter, setNodes, setEdges]);
+  }, [selectedComponentId, layoutVersion, blastRadiusMode, restoreBaseStyles, getNodes, getEdges,
+      fitView, getViewport, getMeasuredNodeBounds, screenToFlowPosition, isNodeIntersecting,
+      setNodes, setEdges]);
 
   // Blast radius shading (D5). An interaction, not a report: with the mode on,
   // the anchored component's transitive DEPENDENTS shade warm (what breaks if
