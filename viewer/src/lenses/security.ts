@@ -1,13 +1,29 @@
 import type { Architecture } from "../types";
 import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
-import { LENS_MATURITY } from "./maturity";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 export const SECURITY_QUESTIONS: LensQuestion[] = [
-  { id: "mechanisms", question: "What authentication mechanisms are visible?", gesture: "Inspect a confirmed mechanism and its exact boundary." },
-  { id: "boundaries", question: "Which communication boundaries are observable?", gesture: "Compare evidenced transport labels without treating unknown as safe." },
-  { id: "credentials", question: "Where are credential inputs referenced?", gesture: "Open the owning component; secret values are never displayed." },
-  { id: "unknown", question: "What cannot this repository prove?", gesture: "Read the explicit not-observable ledger before drawing a conclusion." },
+  {
+    id: "mechanisms",
+    question: "What authentication mechanisms are visible?",
+    gesture: "Inspect a confirmed mechanism and its exact boundary.",
+  },
+  {
+    id: "boundaries",
+    question: "Which communication boundaries are observable?",
+    gesture: "Compare evidenced transport labels without treating unknown as safe.",
+  },
+  {
+    id: "credentials",
+    question: "Where are credential inputs referenced?",
+    gesture: "Open the owning component; secret values are never displayed.",
+  },
+  {
+    id: "unknown",
+    question: "What cannot this repository prove?",
+    gesture: "Read the explicit not-observable ledger before drawing a conclusion.",
+  },
 ];
 
 export function hasSecurityEvidence(architecture: Architecture): boolean {

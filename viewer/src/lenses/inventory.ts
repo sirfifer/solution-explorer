@@ -10,7 +10,7 @@
  */
 import type { Architecture, Component } from "../types";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
-import { LENS_MATURITY } from "./maturity";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 export interface CriticalEntry {
   id: string;

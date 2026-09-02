@@ -50,6 +50,21 @@ probe_inventory:
     # Optional sidecar: present only on the `publication` dataset, so it 404s on
     # every other monolith AND split dataset by design.
     can_404_on: [monolith, split]
+  - match: 'dataUrl(path)'
+    source: App.tsx
+    fn: optionalJson
+    fires: >
+      split-mode boot, once per Overview sidecar, after manifest.json resolves
+      (orientation.json, support.json, security.json all load through this one
+      helper, so the call site has a single literal argument)
+    # Three paths, one call site. The sidecars are additive: every dataset key
+    # here predates them, so all three 404 by design on monolith and on split
+    # alike until a dataset is regenerated with them.
+    allow_path:
+      - "/architecture/orientation.json"
+      - "/architecture/support.json"
+      - "/architecture/security.json"
+    can_404_on: [monolith, split]
   - match: '"./architecture.json"'
     source: App.tsx
     fires: boot fallback on monolith datasets; present there by construction
@@ -113,6 +128,12 @@ datasets:
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
       - path: "/architecture/publication.json"
         reason: "Optional publication-metadata sidecar probe; 404s by design when absent."
+      - path: "/architecture/orientation.json"
+        reason: "Optional Overview orientation sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/support.json"
+        reason: "Optional Overview support sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/security.json"
+        reason: "Optional Overview security sidecar; 404s by design on a dataset generated before the sidecars existed."
 
   split-mode:
     description: >
@@ -128,6 +149,12 @@ datasets:
         reason: "Live-monitoring probe; 404s by design when served statically."
       - path: "/architecture/publication.json"
         reason: "Optional publication-metadata sidecar probe; 404s by design (this split dataset carries no sidecar)."
+      - path: "/architecture/orientation.json"
+        reason: "Optional Overview orientation sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/support.json"
+        reason: "Optional Overview support sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/security.json"
+        reason: "Optional Overview security sidecar; 404s by design on a dataset generated before the sidecars existed."
 
   unenriched:
     description: >
@@ -146,6 +173,12 @@ datasets:
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
       - path: "/architecture/publication.json"
         reason: "Optional publication-metadata sidecar probe; 404s by design when absent."
+      - path: "/architecture/orientation.json"
+        reason: "Optional Overview orientation sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/support.json"
+        reason: "Optional Overview support sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/security.json"
+        reason: "Optional Overview security sidecar; 404s by design on a dataset generated before the sidecars existed."
 
   gaps:
     description: >
@@ -165,6 +198,12 @@ datasets:
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
       - path: "/architecture/publication.json"
         reason: "Optional publication-metadata sidecar probe; 404s by design when absent."
+      - path: "/architecture/orientation.json"
+        reason: "Optional Overview orientation sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/support.json"
+        reason: "Optional Overview support sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/security.json"
+        reason: "Optional Overview security sidecar; 404s by design on a dataset generated before the sidecars existed."
 
   malformed:
     description: >
@@ -184,6 +223,12 @@ datasets:
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
       - path: "/architecture/publication.json"
         reason: "Optional publication-metadata sidecar probe; 404s by design when absent."
+      - path: "/architecture/orientation.json"
+        reason: "Optional Overview orientation sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/support.json"
+        reason: "Optional Overview support sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/security.json"
+        reason: "Optional Overview security sidecar; 404s by design on a dataset generated before the sidecars existed."
 
   old-format:
     description: >
@@ -200,6 +245,12 @@ datasets:
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
       - path: "/architecture/publication.json"
         reason: "Optional publication-metadata sidecar probe; 404s by design when absent."
+      - path: "/architecture/orientation.json"
+        reason: "Optional Overview orientation sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/support.json"
+        reason: "Optional Overview support sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/security.json"
+        reason: "Optional Overview security sidecar; 404s by design on a dataset generated before the sidecars existed."
 
   publication:
     description: >
@@ -222,3 +273,9 @@ datasets:
         reason: "Split-mode probe; 404s by design on a monolith-layout dataset."
       - path: "/architecture/publication.json"
         reason: "Publication-metadata sidecar; present on this dataset (200), allowlisted for parity with the monolith/split datasets where it 404s."
+      - path: "/architecture/orientation.json"
+        reason: "Optional Overview orientation sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/support.json"
+        reason: "Optional Overview support sidecar; 404s by design on a dataset generated before the sidecars existed."
+      - path: "/architecture/security.json"
+        reason: "Optional Overview security sidecar; 404s by design on a dataset generated before the sidecars existed."

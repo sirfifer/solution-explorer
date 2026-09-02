@@ -122,7 +122,7 @@ inventory in `viewer/tests/gui/datasets.yaml`.
 `contract.ts` reads the shipped artifact and imports nothing from `viewer/src`,
 so a change to the app that breaks the published contract shows up as a failure
 rather than being compensated for. There is exactly one agreed exception:
-`src/lenses/maturity.ts`, a dependency-free table of lens ids to stability
+`src/utils/lensMaturity.ts`, a dependency-free table of lens ids to stability
 levels. Which lenses a reader may see is not derivable from the projection
 alone, because a lens the data warrants can still be gated off by its maturity
 on the resolved channel, and a crawl that did not know that would report a

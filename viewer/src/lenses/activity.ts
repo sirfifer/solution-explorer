@@ -19,7 +19,7 @@
  * specific surfaces (ranking, knowledge, coupling) live in ActivityPanel.
  */
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
-import { LENS_MATURITY } from "./maturity";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 // The Activity question list (I14), each pairing a human question with the exact
 // gesture that answers it. Every id is exercised in activityQuestions.test.

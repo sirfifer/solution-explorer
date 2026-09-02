@@ -339,7 +339,12 @@ def check_probe_inventory(
     cannot wildcard a same-text fetch in a different file (adversarial review
     F1). Additionally, every inventory entry whose can_404_on names a layout
     must be allowlisted (by allow_path) in every dataset of that layout, so
-    the reviewed allowlists cannot drift from the code.
+    the reviewed allowlists cannot drift from the code. allow_path takes one
+    path or a list of them, because one call site can request several: an
+    entry is keyed by (source, argument text), so a helper that loads three
+    files through one parameterized fetch (App.tsx's optionalJson and the
+    Overview sidecars) is one entry, and every path it can request is
+    declared on it.
     """
     inventory = registry.get("probe_inventory") or []
     if not inventory:
@@ -389,8 +394,11 @@ def check_probe_inventory(
     datasets = registry.get("datasets") or {}
     for entry in inventory:
         layouts = entry.get("can_404_on") or []
-        allow_path = entry.get("allow_path")
-        if layouts and not allow_path:
+        raw_allow = entry.get("allow_path")
+        allow_paths = [
+            p for p in (raw_allow if isinstance(raw_allow, list) else [raw_allow]) if p
+        ]
+        if layouts and not allow_paths:
             findings.append(
                 f"probes: inventory entry {entry.get('match')!r} names "
                 "can_404_on layouts but no allow_path"
@@ -399,12 +407,14 @@ def check_probe_inventory(
         for key, spec in datasets.items():
             if spec.get("layout") in layouts:
                 allowed = {e.get("path") for e in spec.get("allow_errors") or []}
-                if allow_path not in allowed:
-                    findings.append(
-                        f"probes: dataset '{key}' (layout {spec.get('layout')}) "
-                        f"does not allowlist {allow_path} required by probe "
-                        f"{entry.get('match')!r}"
-                    )
+                for allow_path in allow_paths:
+                    if allow_path not in allowed:
+                        findings.append(
+                            f"probes: dataset '{key}' (layout "
+                            f"{spec.get('layout')}) does not allowlist "
+                            f"{allow_path} required by probe "
+                            f"{entry.get('match')!r}"
+                        )
 
 
 SKIP_STEP_MARKER = "welcome dialog"

@@ -15,7 +15,7 @@
  * breaks the published contract shows up as a failure rather than being
  * compensated for.
  *
- * The one agreed exception is the lens maturity table (src/lenses/maturity.ts),
+ * The one agreed exception is the lens maturity table (src/utils/lensMaturity.ts),
  * imported below. Which lenses a reader may see is not derivable from the
  * projection alone: a lens the data warrants can still be gated off by its
  * maturity on the resolved channel, and a crawl that did not know that would
@@ -30,7 +30,7 @@ import path from "node:path";
 
 import type { APIRequestContext } from "@playwright/test";
 
-import { LENS_MATURITY } from "../../src/lenses/maturity";
+import { LENS_MATURITY } from "../../src/utils/lensMaturity";
 
 export interface ExpectedComponent {
   id: string;
@@ -648,6 +648,12 @@ export function allowedErrorPaths(): string[] {
   return [
     "/live-config.json",
     "/architecture/publication.json",
+    // The Overview sidecars, loaded through App.tsx's optionalJson helper. They
+    // are additive, so a projection generated before they existed 404s on all
+    // three by design.
+    "/architecture/orientation.json",
+    "/architecture/support.json",
+    "/architecture/security.json",
     ...extra,
   ];
 }

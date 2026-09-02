@@ -86,6 +86,28 @@ surfaces:
     file: StatusDashboard.tsx
   - component: SolutionIndex
     file: SolutionIndex.tsx
+  # The Overview interface and the two human-view lens panels that landed with
+  # it. They are interactive surfaces, so they belong here rather than in the
+  # ignore list, but the AI plan has no Overview vector yet: the deterministic
+  # crawl is what walks them today. Each therefore carries a waiver in
+  # plan/waivers.yaml naming that crawl coverage, which keeps the missing AI
+  # cases a decision printed on every run instead of an omission.
+  - component: SystemOverview
+    file: SystemOverview.tsx
+  - component: ExperienceSwitcher
+    file: ExperienceSwitcher.tsx
+  - component: ViewerPreferences
+    file: ViewerPreferences.tsx
+  - component: ThemeSwitcher
+    file: ThemeSwitcher.tsx
+  - component: TrustLedger
+    file: TrustLedger.tsx
+  - component: WorkbenchTrustStrip
+    file: WorkbenchTrustStrip.tsx
+  - component: SupportPanel
+    file: SupportPanel.tsx
+  - component: SecurityPanel
+    file: SecurityPanel.tsx
 
 ignore:
   - file: MarkdownRenderer.tsx
@@ -118,3 +140,13 @@ ignore:
     reason: "Part of AdminDashboard; same Phase 4 deferral."
   - file: admin/SettingsTab.tsx
     reason: "Part of AdminDashboard; same Phase 4 deferral."
+  - file: ElkRoutedEdge.tsx
+    reason: >
+      React Flow edge renderer; it draws the route ELK solved and reveals the
+      label above a zoom threshold. Nothing to click. Exercised implicitly by
+      every graph case (V1, V2). No standalone user flow.
+  - file: LegacyInterfaceNotice.tsx
+    reason: >
+      Static deprecation notice above the legacy workspace. Its one control is
+      a shortcut into Overview, which is the same store transition
+      ExperienceSwitcher owns and is covered there. No surface of its own.

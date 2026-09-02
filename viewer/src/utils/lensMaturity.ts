@@ -16,10 +16,16 @@
  * is safe to be one precisely because it is data with no behaviour: no React,
  * no store, no DOM, nothing to execute.
  *
- * The lens definitions below read their `maturity` from here, so this is the
- * source rather than a copy of it. Moving a lens to "beta" here moves it in the
- * app and in the crawl's expectations at the same time, which is the property
- * that makes a duplicated table not worth having.
+ * It lives under `utils/` rather than `lenses/` because `lenses/` holds one
+ * definition file per lens and nothing else. That convention is load bearing:
+ * `scripts/gui-plan-check.py` enumerates every `lenses/*.ts` as a lens
+ * definition, so a support module parked there reads as a lens that failed to
+ * parse.
+ *
+ * The lens definitions read their `maturity` from here, so this is the source
+ * rather than a copy of it. Moving a lens to "beta" here moves it in the app
+ * and in the crawl's expectations at the same time, which is the property that
+ * makes a duplicated table not worth having.
  */
 
 /** Stability of a surface. Mirrors `Channel` in utils/channel.ts by value. */

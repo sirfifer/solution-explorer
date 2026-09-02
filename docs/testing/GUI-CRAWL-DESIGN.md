@@ -159,8 +159,10 @@ Derived from the projection, never typed into a spec:
   `lenses/flow.ts` over the manifest; design iff `design_signals`). Maturity
   gating by channel is honoured: the contract reads the registry's maturity
   table only through a small exported list that the build can import without
-  importing the app (a JSON or TS constant with no React dependency). If the
-  channel gates a lens off, it is expected absent.
+  importing the app, `viewer/src/utils/lensMaturity.ts`, a TS constant with no
+  React, store or DOM dependency. It sits under `utils/` rather than `lenses/`
+  because `lenses/` holds one lens definition file per lens and nothing else.
+  If the channel gates a lens off, it is expected absent.
 - `pathToDeepest`: the component chain from a root to a deepest component,
   for the drill journey.
 - `loadDetail(id)`: the detail shard for a component, fetched through the

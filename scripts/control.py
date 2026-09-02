@@ -207,7 +207,7 @@ def _mobile_disabled(params: dict) -> bool:
     return str(value).strip().lower() in ("0", "false", "no", "off")
 
 
-def _validate_params(job: "Job", params: dict) -> Optional[str]:
+def _validate_params(job: Job, params: dict) -> Optional[str]:
     """The one place slug and job-specific validation happen.
 
     Shared between JobRunner.start() (the HTTP path) and the CLI's --dry-run,

@@ -9,7 +9,7 @@
  * answers it, and the gestures are exercised in a test.
  */
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
-import { LENS_MATURITY } from "./maturity";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 // The Structure question list (I14), spanning Sillito's scopes with the gestures
 // the viewer supports today. Each id is exercised in lensQuestions.test.

@@ -98,3 +98,73 @@
   reason: "Same as lens:design: the boundary-strength summary is a Design panel row."
 - token: component:DesignPanel
   reason: "Same as lens:design: the panel mounts only under the Design lens. Retire together with the lens waiver."
+- token: lens:support
+  reason: >
+    Exercised by the deterministic crawl (surfaces.spec.ts checks the lens
+    switcher offers exactly the lenses the data warrants, and that every
+    present entry opens a surface with something in it), but no AI-plan case
+    is written yet: the plan has no Overview vector, and support is one of the
+    two human-view lenses that shipped with it. Retire by authoring V5 rows
+    for the lens and each subview below.
+- token: subview:support/attention
+  reason: "Same as lens:support: the ranked-attention list is a SupportPanel section, walked by the crawl's surface entry, not by a plan case."
+- token: subview:support/configuration
+  reason: "Same as lens:support: the configuration group renders only under the lens."
+- token: subview:support/external
+  reason: "Same as lens:support: the external-reliance group renders only under the lens."
+- token: subview:support/entry
+  reason: >
+    Same as lens:support. The entry-point gesture is reached from Overview's
+    question routes, which overview.spec.ts walks; the AI plan has no Overview
+    vector to walk them from.
+- token: lens:security
+  reason: >
+    Exercised by the deterministic crawl on the same two surfaces.spec.ts
+    checks as lens:support (lens presence and surface entry), and no AI-plan
+    case is written yet for the same reason: no Overview vector. Retire by
+    authoring V5 rows for the lens and each subview below.
+- token: subview:security/mechanisms
+  reason: "Same as lens:security: the confirmed-mechanisms group is a SecurityPanel section, walked by the crawl's surface entry, not by a plan case."
+- token: subview:security/boundaries
+  reason: "Same as lens:security: the communication-boundaries group renders only under the lens."
+- token: subview:security/credentials
+  reason: "Same as lens:security: the credential-inputs group renders only under the lens; values are never displayed."
+- token: subview:security/unknown
+  reason: "Same as lens:security: the not-observable ledger is a SecurityPanel section under the lens."
+- token: component:SystemOverview
+  reason: >
+    Exercised by the deterministic crawl (overview.spec.ts walks the three
+    directions, the question routes and their continues, and the portrait
+    cards). The AI plan has no Overview vector yet, so no case claims it.
+    Retire by authoring one.
+- token: component:ExperienceSwitcher
+  reason: >
+    Exercised by the deterministic crawl (overview.spec.ts moves between
+    Overview and the legacy workspace through open-workbench and
+    open-overview). No AI-plan case yet; retire with the Overview vector.
+- token: component:ViewerPreferences
+  reason: >
+    Exercised by the deterministic crawl (overview.spec.ts opens the
+    preferences drawer and switches interface from it). No AI-plan case yet;
+    retire with the Overview vector.
+- token: component:ThemeSwitcher
+  reason: >
+    The dress popover in the Overview header. Its mount is walked by the
+    deterministic crawl with the header; no AI-plan case exercises a theme
+    change yet. Retire with the Overview vector, which is where the theme and
+    variant controls live.
+- token: component:TrustLedger
+  reason: >
+    Exercised by the deterministic crawl (overview.spec.ts opens the trust
+    drawer from the ledger entry and closes it, asserting nothing changed).
+    No AI-plan case yet; retire with the Overview vector.
+- token: component:WorkbenchTrustStrip
+  reason: >
+    The compact chip row carrying the ledger, findings, supply-chain and tours
+    entries in the legacy workspace. Exercised by the deterministic crawl
+    (surfaces.spec.ts opens every present entry). No AI-plan case claims the
+    strip itself; retire with the Overview vector.
+- token: component:SupportPanel
+  reason: "Same as lens:support: the panel mounts only under the Support lens. Retire together with the lens waiver."
+- token: component:SecurityPanel
+  reason: "Same as lens:security: the panel mounts only under the Security lens. Retire together with the lens waiver."

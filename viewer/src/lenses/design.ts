@@ -37,7 +37,7 @@ import type {
 } from "../types";
 import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
-import { LENS_MATURITY } from "./maturity";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 // The panel order, taken from the ranked-finding list in Part 3 of the research
 // document. This is the order a reader meets the findings in, chosen because

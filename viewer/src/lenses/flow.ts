@@ -23,7 +23,7 @@
  */
 import type { Architecture, Component, Relationship } from "../types";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
-import { LENS_MATURITY } from "./maturity";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 // The component types that participate in a screen flow.
 export const FLOW_COMPONENT_TYPES = new Set(["screen", "tab", "tab-container"]);
