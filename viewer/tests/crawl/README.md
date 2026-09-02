@@ -654,6 +654,19 @@ projection (168 components, 4 tours):**
   coverage annotation naming why, so a skip is a fact in the record rather than
   a silent hole.
 
+**A fourth harness lesson, from the tours and graph occlusion checks:**
+
+- **An occlusion read taken during the pan animation reports a covering that a
+  reader never sees.** `describeOcclusion` read `document.elementFromPoint`
+  once, right after the in-view wait passed. Selecting a tour stop or a
+  component triggers ArchitectureGraph's 400ms `fitView` pan, and a read taken
+  150ms in finds the node still travelling under the minimap or a panel that
+  will not be there once it settles. `waitForUnoccluded` now polls the same
+  point every 100ms for up to two seconds, same shape as `waitForInView`, and
+  only reports the finding if the node is still covered when the ceiling
+  passes. Every read of where a node is must poll until the engine's animation
+  has settled.
+
 ## What it does not cover yet
 
 Named so the gaps are decisions rather than oversights:

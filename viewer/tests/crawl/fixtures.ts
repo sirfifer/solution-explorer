@@ -919,6 +919,61 @@ export async function describeOcclusion(page: Page, selector: string): Promise<s
   }, selector);
 }
 
+/** What `waitForUnoccluded` found. */
+export interface OcclusionResult {
+  /** True when the node was still covered once the ceiling was reached. */
+  occluded: boolean;
+  /** What covered the node on the last read that found a cover, or null if it never was. */
+  lastCover: string | null;
+  /** How long the node stayed covered: until it cleared, or the ceiling if it never did. */
+  coveredForMs: number;
+}
+
+/**
+ * Poll a node's centre point until nothing else is painted over it, or give up
+ * at `ceilingMs`.
+ *
+ * A single `describeOcclusion` read taken right after the in-view wait passes
+ * catches ArchitectureGraph's own pan animation (fitView, 400ms) rather than a
+ * defect: at 150ms after a tour step or a selection the node is still travelling
+ * and something else legitimately sits where it will end up, and by 600ms it has
+ * settled. The same lesson `waitForStableBox` already paid for on click
+ * actionability applies here to what a reader can see, so this is `waitForInView`
+ * shaped: `expect.poll` at 100ms intervals, Node-enforced, bounded by `ceilingMs`.
+ *
+ * Not weakened by the retry: a node still covered once the ceiling passes is
+ * still a finding, and the result carries what covered it last and how long it
+ * stayed covered, so the report reads as a cause rather than a flake.
+ */
+export async function waitForUnoccluded(
+  page: Page,
+  selector: string,
+  ceilingMs = 2_000,
+): Promise<OcclusionResult> {
+  const start = Date.now();
+  let lastCover: string | null = null;
+  let clearedAt: number | null = null;
+  try {
+    await expect
+      .poll(
+        async () => {
+          const cover = await describeOcclusion(page, selector);
+          if (cover) {
+            lastCover = cover;
+            return false;
+          }
+          clearedAt = Date.now();
+          return true;
+        },
+        { timeout: ceilingMs, intervals: [100] },
+      )
+      .toBe(true);
+    return { occluded: false, lastCover, coveredForMs: (clearedAt ?? start) - start };
+  } catch {
+    return { occluded: true, lastCover, coveredForMs: Date.now() - start };
+  }
+}
+
 /**
  * The visible instance of an entry point, opening whatever hides it.
  *
