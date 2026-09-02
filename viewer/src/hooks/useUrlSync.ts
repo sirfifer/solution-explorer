@@ -23,91 +23,103 @@ export function useUrlSync(): void {
   const architecture = useArchStore((s) => s.architecture);
   const urlRestoredRef = useRef(false);
   const applyingPopStateRef = useRef(false);
+  // True while the one-shot restore below is applying the URL to the store.
+  // The restore's mode change is not a handoff the reader made, so it must not
+  // push a history entry: a cold deep link would otherwise arrive with a
+  // duplicate entry on the stack and Back would appear to do nothing.
+  const restoringUrlRef = useRef(false);
 
   // Restore navigation state from URL on initial architecture load.
   useEffect(() => {
     if (!architecture || urlRestoredRef.current) return;
     urlRestoredRef.current = true;
+    restoringUrlRef.current = true;
+    try {
+      const urlState = parseUrlState();
+      const store = useArchStore.getState();
 
-    const urlState = parseUrlState();
-    const store = useArchStore.getState();
+      const hasWorkbenchIntent = Boolean(
+        urlState.lens || urlState.component || urlState.drill || urlState.file ||
+        urlState.flow || urlState.capability || urlState.entity || urlState.rule ||
+        urlState.finding,
+      );
+      if (urlState.mode) store.setExperienceMode(urlState.mode);
+      else if (hasWorkbenchIntent) store.setExperienceMode("workbench");
+      if (urlState.level) store.setSemanticLevel(urlState.level);
 
-    const hasWorkbenchIntent = Boolean(
-      urlState.lens || urlState.component || urlState.drill || urlState.file ||
-      urlState.flow || urlState.capability || urlState.entity || urlState.rule ||
-      urlState.finding,
-    );
-    if (urlState.mode) store.setExperienceMode(urlState.mode);
-    else if (hasWorkbenchIntent) store.setExperienceMode("workbench");
-    if (urlState.level) store.setSemanticLevel(urlState.level);
-
-    // Restore the lens first so the graph selects the right nodes/edges before
-    // drill/selection are applied (P6-1). Unknown/unavailable ids fall back to
-    // Structure inside setLens.
-    if (urlState.lens) {
-      store.setLens(urlState.lens);
-    }
-
-    // Flow lens follow state (P6-2). If the link names an entry flow (and the
-    // Flow lens is active and available), enter follow mode and jump to the saved
-    // step. This drives its own selection, so it takes precedence over the
-    // component/drill params below.
-    if (urlState.flow && useArchStore.getState().lens === "flow") {
-      store.setFlowEntry(urlState.flow);
-      if (urlState.step) store.flowGoToStep(urlState.step);
-      return;
-    }
-
-    // Capability/Data lens selection (P6-3). If the link names a capability (under
-    // the Capability lens) or an entity (under the Data lens), select it; that
-    // drives its own component selection, so it takes precedence over the
-    // component/drill params below.
-    if (urlState.capability && useArchStore.getState().lens === "capability") {
-      store.selectCapability(urlState.capability);
-      return;
-    }
-    if (urlState.entity && useArchStore.getState().lens === "data") {
-      store.selectEntity(urlState.entity);
-      return;
-    }
-
-    // Rules lens selection (P6-6). If the link names a rule (under the Rules
-    // lens), select it; that drives its own component selection, so it takes
-    // precedence over the component/drill params below.
-    if (urlState.rule && useArchStore.getState().lens === "rules") {
-      store.selectRule(urlState.rule);
-      return;
-    }
-    // Design lens selection (D4). If the link names a finding (under the
-    // Design lens), select it; selection navigates to the first implicated
-    // component, mirroring the sibling lenses.
-    if (urlState.finding && useArchStore.getState().lens === "design") {
-      store.selectDesignFinding(urlState.finding);
-      return;
-    }
-
-    // Inbound file/line deep link takes precedence: it computes its own drill and
-    // selection from the owning component, so it overrides any component/drill
-    // params (P3-2). The tab param is still honored, defaulting to the Files tab.
-    if (urlState.file) {
-      // Seed the tab into the URL before navigation so the detail panel mounts on
-      // it; the URL writer below preserves it as component/drill are filled in.
-      replaceUrlState({ tab: urlState.tab || "files" });
-      store.openFileDeepLink(urlState.file, urlState.line ?? null);
-      return;
-    }
-
-    // Restore drill level first (so the component is visible in the graph).
-    if (urlState.drill) {
-      const drillComp = store.getComponentById(urlState.drill);
-      if (drillComp) {
-        store.drillInto(drillComp);
+      // Restore the lens first so the graph selects the right nodes/edges before
+      // drill/selection are applied (P6-1). Unknown/unavailable ids fall back to
+      // Structure inside setLens.
+      if (urlState.lens) {
+        store.setLens(urlState.lens);
       }
-    }
 
-    // Then restore selected component.
-    if (urlState.component) {
-      store.selectComponent(urlState.component);
+      // Flow lens follow state (P6-2). If the link names an entry flow (and the
+      // Flow lens is active and available), enter follow mode and jump to the saved
+      // step. This drives its own selection, so it takes precedence over the
+      // component/drill params below.
+      if (urlState.flow && useArchStore.getState().lens === "flow") {
+        store.setFlowEntry(urlState.flow);
+        if (urlState.step) store.flowGoToStep(urlState.step);
+        return;
+      }
+
+      // Capability/Data lens selection (P6-3). If the link names a capability (under
+      // the Capability lens) or an entity (under the Data lens), select it; that
+      // drives its own component selection, so it takes precedence over the
+      // component/drill params below.
+      if (urlState.capability && useArchStore.getState().lens === "capability") {
+        store.selectCapability(urlState.capability);
+        return;
+      }
+      if (urlState.entity && useArchStore.getState().lens === "data") {
+        store.selectEntity(urlState.entity);
+        return;
+      }
+
+      // Rules lens selection (P6-6). If the link names a rule (under the Rules
+      // lens), select it; that drives its own component selection, so it takes
+      // precedence over the component/drill params below.
+      if (urlState.rule && useArchStore.getState().lens === "rules") {
+        store.selectRule(urlState.rule);
+        return;
+      }
+      // Design lens selection (D4). If the link names a finding (under the
+      // Design lens), select it; selection navigates to the first implicated
+      // component, mirroring the sibling lenses.
+      if (urlState.finding && useArchStore.getState().lens === "design") {
+        store.selectDesignFinding(urlState.finding);
+        return;
+      }
+
+      // Inbound file/line deep link takes precedence: it computes its own drill and
+      // selection from the owning component, so it overrides any component/drill
+      // params (P3-2). The tab param is still honored, defaulting to the Files tab.
+      if (urlState.file) {
+        // Seed the tab into the URL before navigation so the detail panel mounts on
+        // it; the URL writer below preserves it as component/drill are filled in.
+        replaceUrlState({ tab: urlState.tab || "files" });
+        store.openFileDeepLink(urlState.file, urlState.line ?? null);
+        // openFileDeepLink asks the panel for the Files tab, which is this path's
+        // documented default. A link that named its own tab still wins.
+        if (urlState.tab) store.setPendingDetailTab(urlState.tab);
+        return;
+      }
+
+      // Restore drill level first (so the component is visible in the graph).
+      if (urlState.drill) {
+        const drillComp = store.getComponentById(urlState.drill);
+        if (drillComp) {
+          store.drillInto(drillComp);
+        }
+      }
+
+      // Then restore selected component.
+      if (urlState.component) {
+        store.selectComponent(urlState.component);
+      }
+    } finally {
+      restoringUrlRef.current = false;
     }
   }, [architecture]);
 
@@ -150,13 +162,20 @@ export function useUrlSync(): void {
           // Carry the Design lens finding so it is shareable (D4).
           finding: state.selectedDesignFindingId || undefined,
           // Preserve the active-tab param that DetailPanel manages; rebuilding
-          // the URL from component/drill alone would erase it (F-VW-7).
-          tab: parseUrlState().tab,
+          // the URL from component/drill alone would erase it (F-VW-7). A tab
+          // belongs to a detail panel, though, so once nothing is selected it
+          // is not preserved: it used to outlive Home, Escape and a pane click
+          // and sit in the URL naming a panel nobody could see (GUI crawl
+          // 2026-09-01, journey.context_leak).
+          tab: state.selectedComponentId ? parseUrlState().tab : undefined,
         };
-        // pushState for drill navigation (supports browser back), replaceState
-        // for selection or a lens-only change (minor changes that should not add
-        // a history entry).
-        if (drillChanged) {
+        // pushState for drill navigation and for crossing between the Overview
+        // and the workbench (both support browser back), replaceState for
+        // selection or a lens-only change (minor changes that should not add a
+        // history entry). Without the mode clause the handoff from the front
+        // door REPLACED the entry it arrived on, so browser Back left the site
+        // entirely (GUI crawl 2026-09-01, overview.back_wrong_mode).
+        if (drillChanged || (experienceChanged && !restoringUrlRef.current)) {
           pushUrlState(update);
         } else {
           replaceUrlState(update);

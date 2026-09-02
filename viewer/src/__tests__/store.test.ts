@@ -198,6 +198,153 @@ describe("ArchStore", () => {
     });
   });
 
+  // Home, drill-up and drill-in all mean "nothing is selected any more", and
+  // each used to clear a different subset: the drill and the selection went,
+  // detailItem and activePanel stayed, so the reader arrived back at the top of
+  // the graph with the previous component's panel still on screen while the
+  // beacon reported nothing selected (GUI crawl 2026-09-01,
+  // journey.context_leak, tour.exit_leak).
+  describe("clearing the selection (Home, drill-up, drill-in)", () => {
+    function drilledWithASelection() {
+      const grandchild = makeComponent({ id: "gc", name: "Grandchild" });
+      const child = makeComponent({ id: "child", name: "Child", children: [grandchild] });
+      const parent = makeComponent({ id: "parent", name: "Parent", children: [child] });
+      useArchStore.getState().setArchitecture(makeArchitecture({ components: [parent] }));
+      useArchStore.getState().drillInto(parent);
+      useArchStore.getState().drillInto(child);
+      useArchStore.getState().selectComponent("gc");
+      const state = useArchStore.getState();
+      expect(state.detailItem).not.toBeNull();
+      expect(state.activePanel).toBe("detail");
+    }
+
+    it("navigateToBreadcrumb(-1) closes the detail panel it left open", () => {
+      drilledWithASelection();
+
+      useArchStore.getState().navigateToBreadcrumb(-1);
+
+      const state = useArchStore.getState();
+      expect(state.drillLevel).toBeNull();
+      expect(state.breadcrumbs).toHaveLength(0);
+      expect(state.selectedComponentId).toBeNull();
+      expect(state.detailItem).toBeNull();
+      expect(state.activePanel).toBeNull();
+      expect(state.annotatingComponentId).toBeNull();
+    });
+
+    it("drillUp closes the detail panel it left open", () => {
+      drilledWithASelection();
+
+      useArchStore.getState().drillUp();
+
+      const state = useArchStore.getState();
+      expect(state.drillLevel).toBe("parent");
+      expect(state.detailItem).toBeNull();
+      expect(state.activePanel).toBeNull();
+    });
+
+    it("drillInto closes the previous component's detail panel", () => {
+      drilledWithASelection();
+      const parent = useArchStore.getState().getComponentById("parent")!;
+
+      useArchStore.getState().drillInto(parent);
+
+      const state = useArchStore.getState();
+      expect(state.drillLevel).toBe("parent");
+      expect(state.detailItem).toBeNull();
+      expect(state.activePanel).toBeNull();
+    });
+
+    it("leaves the review panel up in review mode, as selectComponent(null) does", () => {
+      drilledWithASelection();
+      useArchStore.setState({ reviewMode: true, activePanel: "review" });
+
+      useArchStore.getState().navigateToBreadcrumb(-1);
+
+      const state = useArchStore.getState();
+      expect(state.selectedComponentId).toBeNull();
+      expect(state.detailItem).toBeNull();
+      // The review panel is the workspace, not the old context.
+      expect(state.activePanel).toBe("review");
+      useArchStore.setState({ reviewMode: false, activePanel: null });
+    });
+
+    // Home is the reader's "start over". It used to leave every lens-scoped
+    // selection standing, so the beacon and the URL still carried
+    // entity=/capability=/rule=/finding= and a half-walked flow from wherever
+    // the reader had been (GUI crawl 2026-09-01, journey.context_leak:
+    // 'entity="entity:unamentis:curriculum" survived the reset').
+    it("navigateToBreadcrumb(-1) clears the lens-scoped selections and the flow walk", () => {
+      drilledWithASelection();
+      useArchStore.setState({
+        selectedCapabilityId: "cap:x",
+        selectedEntityId: "entity:x",
+        selectedRuleId: "rule:x",
+        selectedDesignFindingId: "finding:x",
+        flowEntryId: "parent",
+        flowStep: 2,
+      });
+
+      useArchStore.getState().navigateToBreadcrumb(-1);
+
+      const state = useArchStore.getState();
+      expect(state.selectedCapabilityId).toBeNull();
+      expect(state.selectedEntityId).toBeNull();
+      expect(state.selectedRuleId).toBeNull();
+      expect(state.selectedDesignFindingId).toBeNull();
+      expect(state.flowEntryId).toBeNull();
+      expect(state.flowStep).toBe(0);
+    });
+
+    // The other half of the same decision. Drilling up or into a component is
+    // movement within the structure lens, not a reset, and a lens switch keeps
+    // the selection by design (I12); only Home means "start over".
+    it("drillUp leaves the lens-scoped selections alone", () => {
+      drilledWithASelection();
+      useArchStore.setState({ selectedEntityId: "entity:x", selectedRuleId: "rule:x" });
+
+      useArchStore.getState().drillUp();
+
+      const state = useArchStore.getState();
+      expect(state.selectedEntityId).toBe("entity:x");
+      expect(state.selectedRuleId).toBe("rule:x");
+      useArchStore.setState({ selectedEntityId: null, selectedRuleId: null });
+    });
+  });
+
+  // The mobile detail sheet's "peek" default is right for a direct tap on a
+  // graph node and wrong for a selection the app made for the reader. The store
+  // is where the two are told apart: selectComponent is the node tap,
+  // navigateToComponent is every path that places the reader somewhere they did
+  // not touch (GUI crawl 2026-09-01, tour.evidence_dead on mobile).
+  describe("revealDetail", () => {
+    function twoComponents() {
+      const child = makeComponent({ id: "parent/child", name: "Child" });
+      const parent = makeComponent({ id: "parent", name: "Parent", children: [child] });
+      useArchStore.getState().setArchitecture(makeArchitecture({ components: [parent] }));
+    }
+
+    it("navigateToComponent asks for the detail to be revealed", () => {
+      twoComponents();
+      expect(useArchStore.getState().revealDetail).toBe(false);
+
+      useArchStore.getState().navigateToComponent("parent/child");
+
+      expect(useArchStore.getState().revealDetail).toBe(true);
+      useArchStore.getState().clearRevealDetail();
+      expect(useArchStore.getState().revealDetail).toBe(false);
+    });
+
+    it("selectComponent, the direct node tap, does not", () => {
+      twoComponents();
+      useArchStore.getState().clearRevealDetail();
+
+      useArchStore.getState().selectComponent("parent");
+
+      expect(useArchStore.getState().revealDetail).toBe(false);
+    });
+  });
+
   describe("getVisibleComponents", () => {
     it("returns top-level components when not drilled", () => {
       const comp = makeComponent({ id: "comp-1" });

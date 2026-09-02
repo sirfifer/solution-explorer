@@ -68,6 +68,31 @@ function mobileSheetSize(sheetHeight: number): string {
   return `calc(${sheetHeight}vh - ${(MOBILE_NAV_HEIGHT_PX * sheetHeight) / 100}px)`;
 }
 
+// How much of the canvas the mounted mobile sheet reserves below itself.
+//
+// The detail sheet's peek snap reserves nothing, so the peek strip overlays the
+// bottom of the canvas instead of shrinking it. A tap on a node selects it,
+// which mounts this sheet, and reserving 15vh at that moment relaid the canvas
+// and slid the just-tapped node about 22 px, past the 5 px slop the double-tap
+// drill detector allows, so drilling by double-tap failed roughly one phone run
+// in two (GUI crawl 2026-09-01, journey.drill_hop). That is the same rule as
+// the pan effect's: a node the reader just touched must not move under their
+// finger (comprehension-study S5). The canvas height is therefore identical
+// before and after the first tap, and the reclaimed space from the empty-sheet
+// fix is untouched, because nothing selected still mounts no sheet at all.
+//
+// Half and full still reserve: by then the reader has asked for the sheet, the
+// strip would cover most of the canvas, and a guided selection landing under it
+// is brought clear by the pan effect, which already counts both mobile sheets
+// as obstructions.
+export function mobileGraphReserve(
+  sheet: { kind: "detail" | "lens"; snap: SnapPoint; sheetHeight: number } | null,
+): string {
+  if (!sheet) return "0px";
+  if (sheet.kind === "detail" && sheet.snap === "peek") return "0px";
+  return mobileSheetSize(sheet.sheetHeight);
+}
+
 // Session storage keys for UI state persistence
 const STORAGE_KEYS = {
   leftCollapsed: "arch-left-collapsed",
@@ -146,6 +171,7 @@ function MobileBottomSheet({ darkMode, activePanel, bottomSheet }: {
       {/* Peek header: always visible, shows component name */}
       {component && snap === "peek" && !isDragging && (
         <div
+          data-testid="detail-sheet-peek"
           className="flex items-center gap-2 px-4 py-2 shrink-0 cursor-pointer"
           onClick={() => setSnap("half")}
         >
@@ -175,6 +201,26 @@ function MobileBottomSheet({ darkMode, activePanel, bottomSheet }: {
       )}
     </div>
   );
+}
+
+// Whether the mobile detail/review sheet should mount, exported for the same
+// testability reason as shouldShowMobileLensSheet below.
+//
+// The sheet used to mount on activePanel alone. In review mode, and on any path
+// that leaves the panel open with nothing selected, that put a peek-height
+// sheet on screen with no content in it: the peek header only renders for a
+// selected component, so the reader got an empty 15vh slab and the canvas lost
+// the same 15vh to mobileGraphBottomReserve (GUI crawl 2026-09-01, mobile
+// chrome). Nothing selected now means no sheet at all and the canvas keeps the
+// space. A selected component, and the review summary, are unchanged.
+export function shouldShowMobileDetailSheet({ isDesktopViewport, activePanel, hasDetail }: {
+  isDesktopViewport: boolean;
+  activePanel: string | null;
+  hasDetail: boolean;
+}): boolean {
+  if (isDesktopViewport) return false;
+  if (activePanel === "review") return true;
+  return activePanel === "detail" && hasDetail;
 }
 
 // Whether the mobile lens sheet should mount (O10), exported so its exact
@@ -261,6 +307,138 @@ export function MobileLensSheet({ lens, darkMode, bottomSheet }: {
   );
 }
 
+/** The open-overlay flags the beacon publishes, gathered in one place. */
+interface OverlayFlags {
+  searchOpen: boolean;
+  findingsOpen: boolean;
+  supplyChainOpen: boolean;
+  inventoryOpen: boolean;
+  toursOpen: boolean;
+  helpOpen: boolean;
+  welcomeOpen: boolean;
+  adminOpen: boolean;
+  activePanel: string | null;
+  trustOpen: boolean;
+  preferencesOpen: boolean;
+}
+
+/**
+ * Which overlays and dialogs are open right now, by the names the beacon
+ * publishes.
+ *
+ * One derivation, two readers: the beacon prints it, and the global Escape
+ * handler asks it whether anything else owns the key. Each overlay registers
+ * its own Escape listener while it is open, so a second handler that did not
+ * check this list would close the detail panel underneath an open dialog on
+ * the same keypress.
+ */
+function openOverlays(f: OverlayFlags): string[] {
+  return [
+    f.searchOpen && "search",
+    f.findingsOpen && "findings",
+    f.supplyChainOpen && "supply-chain",
+    f.inventoryOpen && "inventory",
+    f.toursOpen && "tours",
+    (f.helpOpen || f.welcomeOpen) && "help",
+    f.adminOpen && "admin",
+    f.activePanel === "review" && "review",
+    f.trustOpen && "trust",
+    f.preferencesOpen && "preferences",
+  ].filter((x): x is string => typeof x === "string");
+}
+
+// The navigation-state beacon.
+//
+// One always-mounted, visually hidden element that publishes the store's
+// navigation state as data-* attributes. It renders nothing and reads nothing
+// but the store, so it cannot change behaviour; it exists so a test (and anyone
+// with devtools open) can read the app's own account of where it is, rather
+// than inferring it from which panels happen to be on screen.
+//
+// Asserting on it alone would be worthless: a beacon that says "reset" while a
+// tour panel is still up is exactly the bug worth catching. So the crawl checks
+// the beacon AND the visible expression of the same state, and a disagreement
+// between them is the finding.
+//
+// aria-hidden because it is not content: a screen reader has the real UI.
+function NavStateBeacon() {
+  const drillLevel = useArchStore((s) => s.drillLevel);
+  const selectedComponentId = useArchStore((s) => s.selectedComponentId);
+  const lens = useArchStore((s) => s.lens);
+  const flowEntryId = useArchStore((s) => s.flowEntryId);
+  const flowStep = useArchStore((s) => s.flowStep);
+  const selectedCapabilityId = useArchStore((s) => s.selectedCapabilityId);
+  const selectedEntityId = useArchStore((s) => s.selectedEntityId);
+  const selectedRuleId = useArchStore((s) => s.selectedRuleId);
+  const selectedDesignFindingId = useArchStore((s) => s.selectedDesignFindingId);
+  const activeTourId = useArchStore((s) => s.activeTourId);
+  const tourStep = useArchStore((s) => s.tourStep);
+  const activePanel = useArchStore((s) => s.activePanel);
+  const detailItem = useArchStore((s) => s.detailItem);
+  const blastRadiusMode = useArchStore((s) => s.blastRadiusMode);
+  const searchOpen = useArchStore((s) => s.searchOpen);
+  const findingsOpen = useArchStore((s) => s.findingsSurface.open);
+  const supplyChainOpen = useArchStore((s) => s.supplyChainOpen);
+  const inventoryOpen = useArchStore((s) => s.inventoryOpen);
+  const toursOpen = useArchStore((s) => s.toursOpen);
+  const helpOpen = useArchStore((s) => s.helpOpen);
+  const welcomeOpen = useArchStore((s) => s.welcomeOpen);
+  const adminOpen = useArchStore((s) => s.adminOpen);
+  // The front door (main, 2026-09-01). The mode is the single most important
+  // thing a test can ask, because every other field means something different
+  // depending on which aperture published it: a bare drill in Overview is not
+  // the same claim as a bare drill in the workbench.
+  const experienceMode = useArchStore((s) => s.experienceMode);
+  const semanticLevel = useArchStore((s) => s.semanticLevel);
+  const overviewDirection = useArchStore((s) => s.overviewDirection);
+  // Whether this workbench was ARRIVED AT from Overview rather than entered
+  // directly. The app already branches on it (HelpSystem suppresses the
+  // first-run modal after a handoff, because "replacing it immediately with the
+  // legacy five-step modal makes a deliberate handoff feel like a restart"), so
+  // a test that could not see it would be blind to the difference between the
+  // two ways of standing in the same place.
+  const overviewHandoff = useArchStore((s) => s.overviewHandoff);
+  const trustOpen = useArchStore((s) => s.trustOpen);
+  const preferencesOpen = useArchStore((s) => s.preferencesOpen);
+
+  const overlays = openOverlays({
+    searchOpen, findingsOpen, supplyChainOpen, inventoryOpen, toursOpen,
+    helpOpen, welcomeOpen, adminOpen, activePanel, trustOpen, preferencesOpen,
+  });
+
+  return (
+    <div
+      data-testid="nav-state"
+      aria-hidden="true"
+      className="hidden"
+      data-drill={drillLevel ?? ""}
+      data-selected={selectedComponentId ?? ""}
+      data-lens={lens}
+      data-flow={flowEntryId ?? ""}
+      // Flow and tour steps are indexes, meaningless without a walk in
+      // progress, so they read "" rather than 0 when nothing is being walked.
+      data-flow-step={flowEntryId ? String(flowStep) : ""}
+      data-capability={selectedCapabilityId ?? ""}
+      data-entity={selectedEntityId ?? ""}
+      data-rule={selectedRuleId ?? ""}
+      data-finding={selectedDesignFindingId ?? ""}
+      data-tour={activeTourId ?? ""}
+      data-tour-step={activeTourId ? String(tourStep) : ""}
+      data-panel={activePanel ?? ""}
+      // "aggregate" is a fourth detail kind the store carries; it is published
+      // as itself rather than folded into "" so the beacon never claims nothing
+      // is open while an aggregate's member list is.
+      data-detail={detailItem?.type ?? ""}
+      data-overlays={overlays.join(",")}
+      data-blast={blastRadiusMode ? "true" : ""}
+      data-mode={experienceMode}
+      data-level={semanticLevel}
+      data-direction={overviewDirection}
+      data-handoff={overviewHandoff ? "true" : ""}
+    />
+  );
+}
+
 export function App() {
   const {
     architecture,
@@ -297,6 +475,9 @@ export function App() {
     workbenchDensity,
     setPreferencesOpen,
     toggleReviewMode,
+    detailItem,
+    revealDetail,
+    clearRevealDetail,
   } = useArchStore();
 
   useLiveMonitor();
@@ -409,12 +590,18 @@ export function App() {
     onDismiss: () => useArchStore.getState().setLens("structure"),
     initialSnap: initialMobileLensSnap(lens),
   });
-  const mobileGraphBottomReserve = !isDesktopViewport
-    && (activePanel === "detail" || activePanel === "review")
-    ? mobileSheetSize(bottomSheet.sheetHeight)
-    : shouldShowMobileLensSheet({ isPanelViewport, lens, activePanel })
-      ? mobileSheetSize(lensBottomSheet.sheetHeight)
-      : "0px";
+  const showMobileDetailSheet = shouldShowMobileDetailSheet({
+    isDesktopViewport,
+    activePanel,
+    hasDetail: detailItem !== null,
+  });
+  const mobileGraphBottomReserve = mobileGraphReserve(
+    showMobileDetailSheet
+      ? { kind: "detail", snap: bottomSheet.snap, sheetHeight: bottomSheet.sheetHeight }
+      : shouldShowMobileLensSheet({ isPanelViewport, lens, activePanel })
+        ? { kind: "lens", snap: lensBottomSheet.snap, sheetHeight: lensBottomSheet.sheetHeight }
+        : null,
+  );
 
   // Collapsible + resizable sidebar widths (restored from session storage)
   const [leftCollapsed, setLeftCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.leftCollapsed, workbenchDensity === "focused"));
@@ -595,6 +782,51 @@ export function App() {
   // Deep linking: two-way URL sync with popstate suppression (F-VW-2).
   useUrlSync();
 
+  // Escape closes the detail panel, which the help dialog's own shortcut list
+  // has always advertised ("Esc: Close panels / search") and nothing
+  // implemented: every Escape listener in the app belongs to an overlay and is
+  // registered only while that overlay is open (GUI crawl 2026-09-01,
+  // journey.advertised_shortcut_dead).
+  //
+  // Last in the chain rather than competing with them: if any overlay, dialog
+  // or drawer is open it owns the key, and a tour owns it too (Escape exits the
+  // tour). The state is read at event time so this registers once and cannot go
+  // stale. A field with focus keeps its own Escape (AnnotationInput cancels an
+  // annotation with it), so a keypress from inside one is left alone.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) return;
+      const s = useArchStore.getState();
+      if (s.activeTourId) return;
+      const open = openOverlays({
+        searchOpen: s.searchOpen,
+        findingsOpen: s.findingsSurface.open,
+        supplyChainOpen: s.supplyChainOpen,
+        inventoryOpen: s.inventoryOpen,
+        toursOpen: s.toursOpen,
+        helpOpen: s.helpOpen,
+        welcomeOpen: s.welcomeOpen,
+        adminOpen: s.adminOpen,
+        activePanel: s.activePanel,
+        trustOpen: s.trustOpen,
+        preferencesOpen: s.preferencesOpen,
+      });
+      if (open.length > 0) return;
+      if (!s.selectedComponentId) return;
+      // selectComponent(null) is the app's definition of a cleared selection,
+      // review mode's panel rule included.
+      s.selectComponent(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   // Auto-expand right panel when content appears
   useEffect(() => {
     if (activePanel === "detail" || activePanel === "review") {
@@ -612,6 +844,19 @@ export function App() {
       bottomSheet.setSnap("half");
     }
   }, [activePanel, bottomSheet.setSnap]);
+
+  // Mobile: a selection the app made FOR the reader has to be visible, for the
+  // same reason review mode does above. The sheet's "peek" default is right for
+  // a direct tap on a graph node, where the reader can see what they touched and
+  // the peek header names it; it is wrong for a tour step, a tour's evidence
+  // link, a search result or a tree row, which land on something the reader
+  // never touched and left them reading a name they already had. The store sets
+  // revealDetail on exactly those paths (see its comment); this consumes it.
+  useEffect(() => {
+    if (!revealDetail) return;
+    bottomSheet.setSnap("half");
+    clearRevealDetail();
+  }, [revealDetail, bottomSheet.setSnap, clearRevealDetail]);
 
   // Apply the dress (data-theme) and the time of day (dark/light) to the root
   // element. Both are pure CSS switches: every themed value in the viewer is a
@@ -682,11 +927,22 @@ export function App() {
   const showLegacyOpeningBands = false;
 
   if (experienceMode === "overview") {
-    return <SystemOverview displayName={displayName} />;
+    // The beacon rides along here too. It is the only element that can answer
+    // "which aperture am I in", so mounting it only in the workbench would
+    // make the one state it exists to publish unreadable in exactly the mode a
+    // fresh reader lands in.
+    return (
+      <>
+        <NavStateBeacon />
+        <SystemOverview displayName={displayName} />
+      </>
+    );
   }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      <NavStateBeacon />
+
       {/* Publication header banner (always region), rendered at the very top per
           the placement contract. Absent-file behavior: renders nothing. */}
       <PublicationBanner />
@@ -709,6 +965,7 @@ export function App() {
               mobile tap-target guideline (header-wide pass); sm:* reverts to the
               original compact size. */}
           <button
+            data-testid="tree-expand"
             className={`lg:hidden flex items-center justify-center p-2 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
             onClick={() => setSidebarOpen(!sidebarOpen)}
             aria-label="Open architecture tree"
@@ -753,6 +1010,7 @@ export function App() {
           {/* Home button - visible when drilled into a component */}
           {drillLevel && (
             <button
+              data-testid="drill-home"
               onClick={() => navigateToBreadcrumb(-1)}
               className={`
                 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
@@ -772,6 +1030,7 @@ export function App() {
               guideline; sm:min-h-0 keeps the compact desktop height (PR #85
               review F3 header-wide follow-up). */}
           <button
+            data-testid="search-button"
             onClick={() => setSearchOpen(true)}
             className={`
               hidden items-center gap-2 px-3 py-1.5 rounded-lg text-sm sm:flex
@@ -795,7 +1054,7 @@ export function App() {
 
           <div className={`hidden rounded-lg p-0.5 xl:flex ${darkMode ? "bg-zinc-900" : "bg-zinc-100"}`} aria-label="Semantic level">
             {(["system", "domain", "component"] as const).map((level) => (
-              <button key={level} onClick={() => setSemanticLevel(level)} className={`rounded-md px-2 py-1 text-[9px] capitalize ${semanticLevel === level ? darkMode ? "bg-zinc-700 text-zinc-100" : "bg-white text-zinc-900 shadow" : "text-zinc-500"}`}>{level}</button>
+              <button data-testid="semantic-level" data-level={level} data-selected={semanticLevel === level} key={level} onClick={() => setSemanticLevel(level)} className={`rounded-md px-2 py-1 text-[9px] capitalize ${semanticLevel === level ? darkMode ? "bg-zinc-700 text-zinc-100" : "bg-white text-zinc-900 shadow" : "text-zinc-500"}`}>{level}</button>
             ))}
           </div>
 
@@ -842,6 +1101,7 @@ export function App() {
               target applies; there is no desktop size to preserve here. */}
           <div ref={moreMenuRef} className="sm:hidden relative">
             <button
+              data-testid="more-menu"
               onClick={() => setMoreMenuOpen(!moreMenuOpen)}
               className={`flex items-center justify-center p-2 rounded-lg min-h-[44px] min-w-[44px] ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
               title="More options"
@@ -877,6 +1137,7 @@ export function App() {
                     <span>{reviewMode ? "Exit review mode" : "Review mode"}</span>
                   </button>
                   <button
+                    data-testid="help-button"
                     onClick={() => { window.dispatchEvent(new Event("arch-viz-open-help")); setMoreMenuOpen(false); }}
                     className={`min-h-11 w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
                   >
@@ -1116,24 +1377,37 @@ export function App() {
         </div>
       )}
 
-      {/* Coverage ledger badge and drill-in panel (P4-4, invariant I2) */}
-      <CoverageBadge />
+      {/* The entry strip: every globally reachable surface this dataset
+          warrants, each present only when its own data is present. Wrapped so
+          the crawl can ask "what does this projection offer" in one query.
+          `contents` means the wrapper renders no box, so the strip lays out
+          exactly as it did before it was wrapped.
 
-      {/* Producer-gap banner (R1 honesty surface), directly under coverage
-          because both are honesty-about-scope; present only when the dataset
-          carries producer gaps. */}
-      <GapsBanner />
+          Note that the whole strip currently sits inside
+          showLegacyOpeningBands, which is a hard-coded false, so none of it
+          renders in the workbench today. The wrapper is here anyway: it is the
+          contract for these entries wherever they are mounted, and the crawl
+          reports their absence rather than being written around it. */}
+      <div data-testid="entry-bar" className="contents">
+        {/* Coverage ledger badge and drill-in panel (P4-4, invariant I2) */}
+        <CoverageBadge />
 
-      {/* Findings surface entry point (P6-8), near the coverage badge; present
-          whenever the dataset carries findings or concerns. */}
-      <FindingsEntry />
+        {/* Producer-gap banner (R1 honesty surface), directly under coverage
+            because both are honesty-about-scope; present only when the dataset
+            carries producer gaps. */}
+        <GapsBanner />
 
-      {/* Supply chain / SBOM entry point (P10-1), present whenever the dataset
-          carries a supply_chain section; opens the SupplyChainSurface overlay. */}
-      <SupplyChainEntry />
+        {/* Findings surface entry point (P6-8), near the coverage badge; present
+            whenever the dataset carries findings or concerns. */}
+        <FindingsEntry />
 
-      {/* Tours entry point (P6-7); present only when the dataset carries tours. */}
-      <ToursEntry />
+        {/* Supply chain / SBOM entry point (P10-1), present whenever the dataset
+            carries a supply_chain section; opens the SupplyChainSurface overlay. */}
+        <SupplyChainEntry />
+
+        {/* Tours entry point (P6-7); present only when the dataset carries tours. */}
+        <ToursEntry />
+      </div>
       </>}
 
       {/* Review mode banner */}
@@ -1163,6 +1437,7 @@ export function App() {
         >
           {leftCollapsed ? (
             <button
+              data-testid="tree-expand"
               onClick={() => setLeftCollapsed(false)}
               className={`w-full h-full flex items-center justify-center ${darkMode ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900" : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"}`}
               title="Expand sidebar"
@@ -1283,7 +1558,7 @@ export function App() {
         )}
 
         {/* Detail / Review panel - mobile bottom sheet */}
-        {!isDesktopViewport && (activePanel === "detail" || activePanel === "review") && (
+        {showMobileDetailSheet && activePanel && (
           <MobileBottomSheet
             darkMode={darkMode}
             activePanel={activePanel}
@@ -1348,6 +1623,7 @@ export function App() {
           <span className="text-xs">Graph</span>
         </button>
         <button
+          data-testid="search-button"
           onClick={() => setSearchOpen(true)}
           className={`flex min-h-11 min-w-14 flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
         >

@@ -265,3 +265,81 @@ describe("SearchOverlay: symbol search re-resolves once the owning component loa
     expect(useArchStore.getState().detailItem).toBeNull();
   });
 });
+
+// The Overview mounts its own SearchOverlay, and every result it offers is a
+// workbench object. Picking one used to select it in the store and leave the
+// reader on the front door with nothing to show for it (GUI crawl 2026-09-01,
+// overview.search_dead). All three result kinds cross over, because all three
+// land somewhere only the workbench draws.
+describe("SearchOverlay: a result chosen from the Overview crosses into the workbench", () => {
+  function searchableArchitecture(): Architecture {
+    return makeArchitecture({
+      files: [{
+        path: "src/alpha/alphaThing.ts", language: "typescript", lines: 10,
+        size_bytes: 100, symbols: ["sym-alpha"], imports: [], exports: [], module_doc: null,
+      }],
+      symbols: [{
+        id: "sym-alpha", name: "alphaThing", kind: "function",
+        file: "src/alpha/alphaThing.ts", line: 1, end_line: 5, code_preview: "",
+        visibility: "public", docstring: null, parent: null, dependencies: [],
+      }],
+    });
+  }
+
+  function pickFirstResultOfKind(kind: string) {
+    const result = document.querySelector(`[data-result-kind="${kind}"]`);
+    expect(result, `a ${kind} result is offered`).not.toBeNull();
+    fireEvent.click(result as Element);
+  }
+
+  beforeEach(() => {
+    resetShardSearchEntries();
+    resetDetailSearchEntries();
+    useArchStore.setState({
+      navigateToComponent: realNavigateToComponent,
+      experienceMode: "overview",
+      selectedComponentId: null,
+      detailItem: null,
+      fileDeepLink: null,
+      fileDeepLinkNotice: null,
+    });
+  });
+
+  for (const kind of ["component", "file", "symbol"]) {
+    it(`sets the workbench aperture for a ${kind} result`, () => {
+      const arch = searchableArchitecture();
+      initializeSearch(arch);
+      useArchStore.setState({
+        architecture: arch, searchOpen: true, searchQuery: "alpha",
+        experienceMode: "overview",
+      });
+      render(<SearchOverlay />);
+
+      pickFirstResultOfKind(kind);
+
+      expect(useArchStore.getState().experienceMode).toBe("workbench");
+    });
+  }
+
+  // On a phone the detail panel is a bottom sheet that opens at "peek", which
+  // is right for a direct tap on a graph node and wrong for a search result:
+  // the reader never touched the thing they landed on, so peek shows them a
+  // name they just typed. Every kind of result asks for the detail to be
+  // revealed, monolithic-mode branches included.
+  for (const kind of ["component", "file", "symbol"]) {
+    it(`asks for the mobile detail sheet to open for a ${kind} result`, () => {
+      const arch = searchableArchitecture();
+      initializeSearch(arch);
+      useArchStore.setState({
+        architecture: arch, searchOpen: true, searchQuery: "alpha",
+        experienceMode: "overview", revealDetail: false,
+      });
+      render(<SearchOverlay />);
+
+      pickFirstResultOfKind(kind);
+
+      expect(useArchStore.getState().revealDetail).toBe(true);
+      useArchStore.getState().clearRevealDetail();
+    });
+  }
+});

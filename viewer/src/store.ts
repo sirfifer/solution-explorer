@@ -367,9 +367,45 @@ interface ArchStore {
   activePanel: Panel;
   detailItem: { type: "component" | "file" | "symbol" | "aggregate"; data: Component | FileInfo | Symbol | AggregateNode } | null;
 
+  // "This selection was made FOR the reader, so show them what it opened."
+  //
+  // On a phone the detail panel is a bottom sheet that starts at its peek snap,
+  // which is the right default for a direct tap on a graph node: the reader can
+  // see the node they touched and a compact header naming it, and swiping up is
+  // their choice. It is the wrong default for every selection the app makes on
+  // the reader's behalf, because there is no gesture of theirs to interpret. A
+  // tour step, a tour's "show me the code" evidence link, a search result and a
+  // tree row all land on a component the reader never touched, and the sheet sat
+  // at peek showing a name they already knew (GUI crawl 2026-09-01,
+  // tour.evidence_dead on mobile: "left the reader on no component's tab").
+  //
+  // Set by those callers, consumed once by App's sheet effect. Direct node taps
+  // go through selectComponent, which deliberately does not set it.
+  revealDetail: boolean;
+  requestDetailReveal: () => void;
+  clearRevealDetail: () => void;
+
   // Search
   searchOpen: boolean;
   searchQuery: string;
+
+  // Overlay flags that used to live in component-local state and are now here
+  // because App has to be able to say, in one place, which overlays are open
+  // (the nav-state beacon it renders for the crawl and for devtools). Lifting
+  // them changes nothing about when they open or close: HelpSystem still owns
+  // every gesture that sets them, and CoverageBadge still owns the inventory's.
+  // Reading them from anywhere else was impossible while they were local, and a
+  // beacon that cannot see an overlay would quietly under-report it.
+  //   helpOpen      the Help dialog (the ? button, the ? key)
+  //   welcomeOpen   the first-run welcome walkthrough
+  //   inventoryOpen the non-source inventory dialog, opened from the coverage
+  //                 drill-in's "Explore inventory" affordance
+  helpOpen: boolean;
+  welcomeOpen: boolean;
+  inventoryOpen: boolean;
+  setHelpOpen: (open: boolean) => void;
+  setWelcomeOpen: (open: boolean) => void;
+  setInventoryOpen: (open: boolean) => void;
 
   // Theme
   darkMode: boolean;
@@ -1113,6 +1149,34 @@ function findOrCreateConcernSet(get: () => ArchStore, concernId: string): string
   return get().createSetFromConcern(concernId);
 }
 
+/**
+ * The state that means "nothing is selected any more".
+ *
+ * selectComponent(null) is the definition, and Home, drill-up and drill-in all
+ * mean exactly that, so they route through this one shape instead of each
+ * clearing a different subset. Before this, Home cleared the drill, the
+ * breadcrumbs and the selection but left detailItem and activePanel alone, so
+ * the reader went back to the top of the graph with the previous component's
+ * detail panel still on screen (GUI crawl 2026-09-01, journey.context_leak).
+ *
+ * Review mode is the one exception, and it is the rule selectComponent already
+ * makes: the review panel is the workspace rather than the old context, so it
+ * survives a cleared selection.
+ */
+function clearedSelection(state: { reviewMode: boolean; activePanel: Panel }): {
+  selectedComponentId: null;
+  detailItem: null;
+  annotatingComponentId: null;
+  activePanel: Panel;
+} {
+  return {
+    selectedComponentId: null,
+    detailItem: null,
+    annotatingComponentId: null,
+    activePanel: state.reviewMode ? state.activePanel : null,
+  };
+}
+
 const initialExperiencePreferences = getExperiencePreferences();
 
 export const useArchStore = create<ArchStore>((set, get) => ({
@@ -1216,8 +1280,14 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   activePanel: null,
   detailItem: null,
+  revealDetail: false,
+  requestDetailReveal: () => set({ revealDetail: true }),
+  clearRevealDetail: () => set({ revealDetail: false }),
 
   searchOpen: false,
+  helpOpen: false,
+  welcomeOpen: false,
+  inventoryOpen: false,
   searchQuery: "",
 
   darkMode: getStoredDarkMode(),
@@ -1339,7 +1409,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   selectComponent: (id) => {
     const arch = get().architecture;
     if (!arch || !id) {
-      set({ selectedComponentId: null, detailItem: null, activePanel: get().reviewMode ? get().activePanel : null, annotatingComponentId: null });
+      set(clearedSelection(get()));
       return;
     }
     const comp = findComponent(arch.components, id);
@@ -1370,8 +1440,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     set({
       drillLevel: component.id,
       breadcrumbs: crumbs,
-      selectedComponentId: null,
-      detailItem: null,
+      ...clearedSelection(get()),
     });
     // Prefetch the newly visible children's detail shards at idle time (P6-4).
     get().prefetchDetails(component.id);
@@ -1380,7 +1449,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   drillUp: () => {
     const { breadcrumbs } = get();
     if (breadcrumbs.length <= 1) {
-      set({ drillLevel: null, breadcrumbs: [], selectedComponentId: null });
+      set({ drillLevel: null, breadcrumbs: [], ...clearedSelection(get()) });
       return;
     }
     const parent = breadcrumbs[breadcrumbs.length - 2];
@@ -1388,21 +1457,43 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     set({
       drillLevel: parent.id,
       breadcrumbs: newCrumbs,
-      selectedComponentId: null,
+      ...clearedSelection(get()),
     });
   },
 
   navigateToBreadcrumb: (index) => {
     const { breadcrumbs } = get();
     if (index < 0) {
-      set({ drillLevel: null, breadcrumbs: [], selectedComponentId: null });
+      // Home is the reader's "start over", and it has to mean it. It used to
+      // clear the drill, the breadcrumbs and the component selection while
+      // leaving every lens-scoped selection standing, so after Home the beacon
+      // and the URL still carried entity=..., capability=..., rule=...,
+      // finding=... or a half-walked flow from wherever the reader had been
+      // (GUI crawl 2026-09-01, journey.context_leak: 'entity=
+      // "entity:unamentis:curriculum" survived the reset').
+      //
+      // Only Home. A lens SWITCH deliberately leaves the selection alone
+      // (invariant I12: the same element stays selected across lenses) and
+      // whether a lens switch should also drop the other lenses' own ids is a
+      // separate design question this does not answer.
+      set({
+        drillLevel: null,
+        breadcrumbs: [],
+        ...clearedSelection(get()),
+        selectedCapabilityId: null,
+        selectedEntityId: null,
+        selectedRuleId: null,
+        selectedDesignFindingId: null,
+        flowEntryId: null,
+        flowStep: 0,
+      });
       return;
     }
     const crumb = breadcrumbs[index];
     set({
       drillLevel: crumb.id,
       breadcrumbs: breadcrumbs.slice(0, index + 1),
-      selectedComponentId: null,
+      ...clearedSelection(get()),
     });
   },
 
@@ -1653,6 +1744,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   setSearchOpen: (open) => set({ searchOpen: open, searchQuery: open ? get().searchQuery : "" }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+  setHelpOpen: (open) => set({ helpOpen: open }),
+  setWelcomeOpen: (open) => set({ welcomeOpen: open }),
+  setInventoryOpen: (open) => set({ inventoryOpen: open }),
 
   toggleDarkMode: () => set((s) => {
     const newValue = !s.darkMode;
@@ -1799,6 +1893,11 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     // Check if the component is top-level (no parent)
     const parentId = findParentId(arch.components, componentId);
 
+    // Every caller of this action is the app placing the reader somewhere they
+    // did not touch (a tour step, an evidence link, a search result, a lens
+    // row, a flow hop, an inbound URL). A direct tap on a graph node goes
+    // through selectComponent instead, so this is the honest single place to
+    // ask the mobile sheet to actually show what was opened. See revealDetail.
     if (parentId) {
       // Nested component: drill to parent, then select
       const parent = findComponent(arch.components, parentId);
@@ -1810,6 +1909,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
           selectedComponentId: componentId,
           detailItem: { type: "component", data: comp },
           activePanel: "detail",
+          revealDetail: true,
         });
       }
     } else {
@@ -1820,6 +1920,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
         selectedComponentId: componentId,
         detailItem: { type: "component", data: comp },
         activePanel: "detail",
+        revealDetail: true,
       });
     }
   },
@@ -1845,6 +1946,13 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     set({
       fileDeepLink: { componentId: owner.id, filePath, line, symbolId: null },
       fileDeepLinkNotice: null,
+      // Ask the panel for the Files tab, where the file is actually marked.
+      // Only the cold-URL route used to seed tab=files, so an in-app link (a
+      // tour's "Show me the code", a finding, a supply-chain evidence row) left
+      // the reader on the owning component's Overview tab with the file marked
+      // on a tab nobody was looking at (GUI crawl 2026-09-01, tour.evidence_dead).
+      // useUrlSync overrides this when an inbound link named its own tab.
+      pendingDetailTab: "files",
     });
 
     if (line == null) return "found";
@@ -2536,6 +2644,17 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     const comp = get().getComponentById(step.target);
     if (comp) {
       get().navigateToComponent(step.target);
+      // A component step is the one selection made for the reader that must NOT
+      // open the mobile detail sheet. The step panel is already on screen with
+      // the title and the narration in it, and two docked surfaces sharing the
+      // bottom of a phone is the same "nowhere to go" the lens sheet records in
+      // App.tsx. Measured: with the sheet at its half snap a tour step left the
+      // canvas 142px of a 408px content area, and the crawl reported three tour
+      // stops whose node never came into view and twenty-nine covered by the
+      // breadcrumb and the drill hint. The step's own evidence link below still
+      // reveals, through openFileDeepLink: "show me the code" is a request for
+      // the detail panel, and a step is a request for the diagram.
+      set({ revealDetail: false });
       return;
     }
     if (step.evidence?.file) {

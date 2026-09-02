@@ -184,7 +184,7 @@ export function ActivityPanel({ mobile = false }: { mobile?: boolean } = {}) {
   }
 
   return (
-    <div className={containerClass}>
+    <div className={containerClass} data-testid="lens-panel" data-lens="activity">
       {header}
       {body}
     </div>

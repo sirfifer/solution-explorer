@@ -48,8 +48,15 @@ const KEYBOARD_SHORTCUTS = [
 
 export function HelpSystem() {
   const { darkMode, overviewHandoff } = useArchStore();
-  const [showHelp, setShowHelp] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(false);
+  // Open/closed lives in the store rather than here so App can publish which
+  // overlays are open on its nav-state beacon. Every gesture that opens or
+  // closes a help surface is still this component's, and the sequencing is
+  // unchanged: welcome is decided by localStorage and the Overview handoff on
+  // mount, help by the ? button, the ? key and the mobile menu event.
+  const showHelp = useArchStore((s) => s.helpOpen);
+  const setShowHelp = useArchStore((s) => s.setHelpOpen);
+  const showWelcome = useArchStore((s) => s.welcomeOpen);
+  const setShowWelcome = useArchStore((s) => s.setWelcomeOpen);
   const [currentStep, setCurrentStep] = useState(0);
   const [activeHelpTab, setActiveHelpTab] = useState<"guide" | "shortcuts" | "about">("guide");
 
@@ -62,7 +69,7 @@ export function HelpSystem() {
     if (!dismissed && !overviewHandoff) {
       setShowWelcome(true);
     }
-  }, [overviewHandoff]);
+  }, [overviewHandoff, setShowWelcome]);
 
   // ? key toggles help; Escape closes it. The help dialog lists its own
   // shortcuts, so Escape not closing it read as broken (comprehension-study
@@ -71,7 +78,7 @@ export function HelpSystem() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "?" && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement)) {
-        setShowHelp((v) => !v);
+        setShowHelp(!useArchStore.getState().helpOpen);
         return;
       }
       if (e.key === "Escape") {
@@ -89,7 +96,7 @@ export function HelpSystem() {
       window.removeEventListener("keydown", handler);
       window.removeEventListener("arch-viz-open-help", openFromMobileMenu);
     };
-  }, [showHelp, showWelcome]);
+  }, [showHelp, showWelcome, setShowHelp, setShowWelcome]);
 
   const dismissWelcome = () => {
     setShowWelcome(false);
@@ -100,6 +107,7 @@ export function HelpSystem() {
     <>
       {/* Help button (fixed) */}
       <button
+        data-testid="help-button"
         onClick={() => setShowHelp(true)}
         className={`
           fixed bottom-4 right-4 z-20 hidden w-8 h-8 rounded-full sm:flex items-center justify-center
@@ -116,7 +124,11 @@ export function HelpSystem() {
 
       {/* Welcome guide overlay */}
       {showWelcome && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          data-testid="help-overlay"
+          data-kind="welcome"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={dismissWelcome} />
           <div className={`
             relative w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden
@@ -188,7 +200,11 @@ export function HelpSystem() {
 
       {/* Help panel */}
       {showHelp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          data-testid="help-overlay"
+          data-kind="help"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowHelp(false)} />
           <div className={`
             relative w-full max-w-md max-h-[80vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col

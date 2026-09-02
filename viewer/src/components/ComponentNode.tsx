@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { memo, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { Component, AnnotationTarget, AnnotationTargetContext } from "../types";
@@ -461,11 +461,63 @@ function ReviewTarget({
 
 // ─── HoverCard ─────────────────────────────────────────────────────────────────
 
+/** Gap kept between the preview and both the node and the canvas edge. */
+const PREVIEW_PAD = 8;
+
+/**
+ * Where the hover preview goes so it stays inside the graph canvas.
+ *
+ * The preview is a fixed-position portal, so nothing about the layout stops it
+ * from being drawn over the header. On a projection with a single root the node
+ * sits centred near the top of the canvas, and the popup covered the lens
+ * switcher, the level toggle, Review and part of Search: every one of those
+ * controls was unclickable while it was up (GUI crawl 2026-09-01,
+ * graph.preview_covers_header).
+ *
+ * The rules are the reader's, not the layout engine's: above the node by
+ * default, below it when there is no room above, and never past either side of
+ * the canvas. Pure and exported so the arithmetic is testable without a
+ * browser.
+ */
+export function clampPreviewToCanvas(
+  trigger: { left: number; right: number; top: number; bottom: number; width: number },
+  canvas: { left: number; right: number; top: number } | null,
+  card: { width: number; height: number },
+): { left: number; top: number } {
+  let left = trigger.left + trigger.width / 2 - card.width / 2;
+  let top = trigger.top - PREVIEW_PAD - card.height;
+  if (canvas) {
+    if (top < canvas.top + PREVIEW_PAD) top = trigger.bottom + PREVIEW_PAD;
+    const minLeft = canvas.left + PREVIEW_PAD;
+    const maxLeft = canvas.right - card.width - PREVIEW_PAD;
+    // A canvas narrower than the card cannot satisfy both edges; pinning to the
+    // left one keeps the popup's start on screen rather than its end.
+    left = maxLeft < minLeft ? minLeft : Math.min(Math.max(left, minLeft), maxLeft);
+  }
+  return { left, top };
+}
+
 function HoverCard({ component, darkMode, triggerRef }: {
   component: Component;
   darkMode: boolean;
   triggerRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  // Measured rather than assumed: the card's height depends on how much
+  // documentation the component carries, and clamping against the 320px maximum
+  // would push a short card below a node it would have fitted above. Hooks stay
+  // above the early returns below (rules of hooks).
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [card, setCard] = useState({ width: 360, height: 320 });
+  useLayoutEffect(() => {
+    const box = cardRef.current?.getBoundingClientRect();
+    if (!box) return;
+    setCard((prev) =>
+      prev.width === box.width && prev.height === box.height
+        ? prev
+        : { width: box.width, height: box.height },
+    );
+  });
+
   const docs = component.docs;
   if (!docs) return null;
 
@@ -476,9 +528,14 @@ function HoverCard({ component, darkMode, triggerRef }: {
 
   const rect = triggerRef.current?.getBoundingClientRect();
   if (!rect) return null;
+  const canvas = triggerRef.current?.closest(".react-flow")?.getBoundingClientRect() ?? null;
+  const { left, top } = clampPreviewToCanvas(rect, canvas, card);
 
   return createPortal(
     <div
+      ref={cardRef}
+      data-testid="node-preview"
+      data-component-id={component.id}
       className={`
         fixed z-[9999] pointer-events-auto
         w-[360px] max-h-[320px] overflow-y-auto
@@ -489,11 +546,7 @@ function HoverCard({ component, darkMode, triggerRef }: {
         }
         backdrop-blur-md
       `}
-      style={{
-        left: rect.left + rect.width / 2,
-        top: rect.top - 8,
-        transform: "translate(-50%, -100%)",
-      }}
+      style={{ left, top }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-3 space-y-2">
@@ -797,6 +850,22 @@ export const ComponentNode = memo(function ComponentNode({
     };
   }, []);
 
+  // A preview can open with no gesture behind it: arriving in the workbench from
+  // the Overview draws a node under wherever the pointer was left, and the
+  // browser treats that as an enter. Nothing then guarantees the matching leave,
+  // so the popup can outlive the reason it appeared. Any pointer move that is
+  // not over this node closes it. Coarse pointers are left alone, so the 500ms
+  // touch-and-hold path is unchanged.
+  useEffect(() => {
+    if (!hovered || isTouchDevice) return;
+    const onPointerMove = (e: PointerEvent) => {
+      const node = nodeRef.current;
+      if (node && !node.contains(e.target as Node)) setHovered(false);
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    return () => window.removeEventListener("pointermove", onPointerMove);
+  }, [hovered, isTouchDevice]);
+
   const handleMouseEnter = () => {
     if (isTouchDevice) return;
     hoverTimeout.current = setTimeout(() => setHovered(true), 400);
@@ -824,6 +893,10 @@ export const ComponentNode = memo(function ComponentNode({
   return (
     <div
       ref={nodeRef}
+      data-testid="graph-node"
+      data-component-id={component.id}
+      data-selected={Boolean(selected)}
+      data-has-children={hasChildren}
       className={`
         relative
         ${selected ? "node-selected" : ""}

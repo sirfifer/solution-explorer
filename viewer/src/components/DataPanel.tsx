@@ -126,7 +126,7 @@ export function DataPanel({ mobile = false }: { mobile?: boolean } = {}) {
     const writes = accessors.filter((a) => a.mode === "write");
     const owner = focused.component_id ? (nameMap[focused.component_id] ?? focused.component_id) : null;
     return (
-      <div className={containerClass}>
+      <div className={containerClass} data-testid="lens-panel" data-lens="data">
         {header}
         <div className="flex-1 overflow-y-auto">
           <div className="px-3 pt-2.5">
@@ -218,7 +218,7 @@ export function DataPanel({ mobile = false }: { mobile?: boolean } = {}) {
   }
 
   return (
-    <div className={containerClass}>
+    <div className={containerClass} data-testid="lens-panel" data-lens="data">
       {header}
       <div className={`px-4 py-2.5 text-[11px] leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}>
         Ranked by how many components touch each entity. Most-touched data first.
@@ -241,6 +241,10 @@ export function DataPanel({ mobile = false }: { mobile?: boolean } = {}) {
                 return (
                   <li key={ent.id}>
                     <button
+                      data-testid="lens-row"
+                      data-lens="data"
+                      data-row-id={ent.id}
+                      data-selected={ent.id === selectedEntityId}
                       onClick={() => selectEntity(ent.id)}
                       className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${darkMode ? "hover:bg-zinc-900" : "hover:bg-white"}`}
                     >

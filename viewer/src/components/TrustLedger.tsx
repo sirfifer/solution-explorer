@@ -22,7 +22,10 @@ export function TrustLedger({ compact = false }: { compact?: boolean }) {
       failed ? `${failed} failed producers` : "",
     ].filter(Boolean).join(" · ") || "No producer issues";
     return (
-      <button onClick={() => setTrustOpen(true)} className={`flex min-h-11 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs sm:min-h-0 sm:text-[10px] ${darkMode ? "border-zinc-800 bg-zinc-900 text-zinc-300" : "border-zinc-200 bg-white text-zinc-600"}`}>
+      // shrink-0 and whitespace-nowrap: this button is the first chip in the
+      // workbench trust strip, a single scrolling row. Without them the label
+      // wrapped inside the button on a phone and took the strip to about 120px.
+      <button data-testid="trust-ledger-entry" onClick={() => setTrustOpen(true)} className={`flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs sm:min-h-0 sm:text-[10px] ${darkMode ? "border-zinc-800 bg-zinc-900 text-zinc-300" : "border-zinc-200 bg-white text-zinc-600"}`}>
         <i className={`h-2 w-2 rounded-full ${trust.source_coverage.status === "complete" ? "bg-emerald-400" : "bg-amber-400"}`} />
         <strong>{coverageLabel}</strong>
         <span>· {producerLabel}</span>
@@ -61,7 +64,7 @@ export function TrustDrawer() {
   const interpreted = architecture.orientation.orientation.interpreted_statement;
   const interpretationStale = Boolean(interpreted?.provenance.stale);
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end bg-black/45" role="dialog" aria-modal="true" aria-label="Evidence and coverage">
+    <div data-testid="trust-drawer" className="fixed inset-0 z-[70] flex justify-end bg-black/45" role="dialog" aria-modal="true" aria-label="Evidence and coverage">
       <button className="absolute inset-0" aria-label="Close evidence and coverage" onClick={() => setOpen(false)} />
       <aside className={`relative h-full w-full max-w-xl overflow-y-auto border-l p-6 shadow-2xl ${darkMode ? "border-zinc-800 bg-zinc-950" : "border-zinc-200 bg-zinc-50"}`}>
         <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-500">Trust ledger</p><h2 className={`mt-1 text-xl font-bold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>What this view knows—and what it does not</h2></div><button className="min-h-11 min-w-11 rounded-lg p-2 text-zinc-500 hover:bg-zinc-800/20" onClick={() => setOpen(false)} aria-label="Close">✕</button></div>

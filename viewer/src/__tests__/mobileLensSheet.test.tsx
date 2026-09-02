@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
-import { initialMobileLensSnap, MobileLensSheet, shouldShowMobileLensSheet } from "../App";
+import { initialMobileLensSnap, mobileGraphReserve, MobileLensSheet, shouldShowMobileDetailSheet, shouldShowMobileLensSheet } from "../App";
 import { useBottomSheet } from "../hooks/useBottomSheet";
 import { useArchStore } from "../store";
 import type { Architecture, Component } from "../types";
@@ -48,6 +48,33 @@ function makeArchitecture(overrides: Partial<Architecture> = {}): Architecture {
 afterEach(() => {
   cleanup();
   useArchStore.setState({ architecture: null });
+});
+
+// The detail sheet used to mount on activePanel alone, so a panel left open
+// with nothing selected put an empty peek-height slab on the phone and took the
+// same 15vh off the canvas through mobileGraphBottomReserve (GUI crawl
+// 2026-09-01, mobile chrome). Tested here for the same reason its lens sibling
+// is: this is the exact decision App.tsx renders on.
+describe("shouldShowMobileDetailSheet", () => {
+  it("shows a selected component's detail on a phone", () => {
+    expect(shouldShowMobileDetailSheet({ isDesktopViewport: false, activePanel: "detail", hasDetail: true })).toBe(true);
+  });
+
+  it("shows nothing when the detail panel is open with nothing selected", () => {
+    expect(shouldShowMobileDetailSheet({ isDesktopViewport: false, activePanel: "detail", hasDetail: false })).toBe(false);
+  });
+
+  it("still shows the review summary, which is content of its own", () => {
+    expect(shouldShowMobileDetailSheet({ isDesktopViewport: false, activePanel: "review", hasDetail: false })).toBe(true);
+  });
+
+  it("shows nothing with no panel open at all", () => {
+    expect(shouldShowMobileDetailSheet({ isDesktopViewport: false, activePanel: null, hasDetail: true })).toBe(false);
+  });
+
+  it("stays hidden on a desktop viewport, where the docked aside owns the detail", () => {
+    expect(shouldShowMobileDetailSheet({ isDesktopViewport: true, activePanel: "detail", hasDetail: true })).toBe(false);
+  });
 });
 
 describe("shouldShowMobileLensSheet (O10)", () => {
@@ -130,5 +157,56 @@ describe("MobileLensSheet renders real panel content at the acceptance viewport 
       "External reliance (1)",
       "Ranked attention",
     ]);
+  });
+});
+
+// The peek snap of the detail sheet must not change the canvas height (GUI
+// crawl 2026-09-01, journey.drill_hop). The first tap on a node selects it,
+// which mounts the detail sheet; if that mount reserves canvas space the layout
+// slides the just-tapped node out from under the reader's finger and the second
+// tap of a double-tap misses the drill detector's 5 px slop. Measured here
+// rather than only in the crawl, because the reserve is a pure function of the
+// sheet's state.
+//
+// Resolves the reserve's calc() string at a real phone viewport: App writes
+// `calc(<vh>vh - <px>px)`, which jsdom does not compute.
+function reservePx(reserve: string, viewportHeightPx: number): number {
+  if (reserve === "0px") return 0;
+  const parsed = /^calc\(([\d.]+)vh - ([\d.]+)px\)$/.exec(reserve);
+  if (!parsed) throw new Error(`unrecognised reserve: ${reserve}`);
+  return (Number(parsed[1]) / 100) * viewportHeightPx - Number(parsed[2]);
+}
+
+describe("mobileGraphReserve at 390x664", () => {
+  const VIEWPORT_H = 664;
+  // The content area the crawl measures at this viewport with nothing selected,
+  // 414 px of 664 (62 percent), reclaimed by the empty-sheet fix.
+  const CONTENT_AREA_PX = 414;
+
+  it("reserves nothing with no sheet mounted, keeping the reclaimed content area", () => {
+    expect(reservePx(mobileGraphReserve(null), VIEWPORT_H)).toBe(0);
+    expect(CONTENT_AREA_PX / VIEWPORT_H).toBeGreaterThan(0.6);
+  });
+
+  it("leaves the canvas height identical before and after the first tap", () => {
+    const beforeTap = CONTENT_AREA_PX - reservePx(mobileGraphReserve(null), VIEWPORT_H);
+    const afterTap = CONTENT_AREA_PX - reservePx(
+      mobileGraphReserve({ kind: "detail", snap: "peek", sheetHeight: 15 }),
+      VIEWPORT_H,
+    );
+    expect(afterTap).toBe(beforeTap);
+    expect(afterTap).toBe(414);
+  });
+
+  it("still reserves once the reader opens the sheet to half or full", () => {
+    expect(reservePx(mobileGraphReserve({ kind: "detail", snap: "half", sheetHeight: 45 }), VIEWPORT_H))
+      .toBeGreaterThan(0);
+    expect(reservePx(mobileGraphReserve({ kind: "detail", snap: "full", sheetHeight: 90 }), VIEWPORT_H))
+      .toBeGreaterThan(0);
+  });
+
+  it("still reserves for the lens sheet, which never opens at peek", () => {
+    expect(reservePx(mobileGraphReserve({ kind: "lens", snap: "half", sheetHeight: 45 }), VIEWPORT_H))
+      .toBeGreaterThan(0);
   });
 });

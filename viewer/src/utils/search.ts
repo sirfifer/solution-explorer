@@ -57,8 +57,11 @@ const detailResultsByComponent = new Map<string, SearchResult[]>();
 // Entries merged from the prebuilt search shards (P6-4). Loaded once, lazily.
 let shardResults: SearchResult[] = [];
 let shardsLoadStarted = false;
-// Flat view rebuilt from baseResults + detail entries + shard entries.
-let allResults: SearchResult[] = [];
+// The merged, deduplicated entries currently in the Fuse index, keyed by
+// `${type}:${id}` and held in index order. Kept across incremental additions so
+// a detail load can append the handful of documents it brings instead of
+// rebuilding the whole index (see addToSearchIndex).
+let entryByKey = new Map<string, SearchResult>();
 
 // How many shard requests loadSearchShards keeps in flight at once. Bounded
 // rather than unbounded: firing all ~85 requests at once risks connection-pool
@@ -140,6 +143,69 @@ export function subscribeSearchIndex(listener: (version: number) => void): () =>
   };
 }
 
+function bumpIndexVersion() {
+  indexVersion += 1;
+  for (const listener of indexListeners) listener(indexVersion);
+}
+
+/**
+ * How many times the whole Fuse index has been built from scratch.
+ *
+ * Test-only observability. Every split-mode detail load used to rebuild the
+ * index wholesale, so opening forty components tokenised the entire corpus
+ * forty times and the page stalled long enough for a search pick to time out.
+ * The bound is asserted in searchShards.test.ts; without a counter the
+ * difference between "incremental" and "still rebuilding, just faster" is not
+ * observable from outside.
+ */
+let fullRebuildCount = 0;
+
+/** Test hook: number of full index rebuilds since load. See fullRebuildCount. */
+export function getSearchIndexRebuildCount(): number {
+  return fullRebuildCount;
+}
+
+// Merge a lower-priority entry into one already claimed for the same key. The
+// first writer wins every field it actually has; a later entry only fills gaps.
+// Shard entries additionally concatenate their free text, because that text is
+// the whole reason the shards exist (P6-4).
+function mergeEntry(
+  existing: SearchResult,
+  r: SearchResult,
+  mergeText: boolean,
+): SearchResult {
+  return {
+    ...existing,
+    name: existing.name || r.name,
+    path: existing.path || r.path,
+    kind: existing.kind || r.kind,
+    language: existing.language ?? r.language,
+    componentId: existing.componentId ?? r.componentId,
+    text: mergeText
+      ? [existing.text, r.text].filter(Boolean).join(" ") || undefined
+      : (existing.text ?? r.text),
+  };
+}
+
+// Whether two entries carry the same searchable and displayed content. Used to
+// decide when an addition genuinely changes the index and when it is a repeat.
+function sameEntry(a: SearchResult, b: SearchResult): boolean {
+  return (
+    a.type === b.type &&
+    a.id === b.id &&
+    a.name === b.name &&
+    a.path === b.path &&
+    a.kind === b.kind &&
+    a.language === b.language &&
+    a.componentId === b.componentId &&
+    a.text === b.text
+  );
+}
+
+function sameEntries(a: SearchResult[], b: SearchResult[]): boolean {
+  return a.length === b.length && a.every((entry, i) => sameEntry(entry, b[i]));
+}
+
 function rebuildFuse() {
   const byKey = new Map<string, SearchResult>();
   const put = (r: SearchResult, mergeText: boolean) => {
@@ -149,17 +215,7 @@ function rebuildFuse() {
       byKey.set(key, { ...r });
       return;
     }
-    byKey.set(key, {
-      ...existing,
-      name: existing.name || r.name,
-      path: existing.path || r.path,
-      kind: existing.kind || r.kind,
-      language: existing.language ?? r.language,
-      componentId: existing.componentId ?? r.componentId,
-      text: mergeText
-        ? [existing.text, r.text].filter(Boolean).join(" ") || undefined
-        : (existing.text ?? r.text),
-    });
+    byKey.set(key, mergeEntry(existing, r, mergeText));
   };
 
   for (const r of baseResults) put(r, false);
@@ -168,10 +224,10 @@ function rebuildFuse() {
   }
   for (const r of shardResults) put(r, true);
 
-  allResults = [...byKey.values()];
-  componentFuse = new Fuse(allResults, FUSE_OPTIONS);
-  indexVersion += 1;
-  for (const listener of indexListeners) listener(indexVersion);
+  entryByKey = byKey;
+  componentFuse = new Fuse([...byKey.values()], FUSE_OPTIONS);
+  fullRebuildCount += 1;
+  bumpIndexVersion();
 }
 
 function fileResult(file: FileInfo): SearchResult {
@@ -255,6 +311,24 @@ export function initializeSearch(arch: Architecture) {
  * Add lazily loaded (split-mode) files and symbols to the search index. When a
  * componentId is provided the entries are keyed by it, so re-loading the same
  * component replaces its prior entries and a live refresh can preserve them.
+ *
+ * Incremental. This runs once per detail shard, so a reader who opens forty
+ * components pays for it forty times; a full rebuild each time tokenises every
+ * document already indexed and, on a large subject, stalls the page long enough
+ * that a search pick times out. New documents are appended to the live Fuse
+ * index instead. Three cases still fall back to a full rebuild, all rare and
+ * all cases where appending would be wrong:
+ *
+ *   - nothing has been indexed yet (no index to append to),
+ *   - a component that was already loaded comes back with different entries,
+ *     so its previous documents must be dropped rather than added to,
+ *   - an incoming entry would change a document already in the index, and Fuse
+ *     has no in-place update.
+ *
+ * Appending preserves the index version contract (issue #116): the version is
+ * bumped whenever documents are actually added, so SearchOverlay's memo
+ * recomputes and a query typed before the entries landed sees them. A repeat
+ * load that adds nothing bumps nothing, because nothing changed.
  */
 export function addToSearchIndex(
   symbols: Symbol[],
@@ -268,8 +342,41 @@ export function addToSearchIndex(
   // Key by component when known; otherwise use a stable synthetic key so
   // repeated anonymous adds accumulate instead of overwriting.
   const key = componentId ?? `__anon_${detailResultsByComponent.size}`;
+  const previous = detailResultsByComponent.get(key);
   detailResultsByComponent.set(key, entries);
-  rebuildFuse();
+
+  if (!componentFuse) {
+    rebuildFuse();
+    return;
+  }
+  if (previous) {
+    // The same component again. Identical entries are the common case (a shard
+    // loaded twice) and must not duplicate anything, so there is nothing to do.
+    // Different entries mean the old ones have to go, which only a rebuild does.
+    if (sameEntries(previous, entries)) return;
+    rebuildFuse();
+    return;
+  }
+
+  const added: SearchResult[] = [];
+  for (const r of entries) {
+    const entryKey = `${r.type}:${r.id}`;
+    const existing = entryByKey.get(entryKey);
+    if (!existing) {
+      const doc = { ...r };
+      entryByKey.set(entryKey, doc);
+      added.push(doc);
+      continue;
+    }
+    if (!sameEntry(existing, mergeEntry(existing, r, false))) {
+      rebuildFuse();
+      return;
+    }
+  }
+
+  if (added.length === 0) return;
+  for (const doc of added) componentFuse.add(doc);
+  bumpIndexVersion();
 }
 
 /**

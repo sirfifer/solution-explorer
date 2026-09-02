@@ -73,6 +73,10 @@ function FindingRow({ finding, selected }: { finding: DesignFinding; selected: b
   return (
     <li>
       <button
+        data-testid="lens-row"
+        data-lens="design"
+        data-row-id={finding.id}
+        data-selected={selected}
         onClick={() => selectDesignFinding(finding.id)}
         className={`w-full text-left rounded-lg px-2.5 py-2 transition-colors ${
           selected
@@ -241,7 +245,7 @@ export function DesignPanel({ mobile = false }: { mobile?: boolean } = {}) {
       }`;
 
   return (
-    <div className={containerClass}>
+    <div className={containerClass} data-testid="lens-panel" data-lens="design">
       <div className={`px-4 py-3 border-b shrink-0 ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
         <div className="flex items-center gap-1.5">
           <span>{"\u{1F4D0}"}</span>

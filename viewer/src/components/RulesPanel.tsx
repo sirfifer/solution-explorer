@@ -351,6 +351,10 @@ function RuleRow({ rule, selected }: { rule: Rule; selected: boolean }) {
   return (
     <li>
       <button
+        data-testid="lens-row"
+        data-lens="rules"
+        data-row-id={rule.id}
+        data-selected={selected}
         onClick={() => selectRule(rule.id)}
         className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${
           selected
@@ -443,7 +447,7 @@ export function RulesPanel({ mobile = false }: { mobile?: boolean } = {}) {
 
   if (focused) {
     return (
-      <div className={containerClass}>
+      <div className={containerClass} data-testid="lens-panel" data-lens="rules">
         {header}
         <div className="flex-1 overflow-y-auto">
           <FocusedRule rule={focused} />
@@ -453,7 +457,7 @@ export function RulesPanel({ mobile = false }: { mobile?: boolean } = {}) {
   }
 
   return (
-    <div className={containerClass}>
+    <div className={containerClass} data-testid="lens-panel" data-lens="rules">
       {header}
       <div className={`px-4 py-2.5 text-[11px] leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}>
         Grouped by kind; within a kind, by the component that enforces the most.

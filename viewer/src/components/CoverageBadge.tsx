@@ -299,7 +299,12 @@ export function CoverageBadge() {
   const coverageInventory = useArchStore((s) => s.coverageInventory);
 
   const [open, setOpen] = useState(false);
-  const [inventoryOpen, setInventoryOpen] = useState(false);
+  // Store-held rather than local so App can publish it on the nav-state beacon
+  // alongside the other overlays. This component still owns both gestures that
+  // move it (Explore inventory opens, the panel's own close/Escape closes), so
+  // nothing about when the panel appears has changed.
+  const inventoryOpen = useArchStore((s) => s.inventoryOpen);
+  const setInventoryOpen = useArchStore((s) => s.setInventoryOpen);
 
   const coverage = architecture?.coverage ?? null;
 

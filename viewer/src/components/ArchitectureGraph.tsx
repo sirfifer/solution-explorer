@@ -37,6 +37,7 @@ import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
 import { ElkRoutedEdge } from "./ElkRoutedEdge";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
+import { isUnobstructed, collectCanvasObstructions } from "../utils/graphVisibility";
 import { getLens, capabilityCountsByComponent, ruleCountsByComponent, buildBlastAdjacency, blastRadiusFrom, type CapabilityKindCounts, type RuleKindCounts } from "../lenses";
 import type { Component, Relationship } from "../types";
 
@@ -78,6 +79,12 @@ export function ArchitectureGraph() {
     shrinkNodeBudget,
     nodeBudget,
   } = useArchStore();
+
+  // The same media query ComponentNode uses to gate its 500ms touch-and-hold
+  // preview. A reader on a coarse pointer has no double-CLICK to give, so the
+  // drill hint has to name the gesture they actually have.
+  const isCoarsePointer =
+    typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 
   // React Flow's Background and MiniMap take colors as props rather than from
   // CSS, so the theme's values are read back out of the root element. Every
@@ -583,6 +590,12 @@ export function ArchitectureGraph() {
     // general click-target flakiness (comprehension-study S5, verified by
     // event trace). Off-screen selections, which is what search results, tree
     // clicks, and deep links produce, still animate into view.
+    //
+    // "Fully visible" means inside the canvas AND clear of the overlays that
+    // sit on top of it (minimap, controls, tour panel, drill hint, mobile
+    // sheet). Containment alone parked a tour stop under the minimap. A node
+    // that is inside and unobstructed still does not move, which is what S5
+    // above requires.
     const nodeWidth = selectedNode.measured?.width ?? 280;
     const nodeHeight = selectedNode.measured?.height ?? 140;
     const centerX = selectedNode.position.x + nodeWidth / 2;
@@ -591,13 +604,34 @@ export function ArchitectureGraph() {
     const container = containerRef.current;
     let fullyVisible = false;
     if (container) {
-      const { width, height } = container.getBoundingClientRect();
-      // Node bounds in screen space under the current viewport transform.
-      const left = selectedNode.position.x * viewport.zoom + viewport.x;
-      const top = selectedNode.position.y * viewport.zoom + viewport.y;
-      const right = left + nodeWidth * viewport.zoom;
-      const bottom = top + nodeHeight * viewport.zoom;
-      fullyVisible = left >= 0 && top >= 0 && right <= width && bottom <= height;
+      const containerRect = container.getBoundingClientRect();
+      // Node bounds in client space under the current viewport transform.
+      const left = containerRect.left + selectedNode.position.x * viewport.zoom + viewport.x;
+      const top = containerRect.top + selectedNode.position.y * viewport.zoom + viewport.y;
+      const nodeRect = {
+        left,
+        top,
+        right: left + nodeWidth * viewport.zoom,
+        bottom: top + nodeHeight * viewport.zoom,
+      };
+      const insideCanvas = isUnobstructed(nodeRect, containerRect, []);
+      // A node the reader picked ON THE CANVAS never moves, obstructed or not.
+      // Moving it under the cursor is exactly what S5 above is about, and the
+      // overlay test would otherwise reintroduce it for any node sitting over
+      // the controls or the drill hint. The selections that land under the
+      // minimap or the tour panel are the guided ones (tour, search, tree row,
+      // deep link), and those are still brought clear.
+      //
+      // No time window here on purpose. The click record is cleared by the next
+      // mousedown anywhere on the page, which is the same signal the drill
+      // detector uses, so it expires when the reader acts again rather than on
+      // a clock that a slow re-layout can outrun.
+      const recentClick = lastNodeClickRef.current;
+      const wasDirectGraphClick = recentClick?.id === selectedComponentId;
+      fullyVisible =
+        insideCanvas &&
+        (wasDirectGraphClick ||
+          isUnobstructed(nodeRect, containerRect, collectCanvasObstructions()));
     }
     if (!fullyVisible) {
       setCenter(centerX, centerY, { duration: 400 });
@@ -1004,10 +1038,10 @@ export function ArchitectureGraph() {
         />
 
         {/* Breadcrumb bar */}
-        <Panel position="top-left">
+        <Panel position="top-left" className="max-w-[calc(100%-15rem)]">
           {breadcrumbs.length > 0 && (
             <div className={`
-              flex items-center gap-1 px-3 py-2 rounded-xl text-sm
+              flex items-center gap-1 overflow-x-auto whitespace-nowrap px-3 py-2 rounded-xl text-sm
               ${darkMode ? "bg-zinc-900/90 border border-zinc-800" : "bg-white/90 border border-zinc-200"}
               backdrop-blur-sm shadow-lg
             `}>
@@ -1018,7 +1052,13 @@ export function ArchitectureGraph() {
                 Home
               </button>
               {breadcrumbs.map((crumb, i) => (
-                <span key={crumb.id} className="flex items-center gap-1">
+                <span
+                  key={crumb.id}
+                  data-testid="breadcrumb-item"
+                  data-component-id={crumb.id}
+                  data-current={i === breadcrumbs.length - 1}
+                  className="flex items-center gap-1"
+                >
                   <span className={darkMode ? "text-zinc-600" : "text-zinc-300"}>/</span>
                   {i < breadcrumbs.length - 1 ? (
                     <button
@@ -1045,12 +1085,32 @@ export function ArchitectureGraph() {
               )}
             </div>
           )}
+
         </Panel>
 
+        {/* The drill hint, and the two rules that keep it off the breadcrumb bar.
+            Both are absolutely positioned Panels, so nothing about the document
+            stops them meeting: on a 390px canvas the hint landed on top of the
+            breadcrumb text and neither could be read (GUI crawl 2026-09-01).
+            (1) The breadcrumb Panel above is capped at the canvas width less
+            15rem, which is this box's own 12rem cap plus the 15px margin React
+            Flow gives every Panel at each end, and its bar scrolls inside that
+            cap rather than growing under the hint. Measured at 640, 768 and
+            1280 with the deepest chain this subject has.
+            (2) Below the sm breakpoint even that cap leaves too little for a
+            breadcrumb, so on a phone the hint is shown only at the top level,
+            where there is no breadcrumb bar to collide with and where the drill
+            gesture is the thing a first-time reader has not tried yet. A reader
+            who has drilled has used the gesture.
+            Stacking the two in one Panel was tried and rejected: it guarantees
+            no overlap and puts twice as much chrome in the canvas's top-left
+            corner, which took mobile tour stops covered by this box from 0 to
+            23 (measured, crawl runs 05-39 and 05-42). */}
         {lens === "structure" && nodes.length > 0 && (
-          <Panel position="top-right">
-            <div className={`rounded-lg border px-3 py-2 text-[11px] shadow-sm ${darkMode ? "border-zinc-800 bg-zinc-950/90 text-zinc-400" : "border-zinc-200 bg-white/90 text-zinc-600"}`}>
-              <strong className={darkMode ? "text-zinc-200" : "text-zinc-800"}>Open a level:</strong> double-click a component
+          <Panel position="top-right" className={breadcrumbs.length > 0 ? "hidden sm:block" : undefined}>
+            <div data-testid="drill-hint" className={`max-w-[12rem] rounded-lg border px-3 py-2 text-[11px] shadow-sm ${darkMode ? "border-zinc-800 bg-zinc-950/90 text-zinc-400" : "border-zinc-200 bg-white/90 text-zinc-600"}`}>
+              <strong className={darkMode ? "text-zinc-200" : "text-zinc-800"}>Open a level:</strong>{" "}
+              {isCoarsePointer ? "double-tap" : "double-click"} a component
             </div>
           </Panel>
         )}

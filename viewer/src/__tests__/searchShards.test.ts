@@ -8,9 +8,13 @@ import {
   loadSearchShards,
   getShardLoadState,
   subscribeShardLoadState,
+  addToSearchIndex,
+  getSearchIndexRebuildCount,
+  getSearchIndexVersion,
+  subscribeSearchIndex,
   type ShardEntry,
 } from "../utils/search";
-import type { Architecture, Component } from "../types";
+import type { Architecture, Component, FileInfo, Symbol } from "../types";
 
 // P6-4: the viewer consumes the prebuilt search shards so search covers
 // descriptions, docstrings, and AI help text, and split-mode symbols are
@@ -266,5 +270,98 @@ describe("loadSearchShards: bounded-parallel fetch and loading state", () => {
     // or unreachable shard set must not break the app).
     await expect(loadSearchShards()).resolves.toBeUndefined();
     expect(getShardLoadState()).toBe("failed");
+  });
+});
+
+// Incremental detail indexing. Every split-mode detail load called the full
+// index rebuild, so a reader who opened forty components tokenised the whole
+// corpus forty times; on the 165-component subject the page stalled long enough
+// that the crawl's symbol pick timed out (finding `search.unusable`). Reverting
+// addToSearchIndex to an unconditional rebuildFuse fails the bound below.
+describe("incremental detail indexing", () => {
+  beforeEach(() => {
+    resetShardSearchEntries();
+    resetDetailSearchEntries();
+    initializeSearch(makeSplitArchitecture());
+  });
+
+  function detailSymbol(component: number, index: number): Symbol {
+    return {
+      id: `sym:src/c${component}/mod.ts:fn${index}:${index}`,
+      name: `fn${component}_${index}`,
+      kind: "function",
+      file: `src/c${component}/mod.ts`,
+      line: index,
+      end_line: index + 1,
+      code_preview: "",
+      visibility: "public",
+      docstring: null,
+      parent: null,
+      dependencies: [],
+    };
+  }
+
+  function detailFile(component: number): FileInfo {
+    return {
+      path: `src/c${component}/mod.ts`,
+      language: "typescript",
+      lines: 10,
+      size_bytes: 100,
+      symbols: [],
+      imports: [],
+      exports: [],
+      module_doc: null,
+    };
+  }
+
+  it("loads forty detail shards without rebuilding the index forty times", () => {
+    const before = getSearchIndexRebuildCount();
+    for (let c = 0; c < 40; c++) {
+      addToSearchIndex(
+        [detailSymbol(c, 0), detailSymbol(c, 1)],
+        [detailFile(c)],
+        `comp-${c}`,
+      );
+    }
+    // Forty loads, no full rebuild at all: every document was appended.
+    expect(getSearchIndexRebuildCount() - before).toBe(0);
+
+    // And the index is complete: every shard's symbols are findable.
+    expect(search("fn0_0").map((r) => r.id)).toContain("sym:src/c0/mod.ts:fn0:0");
+    expect(search("fn39_1").map((r) => r.id)).toContain("sym:src/c39/mod.ts:fn1:1");
+  });
+
+  it("bumps the index version as entries arrive so a memoised query recomputes (#116)", () => {
+    const seen: number[] = [];
+    const unsubscribe = subscribeSearchIndex((v) => seen.push(v));
+    addToSearchIndex([detailSymbol(1, 0)], [detailFile(1)], "comp-1");
+    expect(seen).toHaveLength(1);
+    unsubscribe();
+  });
+
+  it("adds nothing, and rebuilds nothing, when the same detail shard loads twice", () => {
+    addToSearchIndex([detailSymbol(2, 0)], [detailFile(2)], "comp-2");
+    const rebuildsAfterFirst = getSearchIndexRebuildCount();
+    const versionAfterFirst = getSearchIndexVersion();
+    const firstHits = search("fn2_0");
+    expect(firstHits).toHaveLength(1);
+
+    addToSearchIndex([detailSymbol(2, 0)], [detailFile(2)], "comp-2");
+
+    // No duplicate row, no rebuild, and no pointless memo invalidation.
+    expect(search("fn2_0")).toHaveLength(1);
+    expect(search("mod.ts").filter((r) => r.type === "file")).toHaveLength(1);
+    expect(getSearchIndexRebuildCount()).toBe(rebuildsAfterFirst);
+    expect(getSearchIndexVersion()).toBe(versionAfterFirst);
+  });
+
+  it("drops the old entries when a reloaded component comes back with fewer symbols", () => {
+    addToSearchIndex([detailSymbol(3, 0), detailSymbol(3, 1)], [detailFile(3)], "comp-3");
+    expect(search("fn3_1")).toHaveLength(1);
+
+    addToSearchIndex([detailSymbol(3, 0)], [detailFile(3)], "comp-3");
+
+    expect(search("fn3_1")).toHaveLength(0);
+    expect(search("fn3_0")).toHaveLength(1);
   });
 });

@@ -88,7 +88,7 @@ export function InventoryLensPanel({ mobile = false }: { mobile?: boolean } = {}
       }`;
 
   return (
-    <div className={containerClass}>
+    <div className={containerClass} data-testid="lens-panel" data-lens="inventory">
       <div className={`px-4 py-3 border-b shrink-0 ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
         <div className="flex items-center gap-1.5">
           <span>{"\u{1F4CB}"}</span>

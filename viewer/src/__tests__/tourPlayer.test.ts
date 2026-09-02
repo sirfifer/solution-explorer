@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { useArchStore } from "../store";
+import { tourPanelStartsExpanded } from "../components/TourPlayer";
 import { hasTours, isTourStale, listTours } from "../tours/model";
 import { SAMPLE_FIXTURE_TOURS } from "../tours/fixtureTour";
 import type { Architecture, Component, Tour } from "../types";
@@ -209,5 +210,46 @@ describe("Hand-authored fixture over the committed sample dataset (end to end)",
   it("the second fixture tour is marked stale (I5)", () => {
     expect(isTourStale(SAMPLE_FIXTURE_TOURS[1])).toBe(true);
     expect(isTourStale(SAMPLE_FIXTURE_TOURS[0])).toBe(false);
+  });
+});
+
+// The step panel is 22rem wide and up to 70vh tall. On a phone that covered the
+// whole diagram, so a tour narrated a picture the reader could not see (GUI
+// crawl 2026-09-01). Below the sm breakpoint it is now a docked strip with the
+// narration and the step list one tap away on the header, which means the
+// default has to be collapsed there and expanded everywhere else.
+describe("the step panel's narration default", () => {
+  const original = Object.getOwnPropertyDescriptor(window, "matchMedia");
+
+  function stubViewport(matches: boolean) {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+  }
+
+  afterEach(() => {
+    if (original) Object.defineProperty(window, "matchMedia", original);
+    else Reflect.deleteProperty(window, "matchMedia");
+  });
+
+  it("starts collapsed below the sm breakpoint, which is where a 390px phone is", () => {
+    stubViewport(false);
+    expect(tourPanelStartsExpanded()).toBe(false);
+  });
+
+  it("starts expanded from sm up, where the panel has always been a corner card", () => {
+    stubViewport(true);
+    expect(tourPanelStartsExpanded()).toBe(true);
   });
 });

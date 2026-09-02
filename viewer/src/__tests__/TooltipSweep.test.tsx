@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, within, act } from "@testing-library/react";
 import { Tooltip } from "../components/Tooltip";
+import { clampPreviewToCanvas } from "../components/ComponentNode";
 import { LensSwitcher } from "../components/LensSwitcher";
 import { CoverageBadge } from "../components/CoverageBadge";
 import { FindingsEntry } from "../components/FindingsEntry";
@@ -280,5 +281,47 @@ describe("dispositionTooltip fallback semantics", () => {
       TOOLTIP_COPY.coverage.disposition.unknownExcluded,
     );
     expect(dispositionTooltip("timeout")).not.toBe(TOOLTIP_COPY.coverage.disposition.parsed);
+  });
+});
+
+// The graph node's hover preview is the third popup on this surface, and the
+// only one drawn in a portal at fixed coordinates, so nothing about the layout
+// stopped it from covering the header. On a projection with one root the node
+// sits centred near the top of the canvas and the popup took the lens switcher,
+// the level toggle, Review and part of Search with it (GUI crawl 2026-09-01,
+// graph.preview_covers_header). The arithmetic is pure, so it is checked here
+// rather than through a browser.
+describe("node hover preview placement", () => {
+  const canvas = { left: 0, right: 1000, top: 100 };
+  const card = { width: 360, height: 200 };
+
+  it("sits above the node when there is room above it", () => {
+    const node = { left: 480, right: 620, top: 500, bottom: 560, width: 140 };
+    const { left, top } = clampPreviewToCanvas(node, canvas, card);
+    expect(top).toBe(500 - 8 - 200);
+    expect(left).toBe(550 - 180);
+  });
+
+  it("flips below the node rather than over the header", () => {
+    // A node 40px below the canvas top has no room for a 200px card above it.
+    const node = { left: 480, right: 620, top: 140, bottom: 200, width: 140 };
+    const { top } = clampPreviewToCanvas(node, canvas, card);
+    expect(top).toBe(208);
+    expect(top).toBeGreaterThanOrEqual(canvas.top);
+  });
+
+  it("shifts inside the canvas rather than off either edge", () => {
+    const nearLeft = { left: 0, right: 60, top: 500, bottom: 560, width: 60 };
+    expect(clampPreviewToCanvas(nearLeft, canvas, card).left).toBe(8);
+
+    const nearRight = { left: 960, right: 1000, top: 500, bottom: 560, width: 40 };
+    expect(clampPreviewToCanvas(nearRight, canvas, card).left).toBe(1000 - 360 - 8);
+  });
+
+  it("centres on the node when there is no canvas to clamp against", () => {
+    const node = { left: 480, right: 620, top: 40, bottom: 100, width: 140 };
+    const { left, top } = clampPreviewToCanvas(node, null, card);
+    expect(left).toBe(550 - 180);
+    expect(top).toBe(40 - 8 - 200);
   });
 });

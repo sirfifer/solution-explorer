@@ -135,6 +135,24 @@ describe("file deep links (P3-2)", () => {
     expect(state.fileDeepLinkNotice).toBeNull();
   });
 
+  it("asks the detail panel for the Files tab, where the file is marked", async () => {
+    // The in-app route (a tour's evidence link, a finding, a supply-chain row)
+    // used to leave the reader on the owning component's Overview tab: only the
+    // cold-URL path seeded tab=files, so the file was marked on a tab nobody was
+    // looking at (GUI crawl 2026-09-01, tour.evidence_dead).
+    const comp = makeComponent({ id: "comp-a", files: ["src/a/index.ts"] });
+    const arch = makeArchitecture({
+      components: [comp],
+      files: [makeFileInfo("src/a/index.ts", ["sym-1"])],
+      symbols: [makeSymbol()],
+    });
+    useArchStore.setState({ architecture: arch, pendingDetailTab: null });
+
+    await useArchStore.getState().openFileDeepLink("src/a/index.ts", null);
+
+    expect(useArchStore.getState().pendingDetailTab).toBe("files");
+  });
+
   it("found without a line does not resolve a symbol but still navigates", async () => {
     const comp = makeComponent({ id: "comp-a", files: ["src/a/index.ts"] });
     const arch = makeArchitecture({
