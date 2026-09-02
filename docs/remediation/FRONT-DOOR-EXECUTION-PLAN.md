@@ -4,7 +4,7 @@ Status: **COMPLETE — historical execution record**
 
 Integrated: `main`
 
-Prototype: `docs/front-door-prototype/`  
+Prototype: `docs/front-door-prototype/`
 Design authority: `docs/front-door-prototype/DESIGN-PROPOSAL.md`
 
 Current interface policy: Overview is the primary/default SysCorpus interface. The internal `workbench` route is deprecated and retained temporarily for historical comparison, compatible deep links, and validation. This file records the implementation path; it is not a second active product plan.
