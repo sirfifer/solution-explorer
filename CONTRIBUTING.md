@@ -4,7 +4,9 @@ Thank you for your interest in contributing to Solution Explorer! This guide wil
 
 ## Licensing of contributions
 
-This project is licensed under the Functional Source License (FSL-1.1-ALv2); see [LICENSE](LICENSE). Because the project must retain a single copyright holder, code contributions require a signed contributor license agreement, and that agreement is not yet in place. Until it is, we welcome issues, discussions, and documentation feedback, but we cannot merge external code pull requests. This section will be updated when the CLA process is live.
+This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE), and commercial use requires a separate written license. Because the project must retain a single copyright holder, so that commercial licenses and free grants can be issued at all, code contributions require a signed contributor license agreement, and that agreement is not yet in place. Until it is, we welcome issues, discussions, and documentation feedback, but we cannot merge external code pull requests. This section will be updated when the CLA process is live.
+
+Note that this constraint is load bearing rather than bureaucratic. A single accepted outside patch without a signed agreement would permanently limit the project's ability to grant anyone a license, including the free grants described in [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
 
 ## Getting Started
 

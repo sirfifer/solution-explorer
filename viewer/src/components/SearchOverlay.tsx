@@ -211,7 +211,7 @@ export function SearchOverlay() {
             }}
             onKeyDown={handleKeyDown}
             className={`
-              flex-1 bg-transparent text-base outline-none
+              min-h-11 flex-1 bg-transparent text-base outline-none sm:min-h-0
               ${darkMode ? "text-zinc-200 placeholder-zinc-600" : "text-zinc-800 placeholder-zinc-400"}
             `}
           />

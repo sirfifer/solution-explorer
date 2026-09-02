@@ -117,6 +117,14 @@ describe("ranking: importance decides visibility, not file count", () => {
     expect(shown).toContain("TabBar");
   });
 
+  it("pins the URL-selected component before spending the remaining budget", () => {
+    useArchStore.setState({ selectedComponentId: "Tools" });
+    const { shown } = visibleAt(4);
+    expect(shown).toContain("Tools");
+    expect(useArchStore.getState().getAggregateNodes().flatMap((group) => group.members.map((member) => member.id)))
+      .not.toContain("Tools");
+  });
+
   it("shows more when the viewport allows more, and nothing is lost", () => {
     const tight = visibleAt(5);
     const roomy = visibleAt(20);

@@ -502,7 +502,7 @@ Recorded in the registry entry and checked by `validate`:
 2. Ship the upstream LICENSE in the deployed bundle and name it in
    `publication.json`.
 3. Confirm no copyleft obligation attaches to our viewer bundle. Our own code is
-   FSL-1.1-ALv2; keep subject content and tool code cleanly separated in the
+   PolyForm Noncommercial 1.0.0; keep subject content and tool code cleanly separated in the
    bundle.
 4. Trademark: use plain text names, never logos or wordmarks, and keep the
    unofficial and not-affiliated framing the showcase boilerplate already

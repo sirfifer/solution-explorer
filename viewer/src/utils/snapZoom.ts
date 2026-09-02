@@ -33,7 +33,7 @@ export const SNAP_DURATION_MS = 300;
 // Comfortable reading size for a node (280x140 at zoom 1 gives 238x119 here).
 // READABLE_ZOOM (0.6) in store.ts is the floor below which a layout is judged
 // unreadable; a deliberate snap should land clear of that floor, not on it.
-export const READ_SNAP_ZOOM = 0.85;
+export const READ_SNAP_ZOOM = 1;
 
 // Read must always be a real move in from Fit. Where a level already fits at a
 // readable zoom (a large display), snapping "to readable" would otherwise zoom

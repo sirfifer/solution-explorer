@@ -24,6 +24,11 @@ from .activity import build_activity
 from .changelog import apply_changelog
 from .coverage import build_coverage
 from .frontdoor import FRONT_DOOR_VERSION, build_front_door, write_front_door
+from .human_views import (
+    build_orientation,
+    build_security_view,
+    build_support_view,
+)
 from .naming import safe_component_id
 from .pipeline import (
     ProjectionResult,
@@ -43,6 +48,9 @@ __all__ = [
     "apply_changelog",
     "build_coverage",
     "build_activity",
+    "build_orientation",
+    "build_support_view",
+    "build_security_view",
     "safe_component_id",
     "build_search_entries",
     "shard_entries",

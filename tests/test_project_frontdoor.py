@@ -104,7 +104,11 @@ def test_monolith_emits_ai_json_and_llms_txt(tmp_path):
     # named endpoint exists on disk (link integrity).
     paths = [e["path"] for e in ai["endpoints"]]
     assert paths[0] == "architecture.json"
-    assert set(paths) <= {"architecture.json", "sbom.json", "cra-readiness.json"}
+    assert set(paths) <= {
+        "architecture.json", "sbom.json", "cra-readiness.json",
+        "orientation.json", "support.json", "security.json",
+    }
+    assert {"orientation.json", "support.json", "security.json"} <= set(paths)
     for path in paths:
         assert (out.parent / path).is_file()
 

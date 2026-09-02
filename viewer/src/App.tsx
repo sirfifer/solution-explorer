@@ -7,6 +7,8 @@ import { DetailPanel } from "./components/DetailPanel";
 import { SearchOverlay } from "./components/SearchOverlay";
 import { HelpSystem } from "./components/HelpSystem";
 import { ReviewModeButton } from "./components/ReviewModeButton";
+import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { applyThemeToDocument } from "./utils/themes";
 import { AnnotationInput } from "./components/AnnotationInput";
 import { ReviewSummary } from "./components/ReviewSummary";
 import { AdminDashboard } from "./components/AdminDashboard";
@@ -29,6 +31,13 @@ import { CapabilityPanel } from "./components/CapabilityPanel";
 import { DataPanel } from "./components/DataPanel";
 import { RulesPanel } from "./components/RulesPanel";
 import { DesignPanel } from "./components/DesignPanel";
+import { SupportPanel } from "./components/SupportPanel";
+import { SecurityPanel } from "./components/SecurityPanel";
+import { SystemOverview } from "./components/SystemOverview";
+import { ExperienceSwitcher } from "./components/ExperienceSwitcher";
+import { WorkbenchTrustStrip } from "./components/WorkbenchTrustStrip";
+import { TrustDrawer } from "./components/TrustLedger";
+import { ViewerPreferences } from "./components/ViewerPreferences";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useBottomSheet } from "./hooks/useBottomSheet";
@@ -38,11 +47,25 @@ import { collectCriticalComponents, collectExternalDependencies } from "./lenses
 import { formatNumber, formatRelativeTime, getTypeColors } from "./utils/layout";
 import { dataUrl, getDataBase } from "./utils/dataSource";
 import { parsePublication, publicationDisplayName } from "./utils/publication";
+import { attachHumanViews } from "./utils/orientation";
 import { SolutionIndex } from "./components/SolutionIndex";
 import { Tooltip } from "./components/Tooltip";
 import { TOOLTIP_COPY } from "./utils/tooltipCopy";
-import type { Architecture, Component, SolutionManifest } from "./types";
+import type {
+  Architecture,
+  Component,
+  OrientationProjection,
+  SecurityProjection,
+  SolutionManifest,
+  SupportProjection,
+} from "./types";
 import { SOLUTION_MANIFEST_KIND } from "./types";
+
+const MOBILE_NAV_HEIGHT_PX = 72;
+
+function mobileSheetSize(sheetHeight: number): string {
+  return `calc(${sheetHeight}vh - ${(MOBILE_NAV_HEIGHT_PX * sheetHeight) / 100}px)`;
+}
 
 // Session storage keys for UI state persistence
 const STORAGE_KEYS = {
@@ -84,7 +107,9 @@ function MobileBottomSheet({ darkMode, activePanel, bottomSheet }: {
   const { snap, setSnap, sheetHeight, isDragging, dragOffset, handlers } = bottomSheet;
 
   // Compute actual height during drag
-  const windowH = typeof window !== "undefined" ? window.innerHeight : 800;
+  const windowH = typeof window !== "undefined"
+    ? Math.max(320, window.innerHeight - MOBILE_NAV_HEIGHT_PX)
+    : 728;
   const baseHeightPx = (sheetHeight / 100) * windowH;
   const currentHeightPx = isDragging
     ? Math.max(0, Math.min(windowH * 0.95, baseHeightPx - dragOffset))
@@ -96,16 +121,17 @@ function MobileBottomSheet({ darkMode, activePanel, bottomSheet }: {
 
   return (
     <div
+      data-se="mobile-detail-sheet"
       className={`
-        lg:hidden fixed bottom-0 left-0 right-0 z-30
+        lg:hidden fixed left-0 right-0 z-30
         flex flex-col rounded-t-2xl shadow-2xl
         ${darkMode ? "bg-zinc-900 border-t border-zinc-800" : "bg-white border-t border-zinc-200"}
       `}
       style={{
-        height: currentHeightPx,
+        bottom: `calc(${MOBILE_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom))`,
+        height: isDragging ? currentHeightPx : mobileSheetSize(sheetHeight),
         transition: isDragging ? "none" : "height 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
         willChange: isDragging ? "height" : "auto",
-        paddingBottom: `env(safe-area-inset-bottom)`,
       }}
     >
       {/* Drag handle area (full width touch target) */}
@@ -165,6 +191,15 @@ export function shouldShowMobileLensSheet({ isPanelViewport, lens, activePanel }
   return !isPanelViewport && lens !== "structure" && activePanel !== "detail" && activePanel !== "review";
 }
 
+// Support is a ranked operational report, not a terse control strip. Opening
+// it into the generic half-height snap left only ~199 px for the real content
+// on a phone and put external reliance more than a screen below the fold.
+// Give that lens the full mobile canvas immediately; the drag handle still
+// allows the user to collapse or dismiss it.
+export function initialMobileLensSnap(lens: string): SnapPoint {
+  return lens === "support" ? "full" : "half";
+}
+
 // The mobile counterpart to the desktop-docked lens panel (O10). Below the md
 // breakpoint the docked panel is display:none (its own `hidden md:flex`
 // wrapper), so without this a lens picked on a phone rendered nothing with no
@@ -179,7 +214,9 @@ export function MobileLensSheet({ lens, darkMode, bottomSheet }: {
 }) {
   const { isDragging, dragOffset, sheetHeight, handlers } = bottomSheet;
 
-  const windowH = typeof window !== "undefined" ? window.innerHeight : 800;
+  const windowH = typeof window !== "undefined"
+    ? Math.max(320, window.innerHeight - MOBILE_NAV_HEIGHT_PX)
+    : 728;
   const baseHeightPx = (sheetHeight / 100) * windowH;
   const currentHeightPx = isDragging
     ? Math.max(0, Math.min(windowH * 0.95, baseHeightPx - dragOffset))
@@ -187,16 +224,17 @@ export function MobileLensSheet({ lens, darkMode, bottomSheet }: {
 
   return (
     <div
+      data-se="mobile-lens-sheet"
       className={`
-        md:hidden fixed bottom-0 left-0 right-0 z-30
+        md:hidden fixed left-0 right-0 z-30
         flex flex-col rounded-t-2xl shadow-2xl
         ${darkMode ? "bg-zinc-900 border-t border-zinc-800" : "bg-white border-t border-zinc-200"}
       `}
       style={{
-        height: currentHeightPx,
+        bottom: `calc(${MOBILE_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom))`,
+        height: isDragging ? currentHeightPx : mobileSheetSize(sheetHeight),
         transition: isDragging ? "none" : "height 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
         willChange: isDragging ? "height" : "auto",
-        paddingBottom: `env(safe-area-inset-bottom)`,
       }}
     >
       {/* Drag handle area (full width touch target) */}
@@ -215,6 +253,8 @@ export function MobileLensSheet({ lens, darkMode, bottomSheet }: {
         {lens === "data" && <DataPanel mobile />}
         {lens === "rules" && <RulesPanel mobile />}
         {lens === "design" && <DesignPanel mobile />}
+        {lens === "support" && <SupportPanel mobile />}
+        {lens === "security" && <SecurityPanel mobile />}
       </div>
     </div>
   );
@@ -228,6 +268,7 @@ export function App() {
     loading,
     error,
     darkMode,
+    theme,
     activePanel,
     reviewMode,
     annotatingComponentId,
@@ -238,7 +279,6 @@ export function App() {
     setError,
     setSearchOpen,
     setActivePanel,
-    toggleDarkMode,
     enhancedFrames,
     toggleEnhancedFrames,
     navigateToBreadcrumb,
@@ -249,6 +289,13 @@ export function App() {
     mobileChromeHidden,
     fileDeepLinkNotice,
     clearFileDeepLinkNotice,
+    experienceMode,
+    setExperienceMode,
+    semanticLevel,
+    setSemanticLevel,
+    workbenchDensity,
+    setPreferencesOpen,
+    toggleReviewMode,
   } = useArchStore();
 
   useLiveMonitor();
@@ -359,12 +406,18 @@ export function App() {
   // render a mostly blank sheet for a lens the user just deliberately picked.
   const lensBottomSheet = useBottomSheet({
     onDismiss: () => useArchStore.getState().setLens("structure"),
-    initialSnap: "half" as SnapPoint,
+    initialSnap: initialMobileLensSnap(lens),
   });
+  const mobileGraphBottomReserve = !isDesktopViewport
+    && (activePanel === "detail" || activePanel === "review")
+    ? mobileSheetSize(bottomSheet.sheetHeight)
+    : shouldShowMobileLensSheet({ isPanelViewport, lens, activePanel })
+      ? mobileSheetSize(lensBottomSheet.sheetHeight)
+      : "0px";
 
   // Collapsible + resizable sidebar widths (restored from session storage)
-  const [leftCollapsed, setLeftCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.leftCollapsed, false));
-  const [rightCollapsed, setRightCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.rightCollapsed, false));
+  const [leftCollapsed, setLeftCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.leftCollapsed, workbenchDensity === "focused"));
+  const [rightCollapsed, setRightCollapsed] = useState(() => getStoredValue(STORAGE_KEYS.rightCollapsed, workbenchDensity === "focused"));
   const [leftWidth, setLeftWidth] = useState(() => getStoredValue(STORAGE_KEYS.leftWidth, 256));
   const [rightWidth, setRightWidth] = useState(() => getStoredValue(STORAGE_KEYS.rightWidth, 320));
   const resizing = useRef<"left" | "right" | null>(null);
@@ -430,6 +483,15 @@ export function App() {
       return res.ok && (res.headers.get("content-type")?.includes("json") ?? false);
     }
 
+    async function optionalJson<T>(path: string): Promise<T | null> {
+      try {
+        const response = await fetch(dataUrl(path));
+        return isJsonResponse(response) ? await response.json() as T : null;
+      } catch {
+        return null;
+      }
+    }
+
     // Apply loaded static data only if the live monitor has not already loaded
     // an architecture (from its cache or an authoritative poll). The static file
     // is the deployed baseline; if live data arrived first it is at least as
@@ -461,7 +523,13 @@ export function App() {
             return;
           }
           // Split mode: manifest has components/relationships but no symbols/files
-          const data: Architecture = { ...manifest, symbols: manifest.symbols || [], files: manifest.files || [] };
+          const base: Architecture = { ...manifest, symbols: manifest.symbols || [], files: manifest.files || [] };
+          const [orientation, support, security] = await Promise.all([
+            optionalJson<OrientationProjection>("orientation.json"),
+            optionalJson<SupportProjection>("support.json"),
+            optionalJson<SecurityProjection>("security.json"),
+          ]);
+          const data = attachHumanViews(base, { orientation, support, security });
           applyIfUnset(data);
           return;
         }
@@ -470,7 +538,7 @@ export function App() {
         const monoRes = await fetch("./architecture.json");
         if (isJsonResponse(monoRes)) {
           const data: Architecture = await monoRes.json();
-          applyIfUnset(data);
+          applyIfUnset(attachHumanViews(data, {}));
           return;
         }
 
@@ -544,14 +612,23 @@ export function App() {
     }
   }, [activePanel, bottomSheet.setSnap]);
 
-  // Apply dark mode class
+  // Apply the dress (data-theme) and the time of day (dark/light) to the root
+  // element. Both are pure CSS switches: every themed value in the viewer is a
+  // Tailwind utility that resolves through a custom property, and themes.css
+  // redefines those properties under these selectors. Nothing about data,
+  // layout, or interaction changes with either.
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-    document.documentElement.classList.toggle("light", !darkMode);
+    // The store applies this synchronously when either setting changes; this
+    // covers first mount and any path that sets state without going through
+    // those actions. Idempotent either way.
+    applyThemeToDocument(theme, darkMode);
+    // The page ground comes from the theme rather than a hardcoded utility, so
+    // the paper and parchment themes are not sitting on a white or near-black
+    // slab that belongs to Signal.
     document.body.className = darkMode
-      ? "bg-zinc-950 text-zinc-100 antialiased"
-      : "bg-white text-zinc-900 antialiased";
-  }, [darkMode]);
+      ? "bg-[var(--se-page)] text-zinc-100 antialiased"
+      : "bg-[var(--se-page)] text-zinc-900 antialiased";
+  }, [darkMode, theme]);
 
   if (loading) {
     return (
@@ -601,6 +678,11 @@ export function App() {
   // else the folder-derived architecture.name (the contextual default). This is
   // display only; the annotation identity key stays on architecture.name.
   const displayName = publicationDisplayName(publication, architecture.name);
+  const showLegacyOpeningBands = false;
+
+  if (experienceMode === "overview") {
+    return <SystemOverview displayName={displayName} />;
+  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -611,7 +693,7 @@ export function App() {
       {/* Header */}
       <header
         className={`
-          flex items-center justify-between px-4 py-2 border-b shrink-0 z-30
+          flex items-center justify-between gap-1 px-2 py-2 border-b shrink-0 z-30 sm:gap-3 sm:px-4
           ${darkMode ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"}
           backdrop-blur-sm transition-transform duration-300
         `}
@@ -627,12 +709,13 @@ export function App() {
           <button
             className={`lg:hidden flex items-center justify-center p-2 rounded-lg min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="Open architecture tree"
           >
             &#x2630;
           </button>
 
-          <div className="flex items-center gap-2">
-            <h1 className={`font-bold text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+          <div className="hidden min-w-0 items-center gap-2 sm:flex">
+            <h1 className={`max-w-40 truncate font-bold text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
               {displayName}
             </h1>
             <span className={`hidden sm:inline text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
@@ -663,7 +746,8 @@ export function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+          <ExperienceSwitcher className="hidden sm:flex" />
           {/* Home button - visible when drilled into a component */}
           {drillLevel && (
             <button
@@ -688,7 +772,7 @@ export function App() {
           <button
             onClick={() => setSearchOpen(true)}
             className={`
-              flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm
+              hidden items-center gap-2 px-3 py-1.5 rounded-lg text-sm sm:flex
               min-h-[44px] sm:min-h-0
               ${darkMode
                 ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300"
@@ -707,10 +791,24 @@ export function App() {
               reachable on a phone (GUI run finding V8.4). */}
           <LensSwitcher />
 
+          <div className={`hidden rounded-lg p-0.5 xl:flex ${darkMode ? "bg-zinc-900" : "bg-zinc-100"}`} aria-label="Semantic level">
+            {(["system", "domain", "component"] as const).map((level) => (
+              <button key={level} onClick={() => setSemanticLevel(level)} className={`rounded-md px-2 py-1 text-[9px] capitalize ${semanticLevel === level ? darkMode ? "bg-zinc-700 text-zinc-100" : "bg-white text-zinc-900 shadow" : "text-zinc-500"}`}>{level}</button>
+            ))}
+          </div>
+
           {/* Review mode: reachable on every viewport so the annotation
               workflow works on a phone (GUI run finding V8.8). The button is
               already responsive (icon-only under sm). */}
-          <ReviewModeButton />
+          <div className="hidden sm:block"><ReviewModeButton /></div>
+
+          {/* Theme + appearance. Reachable on every viewport, the way the lens
+              switcher is: on a phone the dark-mode toggle used to be buried in
+              the overflow menu, and the dress is the first thing a demo
+              audience asks to see changed. */}
+          <ThemeSwitcher />
+
+          <button onClick={() => setPreferencesOpen(true)} className={`hidden rounded-lg p-2 sm:block ${darkMode ? "text-zinc-400 hover:bg-zinc-800" : "text-zinc-600 hover:bg-zinc-100"}`} aria-label="Viewer preferences">◒</button>
 
           {/* Desktop: remaining secondary buttons inline */}
           <div className="hidden sm:flex items-center gap-2">
@@ -729,14 +827,6 @@ export function App() {
             )}
 
             <button
-              onClick={toggleDarkMode}
-              className={`p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
-              title={darkMode ? "Light mode" : "Dark mode"}
-            >
-              {darkMode ? "\u2600" : "\u263E"}
-            </button>
-
-            <button
               onClick={toggleEnhancedFrames}
               className={`p-2 rounded-lg ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"} ${enhancedFrames ? (darkMode ? "text-orange-400" : "text-orange-500") : (darkMode ? "text-zinc-400" : "text-zinc-600")}`}
               title={enhancedFrames ? "Switch to classic frames" : "Switch to enhanced frames"}
@@ -753,6 +843,7 @@ export function App() {
               onClick={() => setMoreMenuOpen(!moreMenuOpen)}
               className={`flex items-center justify-center p-2 rounded-lg min-h-[44px] min-w-[44px] ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-600"}`}
               title="More options"
+              aria-label="More options"
             >
               {"\u22EF"}
             </button>
@@ -763,18 +854,32 @@ export function App() {
               `}>
                 <div className="py-1">
                   <button
-                    onClick={() => { toggleDarkMode(); setMoreMenuOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
-                  >
-                    <span>{darkMode ? "\u2600" : "\u263E"}</span>
-                    <span>{darkMode ? "Light mode" : "Dark mode"}</span>
-                  </button>
-                  <button
                     onClick={() => { toggleEnhancedFrames(); setMoreMenuOpen(false); }}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
                   >
                     <span>{"\u{1F4F1}"}</span>
                     <span>{enhancedFrames ? "Classic frames" : "Enhanced frames"}</span>
+                  </button>
+                  <button
+                    onClick={() => { setPreferencesOpen(true); setMoreMenuOpen(false); }}
+                    className={`min-h-11 w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
+                  >
+                    <span>◒</span>
+                    <span>Viewer preferences</span>
+                  </button>
+                  <button
+                    onClick={() => { toggleReviewMode(); setMoreMenuOpen(false); }}
+                    className={`min-h-11 w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
+                  >
+                    <span>✍️</span>
+                    <span>{reviewMode ? "Exit review mode" : "Review mode"}</span>
+                  </button>
+                  <button
+                    onClick={() => { window.dispatchEvent(new Event("arch-viz-open-help")); setMoreMenuOpen(false); }}
+                    className={`min-h-11 w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
+                  >
+                    <span>?</span>
+                    <span>Help</span>
                   </button>
                   {liveConfig && (
                     <button
@@ -851,9 +956,13 @@ export function App() {
         </div>
       </header>
 
+      <WorkbenchTrustStrip />
+
+      {showLegacyOpeningBands && <>
+
       {/* AI summary banner */}
       {architecture.ai_enhance?.summary && !summaryDismissed && (
-        <div className={`
+        <div data-se="summary" className={`
           px-4 py-2 text-xs shrink-0
           ${darkMode ? "bg-indigo-950/30 border-b border-indigo-800/30 text-indigo-300" : "bg-indigo-50 border-b border-indigo-200 text-indigo-700"}
         `}>
@@ -1023,6 +1132,7 @@ export function App() {
 
       {/* Tours entry point (P6-7); present only when the dataset carries tours. */}
       <ToursEntry />
+      </>}
 
       {/* Review mode banner */}
       {reviewMode && (
@@ -1115,7 +1225,9 @@ export function App() {
           {isPanelViewport && lens === "data" && <DataPanel />}
           {isPanelViewport && lens === "rules" && <RulesPanel />}
           {isPanelViewport && lens === "design" && <DesignPanel />}
-          <div className="flex-1 relative">
+          {isPanelViewport && lens === "support" && <SupportPanel />}
+          {isPanelViewport && lens === "security" && <SecurityPanel />}
+          <div data-se="graph-frame" className="flex-1 relative" style={{ paddingBottom: mobileGraphBottomReserve }}>
             <ReactFlowProvider>
               <ArchitectureGraph />
             </ReactFlowProvider>
@@ -1128,6 +1240,7 @@ export function App() {
             states; comprehension-study S4). */}
         {isDesktopViewport && (activePanel === "detail" || activePanel === "review") && (
           <aside
+            data-se="panel"
             className={`
               hidden lg:flex flex-col shrink-0 border-l relative
               ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"}
@@ -1200,6 +1313,7 @@ export function App() {
 
       {/* Mobile bottom nav */}
       <nav
+        data-se="mobile-nav"
         className={`
           lg:hidden flex items-center justify-around border-t py-2 shrink-0
           ${darkMode ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"}
@@ -1210,35 +1324,33 @@ export function App() {
           transform: mobileChromeHidden ? "translateY(100%)" : "none",
         }}
       >
-        {drillLevel && (
-          <button
-            onClick={() => navigateToBreadcrumb(-1)}
-            className={`flex flex-col items-center gap-0.5 px-4 py-1 ${darkMode ? "text-blue-400" : "text-blue-500"}`}
-          >
-            <span className="text-lg">&#x1F3E0;</span>
-            <span className="text-[10px]">Home</span>
-          </button>
-        )}
+        <button
+          onClick={() => setExperienceMode("overview")}
+          className={`flex min-h-11 min-w-14 flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
+        >
+          <span className="text-lg">&#x25CE;</span>
+          <span className="text-xs">Overview</span>
+        </button>
         <button
           onClick={() => { setSidebarOpen(true); }}
-          className={`flex flex-col items-center gap-0.5 px-4 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
+          className={`flex min-h-11 min-w-14 flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
         >
           <span className="text-lg">&#x1F4CB;</span>
-          <span className="text-[10px]">Tree</span>
+          <span className="text-xs">Tree</span>
         </button>
         <button
           onClick={() => { setSidebarOpen(false); setActivePanel(null); }}
-          className={`flex flex-col items-center gap-0.5 px-4 py-1 ${!drillLevel ? (darkMode ? "text-blue-400" : "text-blue-500") : (darkMode ? "text-zinc-400" : "text-zinc-500")}`}
+          className={`flex min-h-11 min-w-14 flex-col items-center gap-0.5 px-2 py-1 ${!drillLevel ? (darkMode ? "text-blue-400" : "text-blue-500") : (darkMode ? "text-zinc-400" : "text-zinc-500")}`}
         >
           <span className="text-lg">&#x1F310;</span>
-          <span className="text-[10px]">Graph</span>
+          <span className="text-xs">Graph</span>
         </button>
         <button
           onClick={() => setSearchOpen(true)}
-          className={`flex flex-col items-center gap-0.5 px-4 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
+          className={`flex min-h-11 min-w-14 flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
         >
           <span className="text-lg">&#x1F50D;</span>
-          <span className="text-[10px]">Search</span>
+          <span className="text-xs">Search</span>
         </button>
       </nav>
 
@@ -1269,6 +1381,9 @@ export function App() {
 
       {/* Search overlay */}
       <SearchOverlay />
+
+      <TrustDrawer />
+      <ViewerPreferences />
 
       {/* Findings and concerns surface overlay (P6-8) */}
       <FindingsSurface />

@@ -69,6 +69,9 @@ _MANIFEST_SECTIONS: tuple[tuple[str, str], ...] = (
     # the plain sentence rides along as the description. The human surfaces
     # invert this and lead with the sentence.
     ("design_signals", "Architecture quality signals, deterministic (no AI). Per-component metrics ride on each component's `design`: fan_in (afferent coupling Ca), fan_out (efferent coupling Ce), instability (I = Ce/(Ca+Ce)), abstractness (A), distance_main_sequence (D = |A+I-1|), blast_radius (transitive dependents), and quintile `bands`. The ratios are NULLABLE and null means not measurable, never zero: abstractness is only computed where the language distinguishes an interface from a class. Architecture level carries `findings` (kinds: cycle, zone_of_pain, zone_of_uselessness, stability_inversion, change_coupling, boundary_strength; each with `term`, plain-language `lead`, `method` naming the epistemic class, `targets`, `edges`, `evidence`, and `rank_within_kind`), `boundaries` (per-pair boundary strength: source, deployment, process, service), `finding_counts`, and `method_caveat`. Findings rank WITHIN a kind only. There is deliberately no overall architecture score and no ranking of one kind against another. Present only when the analyzer ran with --design-signals."),
+    ("orientation", "Bounded human orientation: subject identity, deterministic system portrait groups, question routes, trust rollups, and stable launch targets."),
+    ("support", "Support and Operations view: required configuration, external reliance, entry points, data handled, and mechanically ranked attention. The score is not incident probability."),
+    ("security", "Repository-observable security mechanisms, credential configuration references, communication boundaries, sensitive-data leads, findings, and explicit unknowns. Not an audit or verdict."),
     ("tours", "Guided walkthroughs (ordered component sequences) when present."),
     ("ai_enhance", "Architecture-level AI overlay (description, help text, provenance markers) when the dataset is enriched."),
     ("changelog", "Ordered projection changelog entries (what changed since the previous projection)."),
@@ -209,6 +212,19 @@ def _cra_endpoint() -> dict:
     }
 
 
+def _human_view_endpoints(arch: dict) -> list[dict]:
+    definitions = (
+        ("orientation", "orientation.json", "human-orientation", "Identity, bounded system portrait, question routes, trust rollups, and stable Workbench launch targets."),
+        ("support", "support.json", "support-operations", "Observed configuration, external reliance, entry points, data handled, and attention ordering; not incident probability."),
+        ("security", "security.json", "security-observations", "Repository-observable mechanisms, boundaries, leads, and explicit unknowns; not an audit or safety verdict."),
+    )
+    return [
+        {"path": path, "role": role, "contains": contains}
+        for key, path, role, contains in definitions
+        if arch.get(key) is not None
+    ]
+
+
 def _split_endpoints(
     arch: dict,
     *,
@@ -284,11 +300,13 @@ def _split_endpoints(
         endpoints.append(_sbom_endpoint())
     if cra_present:
         endpoints.append(_cra_endpoint())
+    endpoints.extend(_human_view_endpoints(arch))
     return endpoints
 
 
 def _monolith_endpoints(
     single_file: str,
+    arch: dict,
     supply_chain: Optional[dict] = None,
     cra_present: bool = False,
 ) -> list[dict]:
@@ -312,6 +330,7 @@ def _monolith_endpoints(
         endpoints.append(_sbom_endpoint())
     if cra_present:
         endpoints.append(_cra_endpoint())
+    endpoints.extend(_human_view_endpoints(arch))
     return endpoints
 
 
@@ -578,7 +597,7 @@ def build_front_door(
         ai_json["projection_root"] = "./"
         ai_json["entry"] = monolith_filename
         ai_json["endpoints"] = _monolith_endpoints(
-            monolith_filename, supply_chain=supply_chain, cra_present=cra_present
+            monolith_filename, arch, supply_chain=supply_chain, cra_present=cra_present
         )
 
     llms_txt = _render_llms_txt(ai_json, mode=mode, monolith_filename=monolith_filename)
@@ -634,12 +653,18 @@ def _render_llms_txt(ai_json: dict, *, mode: str, monolith_filename: str) -> str
             lines.append("- [sbom.json](./sbom.json): CycloneDX 1.5 SBOM; a quick dependency summary is in manifest.json .supply_chain.")
         if any(e["path"] == "cra-readiness.json" for e in ai_json["endpoints"]):
             lines.append("- [cra-readiness.json](./cra-readiness.json): repo-observable CRA readiness checklist (presence/absence items with evidence; not a conformity assessment).")
+        for filename, label in (("orientation.json", "human orientation and question routes"), ("support.json", "Support and Operations view"), ("security.json", "repository-observable Security view")):
+            if any(e["path"] == filename for e in ai_json["endpoints"]):
+                lines.append(f"- [{filename}](./{filename}): {label}.")
     else:
         lines.append(f"- [{monolith_filename}](./{monolith_filename}): the whole dataset in one file (components, relationships, stats, inline symbols/files, embedded coverage/activity/supply_chain). Small-repo layout with no separate shards.")
         if any(e["path"] == "sbom.json" for e in ai_json["endpoints"]):
             lines.append("- [sbom.json](./sbom.json): CycloneDX 1.5 SBOM beside the monolith; a quick dependency summary is in its .supply_chain section.")
         if any(e["path"] == "cra-readiness.json" for e in ai_json["endpoints"]):
             lines.append("- [cra-readiness.json](./cra-readiness.json): repo-observable CRA readiness checklist beside the monolith (presence/absence items with evidence; not a conformity assessment).")
+        for filename, label in (("orientation.json", "human orientation and question routes"), ("support.json", "Support and Operations view"), ("security.json", "repository-observable Security view")):
+            if any(e["path"] == filename for e in ai_json["endpoints"]):
+                lines.append(f"- [{filename}](./{filename}): {label} beside the monolith.")
     lines.append("")
     lines.append("## Token economy")
     lines.append("")

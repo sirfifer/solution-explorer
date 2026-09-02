@@ -1,0 +1,540 @@
+{
+  "launch_targets": {
+    "overview": {
+      "mode": "overview"
+    },
+    "search": {
+      "mode": "workbench",
+      "surface": "search"
+    },
+    "workbench": {
+      "lens": "structure",
+      "mode": "workbench",
+      "semantic_level": "system"
+    }
+  },
+  "orientation": {
+    "default_path": {
+      "id": "organization",
+      "kind": "question"
+    },
+    "deterministic_statement": "unamentis contains 256 mapped components across 5 system areas, connected by 168 relationships.",
+    "interpreted_statement": {
+      "provenance": {
+        "derived_from_commit": null,
+        "stale": false
+      },
+      "status": "interpreted",
+      "text": "UnaMentis is a real-time bidirectional voice AI platform for extended educational conversations. The system centers on an iOS app with five main tabs (Learning, Chat, Assistant, History, More) that connects to a Python management server for session orchestration, curriculum delivery, and administrative functions. A Rust-based service manager (USM Core) handles process lifecycle and monitoring via WebSocket. The architecture spans Swift (iOS + Watch + macOS), Python (server + importers + Lambda), TypeScript (two Next.js web apps), and Rust (service management), with PostgreSQL for persistence."
+    }
+  },
+  "portrait": {
+    "edges": [
+      {
+        "evidence_pairs": [
+          [
+            "server/lambda/services/metrics",
+            "server/lambda/services/shared"
+          ],
+          [
+            "server/lambda/services/kb",
+            "server/lambda/services/shared"
+          ],
+          [
+            "server/lambda/services/auth",
+            "server/lambda/services/shared"
+          ],
+          [
+            "server/server-manager/usmxcode-ffi/usmffi/views",
+            "scripts"
+          ],
+          [
+            "unamentis/services/knowledgebowl/ml",
+            "unamentis/core/routing/models"
+          ],
+          [
+            "unamentis/services/tts",
+            "server/web/src/lib"
+          ],
+          [
+            "unamentis/services/stt",
+            "server/web/src/lib"
+          ],
+          [
+            "server/latency_harness",
+            "server/web/src/lib"
+          ]
+        ],
+        "relationship_count": 10,
+        "source": "orientation:core",
+        "target": "orientation:data"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "server/management/tests/property",
+            "server/web/src/components/tts-pregen"
+          ],
+          [
+            "unamentis/services/knowledgebowl/ml",
+            "unamentis-watch-app"
+          ]
+        ],
+        "relationship_count": 2,
+        "source": "orientation:core",
+        "target": "orientation:experience"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "server/management/tests/property",
+            "server/management/tts_cache"
+          ],
+          [
+            "server/management/tts_cache/tests",
+            "server/management/tts_cache"
+          ],
+          [
+            "demo/tests",
+            "server/management"
+          ],
+          [
+            "unamentis/ui/curriculum",
+            "server/management"
+          ],
+          [
+            "unamentis/ui/learning",
+            "server/management"
+          ],
+          [
+            "unamentis/ui/session",
+            "server/management"
+          ],
+          [
+            "unamentis/core/config",
+            "server/management"
+          ],
+          [
+            "unamentis/core/todo",
+            "server/management"
+          ]
+        ],
+        "relationship_count": 30,
+        "source": "orientation:core",
+        "target": "orientation:services"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "server/ttfa_harness/tests",
+            "server/ttfa_harness"
+          ],
+          [
+            "unamentistests/unit",
+            "root"
+          ]
+        ],
+        "relationship_count": 2,
+        "source": "orientation:data",
+        "target": "orientation:core"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "unamentis/ui/settings",
+            "server/management"
+          ],
+          [
+            "server/web/src/lib",
+            "server/management"
+          ],
+          [
+            "server/web/src/lib/latency-harness",
+            "server/management"
+          ],
+          [
+            "server/server-manager/usmxcode-ffi/usmffipackage",
+            "server/management"
+          ],
+          [
+            "unamentistests/unit",
+            "server/usm-core/crates/usm-core"
+          ],
+          [
+            "unamentistests/unit",
+            "server/management"
+          ],
+          [
+            "unamentistests/unit",
+            "server/management/tests"
+          ]
+        ],
+        "relationship_count": 7,
+        "source": "orientation:data",
+        "target": "orientation:services"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "server/web/src/lib/feature-flags",
+            "server/web/src/test"
+          ],
+          [
+            "server/web-client/src/components/visual",
+            "server"
+          ]
+        ],
+        "relationship_count": 2,
+        "source": "orientation:experience",
+        "target": "orientation:core"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "unamentis",
+            "scripts"
+          ],
+          [
+            "server/server-manager/usmxcode/usm",
+            "server/database"
+          ],
+          [
+            "server/server-manager/usmxcode/usm",
+            "scripts"
+          ],
+          [
+            "server/web/src/components/question-packs",
+            "server/web/src/lib"
+          ],
+          [
+            "server/management/static",
+            "server/web/src/lib"
+          ]
+        ],
+        "relationship_count": 5,
+        "source": "orientation:experience",
+        "target": "orientation:data"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "server/server-manager/usmxcode/usm",
+            "server/feature-flags"
+          ]
+        ],
+        "relationship_count": 1,
+        "source": "orientation:experience",
+        "target": "orientation:operations"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "server/web",
+            "server/management"
+          ],
+          [
+            "server/web/src/app",
+            "server/management"
+          ],
+          [
+            "server/web/src/components/tts-pregen",
+            "server/management"
+          ],
+          [
+            "server/web/src/components/latency-dashboard",
+            "server/management"
+          ],
+          [
+            "server/web/src/components/dashboard",
+            "server/management"
+          ],
+          [
+            "server/web/src/hooks",
+            "server/management"
+          ],
+          [
+            "server/server-manager/usmxcode/usm",
+            "server/usm-core"
+          ],
+          [
+            "server/server-manager/usmxcode/usm",
+            "server/management"
+          ]
+        ],
+        "relationship_count": 17,
+        "source": "orientation:experience",
+        "target": "orientation:services"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "server/usm-core/crates/usm-cli",
+            "server/usm-core/crates/usm-core"
+          ]
+        ],
+        "relationship_count": 1,
+        "source": "orientation:operations",
+        "target": "orientation:services"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "server/importers/docs",
+            "server/importers"
+          ],
+          [
+            "server/usm-core/crates/usm-core",
+            "unamentis/core/config"
+          ],
+          [
+            "server/management",
+            "server/management/fov_context"
+          ],
+          [
+            "server/management",
+            "server/importers"
+          ],
+          [
+            "server/management",
+            "unamentis/testing/latencyharness"
+          ],
+          [
+            "server/management/tests",
+            "server/management/fov_context"
+          ],
+          [
+            "server/management/tests",
+            "server"
+          ],
+          [
+            "server/management",
+            "server/management/tts_pregen"
+          ]
+        ],
+        "relationship_count": 12,
+        "source": "orientation:services",
+        "target": "orientation:core"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "server/usm-core/crates/usm-core",
+            "server/database"
+          ]
+        ],
+        "relationship_count": 1,
+        "source": "orientation:services",
+        "target": "orientation:data"
+      },
+      {
+        "evidence_pairs": [
+          [
+            "server/management",
+            "server/web/src/components/tts-pregen"
+          ],
+          [
+            "server/management/tests",
+            "server/web/src/components/tts-pregen"
+          ],
+          [
+            "server/management",
+            "server/web-client/src/components/curriculum"
+          ]
+        ],
+        "relationship_count": 3,
+        "source": "orientation:services",
+        "target": "orientation:experience"
+      }
+    ],
+    "method": "deterministic component-type and path grouping",
+    "nodes": [
+      {
+        "id": "orientation:experience",
+        "label": "Experiences",
+        "member_count": 106,
+        "role": "Client-facing products and user flows",
+        "stable_targets": [
+          "unamentis",
+          "unamentis-watch-app",
+          "server/web-client",
+          "server/web",
+          "server/server-manager",
+          "server/importers/output",
+          "server/management/static",
+          "server/server-manager/usmxcode/usm",
+          "server/web-client/src/app",
+          "server/web-client/src/contexts",
+          "server/web/src/app",
+          "server/web/src/hooks"
+        ],
+        "statement_kind": "deterministic_grouping",
+        "target_truncated": true
+      },
+      {
+        "id": "orientation:core",
+        "label": "Core system",
+        "member_count": 104,
+        "role": "Application and domain implementation",
+        "stable_targets": [
+          "server",
+          "llama.cpp",
+          "server/importers",
+          "unamentis-watch-app/views",
+          "server/ttfa_harness",
+          "unamentistests/integration",
+          "demo/tests",
+          "docs/effort-reports",
+          "server/latency_harness",
+          "unamentis-watch-app/services",
+          "unamentis/intents",
+          "unamentis/services/knowledgebowl"
+        ],
+        "statement_kind": "deterministic_grouping",
+        "target_truncated": true
+      },
+      {
+        "id": "orientation:services",
+        "label": "Services & interfaces",
+        "member_count": 9,
+        "role": "Runtime services and API boundaries",
+        "stable_targets": [
+          "server/management",
+          "server/usm-core",
+          "server/management/tests",
+          "server/management/tts_cache",
+          "server/importers/docs",
+          "server/importers/enrichment",
+          "server/management/auth",
+          "server/importers/plugins/sources",
+          "server/usm-core/crates/usm-core"
+        ],
+        "statement_kind": "deterministic_grouping",
+        "target_truncated": false
+      },
+      {
+        "id": "orientation:data",
+        "label": "Data & persistence",
+        "member_count": 34,
+        "role": "Models, schemas, stores and migrations",
+        "stable_targets": [
+          "server/database",
+          "server/database/migrations",
+          "unamentistests/unit",
+          "models/glm-asr-nano",
+          "shared/watchmodels",
+          "unamentis/core/knowledgebowl",
+          "server/importers/core",
+          "server/ttfa_harness/tests",
+          "unamentis/core/questions",
+          "unamentis/ui/settings",
+          "unamentis/ui/todolist",
+          "server/lambda/services/curriculum"
+        ],
+        "statement_kind": "deterministic_grouping",
+        "target_truncated": true
+      },
+      {
+        "id": "orientation:operations",
+        "label": "Operations & tools",
+        "member_count": 3,
+        "role": "Infrastructure and operational tooling",
+        "stable_targets": [
+          "server/lambda",
+          "server/feature-flags",
+          "server/usm-core/crates/usm-cli"
+        ],
+        "statement_kind": "deterministic_grouping",
+        "target_truncated": false
+      }
+    ],
+    "semantic_level": "system"
+  },
+  "question_routes": [
+    {
+      "available": true,
+      "id": "organization",
+      "label": "How is it organized?",
+      "target": {
+        "lens": "structure",
+        "semantic_level": "system"
+      }
+    },
+    {
+      "available": true,
+      "id": "flow",
+      "label": "How does the core experience work?",
+      "target": {
+        "lens": "flow",
+        "tour_id": null
+      }
+    },
+    {
+      "available": false,
+      "id": "capabilities",
+      "label": "What can this system do?",
+      "target": {
+        "lens": "capability"
+      }
+    },
+    {
+      "available": false,
+      "id": "data",
+      "label": "Where does data live?",
+      "target": {
+        "lens": "data"
+      }
+    },
+    {
+      "available": false,
+      "id": "attention",
+      "label": "Where should I look first?",
+      "target": {
+        "surface": "findings"
+      }
+    },
+    {
+      "available": true,
+      "id": "support",
+      "label": "What could make this fail in operation?",
+      "target": {
+        "lens": "support"
+      }
+    },
+    {
+      "available": true,
+      "id": "security",
+      "label": "What security mechanisms are visible?",
+      "target": {
+        "lens": "security"
+      }
+    }
+  ],
+  "schema": "syscorpus.orientation/v1",
+  "subject": {
+    "analyzer_version": "1.0.0",
+    "default_branch": "main",
+    "generated_at": "2026-03-02T07:22:03.711568+00:00",
+    "id": "unamentis",
+    "kind": "software system",
+    "name": "unamentis",
+    "repository": "https://github.com/UnaMentis/unamentis"
+  },
+  "trust": {
+    "direct_dependencies": 0,
+    "findings": {
+      "total": 0,
+      "unverified": 0
+    },
+    "interpretation": {
+      "component_count": 256,
+      "status": "present",
+      "total_components": 256
+    },
+    "producer_gaps": 0,
+    "source_coverage": {
+      "percent": null,
+      "status": "unavailable",
+      "target": "coverage.json"
+    }
+  }
+}

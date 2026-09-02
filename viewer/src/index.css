@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@xyflow/react/dist/style.css";
+@import "./themes.css";
 
 /* Custom theme for React Flow */
 :root {
@@ -96,9 +97,12 @@
     display: none !important;
   }
   .react-flow__controls {
-    @apply scale-90 origin-bottom-left;
     /* Move above bottom sheet peek area + bottom nav */
     bottom: 130px !important;
+  }
+  .react-flow__controls button {
+    width: 44px !important;
+    height: 44px !important;
   }
 }
 

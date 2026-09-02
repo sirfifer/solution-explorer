@@ -116,27 +116,33 @@ def test_d1_generated_projection_is_not_counted_as_source(tmp_path):
     # The monolith projection file is accounted as generated, never parsed.
     assert cov["architecture.json"][0] == "excluded:generated"
 
-    # The split dataset directory is pruned to one build-output row and its
-    # manifest/shards never enter the parsed set.
-    assert cov["viewer/public/architecture"][0] == "excluded:skipped_directory"
-    assert "generated" in (cov["viewer/public/architecture"][1] or "")
-    assert "viewer/public/architecture/manifest.json" not in cov
+    # Every split-dataset file remains individually accounted, while none of
+    # its manifest/shards can enter the active parsed-source set.
+    assert cov["viewer/public/architecture/manifest.json"][0] == "excluded:generated"
+    assert cov["viewer/public/architecture/data/detail-root.json"][0] == "excluded:generated"
+    assert "generated" in (cov["viewer/public/architecture/manifest.json"][1] or "")
     parsed = {p for p, (d, _) in cov.items() if d == "parsed"}
     assert not any(p.startswith("viewer/public/architecture/") for p in parsed)
+
+    _, arch = derive_all(store, "demo")
+    component_paths: list[str] = []
+    def collect(components):
+        for component in components:
+            component_paths.append(component.get("path") or "")
+            collect(component.get("children") or [])
+    collect(arch["components"])
+    assert not any(path.startswith("viewer/public/architecture") for path in component_paths)
 
 
 def test_d1_generated_rows_classify_as_generated_inventory(tmp_path):
     from analyzer.project.inventory import classify_row
 
     assert classify_row("architecture.json", "excluded:generated", None) == "generated"
-    assert (
-        classify_row(
-            "viewer/public/architecture",
-            "excluded:skipped_directory",
-            "generated: solution-explorer projection dataset",
-        )
-        == "generated"
-    )
+    assert classify_row(
+        "viewer/public/architecture/data/detail-root.json",
+        "excluded:generated",
+        "generated: solution-explorer projection dataset",
+    ) == "generated"
 
 
 # ---------------------------------------------------------------------------
@@ -467,8 +473,27 @@ def test_top_level_generator_keys_still_detected_with_long_description(tmp_path)
     extract_repo(tmp_path, store)
     cov = dict(store._conn.execute(
         "SELECT path, disposition FROM coverage").fetchall())
-    assert cov.get("site") == "excluded:skipped_directory", cov
-    assert "site/manifest.json" not in cov
+    assert cov.get("site/manifest.json") == "excluded:generated", cov
+
+
+def test_split_projection_detected_when_components_push_generated_at_past_head(tmp_path):
+    (tmp_path / "package.json").write_text("{}")
+    d = tmp_path / "architecture"
+    (d / "data").mkdir(parents=True)
+    manifest = {
+        "analyzer_version": "2.0.0",
+        "component_detail_index": {"root": {"fileCount": 1, "symbolCount": 1}},
+        "components": [{"id": "root", "description": "x" * 300_000}],
+        "generated_at": "2026-01-01T00:00:00Z",
+    }
+    (d / "manifest.json").write_text(json.dumps(manifest))
+    (d / "data" / "detail-root.json").write_text("{}")
+
+    store = FactStore(":memory:")
+    extract_repo(tmp_path, store)
+    cov = _coverage(store)
+    assert cov["architecture/manifest.json"][0] == "excluded:generated"
+    assert cov["architecture/data/detail-root.json"][0] == "excluded:generated"
 
 
 def test_directory_prune_requires_the_shard_shape(tmp_path):

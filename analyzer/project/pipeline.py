@@ -49,6 +49,15 @@ from .cra_emit import emit_cra_readiness
 from .design import emit_design_signals
 from .frontdoor import write_front_door
 from .gitinfo import apply_info_plist_names, read_git_info
+from .human_views import (
+    ORIENTATION_FILENAME,
+    SECURITY_FILENAME,
+    SUPPORT_FILENAME,
+    build_orientation,
+    build_security_view,
+    build_support_view,
+    write_human_view,
+)
 from .manifest import write_manifest_and_details
 from .monolith import write_monolith
 from .sbom_emit import emit_sbom
@@ -72,6 +81,9 @@ class ProjectionResult:
     search_manifest_path: Optional[Path] = None
     ai_json_path: Optional[Path] = None
     llms_txt_path: Optional[Path] = None
+    orientation_path: Optional[Path] = None
+    support_path: Optional[Path] = None
+    security_path: Optional[Path] = None
     detail_count: int = 0
     search_total: int = 0
     changelog_serial: int = 0
@@ -361,6 +373,89 @@ def _empty_search_manifest(shard_size: int) -> dict:
     }
 
 
+def _emit_human_views(
+    prepared: dict,
+    output_dir: Path,
+    coverage: Optional[dict],
+    iso: Isolator,
+    indent,
+    *,
+    store=None,
+) -> tuple[Optional[Path], Optional[Path], Optional[Path]]:
+    """Build and write the three bounded human-entry sidecars.
+
+    Builders and writers are isolated independently: a failed view cannot
+    fracture the main projection, and the writer's producer gap is available to
+    the manifest/monolith written after these sidecars.  Successful sections
+    also ride in the main artifact so monolith and split consumers share one
+    schema and an old client can ignore them safely.
+    """
+    support = iso.run(
+        "project.support-view", build_support_view, prepared, default=None
+    )
+    support_path = None
+    if support is not None:
+        prepared["support"] = support
+        support_path = iso.run(
+            "project.support-json",
+            write_human_view,
+            support,
+            output_dir / SUPPORT_FILENAME,
+            indent=indent,
+            default=None,
+        )
+
+    signals_by_path: dict[str, list[dict]] = {}
+    if store is not None:
+        file_paths = {row["id"]: row["path"] for row in store.files()}
+        for signal in store.signals():
+            path = file_paths.get(signal.get("file_id"))
+            if path:
+                signals_by_path.setdefault(path, []).append(signal)
+
+    security = iso.run(
+        "project.security-view",
+        build_security_view,
+        prepared,
+        signals_by_path=signals_by_path,
+        default=None,
+    )
+    security_path = None
+    if security is not None:
+        prepared["security"] = security
+        security_path = iso.run(
+            "project.security-json",
+            write_human_view,
+            security,
+            output_dir / SECURITY_FILENAME,
+            indent=indent,
+            default=None,
+        )
+
+    orientation = iso.run(
+        "project.orientation-view",
+        build_orientation,
+        prepared,
+        coverage=coverage,
+        support=support,
+        security=security,
+        default=None,
+    )
+    orientation_path = None
+    if orientation is not None:
+        prepared["orientation"] = orientation
+        orientation_path = iso.run(
+            "project.orientation-json",
+            write_human_view,
+            orientation,
+            output_dir / ORIENTATION_FILENAME,
+            indent=indent,
+            default=None,
+        )
+
+    return orientation_path, support_path, security_path
+
+
 def project_split(
     arch: dict,
     output_dir,
@@ -494,6 +589,10 @@ def project_split(
         activity_path = output_dir / "activity.json"
         iso.run("project.activity-json", _dump_json, activity_path, activity, indent)
 
+    orientation_path, support_path, security_path = _emit_human_views(
+        prepared, output_dir, coverage, iso, indent, store=store
+    )
+
     ai_json_path, llms_txt_path = iso.run(
         "project.frontdoor", write_front_door, prepared, output_dir, mode="split",
         coverage=coverage, activity=activity,
@@ -526,6 +625,9 @@ def project_split(
         search_manifest_path=output_dir / "search" / "manifest.json",
         ai_json_path=ai_json_path,
         llms_txt_path=llms_txt_path,
+        orientation_path=orientation_path,
+        support_path=support_path,
+        security_path=security_path,
         detail_count=len(prepared.get("component_detail_index", {}))
         or _count_components(prepared.get("components", [])),
         search_total=search_manifest["total"],
@@ -615,6 +717,10 @@ def project_monolith(
     # AI front door (P8-3): emitted beside the single architecture.json, with the
     # endpoint map pointing at that one file (no shards in monolith mode). Runs
     # before the monolith write so its gap, if any, rides on the monolith.
+    orientation_path, support_path, security_path = _emit_human_views(
+        prepared, output_path.parent, coverage, iso, indent, store=store
+    )
+
     ai_json_path, llms_txt_path = iso.run(
         "project.frontdoor", write_front_door, prepared, output_path.parent,
         mode="monolith", coverage=coverage, activity=activity,
@@ -636,6 +742,9 @@ def project_monolith(
         monolith_path=monolith_path,
         ai_json_path=ai_json_path,
         llms_txt_path=llms_txt_path,
+        orientation_path=orientation_path,
+        support_path=support_path,
+        security_path=security_path,
         sbom_path=(output_path.parent / "sbom.json") if sbom_section is not None else None,
         cra_path=cra_result.artifact_path if cra_result is not None else None,
         changelog_serial=serial,

@@ -53,7 +53,7 @@ not-affiliated framing is required and validator-enforced.
 
 ## 6. Separability
 
-Our viewer is FSL-1.1-ALv2; the subject's content is Microsoft's. The bundle
+Our viewer is PolyForm Noncommercial 1.0.0; the subject's content is Microsoft's. The bundle
 keeps them separable: subject content lives under the projection data path,
 `UPSTREAM-LICENSE.txt` and `ThirdPartyNotices.txt` name the subject's terms, and
 nothing implies either license covers the other's material.

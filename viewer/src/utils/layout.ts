@@ -26,6 +26,33 @@ function getElk(): Promise<ELKInstance> {
 // Largest nodes are ~360x230, so use that plus margin
 const DEFAULT_NODE_WIDTH = 380;
 const DEFAULT_NODE_HEIGHT = 250;
+const DEFAULT_EDGE_LABEL_HEIGHT = 26;
+
+function edgeLabelSize(edge: Edge): { width: number; height: number } | null {
+  if (typeof edge.label !== "string" || edge.label.trim().length === 0) return null;
+  const fontSize = typeof edge.labelStyle?.fontSize === "number"
+    ? edge.labelStyle.fontSize
+    : 13;
+  // ELK needs a real label box in order to reserve collision-free space. SVG
+  // text is measured later by the browser, so use a deliberately conservative
+  // monospace-ish estimate plus the background padding rendered by BaseEdge.
+  return {
+    width: Math.min(280, Math.max(54, edge.label.length * fontSize * 0.64 + 18)),
+    height: Math.max(DEFAULT_EDGE_LABEL_HEIGHT, fontSize + 12),
+  };
+}
+
+function edgePath(sections: Array<{
+  startPoint: { x: number; y: number };
+  endPoint: { x: number; y: number };
+  bendPoints?: Array<{ x: number; y: number }>;
+}> | undefined): string | null {
+  if (!sections?.length) return null;
+  return sections.map((section) => {
+    const points = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint];
+    return points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  }).join(" ");
+}
 
 // Priority order for layout: mobile clients first (top-left), then other clients,
 // then servers below them
@@ -54,6 +81,7 @@ export async function getLayoutedElements(
   nodes: Node[],
   edges: Edge[],
   direction: "RIGHT" | "DOWN" = "DOWN",
+  targetAspectRatio: number = 1.3,
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   // Sort nodes by type priority for better initial layering
   const sortedNodes = [...nodes].sort((a, b) => {
@@ -62,11 +90,29 @@ export async function getLayoutedElements(
     return getTypePriority(aType) - getTypePriority(bType);
   });
 
+  // ELK uses this when it packs disconnected subgraphs. Without a target tied
+  // to the actual canvas, a tall workspace can receive a very wide row of
+  // components; fitView then succeeds geometrically by making every label
+  // microscopic. Clamp pathological panel measurements while preserving the
+  // real portrait/landscape intent.
+  const aspectRatio = Math.min(3, Math.max(0.35, targetAspectRatio));
   const elkGraph = {
     id: "root",
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": direction,
+      "elk.aspectRatio": String(aspectRatio),
+      "elk.separateConnectedComponents": "true",
+      "elk.layered.compaction.connectedComponents": "true",
+      "elk.spacing.componentComponent": "60",
+      "elk.edgeRouting": "ORTHOGONAL",
+      // These only work when labels are supplied to ELK (below). Previously
+      // the viewer discarded ELK routes and let React Flow place every label
+      // at an independent midpoint, which made collisions inevitable.
+      "elk.spacing.edgeLabel": "10",
+      "elk.spacing.labelLabel": "14",
+      "elk.spacing.edgeNode": "24",
+      "elk.layered.edgeLabels.centerLabelPlacementStrategy": "SPACE_EFFICIENT_LAYER",
       // Large spacing to prevent overlaps and show relationships clearly
       "elk.spacing.nodeNode": "60",
       "elk.layered.spacing.nodeNodeBetweenLayers": "80",
@@ -93,11 +139,21 @@ export async function getLayoutedElements(
         "elk.priority": String(sortedNodes.length - index),
       },
     })),
-    edges: edges.map((edge) => ({
-      id: edge.id,
-      sources: [edge.source],
-      targets: [edge.target],
-    })),
+    edges: edges.map((edge) => {
+      const labelSize = edgeLabelSize(edge);
+      return {
+        id: edge.id,
+        sources: [edge.source],
+        targets: [edge.target],
+        labels: labelSize ? [{
+          id: `${edge.id}-label`,
+          text: edge.label as string,
+          width: labelSize.width,
+          height: labelSize.height,
+          layoutOptions: { "elk.edgeLabels.placement": "CENTER" },
+        }] : undefined,
+      };
+    }),
   };
 
   const elk = await getElk();
@@ -117,7 +173,31 @@ export async function getLayoutedElements(
     return node;
   });
 
-  return { nodes: layoutedNodes, edges };
+  const layoutEdges = new Map((layout.edges ?? []).map((edge) => [edge.id, edge]));
+  const layoutedEdges = edges.map((edge) => {
+    const elkEdge = layoutEdges.get(edge.id);
+    const path = edgePath(elkEdge?.sections);
+    const label = elkEdge?.labels?.[0];
+    if (!path) return edge;
+    return {
+      ...edge,
+      type: "elk",
+      data: {
+        ...(edge.data ?? {}),
+        elkPath: path,
+        elkLabel: label?.x != null && label?.y != null
+          ? {
+              x: label.x + (label.width ?? 0) / 2,
+              y: label.y + (label.height ?? 0) / 2,
+              width: label.width ?? 0,
+              height: label.height ?? 0,
+            }
+          : undefined,
+      },
+    };
+  });
+
+  return { nodes: layoutedNodes, edges: layoutedEdges };
 }
 
 // Color mapping for component types
@@ -321,33 +401,38 @@ export function getEdgeCategory(type: string): EdgeCategory {
 // Relationship type to edge style
 // Communication edges: colored, animated, solid lines with arrows
 // Structural edges: gray, not animated, dashed to clearly differentiate
+//
+// Colors are palette variables rather than literal hex so that edges are part
+// of the theme seam: React Flow puts these into inline SVG style, where var()
+// resolves, so a theme redresses the wiring between components along with the
+// components themselves.
 const EDGE_STYLES: Record<string, { color: string; animated: boolean; dash: string; strokeWidth: number }> = {
-  import:    { color: "#6B7280", animated: false, dash: "6 4",  strokeWidth: 1.2 },
+  import:    { color: "var(--color-zinc-500)", animated: false, dash: "6 4",  strokeWidth: 1.2 },
   // D5: component-to-component type-usage edges (a symbol reference resolved to
   // its owning component). Structural, like import; a slate dashed line.
-  uses:      { color: "#64748B", animated: false, dash: "3 3",  strokeWidth: 1.3 },
-  http:      { color: "#3B82F6", animated: true,  dash: "",     strokeWidth: 2 },
-  websocket: { color: "#8B5CF6", animated: true,  dash: "",     strokeWidth: 2 },
-  grpc:      { color: "#10B981", animated: true,  dash: "",     strokeWidth: 2 },
-  ffi:       { color: "#F59E0B", animated: false, dash: "4 3",  strokeWidth: 1.2 },
-  database:  { color: "#EC4899", animated: true,  dash: "",     strokeWidth: 2 },
-  file:      { color: "#6B7280", animated: true,  dash: "8 4",  strokeWidth: 1.5 },
-  navigation:{ color: "#06B6D4", animated: false, dash: "",     strokeWidth: 1.5 },
-  tab:       { color: "#818CF8", animated: false, dash: "4 2",  strokeWidth: 1.2 },
-  modal:         { color: "#A78BFA", animated: false, dash: "6 3",  strokeWidth: 1.5 },
+  uses:      { color: "var(--color-slate-500)", animated: false, dash: "3 3",  strokeWidth: 1.3 },
+  http:      { color: "var(--color-blue-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  websocket: { color: "var(--color-violet-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  grpc:      { color: "var(--color-emerald-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  ffi:       { color: "var(--color-amber-500)", animated: false, dash: "4 3",  strokeWidth: 1.2 },
+  database:  { color: "var(--color-pink-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  file:      { color: "var(--color-zinc-500)", animated: true,  dash: "8 4",  strokeWidth: 1.5 },
+  navigation:{ color: "var(--color-cyan-500)", animated: false, dash: "",     strokeWidth: 1.5 },
+  tab:       { color: "var(--color-indigo-400)", animated: false, dash: "4 2",  strokeWidth: 1.2 },
+  modal:         { color: "var(--color-violet-400)", animated: false, dash: "6 3",  strokeWidth: 1.5 },
   // Flow lens (P6-2): synthetic edges for UIAction target_view links. A teal
   // dotted line distinguishes an in-screen action tap from a real navigation edge.
-  action:        { color: "#2DD4BF", animated: false, dash: "2 3",  strokeWidth: 1.4 },
-  embed:         { color: "#94A3B8", animated: false, dash: "1 4",  strokeWidth: 1.2 },
+  action:        { color: "var(--color-teal-400)", animated: false, dash: "2 3",  strokeWidth: 1.4 },
+  embed:         { color: "var(--color-slate-400)", animated: false, dash: "1 4",  strokeWidth: 1.2 },
   // Data lens (P6-3): read/write access edges in the entity ego view. Read is
   // green, write is amber (the card's colors); an inferred edge is dashed via the
   // ai_discovered channel in ArchitectureGraph.
-  reads:         { color: "#10B981", animated: true,  dash: "",     strokeWidth: 1.8 },
-  writes:        { color: "#F59E0B", animated: true,  dash: "",     strokeWidth: 1.8 },
-  message_queue: { color: "#F59E0B", animated: true,  dash: "",     strokeWidth: 2 },
-  pubsub:        { color: "#D946EF", animated: true,  dash: "",     strokeWidth: 2 },
-  event_bus:     { color: "#A855F7", animated: true,  dash: "4 4",  strokeWidth: 1.8 },
-  cache:         { color: "#EF4444", animated: true,  dash: "",     strokeWidth: 1.8 },
+  reads:         { color: "var(--color-emerald-500)", animated: true,  dash: "",     strokeWidth: 1.8 },
+  writes:        { color: "var(--color-amber-500)", animated: true,  dash: "",     strokeWidth: 1.8 },
+  message_queue: { color: "var(--color-amber-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  pubsub:        { color: "var(--color-fuchsia-500)", animated: true,  dash: "",     strokeWidth: 2 },
+  event_bus:     { color: "var(--color-purple-500)", animated: true,  dash: "4 4",  strokeWidth: 1.8 },
+  cache:         { color: "var(--color-red-500)", animated: true,  dash: "",     strokeWidth: 1.8 },
 };
 
 export function getEdgeStyle(type: string) {

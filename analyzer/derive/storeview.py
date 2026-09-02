@@ -84,11 +84,15 @@ class StoreView:
             if path is not None:
                 signals_by_path.setdefault(path, []).append(sig)
 
-        # The full enumerated-file universe (parsed + excluded + binary +
-        # failed), so existence checks on non-parsed marker/config files work.
+        # The derivation-visible filesystem includes ordinary excluded/binary
+        # marker files because their existence can still define a real project.
+        # Generated Solution Explorer files remain in the coverage/inventory
+        # ledger but are deliberately absent here: their manifest/package-like
+        # names must not create active components from serialized tool output.
         all_paths = [
             c["path"] for c in store.coverage()
             if c["disposition"] not in _DIR_DISPOSITIONS
+            and c["disposition"] != "excluded:generated"
         ]
         dir_paths: set[str] = {""}
         for p in list(all_paths) + list(content_by_path):

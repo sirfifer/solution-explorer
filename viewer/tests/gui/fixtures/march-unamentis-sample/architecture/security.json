@@ -1,0 +1,2971 @@
+{
+  "communication_boundaries": [
+    {
+      "evidence": {
+        "relationship": [
+          "demo/tests",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "demo/tests",
+      "source_name": "tests",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server",
+      "source_name": "server",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/importers/core",
+          "server/web/src/types"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/importers/core",
+      "source_name": "core",
+      "target": "server/web/src/types",
+      "target_name": "types",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/importers/docs",
+          "server/importers"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/importers/docs",
+      "source_name": "docs",
+      "target": "server/importers",
+      "target_name": "unamentis-importers",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/importers/output",
+          "server/importers/output"
+        ]
+      },
+      "protocol": "redis_queue",
+      "source": "server/importers/output",
+      "source_name": "output",
+      "target": "server/importers/output",
+      "target_name": "output",
+      "transport_state": "not_observable",
+      "type": "message_queue"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/importers/tests",
+          "server/importers"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/importers/tests",
+      "source_name": "tests",
+      "target": "server/importers",
+      "target_name": "unamentis-importers",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/lambda/services/auth",
+          "server/lambda/services/shared"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/lambda/services/auth",
+      "source_name": "auth",
+      "target": "server/lambda/services/shared",
+      "target_name": "shared",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/lambda/services/curriculum",
+          "server/lambda/services/shared"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/lambda/services/curriculum",
+      "source_name": "curriculum",
+      "target": "server/lambda/services/shared",
+      "target_name": "shared",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/lambda/services/kb",
+          "server/lambda/services/shared"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/lambda/services/kb",
+      "source_name": "kb",
+      "target": "server/lambda/services/shared",
+      "target_name": "shared",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/lambda/services/metrics",
+          "server/lambda/services/shared"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/lambda/services/metrics",
+      "source_name": "metrics",
+      "target": "server/lambda/services/shared",
+      "target_name": "shared",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/latency_harness",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/latency_harness",
+      "source_name": "latency_harness",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/latency_harness",
+          "server/management"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/latency_harness",
+      "source_name": "latency_harness",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/latency_harness",
+          "server/management/tests"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/latency_harness",
+      "source_name": "latency_harness",
+      "target": "server/management/tests",
+      "target_name": "tests",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/latency_harness",
+          "server/usm-core/crates/usm-core"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/latency_harness",
+      "source_name": "latency_harness",
+      "target": "server/usm-core/crates/usm-core",
+      "target_name": "usm-core",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/latency_harness",
+          "server/web/src/lib"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/latency_harness",
+      "source_name": "latency_harness",
+      "target": "server/web/src/lib",
+      "target_name": "lib",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/latency_harness",
+          "unamentis/testing/latencyharness"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/latency_harness",
+      "source_name": "latency_harness",
+      "target": "unamentis/testing/latencyharness",
+      "target_name": "LatencyHarness",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/importers"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management",
+      "source_name": "unamentis-management",
+      "target": "server/importers",
+      "target_name": "unamentis-importers",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/lambda/services/metrics"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/management",
+      "source_name": "unamentis-management",
+      "target": "server/lambda/services/metrics",
+      "target_name": "metrics",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/management/auth"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management",
+      "source_name": "unamentis-management",
+      "target": "server/management/auth",
+      "target_name": "auth",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/management/fov_context"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/management",
+      "source_name": "unamentis-management",
+      "target": "server/management/fov_context",
+      "target_name": "fov_context",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/management/fov_context"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management",
+      "source_name": "unamentis-management",
+      "target": "server/management/fov_context",
+      "target_name": "fov_context",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/management/tts_cache"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management",
+      "source_name": "unamentis-management",
+      "target": "server/management/tts_cache",
+      "target_name": "tts_cache",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/management/tts_pregen"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/management",
+      "source_name": "unamentis-management",
+      "target": "server/management/tts_pregen",
+      "target_name": "tts_pregen",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/web-client/src/components/curriculum"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/management",
+      "source_name": "unamentis-management",
+      "target": "server/web-client/src/components/curriculum",
+      "target_name": "curriculum",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/web/src/components/tts-pregen"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management",
+      "source_name": "unamentis-management",
+      "target": "server/web/src/components/tts-pregen",
+      "target_name": "tts-pregen",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "unamentis/testing/latencyharness"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management",
+      "source_name": "unamentis-management",
+      "target": "unamentis/testing/latencyharness",
+      "target_name": "LatencyHarness",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/static",
+          "server/management"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/management/static",
+      "source_name": "static",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/static",
+          "server/management/tests"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/management/static",
+      "source_name": "static",
+      "target": "server/management/tests",
+      "target_name": "tests",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/static",
+          "server/usm-core/crates/usm-core"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/management/static",
+      "source_name": "static",
+      "target": "server/usm-core/crates/usm-core",
+      "target_name": "usm-core",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/static",
+          "server/web/src/lib"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/management/static",
+      "source_name": "static",
+      "target": "server/web/src/lib",
+      "target_name": "lib",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tests",
+          "server"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management/tests",
+      "source_name": "tests",
+      "target": "server",
+      "target_name": "server",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tests",
+          "server/lambda/services/metrics"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/management/tests",
+      "source_name": "tests",
+      "target": "server/lambda/services/metrics",
+      "target_name": "metrics",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tests",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/management/tests",
+      "source_name": "tests",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tests",
+          "server/management/auth"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management/tests",
+      "source_name": "tests",
+      "target": "server/management/auth",
+      "target_name": "auth",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tests",
+          "server/management/fov_context"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management/tests",
+      "source_name": "tests",
+      "target": "server/management/fov_context",
+      "target_name": "fov_context",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tests",
+          "server/management/tts_cache"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management/tests",
+      "source_name": "tests",
+      "target": "server/management/tts_cache",
+      "target_name": "tts_cache",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tests",
+          "server/web/src/components/tts-pregen"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management/tests",
+      "source_name": "tests",
+      "target": "server/web/src/components/tts-pregen",
+      "target_name": "tts-pregen",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tests",
+          "unamentis/core/config"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/management/tests",
+      "source_name": "tests",
+      "target": "unamentis/core/config",
+      "target_name": "Config",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tests/property",
+          "server/management/fov_context"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management/tests/property",
+      "source_name": "property",
+      "target": "server/management/fov_context",
+      "target_name": "fov_context",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tests/property",
+          "server/management/tts_cache"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management/tests/property",
+      "source_name": "property",
+      "target": "server/management/tts_cache",
+      "target_name": "tts_cache",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tests/property",
+          "server/web/src/components/tts-pregen"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management/tests/property",
+      "source_name": "property",
+      "target": "server/web/src/components/tts-pregen",
+      "target_name": "tts-pregen",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/management/tts_cache/tests",
+          "server/management/tts_cache"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/management/tts_cache/tests",
+      "source_name": "tests",
+      "target": "server/management/tts_cache",
+      "target_name": "tts_cache",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode-ffi/usmffi/core",
+          "server/management"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/server-manager/usmxcode-ffi/usmffi/core",
+      "source_name": "Core",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode-ffi/usmffi/core",
+          "server/management/tests"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/server-manager/usmxcode-ffi/usmffi/core",
+      "source_name": "Core",
+      "target": "server/management/tests",
+      "target_name": "tests",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode-ffi/usmffi/core",
+          "server/usm-core/crates/usm-core"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/server-manager/usmxcode-ffi/usmffi/core",
+      "source_name": "Core",
+      "target": "server/usm-core/crates/usm-core",
+      "target_name": "usm-core",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode-ffi/usmffi/core",
+          "server/usm-core/crates/usm-ffi"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/server-manager/usmxcode-ffi/usmffi/core",
+      "source_name": "Core",
+      "target": "server/usm-core/crates/usm-ffi",
+      "target_name": "usm-ffi",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode-ffi/usmffi/core",
+          "server/web/src/lib"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/server-manager/usmxcode-ffi/usmffi/core",
+      "source_name": "Core",
+      "target": "server/web/src/lib",
+      "target_name": "lib",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode-ffi/usmffi/views",
+          "scripts"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/server-manager/usmxcode-ffi/usmffi/views",
+      "source_name": "Views",
+      "target": "scripts",
+      "target_name": "Remote Log Server",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode-ffi/usmffi/views",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/server-manager/usmxcode-ffi/usmffi/views",
+      "source_name": "Views",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode-ffi/usmffipackage",
+          "scripts"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/server-manager/usmxcode-ffi/usmffipackage",
+      "source_name": "USMFFIPackage",
+      "target": "scripts",
+      "target_name": "Remote Log Server",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode-ffi/usmffipackage",
+          "server/database"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/server-manager/usmxcode-ffi/usmffipackage",
+      "source_name": "USMFFIPackage",
+      "target": "server/database",
+      "target_name": "database",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode-ffi/usmffipackage",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/server-manager/usmxcode-ffi/usmffipackage",
+      "source_name": "USMFFIPackage",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode/usm",
+          "scripts"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/server-manager/usmxcode/usm",
+      "source_name": "USM",
+      "target": "scripts",
+      "target_name": "Remote Log Server",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode/usm",
+          "server/database"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/server-manager/usmxcode/usm",
+      "source_name": "USM",
+      "target": "server/database",
+      "target_name": "database",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode/usm",
+          "server/feature-flags"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/server-manager/usmxcode/usm",
+      "source_name": "USM",
+      "target": "server/feature-flags",
+      "target_name": "feature-flags",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode/usm",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/server-manager/usmxcode/usm",
+      "source_name": "USM",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/server-manager/usmxcode/usm",
+          "server/usm-core"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/server-manager/usmxcode/usm",
+      "source_name": "USM",
+      "target": "server/usm-core",
+      "target_name": "usm-core",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/ttfa_harness/tests",
+          "server/ttfa_harness"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/ttfa_harness/tests",
+      "source_name": "tests",
+      "target": "server/ttfa_harness",
+      "target_name": "ttfa_harness",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/usm-core/crates/usm-cli",
+          "server/usm-core/crates/usm-core"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/usm-core/crates/usm-cli",
+      "source_name": "usm-cli",
+      "target": "server/usm-core/crates/usm-core",
+      "target_name": "usm-core",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/usm-core/crates/usm-core",
+          "server/database"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/usm-core/crates/usm-core",
+      "source_name": "usm-core",
+      "target": "server/database",
+      "target_name": "database",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/usm-core/crates/usm-core",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/usm-core/crates/usm-core",
+      "source_name": "usm-core",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/usm-core/crates/usm-core",
+          "unamentis/core/config"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/usm-core/crates/usm-core",
+      "source_name": "usm-core",
+      "target": "unamentis/core/config",
+      "target_name": "Config",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/usm-core/crates/usm-ffi",
+          "server/usm-core/crates/usm-core"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "server/usm-core/crates/usm-ffi",
+      "source_name": "usm-ffi",
+      "target": "server/usm-core/crates/usm-core",
+      "target_name": "usm-core",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web",
+      "source_name": "web",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web-client",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web-client",
+      "source_name": "unamentis-web-client",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/app",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web-client/src/app",
+      "source_name": "app",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/components/visual",
+          "server"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web-client/src/components/visual",
+      "source_name": "visual",
+      "target": "server",
+      "target_name": "server",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/lib/api",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web-client/src/lib/api",
+      "source_name": "api",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/lib/providers",
+          "server/management"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/web-client/src/lib/providers",
+      "source_name": "providers",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/lib/providers",
+          "server/management/tests"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/web-client/src/lib/providers",
+      "source_name": "providers",
+      "target": "server/management/tests",
+      "target_name": "tests",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/lib/providers",
+          "server/usm-core/crates/usm-core"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/web-client/src/lib/providers",
+      "source_name": "providers",
+      "target": "server/usm-core/crates/usm-core",
+      "target_name": "usm-core",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/lib/providers",
+          "server/web/src/lib"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/web-client/src/lib/providers",
+      "source_name": "providers",
+      "target": "server/web/src/lib",
+      "target_name": "lib",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/app",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web/src/app",
+      "source_name": "app",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/components/dashboard",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web/src/components/dashboard",
+      "source_name": "dashboard",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/components/latency-dashboard",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web/src/components/latency-dashboard",
+      "source_name": "latency-dashboard",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/components/question-packs",
+          "server/management"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/web/src/components/question-packs",
+      "source_name": "question-packs",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/components/question-packs",
+          "server/management/tests"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/web/src/components/question-packs",
+      "source_name": "question-packs",
+      "target": "server/management/tests",
+      "target_name": "tests",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/components/question-packs",
+          "server/usm-core/crates/usm-core"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/web/src/components/question-packs",
+      "source_name": "question-packs",
+      "target": "server/usm-core/crates/usm-core",
+      "target_name": "usm-core",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/components/question-packs",
+          "server/web/src/lib"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "server/web/src/components/question-packs",
+      "source_name": "question-packs",
+      "target": "server/web/src/lib",
+      "target_name": "lib",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/components/tts-pregen",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web/src/components/tts-pregen",
+      "source_name": "tts-pregen",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/hooks",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web/src/hooks",
+      "source_name": "hooks",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/lib",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web/src/lib",
+      "source_name": "lib",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/lib/feature-flags",
+          "server/web/src/test"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web/src/lib/feature-flags",
+      "source_name": "feature-flags",
+      "target": "server/web/src/test",
+      "target_name": "test",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "server/web/src/lib/latency-harness",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "server/web/src/lib/latency-harness",
+      "source_name": "latency-harness",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis",
+          "scripts"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis",
+      "source_name": "UnaMentis",
+      "target": "scripts",
+      "target_name": "Remote Log Server",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis-watch-app",
+          "unamentis"
+        ]
+      },
+      "protocol": "tcp",
+      "source": "unamentis-watch-app",
+      "source_name": "UnaMentis",
+      "target": "unamentis",
+      "target_name": "UnaMentis",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis-watch-app/__ui__/kbwatchmainview",
+          "unamentis-watch-app/__ui__/kbwatchdomaindrillview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis-watch-app/__ui__/kbwatchmainview",
+      "source_name": "KBWatch Main",
+      "target": "unamentis-watch-app/__ui__/kbwatchdomaindrillview",
+      "target_name": "KBWatch Domain Drill",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis-watch-app/__ui__/kbwatchmainview",
+          "unamentis-watch-app/__ui__/kbwatchflashcardsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis-watch-app/__ui__/kbwatchmainview",
+      "source_name": "KBWatch Main",
+      "target": "unamentis-watch-app/__ui__/kbwatchflashcardsview",
+      "target_name": "KBWatch Flash Cards",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis-watch-app/__ui__/kbwatchmainview",
+          "unamentis-watch-app/__ui__/kbwatchquicksessionview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis-watch-app/__ui__/kbwatchmainview",
+      "source_name": "KBWatch Main",
+      "target": "unamentis-watch-app/__ui__/kbwatchquicksessionview",
+      "target_name": "KBWatch Quick Session",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/chatterboxsettingsview",
+          "unamentis/__ui__/audiorecorderview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/chatterboxsettingsview",
+      "source_name": "Chatterbox Settings",
+      "target": "unamentis/__ui__/audiorecorderview",
+      "target_name": "Audio Recorder",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/curriculumdetailview",
+          "unamentis/__ui__/topicdetailview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/curriculumdetailview",
+      "source_name": "Curriculum Detail",
+      "target": "unamentis/__ui__/topicdetailview",
+      "target_name": "Topic Detail",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/curriculumview",
+          "unamentis/__ui__/curriculumdetailview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/curriculumview",
+      "source_name": "Curriculum",
+      "target": "unamentis/__ui__/curriculumdetailview",
+      "target_name": "Curriculum Detail",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/helpview",
+          "unamentis/__ui__/curriculumhelpview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/helpview",
+      "source_name": "Help",
+      "target": "unamentis/__ui__/curriculumhelpview",
+      "target_name": "Curriculum Help",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/helpview",
+          "unamentis/__ui__/freeformchathelpview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/helpview",
+      "source_name": "Help",
+      "target": "unamentis/__ui__/freeformchathelpview",
+      "target_name": "Freeform Chat Help",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/helpview",
+          "unamentis/__ui__/handsfreehelpview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/helpview",
+      "source_name": "Help",
+      "target": "unamentis/__ui__/handsfreehelpview",
+      "target_name": "Hands Free Help",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/helpview",
+          "unamentis/__ui__/settingshelpview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/helpview",
+      "source_name": "Help",
+      "target": "unamentis/__ui__/settingshelpview",
+      "target_name": "Settings Help",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/helpview",
+          "unamentis/__ui__/voicecommandshelpview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/helpview",
+      "source_name": "Help",
+      "target": "unamentis/__ui__/voicecommandshelpview",
+      "target_name": "Voice Commands Help",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/kbdashboardview",
+          "unamentis/__ui__/kbconferencetrainingview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/kbdashboardview",
+      "source_name": "KBDashboard",
+      "target": "unamentis/__ui__/kbconferencetrainingview",
+      "target_name": "KBConference Training",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/kbdashboardview",
+          "unamentis/__ui__/kbdomaindrillview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/kbdashboardview",
+      "source_name": "KBDashboard",
+      "target": "unamentis/__ui__/kbdomaindrillview",
+      "target_name": "KBDomain Drill",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/kbdashboardview",
+          "unamentis/__ui__/kbmatchsimulationview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/kbdashboardview",
+      "source_name": "KBDashboard",
+      "target": "unamentis/__ui__/kbmatchsimulationview",
+      "target_name": "KBMatch Simulation",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/kbdashboardview",
+          "unamentis/__ui__/kboralsessionview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/kbdashboardview",
+      "source_name": "KBDashboard",
+      "target": "unamentis/__ui__/kboralsessionview",
+      "target_name": "KBOral Session",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/kbdashboardview",
+          "unamentis/__ui__/kbquickstartsettingsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/kbdashboardview",
+      "source_name": "KBDashboard",
+      "target": "unamentis/__ui__/kbquickstartsettingsview",
+      "target_name": "KBQuickstart Settings",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/kbdashboardview",
+          "unamentis/__ui__/kbreboundtrainingview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/kbdashboardview",
+      "source_name": "KBDashboard",
+      "target": "unamentis/__ui__/kbreboundtrainingview",
+      "target_name": "KBRebound Training",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/kbdashboardview",
+          "unamentis/__ui__/kbsettingsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/kbdashboardview",
+      "source_name": "KBDashboard",
+      "target": "unamentis/__ui__/kbsettingsview",
+      "target_name": "KBSettings",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/kbdashboardview",
+          "unamentis/__ui__/kbwrittensessionview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/kbdashboardview",
+      "source_name": "KBDashboard",
+      "target": "unamentis/__ui__/kbwrittensessionview",
+      "target_name": "KBWritten Session",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/kbquickstartsettingsview",
+          "unamentis/__ui__/kbdomainmixview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/kbquickstartsettingsview",
+      "source_name": "KBQuickstart Settings",
+      "target": "unamentis/__ui__/kbdomainmixview",
+      "target_name": "KBDomain Mix",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/kyutaipocketsettingsview",
+          "unamentis/__ui__/audiorecorderview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/kyutaipocketsettingsview",
+      "source_name": "Kyutai Pocket Settings",
+      "target": "unamentis/__ui__/audiorecorderview",
+      "target_name": "Audio Recorder",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/serversettingsview",
+          "unamentis/__ui__/qrcodescannerview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/serversettingsview",
+      "source_name": "Server Settings",
+      "target": "unamentis/__ui__/qrcodescannerview",
+      "target_name": "QRCode Scanner",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/serversettingsview",
+          "unamentis/__ui__/serversetupguideview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/serversettingsview",
+      "source_name": "Server Settings",
+      "target": "unamentis/__ui__/serversetupguideview",
+      "target_name": "Server Setup Guide",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/sessionlistview",
+          "unamentis/__ui__/sessiondetailview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/sessionlistview",
+      "source_name": "Session List",
+      "target": "unamentis/__ui__/sessiondetailview",
+      "target_name": "Session Detail",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/sessionview",
+          "unamentis/__ui__/voicesettingsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/sessionview",
+      "source_name": "Session",
+      "target": "unamentis/__ui__/voicesettingsview",
+      "target_name": "Voice Settings",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/apiproviderdetailview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/apiproviderdetailview",
+      "target_name": "APIProvider Detail",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/audiotestview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/audiotestview",
+      "target_name": "Audio Test",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/debugconversationtestview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/debugconversationtestview",
+      "target_name": "Debug Conversation Test",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/devicemetricsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/devicemetricsview",
+      "target_name": "Device Metrics",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/diagnosticsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/diagnosticsview",
+      "target_name": "Diagnostics",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/helpview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/helpview",
+      "target_name": "Help",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/onboardingview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/onboardingview",
+      "target_name": "Onboarding",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/ondevicellmsettingsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/ondevicellmsettingsview",
+      "target_name": "On Device LLMSettings",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/providertestview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/providertestview",
+      "target_name": "Provider Test",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/serversettingsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/serversettingsview",
+      "target_name": "Server Settings",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/sessioncostoverviewview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/sessioncostoverviewview",
+      "target_name": "Session Cost Overview",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/ttsplaybacktuningview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/ttsplaybacktuningview",
+      "target_name": "TTSPlayback Tuning",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/voicecommandshelpview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/voicecommandshelpview",
+      "target_name": "Voice Commands Help",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/settingsview",
+          "unamentis/__ui__/voicesettingsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/settingsview",
+      "source_name": "Settings",
+      "target": "unamentis/__ui__/voicesettingsview",
+      "target_name": "Voice Settings",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/tab-bar",
+          "unamentis/__ui__/tab-assistant"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/tab-bar",
+      "source_name": "Tab Bar",
+      "target": "unamentis/__ui__/tab-assistant",
+      "target_name": "Assistant",
+      "transport_state": "not_observable",
+      "type": "tab"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/tab-bar",
+          "unamentis/__ui__/tab-chat"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/tab-bar",
+      "source_name": "Tab Bar",
+      "target": "unamentis/__ui__/tab-chat",
+      "target_name": "Chat",
+      "transport_state": "not_observable",
+      "type": "tab"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/tab-bar",
+          "unamentis/__ui__/tab-history"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/tab-bar",
+      "source_name": "Tab Bar",
+      "target": "unamentis/__ui__/tab-history",
+      "target_name": "History",
+      "transport_state": "not_observable",
+      "type": "tab"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/tab-bar",
+          "unamentis/__ui__/tab-learning"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/tab-bar",
+      "source_name": "Tab Bar",
+      "target": "unamentis/__ui__/tab-learning",
+      "target_name": "Learning",
+      "transport_state": "not_observable",
+      "type": "tab"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/tab-bar",
+          "unamentis/__ui__/tab-more"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/tab-bar",
+      "source_name": "Tab Bar",
+      "target": "unamentis/__ui__/tab-more",
+      "target_name": "More",
+      "transport_state": "not_observable",
+      "type": "tab"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/tab-more",
+          "unamentis/__ui__/analyticsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/tab-more",
+      "source_name": "More",
+      "target": "unamentis/__ui__/analyticsview",
+      "target_name": "Analytics",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/tab-more",
+          "unamentis/__ui__/settingsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/tab-more",
+      "source_name": "More",
+      "target": "unamentis/__ui__/settingsview",
+      "target_name": "Settings",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/todolistview",
+          "unamentis/__ui__/todoitemdetailview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/todolistview",
+      "source_name": "Todo List",
+      "target": "unamentis/__ui__/todoitemdetailview",
+      "target_name": "Todo Item Detail",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/topicdetailview",
+          "unamentis/__ui__/sessionview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/topicdetailview",
+      "source_name": "Topic Detail",
+      "target": "unamentis/__ui__/sessionview",
+      "target_name": "Session",
+      "transport_state": "not_observable",
+      "type": "modal"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/voicesettingsview",
+          "unamentis/__ui__/chatterboxsettingsview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/voicesettingsview",
+      "source_name": "Voice Settings",
+      "target": "unamentis/__ui__/chatterboxsettingsview",
+      "target_name": "Chatterbox Settings",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/__ui__/voicesettingsview",
+          "unamentis/__ui__/ttsplaybacktuningview"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentis/__ui__/voicesettingsview",
+      "source_name": "Voice Settings",
+      "target": "unamentis/__ui__/ttsplaybacktuningview",
+      "target_name": "TTSPlayback Tuning",
+      "transport_state": "not_observable",
+      "type": "navigation"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/core/config",
+          "server/importers/docs"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis/core/config",
+      "source_name": "Config",
+      "target": "server/importers/docs",
+      "target_name": "docs",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/core/config",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis/core/config",
+      "source_name": "Config",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/core/todo",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis/core/todo",
+      "source_name": "Todo",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/modules/knowledgebowl/services",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis/modules/knowledgebowl/services",
+      "source_name": "Services",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/services/knowledgebowl",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis/services/knowledgebowl",
+      "source_name": "KnowledgeBowl",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/services/knowledgebowl/ml",
+          "unamentis-watch-app"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis/services/knowledgebowl/ml",
+      "source_name": "ML",
+      "target": "unamentis-watch-app",
+      "target_name": "UnaMentis",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/services/knowledgebowl/ml",
+          "unamentis/core/routing/models"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis/services/knowledgebowl/ml",
+      "source_name": "ML",
+      "target": "unamentis/core/routing/models",
+      "target_name": "Models",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/services/stt",
+          "server/management"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentis/services/stt",
+      "source_name": "STT",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/services/stt",
+          "server/management/tests"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentis/services/stt",
+      "source_name": "STT",
+      "target": "server/management/tests",
+      "target_name": "tests",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/services/stt",
+          "server/usm-core/crates/usm-core"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentis/services/stt",
+      "source_name": "STT",
+      "target": "server/usm-core/crates/usm-core",
+      "target_name": "usm-core",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/services/stt",
+          "server/web/src/lib"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentis/services/stt",
+      "source_name": "STT",
+      "target": "server/web/src/lib",
+      "target_name": "lib",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/services/tts",
+          "server/management"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentis/services/tts",
+      "source_name": "TTS",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/services/tts",
+          "server/management/tests"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentis/services/tts",
+      "source_name": "TTS",
+      "target": "server/management/tests",
+      "target_name": "tests",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/services/tts",
+          "server/usm-core/crates/usm-core"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentis/services/tts",
+      "source_name": "TTS",
+      "target": "server/usm-core/crates/usm-core",
+      "target_name": "usm-core",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/services/tts",
+          "server/web/src/lib"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentis/services/tts",
+      "source_name": "TTS",
+      "target": "server/web/src/lib",
+      "target_name": "lib",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/ui/curriculum",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis/ui/curriculum",
+      "source_name": "Curriculum",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/ui/learning",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis/ui/learning",
+      "source_name": "Learning",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/ui/session",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis/ui/session",
+      "source_name": "Session",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentis/ui/settings",
+          "server/management"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentis/ui/settings",
+      "source_name": "Settings",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests",
+          "root"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentistests",
+      "source_name": "UnaMentisTests",
+      "target": "root",
+      "target_name": "unamentis",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/integration",
+          "root"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentistests/integration",
+      "source_name": "Integration",
+      "target": "root",
+      "target_name": "unamentis",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/integration/knowledgebowl",
+          "root"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentistests/integration/knowledgebowl",
+      "source_name": "KnowledgeBowl",
+      "target": "root",
+      "target_name": "unamentis",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit",
+          "root"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentistests/unit",
+      "source_name": "Unit",
+      "target": "root",
+      "target_name": "unamentis",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit",
+          "server/management"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentistests/unit",
+      "source_name": "Unit",
+      "target": "server/management",
+      "target_name": "unamentis-management",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit",
+          "server/management/tests"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentistests/unit",
+      "source_name": "Unit",
+      "target": "server/management/tests",
+      "target_name": "tests",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit",
+          "server/usm-core/crates/usm-core"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentistests/unit",
+      "source_name": "Unit",
+      "target": "server/usm-core/crates/usm-core",
+      "target_name": "usm-core",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit",
+          "server/web/src/lib"
+        ]
+      },
+      "protocol": "WebSocket",
+      "source": "unamentistests/unit",
+      "source_name": "Unit",
+      "target": "server/web/src/lib",
+      "target_name": "lib",
+      "transport_state": "not_observable",
+      "type": "websocket"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit/knowledgebowl",
+          "root"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentistests/unit/knowledgebowl",
+      "source_name": "KnowledgeBowl",
+      "target": "root",
+      "target_name": "unamentis",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit/knowledgebowl/validation",
+          "root"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentistests/unit/knowledgebowl/validation",
+      "source_name": "Validation",
+      "target": "root",
+      "target_name": "unamentis",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit/routing",
+          "root"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentistests/unit/routing",
+      "source_name": "Routing",
+      "target": "root",
+      "target_name": "unamentis",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit/routing",
+          "server/web/src/test"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentistests/unit/routing",
+      "source_name": "Routing",
+      "target": "server/web/src/test",
+      "target_name": "test",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit/services",
+          "root"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentistests/unit/services",
+      "source_name": "Services",
+      "target": "root",
+      "target_name": "unamentis",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit/services",
+          "server/web/src/test"
+        ]
+      },
+      "protocol": "HTTP",
+      "source": "unamentistests/unit/services",
+      "source_name": "Services",
+      "target": "server/web/src/test",
+      "target_name": "test",
+      "transport_state": "cleartext_label_observed",
+      "type": "http"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit/services/voice",
+          "root"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentistests/unit/services/voice",
+      "source_name": "Voice",
+      "target": "root",
+      "target_name": "unamentis",
+      "transport_state": "not_observable",
+      "type": "import"
+    },
+    {
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit/todo",
+          "root"
+        ]
+      },
+      "protocol": "unknown",
+      "source": "unamentistests/unit/todo",
+      "source_name": "Todo",
+      "target": "root",
+      "target_name": "unamentis",
+      "transport_state": "not_observable",
+      "type": "import"
+    }
+  ],
+  "counts": {
+    "communication_boundaries": 171,
+    "credential_configuration": 2,
+    "findings": 0,
+    "mechanisms": 30,
+    "sensitive_data_leads": 0
+  },
+  "credential_configuration": [
+    {
+      "claim": "credential configuration is referenced",
+      "component_id": "demo/tests",
+      "component_name": "tests",
+      "confidence": "certain",
+      "evidence": {
+        "component_id": "demo/tests"
+      },
+      "key": "SHOTSTACK_API_KEY"
+    },
+    {
+      "claim": "credential configuration is referenced",
+      "component_id": "server/web-client/src/app",
+      "component_name": "app",
+      "confidence": "certain",
+      "evidence": {
+        "component_id": "server/web-client/src/app"
+      },
+      "key": "OPENAI_API_KEY"
+    }
+  ],
+  "findings": [],
+  "mechanisms": [
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "demo/tests",
+          "server/management"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "demo/tests",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server",
+          "server/management"
+        ]
+      },
+      "mechanism": "session",
+      "source": "server",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/latency_harness",
+          "server/management"
+        ]
+      },
+      "mechanism": "session",
+      "source": "server/latency_harness",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/lambda/services/metrics"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "server/management",
+      "target": "server/lambda/services/metrics"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/management/fov_context"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "server/management",
+      "target": "server/management/fov_context"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/management/tts_pregen"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "server/management",
+      "target": "server/management/tts_pregen"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/management",
+          "server/web-client/src/components/curriculum"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "server/management",
+      "target": "server/web-client/src/components/curriculum"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/management/tests",
+          "server/lambda/services/metrics"
+        ]
+      },
+      "mechanism": "jwt",
+      "source": "server/management/tests",
+      "target": "server/lambda/services/metrics"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/management/tests",
+          "server/management"
+        ]
+      },
+      "mechanism": "jwt",
+      "source": "server/management/tests",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/management/tests",
+          "unamentis/core/config"
+        ]
+      },
+      "mechanism": "jwt",
+      "source": "server/management/tests",
+      "target": "unamentis/core/config"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/web-client",
+          "server/management"
+        ]
+      },
+      "mechanism": "jwt",
+      "source": "server/web-client",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/app",
+          "server/management"
+        ]
+      },
+      "mechanism": "jwt",
+      "source": "server/web-client/src/app",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/components/visual",
+          "server"
+        ]
+      },
+      "mechanism": "jwt",
+      "source": "server/web-client/src/components/visual",
+      "target": "server"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/lib/api",
+          "server/management"
+        ]
+      },
+      "mechanism": "jwt",
+      "source": "server/web-client/src/lib/api",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/lib/providers",
+          "server/management"
+        ]
+      },
+      "mechanism": "jwt",
+      "source": "server/web-client/src/lib/providers",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/web-client/src/lib/providers",
+          "server/usm-core/crates/usm-core"
+        ]
+      },
+      "mechanism": "jwt",
+      "source": "server/web-client/src/lib/providers",
+      "target": "server/usm-core/crates/usm-core"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/web/src/components/dashboard",
+          "server/management"
+        ]
+      },
+      "mechanism": "session",
+      "source": "server/web/src/components/dashboard",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/web/src/components/tts-pregen",
+          "server/management"
+        ]
+      },
+      "mechanism": "session",
+      "source": "server/web/src/components/tts-pregen",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "server/web/src/lib",
+          "server/management"
+        ]
+      },
+      "mechanism": "session",
+      "source": "server/web/src/lib",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "unamentis",
+          "scripts"
+        ]
+      },
+      "mechanism": "jwt",
+      "source": "unamentis",
+      "target": "scripts"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "unamentis/core/config",
+          "server/importers/docs"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "unamentis/core/config",
+      "target": "server/importers/docs"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "unamentis/core/config",
+          "server/management"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "unamentis/core/config",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "unamentis/core/todo",
+          "server/management"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "unamentis/core/todo",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "unamentis/modules/knowledgebowl/services",
+          "server/management"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "unamentis/modules/knowledgebowl/services",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "unamentis/services/knowledgebowl",
+          "server/management"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "unamentis/services/knowledgebowl",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "unamentis/ui/curriculum",
+          "server/management"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "unamentis/ui/curriculum",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "unamentis/ui/learning",
+          "server/management"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "unamentis/ui/learning",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "unamentis/ui/session",
+          "server/management"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "unamentis/ui/session",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "unamentis/ui/settings",
+          "server/management"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "unamentis/ui/settings",
+      "target": "server/management"
+    },
+    {
+      "confidence": "certain",
+      "evidence": {
+        "relationship": [
+          "unamentistests/unit/routing",
+          "server/web/src/test"
+        ]
+      },
+      "mechanism": "api_key",
+      "source": "unamentistests/unit/routing",
+      "target": "server/web/src/test"
+    }
+  ],
+  "method_caveat": "Repository-observable mechanisms and leads only. This is not a security audit, compliance verdict, penetration test, or assurance of safety.",
+  "not_observable": [
+    "runtime control effectiveness",
+    "deployed secret values",
+    "identity-provider policy",
+    "network perimeter configuration",
+    "incident response performance"
+  ],
+  "schema": "syscorpus.security/v1",
+  "sensitive_data_leads": []
+}

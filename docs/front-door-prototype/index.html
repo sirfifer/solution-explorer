@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Interactive design prototype for a comprehension-first SysCorpus front door and expert workbench."
+    />
+    <title>SysCorpus — Front Door Prototype</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell" id="appShell">
+      <header class="global-header">
+        <a class="brand" href="#overview" data-action="show-overview" aria-label="SysCorpus home">
+          <span class="brand-mark" aria-hidden="true">SC</span>
+          <span class="brand-copy">
+            <strong>SysCorpus</strong>
+            <small>systems, made legible</small>
+          </span>
+        </a>
+
+        <div class="subject-switcher" aria-label="System under study">
+          <span class="subject-avatar">U</span>
+          <span>
+            <small>System under study</small>
+            <strong>UnaMentis</strong>
+          </span>
+          <button class="icon-button compact" aria-label="Choose another system" title="Choose another system">⌄</button>
+        </div>
+
+        <nav class="mode-switch" aria-label="Experience level">
+          <button class="mode-button is-active" data-mode="overview">Overview</button>
+          <button class="mode-button" data-mode="workbench">Workbench</button>
+        </nav>
+
+        <div class="header-actions">
+          <button class="search-button" data-action="open-search">
+            <span aria-hidden="true">⌕</span>
+            <span>Search everything</span>
+            <kbd>⌘ K</kbd>
+          </button>
+          <button class="trust-button" data-action="open-trust" aria-label="Open evidence and coverage details">
+            <span class="status-dot"></span>
+            <span><strong>100%</strong> mapped</span>
+          </button>
+          <button class="icon-button" data-action="open-preferences" aria-label="Open view preferences" title="View preferences">◒</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="overview-view is-visible" id="overviewView" aria-label="System overview">
+          <div class="concept-bar">
+            <div>
+              <span class="eyebrow">Choose the opening posture</span>
+              <p>Three entry directions, one underlying system model.</p>
+            </div>
+            <div class="concept-tabs" role="tablist" aria-label="Design direction">
+              <button class="concept-tab is-active" role="tab" aria-selected="true" data-concept="portrait">
+                <span>01</span> System portrait
+              </button>
+              <button class="concept-tab" role="tab" aria-selected="false" data-concept="questions">
+                <span>02</span> Start with a question
+              </button>
+              <button class="concept-tab" role="tab" aria-selected="false" data-concept="atlas">
+                <span>03</span> Atlas first
+              </button>
+            </div>
+          </div>
+
+          <div class="concept-panel is-visible" data-concept-panel="portrait">
+            <section class="portrait-hero">
+              <div class="portrait-copy">
+                <span class="eyebrow cyan">UnaMentis at a glance</span>
+                <h1>A voice-first learning system that turns conversation into structured teaching.</h1>
+                <p class="lead">
+                  Learners speak naturally. UnaMentis combines curriculum context, language models, and speech services to teach in real time across mobile, web, and supporting services.
+                </p>
+
+                <div class="primary-paths" aria-label="Recommended ways to begin">
+                  <button class="path-card path-primary" data-journey="flow">
+                    <span class="path-index">Best first step</span>
+                    <strong>Follow the learning loop</strong>
+                    <small>See one real experience from voice to response · 6 stages</small>
+                    <span class="path-arrow">→</span>
+                  </button>
+                  <button class="path-card" data-journey="capabilities">
+                    <span class="path-index">Explore</span>
+                    <strong>See what it can do</strong>
+                    <small>Capabilities, products, interfaces, and proof</small>
+                    <span class="path-arrow">→</span>
+                  </button>
+                  <button class="path-card" data-journey="attention">
+                    <span class="path-index">Review</span>
+                    <strong>See what deserves attention</strong>
+                    <small>Ranked findings, gaps, change, and dependencies</small>
+                    <span class="path-arrow">→</span>
+                  </button>
+                </div>
+
+                <div class="scale-ledger" aria-label="System scale">
+                  <div><strong>168</strong><span>components</span></div>
+                  <div><strong>751</strong><span>files</span></div>
+                  <div><strong>458</strong><span>relationships</span></div>
+                  <div><strong>160k</strong><span>code lines</span></div>
+                </div>
+              </div>
+
+              <div class="system-portrait" aria-label="Simplified map of UnaMentis">
+                <div class="portrait-heading">
+                  <div>
+                    <span class="eyebrow">System portrait</span>
+                    <h2>Five meaningful areas, before 168 components</h2>
+                  </div>
+                  <button class="text-button" data-action="open-workbench">Open full map →</button>
+                </div>
+                <div class="portrait-map">
+                  <svg class="portrait-links" viewBox="0 0 720 460" preserveAspectRatio="none" aria-hidden="true">
+                    <path d="M355 220 C270 160 230 105 165 90" />
+                    <path d="M355 220 C450 150 495 110 565 88" />
+                    <path d="M355 220 C260 275 215 335 155 370" />
+                    <path d="M355 220 C450 270 505 325 570 370" />
+                  </svg>
+                  <button class="map-node center" data-node="unamentis">
+                    <span class="node-icon">U</span>
+                    <strong>UnaMentis</strong>
+                    <small>Voice-first learning</small>
+                  </button>
+                  <button class="map-node top-left tone-cyan" data-node="experience">
+                    <span class="node-kicker">Experience</span>
+                    <strong>Learning clients</strong>
+                    <small>iOS · watchOS · web</small>
+                  </button>
+                  <button class="map-node top-right tone-violet" data-node="learning">
+                    <span class="node-kicker">Meaning</span>
+                    <strong>Learning core</strong>
+                    <small>Curricula · sessions · rules</small>
+                  </button>
+                  <button class="map-node bottom-left tone-amber" data-node="providers">
+                    <span class="node-kicker">Runtime</span>
+                    <strong>Voice &amp; AI providers</strong>
+                    <small>STT · LLM · TTS · search</small>
+                  </button>
+                  <button class="map-node bottom-right tone-green" data-node="operations">
+                    <span class="node-kicker">Foundation</span>
+                    <strong>Data &amp; operations</strong>
+                    <small>Persistence · services · admin</small>
+                  </button>
+                </div>
+                <div class="portrait-caption">
+                  <span><i class="legend-dot deterministic"></i> Derived from mapped source</span>
+                  <span><i class="legend-dot interpreted"></i> Plain-language interpretation is marked</span>
+                  <button class="text-button" data-action="open-trust">How do we know? →</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="discovery-strip">
+              <div class="discovery-intro">
+                <span class="eyebrow">Go somewhere useful</span>
+                <h2>Explore by intent, not by tool vocabulary.</h2>
+              </div>
+              <button data-question="organization"><span>01</span><strong>How is it organized?</strong><small>System → domains → components</small></button>
+              <button data-question="data"><span>02</span><strong>Where does data live?</strong><small>Entities, stores, readers, writers</small></button>
+              <button data-question="dependencies"><span>03</span><strong>What does it rely on?</strong><small>Packages, providers, boundaries</small></button>
+              <button data-question="change"><span>04</span><strong>What changed?</strong><small>Activity, hotspots, ownership</small></button>
+            </section>
+          </div>
+
+          <div class="concept-panel" data-concept-panel="questions">
+            <section class="questions-layout">
+              <div class="question-rail">
+                <span class="eyebrow cyan">Start from intent</span>
+                <h1>What are you trying to understand?</h1>
+                <p>You do not need to know the component name, programming language, or which lens contains the answer.</p>
+                <div class="question-list">
+                  <button class="is-active" data-question="flow"><span>↝</span><div><strong>How does the core experience work?</strong><small>Follow a learner’s voice to a useful response</small></div></button>
+                  <button data-question="capabilities"><span>◈</span><div><strong>What can this system do?</strong><small>Capabilities linked to code and tests</small></div></button>
+                  <button data-question="organization"><span>⌗</span><div><strong>How is it organized?</strong><small>Major products, domains, and boundaries</small></div></button>
+                  <button data-question="attention"><span>!</span><div><strong>Where should I look first?</strong><small>Ranked findings, gaps, and hotspots</small></div></button>
+                  <button data-question="data"><span>▦</span><div><strong>Where does data live?</strong><small>Models, persistence, readers, and writers</small></div></button>
+                  <button data-question="dependencies"><span>⇄</span><div><strong>What does it rely on?</strong><small>External services, packages, and protocols</small></div></button>
+                </div>
+              </div>
+              <article class="instant-answer" id="instantAnswer">
+                <div class="answer-meta">
+                  <span><i class="legend-dot deterministic"></i> Answer assembled from mapped evidence</span>
+                  <button class="text-button" data-action="open-trust">Inspect evidence</button>
+                </div>
+                <span class="eyebrow cyan" id="answerEyebrow">Core experience</span>
+                <h2 id="answerTitle">A real-time learning loop crosses six replaceable stages.</h2>
+                <p id="answerBody">A learner speaks; the voice layer detects and transcribes; curriculum context is assembled; a language model responds; and speech services play the answer back.</p>
+                <div class="answer-facts" id="answerFacts">
+                  <span><strong>6</strong> stages</span><span><strong>11</strong> protocol boundaries</span><span><strong>3</strong> guided paths</span>
+                </div>
+                <div class="flow-miniature" id="answerVisual" aria-label="Simplified learning flow">
+                  <div><span>01</span><strong>Learner</strong><small>speaks</small></div><i></i>
+                  <div><span>02</span><strong>Voice</strong><small>hears</small></div><i></i>
+                  <div><span>03</span><strong>Context</strong><small>grounds</small></div><i></i>
+                  <div><span>04</span><strong>Model</strong><small>responds</small></div><i></i>
+                  <div><span>05</span><strong>Speech</strong><small>plays</small></div>
+                </div>
+                <div class="answer-actions">
+                  <button class="primary-button" data-journey="flow">Walk through this answer</button>
+                  <button class="secondary-button" data-action="open-workbench">Open in workbench →</button>
+                </div>
+              </article>
+            </section>
+          </div>
+
+          <div class="concept-panel" data-concept-panel="atlas">
+            <section class="atlas-layout">
+              <aside class="atlas-rail">
+                <div>
+                  <span class="eyebrow cyan">Direct entry</span>
+                  <h1>Begin with the map, at the right altitude.</h1>
+                  <p>For graph-literate visitors: the full analytical shell is present, but the first view is a five-node system model—not 168 components.</p>
+                </div>
+                <nav aria-label="Atlas lenses">
+                  <button class="is-active"><span>◇</span> Structure</button>
+                  <button><span>↝</span> Flow</button>
+                  <button><span>◈</span> Capabilities</button>
+                  <button><span>▦</span> Data</button>
+                  <button><span>◌</span> Activity</button>
+                  <button><span>!</span> Findings</button>
+                </nav>
+                <button class="primary-button wide" data-action="open-workbench">Continue in full workbench →</button>
+              </aside>
+              <div class="atlas-canvas">
+                <div class="atlas-toolbar">
+                  <span>UnaMentis <b>›</b> System</span>
+                  <div class="semantic-control" aria-label="Semantic level">
+                    <button class="is-active">System</button><button>Domains</button><button>Components</button>
+                  </div>
+                  <span class="atlas-measures"><b>168</b> components <b>458</b> links</span>
+                </div>
+                <div class="atlas-graph">
+                  <svg viewBox="0 0 900 560" preserveAspectRatio="none" aria-hidden="true">
+                    <path d="M445 275 L205 125 M445 275 L685 125 M445 275 L205 430 M445 275 L685 430 M205 125 L205 430 M685 125 L685 430" />
+                  </svg>
+                  <button class="atlas-node primary" data-node="unamentis"><span>Primary system</span><strong>UnaMentis</strong><small>Voice-first learning platform</small></button>
+                  <button class="atlas-node n1" data-node="experience"><span>Clients</span><strong>Learning experiences</strong><small>iOS · watchOS · web</small></button>
+                  <button class="atlas-node n2" data-node="learning"><span>Domain</span><strong>Learning core</strong><small>Curriculum · session · rules</small></button>
+                  <button class="atlas-node n3" data-node="providers"><span>Providers</span><strong>Voice &amp; intelligence</strong><small>STT · LLM · TTS</small></button>
+                  <button class="atlas-node n4" data-node="operations"><span>Platform</span><strong>Data &amp; operations</strong><small>Storage · services · admin</small></button>
+                  <div class="zoom-control"><button>+</button><button>−</button><button>⌗</button></div>
+                </div>
+                <div class="trust-strip">
+                  <span class="good">✓ 100% source mapped</span>
+                  <span class="caution">! 42 producer gaps</span>
+                  <span>85 findings · unverified until reviewed</span>
+                  <span>7 direct dependencies</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="workbench-view" id="workbenchView" aria-label="SysCorpus workbench">
+          <aside class="workbench-nav">
+            <div class="nav-section-label">Explore</div>
+            <button class="is-active" data-workbench-lens="structure"><span>◇</span><em>Architecture</em></button>
+            <button data-workbench-lens="capability"><span>◈</span><em>Capabilities</em></button>
+            <button data-workbench-lens="flow"><span>↝</span><em>Flows</em></button>
+            <button data-workbench-lens="data"><span>▦</span><em>Data</em></button>
+            <button data-workbench-lens="activity"><span>◌</span><em>Activity</em></button>
+            <button data-workbench-lens="rules"><span>§</span><em>Rules</em></button>
+            <div class="nav-section-label">Assess</div>
+            <button data-workbench-lens="findings"><span>!</span><em>Findings</em><b>85</b></button>
+            <button data-workbench-lens="supply"><span>⇄</span><em>Supply chain</em></button>
+            <button data-workbench-lens="review"><span>✎</span><em>Review</em></button>
+          </aside>
+
+          <section class="workbench-main">
+            <div class="workbench-context">
+              <div>
+                <span class="eyebrow" id="workbenchLensEyebrow">Architecture · system level</span>
+                <h2 id="workbenchLensTitle">How the system is composed</h2>
+              </div>
+              <div class="workbench-tools">
+                <button class="secondary-button small">Ranked list</button>
+                <div class="semantic-control">
+                  <button class="is-active">System</button><button>Domains</button><button>Components</button>
+                </div>
+                <button class="icon-button compact" title="More view options">•••</button>
+              </div>
+            </div>
+
+            <div class="workbench-stage">
+              <aside class="ranked-panel">
+                <div class="ranked-heading">
+                  <span class="eyebrow">Look here first</span>
+                  <button class="icon-button compact">×</button>
+                </div>
+                <h3 id="rankedTitle">System boundaries</h3>
+                <p id="rankedSummary">The primary learning experience depends on four major system areas.</p>
+                <div class="ranked-list" id="rankedList">
+                  <button class="is-active" data-node="unamentis"><span>01</span><div><strong>UnaMentis</strong><small>Primary learning system</small></div><b>→</b></button>
+                  <button data-node="learning"><span>02</span><div><strong>Learning core</strong><small>Curriculum and sessions</small></div><b>→</b></button>
+                  <button data-node="providers"><span>03</span><div><strong>Voice &amp; AI</strong><small>External provider boundary</small></div><b>→</b></button>
+                  <button data-node="operations"><span>04</span><div><strong>Data &amp; operations</strong><small>Persistence and services</small></div><b>→</b></button>
+                </div>
+                <div class="context-memory">
+                  <span>Context carried in</span>
+                  <strong id="carriedContext">System overview</strong>
+                  <small>Selection, question, lens, and semantic level persist.</small>
+                </div>
+              </aside>
+
+              <div class="workbench-canvas">
+                <div class="canvas-breadcrumb">UnaMentis <b>›</b> System <span>Structure lens</span></div>
+                <svg class="workbench-links" viewBox="0 0 900 650" preserveAspectRatio="none" aria-hidden="true">
+                  <path d="M450 315 L220 150 M450 315 L680 150 M450 315 L215 490 M450 315 L685 490" />
+                </svg>
+                <button class="wb-node wb-center is-selected" data-node="unamentis"><span>Primary system</span><strong>UnaMentis</strong><small>Voice-first learning platform</small><i>16 files · 11 connections</i></button>
+                <button class="wb-node wb-n1" data-node="experience"><span>Clients</span><strong>Learning experiences</strong><small>iOS · watchOS · web</small></button>
+                <button class="wb-node wb-n2" data-node="learning"><span>Domain</span><strong>Learning core</strong><small>Curriculum · session · rules</small></button>
+                <button class="wb-node wb-n3" data-node="providers"><span>Providers</span><strong>Voice &amp; intelligence</strong><small>STT · LLM · TTS</small></button>
+                <button class="wb-node wb-n4" data-node="operations"><span>Platform</span><strong>Data &amp; operations</strong><small>Storage · services · admin</small></button>
+                <div class="canvas-controls"><button>+</button><button>−</button><button>⌗</button></div>
+              </div>
+
+              <aside class="inspector" id="inspector">
+                <div class="inspector-heading">
+                  <span class="eyebrow">Selected system</span>
+                  <button class="icon-button compact" aria-label="Close inspector">×</button>
+                </div>
+                <div class="inspector-identity">
+                  <span class="inspector-icon" id="inspectorIcon">U</span>
+                  <div><h3 id="inspectorTitle">UnaMentis</h3><p id="inspectorRole">Primary learning system</p></div>
+                </div>
+                <p class="inspector-description" id="inspectorDescription">Coordinates voice-driven learning experiences across clients, curriculum, providers, and persistent data.</p>
+                <div class="confidence-line"><span class="status-dot"></span><strong>Source-derived structure</strong><button data-action="open-trust">Evidence</button></div>
+                <dl class="inspector-metrics">
+                  <div><dt>Files</dt><dd id="metricFiles">16</dd></div>
+                  <div><dt>Connections</dt><dd id="metricConnections">11</dd></div>
+                  <div><dt>Coverage</dt><dd id="metricCoverage">100%</dd></div>
+                </dl>
+                <div class="quick-paths">
+                  <span class="eyebrow">Continue from here</span>
+                  <button><span>↝</span> Follow its relationships <b>→</b></button>
+                  <button><span>⌘</span> Browse files and symbols <b>→</b></button>
+                  <button><span>◈</span> See capabilities and proof <b>→</b></button>
+                </div>
+                <button class="primary-button wide">Open full detail →</button>
+              </aside>
+            </div>
+
+            <footer class="workbench-status">
+              <button data-action="open-trust"><span class="good">✓ 100%</span> source mapped</button>
+              <button data-action="open-trust"><span class="caution">! 42</span> honest gaps</button>
+              <button><span>85</span> findings · verification visible</button>
+              <button><span>7</span> direct dependencies</button>
+              <button class="return-overview" data-action="show-overview">Return to system overview →</button>
+            </footer>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div class="drawer-scrim" id="drawerScrim" hidden></div>
+
+    <aside class="side-drawer" id="trustDrawer" aria-hidden="true" aria-label="Evidence and coverage">
+      <div class="drawer-heading"><div><span class="eyebrow cyan">Trust ledger</span><h2>What is known—and how</h2></div><button class="icon-button" data-action="close-drawers">×</button></div>
+      <p class="drawer-lead">SysCorpus separates deterministic facts, interpretation, and missing analysis. Nothing unverified is promoted into a conclusion.</p>
+      <div class="trust-summary-card good-card"><span>✓</span><div><strong>100% of analyzable source mapped</strong><small>Every source file is parsed or carries an explicit disposition.</small></div></div>
+      <div class="trust-sections">
+        <section><header><span class="trust-glyph deterministic">D</span><div><strong>Deterministic map</strong><small>Structure, files, symbols, relationships</small></div><b>Complete</b></header><p>751 files and 458 relationships accounted for in the current iOS snapshot.</p><button>Open coverage ledger →</button></section>
+        <section><header><span class="trust-glyph interpreted">I</span><div><strong>Interpreted layer</strong><small>Purpose, intent, narrative, grouping</small></div><b>28 / 168</b></header><p>Interpretation is an evidence-linked overlay. An unenriched item is not empty or unimportant.</p><button>See provenance →</button></section>
+        <section><header><span class="trust-glyph caution">!</span><div><strong>Honest gaps</strong><small>Analysis that could not be produced</small></div><b>42</b></header><p>Gaps stay visible and drill to their cause; they are not blended into a reassuring score.</p><button>Review producer gaps →</button></section>
+        <section><header><span class="trust-glyph neutral">?</span><div><strong>Findings</strong><small>Leads, concerns, and verification state</small></div><b>85</b></header><p>Findings remain evidence-backed leads until their verification status says otherwise.</p><button>Open ranked findings →</button></section>
+      </div>
+      <div class="snapshot-note"><span>Snapshot</span><strong>UnaMentis iOS · main</strong><small>Generated 3 days ago · analyzer v1.2 · source revision available</small></div>
+    </aside>
+
+    <aside class="side-drawer preferences-drawer" id="preferencesDrawer" aria-hidden="true" aria-label="View preferences">
+      <div class="drawer-heading"><div><span class="eyebrow cyan">Your workspace</span><h2>Make return visits yours</h2></div><button class="icon-button" data-action="close-drawers">×</button></div>
+      <p class="drawer-lead">These preferences change presentation and starting posture only. They never remove data or create a separate product.</p>
+      <form id="preferencesForm">
+        <fieldset>
+          <legend>When I open a system</legend>
+          <label class="radio-card"><input type="radio" name="startView" value="overview" checked /><span><strong>Open the overview</strong><small>Best for learning or sharing a system</small></span></label>
+          <label class="radio-card"><input type="radio" name="startView" value="workbench" /><span><strong>Open the workbench</strong><small>Best when the map is a daily tool</small></span></label>
+          <label class="radio-card"><input type="radio" name="startView" value="last" /><span><strong>Resume where I left off</strong><small>Restore lens, selection, and semantic level</small></span></label>
+        </fieldset>
+        <fieldset>
+          <legend>Overview direction</legend>
+          <select name="concept" id="conceptSelect"><option value="portrait">System portrait</option><option value="questions">Start with a question</option><option value="atlas">Atlas first</option></select>
+        </fieldset>
+        <fieldset>
+          <legend>Workbench density</legend>
+          <div class="segmented-control"><label><input type="radio" name="density" value="focused" checked /><span>Focused</span></label><label><input type="radio" name="density" value="dense" /><span>Dense</span></label></div>
+        </fieldset>
+        <label class="toggle-row"><span><strong>Remember my navigation</strong><small>Lens, selected object, zoom level, and panels</small></span><input type="checkbox" name="remember" checked /><i></i></label>
+        <label class="toggle-row"><span><strong>Show evidence state inline</strong><small>Confidence, provenance, and gaps stay visible</small></span><input type="checkbox" name="evidence" checked /><i></i></label>
+        <button class="primary-button wide" type="submit">Save preferences</button>
+        <button class="text-button center" type="button" data-action="reset-preferences">Reset to first-visit defaults</button>
+      </form>
+    </aside>
+
+    <div class="search-overlay" id="searchOverlay" aria-hidden="true">
+      <div class="search-dialog" role="dialog" aria-modal="true" aria-label="Search SysCorpus">
+        <div class="search-input-row"><span>⌕</span><input id="searchInput" type="search" placeholder="Search by concept, component, file, symbol, or documentation…" autocomplete="off" /><kbd>esc</kbd></div>
+        <div class="search-suggestions">
+          <span class="eyebrow">Try a concept—even if you do not know its name</span>
+          <button data-search-result="voice"><span class="result-type">Concept</span><div><strong>How voice becomes a response</strong><small>Flow · 6 stages · grounded in 11 relationships</small></div><b>→</b></button>
+          <button data-search-result="curriculum"><span class="result-type">Capability</span><div><strong>Curriculum delivery</strong><small>Learning core · 14 components · tests linked</small></div><b>→</b></button>
+          <button data-search-result="session"><span class="result-type">Component</span><div><strong>SessionCoordinator</strong><small>UnaMentis/Core/Session · Swift</small></div><b>→</b></button>
+          <button data-search-result="docs"><span class="result-type">Documentation</span><div><strong>Voice architecture decisions</strong><small>Documentation content, not just filenames</small></div><b>→</b></button>
+        </div>
+        <footer><span>↑↓ move</span><span>↵ open</span><span>⌘↵ open in workbench</span></footer>
+      </div>
+    </div>
+
+    <section class="journey-overlay" id="journeyOverlay" aria-hidden="true">
+      <div class="journey-dialog" role="dialog" aria-modal="true" aria-labelledby="journeyTitle">
+        <header><div><span class="eyebrow cyan" id="journeyEyebrow">Guided path · 1 of 6</span><h2 id="journeyTitle">The learning loop begins with a learner speaking.</h2></div><button class="icon-button" data-action="close-journey">×</button></header>
+        <div class="journey-body">
+          <aside class="journey-steps" id="journeySteps"></aside>
+          <article class="journey-focus">
+            <div class="journey-visual" id="journeyVisual"><span class="pulse-ring"></span><strong>01</strong><small>Learner input</small></div>
+            <span class="eyebrow" id="journeyStepKind">Experience</span>
+            <h3 id="journeyStepTitle">The learner speaks naturally.</h3>
+            <p id="journeyStepBody">The client captures speech while voice activity detection decides when an utterance begins and ends.</p>
+            <div class="evidence-card"><span class="trust-glyph deterministic">D</span><div><strong id="journeyEvidenceTitle">Mapped to 3 components and 8 symbols</strong><small id="journeyEvidenceBody">Open the workbench to inspect files, symbols, relationships, and provenance.</small></div><button data-action="open-workbench">Open evidence →</button></div>
+          </article>
+        </div>
+        <footer><button class="secondary-button" id="journeyBack">← Back</button><span id="journeyProgress">Step 1 of 6</span><button class="primary-button" id="journeyNext">Next: voice layer →</button></footer>
+      </div>
+    </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -22,7 +22,9 @@ export default defineConfig({
     include: ["src/**/*.{test,spec}.?(c|m)[jt]s?(x)"],
     environment: "jsdom",
     globals: true,
-    setupFiles: [],
+    // Repairs the jsdom environment where Vitest 4 no longer supplies Storage.
+    // See the file for why it is conditional.
+    setupFiles: ["./src/__tests__/setup.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary", "html"],

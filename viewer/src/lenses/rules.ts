@@ -42,7 +42,14 @@ export const DECISION_ANCHORS = new Set(["switch", "match", "case_when"]);
 
 // True when the dataset carries any rule. Absence hides the lens.
 export function hasRules(arch: Architecture): boolean {
-  return (arch.rules?.length ?? 0) > 0;
+  const rules = arch.rules ?? [];
+  if (rules.length === 0) return false;
+  // A system-wide lens must not be built entirely from shape-matched branches.
+  // Until the projection carries a calibrated corpus-quality score, one
+  // evidence-anchored rule is the minimum honest gate. The lens itself keeps
+  // showing each rule's confidence rather than turning this into a percentage
+  // threshold invented by the viewer.
+  return rules.some((rule) => rule.confidence === "certain");
 }
 
 // The Data-lens (L3) cross-link target of a rule: the entity whose field an io

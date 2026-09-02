@@ -724,20 +724,29 @@ def _driver_edges(d: Deriver, add, content_ids: set) -> None:
 
 
 def _external_services(d: Deriver, content_ids: set) -> None:
-    by_comp: dict = {}
+    by_comp: dict[str, dict[tuple[str, str, str], dict]] = {}
     for fi in d._all_files:
         comp = d._find_component_for_file(fi.path)
         if not comp or comp.id in content_ids:
             continue
-        for url, _ln in _url_signals(d, fi.path):
+        for url, line in _url_signals(d, fi.path):
             for domain, (service_name, category) in EXTERNAL_CLOUD_APIS.items():
                 if domain in url:
-                    by_comp.setdefault(comp.id, set()).add((service_name, category))
+                    parsed = urlsplit(url)
+                    scheme = parsed.scheme.lower() or "unknown"
+                    default_port = {"https": 443, "wss": 443, "http": 80, "ws": 80}.get(scheme)
+                    key = (service_name, category, scheme)
+                    by_comp.setdefault(comp.id, {}).setdefault(key, {
+                        "name": service_name,
+                        "category": category,
+                        "protocol": scheme,
+                        "port": parsed.port or default_port,
+                        "authentication": "not_observable",
+                        "evidence": {"file": fi.path, "line": line, "host": parsed.hostname or domain},
+                    })
     for comp in d._component_map.values():
         if comp.id in by_comp:
-            comp.external_services = [
-                {"name": n, "category": c} for n, c in sorted(by_comp[comp.id])
-            ]
+            comp.external_services = [by_comp[comp.id][key] for key in sorted(by_comp[comp.id])]
 
 
 def _combined_code(d: Deriver, comp_id: str, content_ids: set) -> str:

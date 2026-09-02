@@ -345,6 +345,17 @@ def _gather_candidates(root: Path) -> dict[str, set[str]]:
             if name in _PRUNE_DIRS:
                 continue
             child = f"{rel}/{name}" if rel else name
+            # Agent instructions can be first-class product content, so do not
+            # discard the whole .claude tree. Only nested working copies are
+            # alternate repository roots and cannot be shipping dependency
+            # authorities for the subject being analyzed.
+            if child.replace("\\", "/") == ".claude/worktrees":
+                continue
+            # Generated projections are output, never authoritative dependency
+            # sources. Keep the SBOM walker aligned with source enumeration.
+            from ..utils import _is_generated_dataset_dir
+            if _is_generated_dataset_dir(str(Path(current) / name)):
+                continue
             if matcher.match(child, is_dir=True) is not None:
                 continue
             kept.append(name)
