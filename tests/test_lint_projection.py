@@ -470,6 +470,40 @@ def test_component_path_that_is_not_in_the_source_tree(projection: Path) -> None
     assert "source.component_path" in _rules(_run(projection))
 
 
+def test_virtual_compose_service_uses_its_source_file_as_the_path_anchor(
+    projection: Path,
+) -> None:
+    def mutate(d):
+        component = d["components"][0]["children"][1]
+        component["path"] = "beta/compose/worker"
+        component["files"] = []
+        component["config_files"] = [{
+            "path": "beta/three.py",
+            "service_name": "worker",
+            "type": "docker-compose-service",
+        }]
+
+    _edit_manifest(projection, mutate)
+    assert "source.component_path" not in _rules(_run(projection))
+
+
+def test_virtual_compose_service_with_a_missing_source_anchor_is_an_error(
+    projection: Path,
+) -> None:
+    def mutate(d):
+        component = d["components"][0]["children"][1]
+        component["path"] = "beta/compose/worker"
+        component["files"] = []
+        component["config_files"] = [{
+            "path": "beta/missing-compose.yaml",
+            "service_name": "worker",
+            "type": "docker-compose-service",
+        }]
+
+    _edit_manifest(projection, mutate)
+    assert "source.component_path" in _rules(_run(projection))
+
+
 def test_symbols_off_their_declared_line(projection: Path) -> None:
     """A whole-shard line-base error, the class a per-file check would miss."""
     for cid in ("alpha", "beta"):

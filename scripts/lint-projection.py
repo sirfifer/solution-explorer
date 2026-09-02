@@ -894,7 +894,28 @@ class Linter:
         for cid, comp in self.components.items():
             p = comp.get("path")
             if isinstance(p, str) and p and p not in (".", "/"):
-                if not (self.src / p).exists():
+                # Some extractors create logical components from a source
+                # declaration rather than a directory. Docker Compose services
+                # are the current example: ``compose/<service>`` is a stable
+                # navigation id, while the checked-out source anchor is the
+                # compose file recorded in config_files. Accept that virtual
+                # path only when it owns no files and every declared Compose
+                # anchor is a real source file. A moved ordinary component, or
+                # a logical component with a stale anchor, still fails.
+                compose_anchors = [
+                    config.get("path")
+                    for config in (comp.get("config_files") or [])
+                    if isinstance(config, dict)
+                    and config.get("type") == "docker-compose-service"
+                    and isinstance(config.get("path"), str)
+                    and config.get("path")
+                ]
+                anchored_virtual_component = (
+                    not (comp.get("files") or [])
+                    and bool(compose_anchors)
+                    and all((self.src / anchor).is_file() for anchor in compose_anchors)
+                )
+                if not (self.src / p).exists() and not anchored_virtual_component:
                     missing_paths.append(f"{cid} -> {p}")
         for example in missing_paths[:EXAMPLE_CAP]:
             self.report.error(
