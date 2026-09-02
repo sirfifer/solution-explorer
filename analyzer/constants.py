@@ -190,7 +190,7 @@ HTTP_CLIENT_PATTERNS = {
 # URL patterns to extract from code - helps identify target services
 URL_EXTRACTION_PATTERNS = [
     # Full URLs with scheme
-    r'["\'](?P<url>https?://[a-zA-Z0-9][-a-zA-Z0-9.]*(?::\d+)?(?:/[^"\']*)?)["\']',
+    r'["\'](?P<url>(?:https?|wss?)://[a-zA-Z0-9][-a-zA-Z0-9.]*(?::\d+)?(?:/[^"\']*)?)["\']',
     # Environment variable references for URLs
     r'(?:API_URL|SERVER_URL|BASE_URL|ENDPOINT|_HOST|_SERVER)\s*[=:]\s*["\'](?P<url>[^"\']+)["\']',
     # Service names in docker-compose style (service:port)
@@ -783,8 +783,10 @@ MIDDLEWARE_PATTERNS = {
 
 # Queue/topic name extraction patterns
 QUEUE_NAME_PATTERNS = [
-    r"""(?:topic|queue|channel|exchange)\s*[=:]\s*['"]([^'"]+)['"]""",
-    r"""(?:TOPIC|QUEUE|CHANNEL)\s*[=:]\s*['"]([^'"]+)['"]""",
+    # Do not accept a colon here. In Swift, ``topic: "value"`` is an
+    # ordinary argument label and is not evidence of a queue operation.
+    r"""\b(?:topic|queue|channel|exchange)\s*=\s*['"]([^'"]+)['"]""",
+    r"""\b(?:TOPIC|QUEUE|CHANNEL)\s*=\s*['"]([^'"]+)['"]""",
     r"""\.subscribe\s*\(\s*['"]([^'"]+)['"]""",
     r"""\.publish\s*\(\s*['"]([^'"]+)['"]""",
 ]

@@ -306,7 +306,7 @@ class TestCppTreeSitter:
 def test_cpp_without_a_grammar_refuses_instead_of_falling_back():
     """No grammar means no answer, not a worse answer.
 
-    This test asserted the opposite until 2026-08-24, when a VS Code run without
+    This test asserted the opposite until 2026-08-24, when a private large-repository validation corpus run without
     tree-sitter installed produced a projection with 355,617 symbols instead of
     153,231 and 55 methods instead of 28,501, while reporting 100% coverage. A
     degraded answer is indistinguishable downstream from a good one, so there is

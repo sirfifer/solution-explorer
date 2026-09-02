@@ -982,6 +982,84 @@ def test_operator_pause_banks_completed_wave_then_resumes_without_repurchase(
         ctx.store.close()
 
 
+def test_ladder_update_reconstructs_bank_and_dispatches_only_unresolved(world, tmp_path):
+    plan = {cid: ("ground",) for cid in world["components"]}
+    _run(world, plan, tmp_path=tmp_path / "initial")
+    target = world["components"][0]
+    with FactStore(str(world["db"])) as store:
+        row = next(
+            value for value in store.enrichment()
+            if value["target_kind"] == CONTRACT_TARGET_KIND
+            and value["target_id"] == f"component:{target}"
+        )
+        payload = dict(row["payload"])
+        payload.update({
+            "state": "escalate",
+            "rung": "sonnet",
+            "failed": [{
+                "question": "mechanism", "trigger": "E1",
+                "note": "resume fixture", "lacked": "judgment",
+            }],
+        })
+        store.add_enrichment(
+            row["target_kind"], row["target_id"], payload,
+            derived_from_hash=row["derived_from_hash"],
+            commit_sha=row["commit_sha"], created_at=row["created_at"],
+        )
+        store.commit()
+
+    invoker = ScriptedLadder(
+        {cid: ("ground", "ground") for cid in world["components"]},
+        world["real_file"], world["components"], world["relationships"],
+        world["facts_by_id"],
+    )
+    config = LadderConfig(
+        store_path=world["db"], root=POLYGLOT,
+        run_dir=tmp_path / "continuation", update=True,
+        policy=LadderPolicy(max_parallel=1),
+    )
+    ctx = build_run_context(
+        config, invoker_factory=lambda spec: invoker, clock=FIXED_CLOCK
+    )
+    try:
+        result = run_pipeline(ctx, [LadderPhase()])
+        outcome = result.phases[0].data["ladder"]
+        assert len(outcome.states) == len(world["components"]) + len(world["relationships"])
+        assert outcome.states[("component", target)].state == "grounded"
+        assert len(invoker.prompts) == 1
+        assert "HIGHER RUNG" in invoker.prompts[0]
+        assert "ENRICHMENT TASK: components" not in invoker.prompts[0]
+        assert "ENRICHMENT TASK: relationships" not in invoker.prompts[0]
+    finally:
+        ctx.store.close()
+
+
+def test_ladder_update_aborts_on_incomplete_bank_before_invocation(world, tmp_path):
+    plan = {cid: ("ground",) for cid in world["components"]}
+    _run(world, plan, tmp_path=tmp_path / "initial")
+    missing = world["components"][0]
+    with FactStore(str(world["db"])) as store:
+        store.delete_enrichment(CONTRACT_TARGET_KIND, f"component:{missing}")
+        store.commit()
+    invoker = ScriptedLadder(
+        plan, world["real_file"], world["components"], world["relationships"],
+        world["facts_by_id"],
+    )
+    config = LadderConfig(
+        store_path=world["db"], root=POLYGLOT,
+        run_dir=tmp_path / "continuation", update=True,
+    )
+    ctx = build_run_context(
+        config, invoker_factory=lambda spec: invoker, clock=FIXED_CLOCK
+    )
+    try:
+        with pytest.raises(RuntimeError, match="resume preflight failed"):
+            LadderPhase().run(ctx)
+        assert invoker.prompts == []
+    finally:
+        ctx.store.close()
+
+
 def test_relationships_are_enriched_and_carry_the_reduced_contract(world):
     if not world["relationships"]:
         pytest.skip("the fixture produced no relationships")
@@ -1032,7 +1110,7 @@ def test_max_partitions_actually_bounds_the_ladder(world):
 
     Fail-before: LadderConfig declared max_partitions "for cheap smoke runs"
     and nothing on the ladder path read it, so a --max-partitions 3 smoke run
-    against the real VS Code store (2026-08-22) ran all 57 partitions to the
+    against the real private large-repository validation corpus store (2026-08-22) ran all 57 partitions to the
     $45 ceiling. The flag must cap the ordered partition list, keep the most
     important partitions, and declare the exclusion in the run's notes.
     """

@@ -13,7 +13,7 @@ panel, and shows evidence snippets with file and line. So the deployment
 redistributes third-party copyrighted text. MIT, BSD-2, BSD-3 and Apache-2.0 all
 permit that and all require the notice to travel with it.
 
-This is also diligence surface. Solution Explorer is being built to sell, and an
+This is also diligence surface. SysCorpus is being built to sell, and an
 acquirer's counsel will look at the public marketing surface first. A documented,
 respectful license and consent trail attached to demos built on other people's
 code is an asset. Reconstructing it later, from memory, is not possible.

@@ -2,7 +2,7 @@
 
 This class used to answer every question twice: with tree-sitter if it could,
 and with a regex parser if it could not. Both answers looked identical to
-everything downstream, which is what made it dangerous. On 2026-08-24 a VS Code
+everything downstream, which is what made it dangerous. On 2026-08-24 a private large-repository validation corpus
 regeneration ran without tree-sitter installed and produced 355,617 symbols
 instead of 153,231, with 55 methods where there should have been 28,501, while
 the analyzer reported 100% coverage and zero gaps throughout.

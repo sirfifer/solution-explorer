@@ -1,8 +1,9 @@
 # Viewer themes: the launch wardrobe and the expansion rack
 
-Status: DECIDED (launch set), 2026-08-22. **Fold takes the striking slot**
-(owner decision). Launch wardrobe: Signal, Ledger, Atlas, Fold. Lumen moves
-to the front of the backlog. The expansion rack (Relay, Brassworks, Grimoire)
+Status: FIVE-THEME WARDROBE IN PRODUCTION IMPLEMENTATION, 2026-08-31. The token
+seam exists and Signal, Ledger, Atlas and Fold are implemented. Lumen is now
+the fifth supported production theme rather than a backlog candidate. The
+expansion rack (Relay, Brassworks, Grimoire)
 is designed and specimen-proven, kept as built options that may surface on
 non-flagship demos such as our own project. Originally written as a proposal
 2026-08-22. The full visual
@@ -95,17 +96,68 @@ gilded double borders and corner fleurons on night ink #171126, gold leaf
 indicators, gold ley-line and silver moonlit-path edges, faint arcane rings.
 Cormorant Garamond.
 
-## The engineering truth
+## The engineering truth, and how the seam was actually built
 
-The viewer today styles via Tailwind utility classes inline in components with
-a `.light` override. There is no token seam, so no Zen-garden theme can be
-dropped in yet. The one-time work is extracting semantic tokens (surface,
-frame, glow, edge, badge, chip, and so on) keyed off a `data-theme` root
-attribute, with Signal rebuilt as the reference theme and screenshot-diffed
-against today to prove zero drift. After the seam, each theme is a stylesheet.
-Estimate: days for the seam, a few days per theme. This is wide-but-shallow
-mechanical work of exactly the kind the golden corpora and GUI plan check
-exist to keep safe.
+The original estimate assumed the seam meant extracting semantic tokens by
+hand across roughly 2,900 utility call sites, days of wide-but-shallow
+mechanical edits with a screenshot diff to prove zero drift.
+
+That work turned out to be unnecessary. The viewer is on Tailwind v4, which
+compiles every utility to a CSS custom property reference: `bg-zinc-900`
+becomes `background-color: var(--color-zinc-900)`. The seam was already there,
+unused. Redefining those variables under a `[data-theme]` selector on the root
+element re-dresses every component without editing one, which is the Zen-garden
+property this document asks for, reached without touching the components at all.
+
+The implementation is two files:
+
+- `viewer/src/themes.generated.css`, the palette, produced by
+  `viewer/scripts/generate-themes.mjs`. Each theme declares a small set of
+  inks and assigns the eighteen Tailwind color families the viewer uses onto
+  them, which is what collapses a generic palette into a deliberate one. The
+  generator reads Tailwind's own oklch ladder and reuses its lightness value
+  for every stop unchanged, moving only hue and chroma. That rule is what
+  preserves every contrast relationship the viewer already relies on, and it
+  replaces the screenshot diff as the guarantee against drift.
+- `viewer/src/themes.css`, the character: type, radii, shadows, canvas
+  ground, and the semantic `--se-*` tokens for the few values React Flow
+  takes as props rather than from CSS.
+
+A palette alone was not enough, and shipping it as though it were was the
+first mistake. A dress is a material, not a hue: Ledger's cards are white
+stock with an ink hairline, a type-coloured rule along the top and an offset
+ink shadow, and its tags are squared outlined stamps; Atlas's are engraved
+plates whose double rule is drawn as two rings, a band of the card's own
+parchment and then a tan hairline, with italic pill captions. None of that is
+reachable by redefining colours. It needs somewhere to attach, and the viewer
+had no semantic classes at all, so a small set of `data-se` hooks was added to
+the card roots, the type badge, the component name, the side panel, the
+summary banner, and the panel's stat tiles, endpoint rows and method chips.
+Those hooks are the whole of the component-side change; every rule that uses
+them lives in the stylesheet.
+
+Two things a stylesheet cannot decide travel with the theme instead:
+
+- **The variant it was drawn in.** Light and dark stay orthogonal and every
+  theme carries both, but they are not equally the point. Signal is a control
+  room and is conceived dark; Ledger and Atlas are paper and parchment and are
+  conceived light. Choosing a dress moves to its own variant. Without this a
+  paper theme picked from Signal renders as night navigation and reads as a
+  recolour, which is exactly how it was first reported.
+- **Whether the hero glow belongs.** It is drawn as an inline box-shadow, out
+  of CSS's reach. Paper does not glow.
+
+Signal needs no palette block at all: it is Tailwind's own palette, so it is
+the default every other theme overrides. Its former hardcoded values were
+moved onto the seam and verified against what they replaced. The page ground,
+canvas grid, and edge-label surfaces resolve to the identical bytes. The edge
+and minimap accent colors moved by at most 31/255 on one channel, because the
+literals were Tailwind v3 hex while the variables carry v4's oklch values, the
+same ones the nodes at either end of those edges were already using. The
+change makes an edge agree with the components it connects.
+
+Adding a theme is now a block in each of those two files and an entry in
+`viewer/src/utils/themes.ts`. No component changes.
 
 ## The decision and the plan
 
@@ -122,5 +174,58 @@ The commercial site's hero now carries a public miniature of this claim: one
 specimen block restyled between Atlas, Ledger, and Signal with radio inputs
 and pure CSS, zero JavaScript, so the claim is inspectable by anyone.
 
-Still open: the default-theme-per-entry-point idea, and slotting the seam
-work relative to demo one.
+Shipped 2026-08-31: the seam, plus Ledger and Atlas, the two dresses the site
+hero demonstrates. The header picker replaces the old dark-mode button rather
+than sitting beside it, because theme and appearance are one question asked
+twice; each theme carries both a light and a dark variant, so the two stay
+orthogonal axes and the switcher carries both. It is reachable on every
+viewport, where the dark-mode toggle used to be buried in the phone overflow
+menu.
+
+Fold, the striking slot, is built, and it answers the question this document
+poses about whether the seam can carry that size of jump. It can. Fold changes
+stock, ink, type, corner, shadow language, edge treatment and the shape of
+every tile: cards are sheets lying on a bench with three stacked shadows
+rather than one, a contact shadow, a lift, and a lit cut along the top edge,
+because a single blurred shadow reads as elevation while three read as a
+physical object. There is washi tape across each card corner, drawn on the
+card with a gradient rather than added to the markup, since a theme may change
+only how the page looks and never what is on it. Edges are stitched thread and
+stat tiles are sticky notes, each sitting half a degree off square.
+
+It was added with one generated palette block, one stylesheet section, and one
+registry entry. No component was touched. That is the seam working as
+intended, and it is the strongest evidence in this document that a customer
+could dress their own map in their own brand with a stylesheet.
+
+One rule about the canvas ground earned itself the hard way. It must be drawn
+once, by React Flow's own Background component, and never also in CSS. Two
+grids at different pitches never resolve into one surface, and the
+interference is what makes a ground assertive rather than quiet; worse, only
+the React Flow layer pans, so a CSS grid sits still while the map moves under
+it and slides off whatever it was meant to help you line up against. A canvas
+gets one grid, at a fine pitch, in a tone a few steps off the page, and it
+belongs to the layer that pans.
+
+Geometry matters as much as weight. A ruled grid was tried on Atlas and had to
+come out: straight rules and the theme's contour arcs are different geometries
+at about the same weight, so they compete instead of layering. Discrete marks
+do not have that problem, which is why Atlas rules its ground with crosses and
+Ledger, which has no arcs, rules it with lines. Weight is `lineWidth`, not
+`size`; for a cross, `size` is the length of the arms, and a mark can be drawn
+larger and still read as quiet if it is struck thinly.
+
+The same area produced the one genuine defect of this work. Anything that
+resolves a theme variable by reading computed style off the root, which the
+canvas must do because React Flow takes its colours as props, runs its effect
+before App's: child effects commit before parent effects. A theme applied in
+App's effect therefore lands after the canvas has already read the outgoing
+one, so the ground rendered a theme behind and kept the previous dress's grid
+colour. It is invisible on a page load, where the pre-paint script has already
+set the attribute, and shows only on a live switch, which is the demo action.
+The document attribute is now written synchronously from the store action,
+ahead of every reader.
+
+Still open: Fold, the default-theme-per-entry-point idea, and whether the
+theme faces should be self-hosted rather than fetched from Google Fonts, which
+matters for a viewer shipped to run offline.

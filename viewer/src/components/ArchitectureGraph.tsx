@@ -10,6 +10,7 @@ import {
   useReactFlow,
   type Node,
   type Edge,
+  type EdgeTypes,
   type NodeTypes,
   MarkerType,
   Panel,
@@ -17,6 +18,8 @@ import {
   getViewportForBounds,
 } from "@xyflow/react";
 import { useArchStore, nodeBudgetForCanvas, READABLE_ZOOM } from "../store";
+import { useThemeTokens } from "../hooks/useThemeTokens";
+import { THEMES } from "../utils/themes";
 import { buildDegreeIndex } from "../utils/importance";
 import {
   nextSnapState,
@@ -26,11 +29,13 @@ import {
   FIT_PADDING,
   GRAPH_MAX_ZOOM,
   GRAPH_MIN_ZOOM,
+  READ_SNAP_ZOOM,
   SNAP_DURATION_MS,
   type SnapState,
 } from "../utils/snapZoom";
 import { ComponentNode } from "./ComponentNode";
 import { AggregateNode } from "./AggregateNode";
+import { ElkRoutedEdge } from "./ElkRoutedEdge";
 import { getLayoutedElements, getEdgeStyle, getEdgeCategory, computeOptimalHandles, getHeatColor } from "../utils/layout";
 import { getLens, capabilityCountsByComponent, ruleCountsByComponent, buildBlastAdjacency, blastRadiusFrom, type CapabilityKindCounts, type RuleKindCounts } from "../lenses";
 import type { Component, Relationship } from "../types";
@@ -38,6 +43,10 @@ import type { Component, Relationship } from "../types";
 const nodeTypes: NodeTypes = {
   component: ComponentNode,
   aggregate: AggregateNode,
+};
+
+const edgeTypes: EdgeTypes = {
+  elk: ElkRoutedEdge,
 };
 
 export function ArchitectureGraph() {
@@ -48,6 +57,7 @@ export function ArchitectureGraph() {
     selectedComponentId,
     breadcrumbs,
     darkMode,
+    theme,
     lens,
     flowEntryId,
     flowStep,
@@ -69,6 +79,21 @@ export function ArchitectureGraph() {
     nodeBudget,
   } = useArchStore();
 
+  // React Flow's Background and MiniMap take colors as props rather than from
+  // CSS, so the theme's values are read back out of the root element. Every
+  // other color on this canvas resolves through var() in inline SVG style.
+  const canvasTokens = useThemeTokens({
+    grid: "--se-grid",
+    application: "--color-blue-500",
+    service: "--color-emerald-500",
+    library: "--color-violet-500",
+    package: "--color-amber-500",
+    module: "--color-cyan-500",
+    infrastructure: "--color-rose-500",
+    fallback: "--color-zinc-500",
+  });
+  const canvas = THEMES[theme].canvas;
+
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const { fitView, setCenter, setViewport, getNodes, getEdges, getViewport } = useReactFlow();
@@ -78,6 +103,10 @@ export function ArchitectureGraph() {
   const readabilityTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chromeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobileRef = useRef(false);
+  // Guided selections must snap to a readable view. A direct graph click must
+  // not move the node before a second click can complete a double-click drill,
+  // so keep the source of the most recent node selection distinct.
+  const lastNodeClickRef = useRef<{ id: string; x: number; y: number; t: number } | null>(null);
   // Double-tap snap zoom state (see utils/snapZoom and the gesture effect
   // below). pendingSnapRef survives a re-layout so a Read snap is not fitted
   // over; applySnapRef lets the layout effect re-apply it without taking the
@@ -93,6 +122,14 @@ export function ArchitectureGraph() {
   // depends on it so it re-runs after ELK resolves instead of centering on
   // pre-layout grid positions during a URL deep-link restore (F-VW-7).
   const [layoutVersion, setLayoutVersion] = useState(0);
+  const [canvasAspectRatio, setCanvasAspectRatio] = useState(1.3);
+  const [canvasReady, setCanvasReady] = useState(false);
+  // React Flow measures the real DOM nodes after their themed/device frames
+  // render. Feed those dimensions back to ELK; laying out every card as the
+  // old 380x250 fallback made tall phone-shaped nodes extend into routes and
+  // made selection centering use the wrong midpoint.
+  const measuredNodeSizes = useRef(new Map<string, { width: number; height: number }>());
+  const [measurementVersion, setMeasurementVersion] = useState(0);
 
   // Bounded retries for the readability loop, reset per level/lens so a level
   // that needed a small budget does not permanently constrain the next one.
@@ -112,6 +149,12 @@ export function ArchitectureGraph() {
     const measure = () => {
       const { width, height } = el.getBoundingClientRect();
       setNodeBudget(nodeBudgetForCanvas(width, height));
+      if (width > 0 && height > 0) {
+        setCanvasReady(true);
+        // Avoid a fresh ELK pass for sub-pixel panel animation while still
+        // following meaningful resize, split-panel, and rotation changes.
+        setCanvasAspectRatio(Math.round((width / height) * 20) / 20);
+      }
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -150,6 +193,21 @@ export function ArchitectureGraph() {
   const onNodesChange = useCallback(
     (changes: Parameters<typeof onNodesChangeBase>[0]) => {
       onNodesChangeBase(changes);
+
+      let measurementsChanged = false;
+      for (const change of changes) {
+        if (change.type !== "dimensions" || !change.dimensions) continue;
+        const previous = measuredNodeSizes.current.get(change.id);
+        if (
+          !previous
+          || Math.abs(previous.width - change.dimensions.width) > 1
+          || Math.abs(previous.height - change.dimensions.height) > 1
+        ) {
+          measuredNodeSizes.current.set(change.id, change.dimensions);
+          measurementsChanged = true;
+        }
+      }
+      if (measurementsChanged) setMeasurementVersion((version) => version + 1);
 
       // If any position changes occurred, recompute handles
       const hasDrag = changes.some((c) => c.type === "position" && c.position);
@@ -240,6 +298,7 @@ export function ArchitectureGraph() {
         position: { x: (i % 4) * 320, y: Math.floor(i / 4) * 200 },
         data: { component: comp },
         selected: comp.id === selectedComponentId,
+        measured: measuredNodeSizes.current.get(comp.id),
       };
       const heat = heatByComponent.get(comp.id);
       if (heat !== undefined) {
@@ -257,12 +316,12 @@ export function ArchitectureGraph() {
         node.data = { ...node.data, ruleBadges: rules };
       }
       if (comp.id === flowStepNodeId) {
-        node.style = { boxShadow: "0 0 0 3px #2DD4BF", borderRadius: 14 };
+        node.style = { boxShadow: "0 0 0 3px var(--color-teal-400)", borderRadius: 14 };
       } else if (comp.id === flowEntryNodeId) {
-        node.style = { boxShadow: "0 0 0 3px #818CF8", borderRadius: 14 };
+        node.style = { boxShadow: "0 0 0 3px var(--color-indigo-400)", borderRadius: 14 };
       } else if (comp.id === dataOwnerNodeId) {
         // Ring the ego-view hub (the entity's owning component) under the Data lens.
-        node.style = { boxShadow: "0 0 0 3px #818CF8", borderRadius: 14 };
+        node.style = { boxShadow: "0 0 0 3px var(--color-indigo-400)", borderRadius: 14 };
       }
       // The style this node returns to when a shading mode releases it. The
       // selection and blast-radius effects both paint over `style`; painting
@@ -285,6 +344,7 @@ export function ArchitectureGraph() {
         position: { x: (idx % 4) * 320, y: Math.floor(idx / 4) * 200 },
         data: { aggregate: agg },
         selectable: false,
+        measured: measuredNodeSizes.current.get(agg.id),
       };
     });
 
@@ -336,12 +396,14 @@ export function ArchitectureGraph() {
           animated: style.animated,
           label: edgeLabel || undefined,
           labelStyle: {
-            fill: darkMode ? "#9CA3AF" : "#6B7280",
-            fontSize: category === "communication" ? 11 : 10,
+            fill: darkMode ? "var(--color-zinc-400)" : "var(--color-zinc-500)",
+            // Relationship text is part of the answer in a focused view. Fit
+            // is allowed to make it ambient; the 1x Read snap is not.
+            fontSize: category === "communication" ? 14 : 13,
             fontFamily: category === "communication" ? "ui-monospace, monospace" : undefined,
           },
           labelBgStyle: {
-            fill: darkMode ? "#18181B" : "#FFFFFF",
+            fill: "var(--se-raise)",
             fillOpacity: 0.9,
           },
           style: {
@@ -384,14 +446,15 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, nodeBudget, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, selectedDesignFindingId, getLensGraph]);
+  }, [architecture, drillLevel, selectedComponentId, darkMode, nodeBudget, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, selectedDesignFindingId, getLensGraph, measurementVersion]);
 
   // Apply ELK layout
   useEffect(() => {
+    if (!canvasReady) return;
     if (rawNodes.length === 0) {
       setNodes([]);
       setEdges([]);
-      // Don't return early — let the empty-state panel render below
+      return;
     }
 
     // Clear any pending layout
@@ -406,7 +469,7 @@ export function ArchitectureGraph() {
     // the Flow lens left-to-right for a walkable diagram (P6-2). Default "DOWN".
     const direction = getLens(lens)?.layoutDirection ?? "DOWN";
 
-    getLayoutedElements(rawNodes, rawEdges, direction).then(({ nodes: ln, edges: le }) => {
+    getLayoutedElements(rawNodes, rawEdges, direction, canvasAspectRatio).then(({ nodes: ln, edges: le }) => {
       // Discard a stale layout: a newer run superseded this one while ELK was
       // computing (rapid drill navigation), so its positions are obsolete.
       if (myGen !== layoutGenRef.current) return;
@@ -445,6 +508,22 @@ export function ArchitectureGraph() {
         pendingSnapRef.current = null;
         if (pending && pending.state === "read" && Date.now() - pending.at < 1200) {
           applySnapRef.current("read");
+        } else if (selectedComponentId) {
+          const selected = ln.find((node) => node.id === selectedComponentId);
+          const graphClick = lastNodeClickRef.current;
+          const wasDirectGraphClick = graphClick?.id === selectedComponentId
+            && Date.now() - graphClick.t < 700;
+          if (selected && !wasDirectGraphClick) {
+            const width = selected.measured?.width ?? 280;
+            const height = selected.measured?.height ?? 140;
+            setCenter(
+              selected.position.x + width / 2,
+              selected.position.y + height / 2,
+              { zoom: Math.max(READ_SNAP_ZOOM, getViewport().zoom), duration: SNAP_DURATION_MS },
+            );
+          } else {
+            fitView({ padding: FIT_PADDING, duration: SNAP_DURATION_MS });
+          }
         } else {
           fitView({ padding: FIT_PADDING, duration: SNAP_DURATION_MS });
         }
@@ -464,7 +543,7 @@ export function ArchitectureGraph() {
       if (layoutTimeout.current) clearTimeout(layoutTimeout.current);
       if (readabilityTimeout.current) clearTimeout(readabilityTimeout.current);
     };
-  }, [rawNodes, rawEdges, lens, setNodes, setEdges, fitView, getViewport, shrinkNodeBudget]);
+  }, [rawNodes, rawEdges, lens, canvasAspectRatio, canvasReady, selectedComponentId, setNodes, setEdges, fitView, getViewport, setCenter, shrinkNodeBudget]);
 
   // Restore every node and edge to the style the graph build gave it. The one
   // exit path for both shading modes: composing from the baseStyle snapshot
@@ -610,7 +689,7 @@ export function ArchitectureGraph() {
       // anchor. It is shown as a dependent, because "this could break" is the
       // claim that matters for a change.
       const ring = isAnchor
-        ? "0 0 0 3px #818CF8"
+        ? "0 0 0 3px var(--color-indigo-400)"
         : isDependent
           ? "0 0 0 3px rgba(244,63,94,0.85)"
           : isDependency
@@ -660,8 +739,6 @@ export function ArchitectureGraph() {
   // dblclick ever reaches the node. Double-click is therefore detected from two
   // presses at the same screen point rather than from the browser's event
   // (comprehension-study S5).
-  const lastNodeClickRef = useRef<{ id: string; x: number; y: number; t: number } | null>(null);
-
   const onNodeClick = useCallback(
     (event: React.MouseEvent, node: Node) => {
       // Aggregate nodes handle their own expand/collapse (P6-4); they are not
@@ -873,6 +950,7 @@ export function ArchitectureGraph() {
         onMoveStart={onMoveStart}
         onMoveEnd={onMoveEnd}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         zoomOnDoubleClick={false}
         // A node's drag behavior consumes the pointer events that would
         // otherwise become a native dblclick, which is why double-click drill
@@ -882,17 +960,23 @@ export function ArchitectureGraph() {
         // from a drag, so clicking is reliable and deliberate dragging still
         // works.
         nodeDragThreshold={5}
-        fitView
         minZoom={GRAPH_MIN_ZOOM}
         maxZoom={GRAPH_MAX_ZOOM}
         proOptions={{ hideAttribution: true }}
         className={darkMode ? "dark" : "light"}
       >
         <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
-          color={darkMode ? "#27272A" : "#E4E4E7"}
+          variant={
+            canvas.variant === "lines"
+              ? BackgroundVariant.Lines
+              : canvas.variant === "cross"
+                ? BackgroundVariant.Cross
+                : BackgroundVariant.Dots
+          }
+          gap={canvas.gap}
+          size={canvas.size}
+          lineWidth={canvas.lineWidth}
+          color={canvasTokens.grid}
         />
         <Controls
           showInteractive={false}
@@ -906,14 +990,14 @@ export function ArchitectureGraph() {
             const comp = (node.data as { component?: { type?: string } })?.component;
             const type = comp?.type || "module";
             const colorMap: Record<string, string> = {
-              application: "#3B82F6",
-              service: "#10B981",
-              library: "#8B5CF6",
-              package: "#F59E0B",
-              module: "#06B6D4",
-              infrastructure: "#F43F5E",
+              application: canvasTokens.application,
+              service: canvasTokens.service,
+              library: canvasTokens.library,
+              package: canvasTokens.package,
+              module: canvasTokens.module,
+              infrastructure: canvasTokens.infrastructure,
             };
-            return colorMap[type] || "#6B7280";
+            return colorMap[type] || canvasTokens.fallback;
           }}
           maskColor={darkMode ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.7)"}
           style={{ height: 100, width: 150 }}
@@ -962,6 +1046,14 @@ export function ArchitectureGraph() {
             </div>
           )}
         </Panel>
+
+        {lens === "structure" && nodes.length > 0 && (
+          <Panel position="top-right">
+            <div className={`rounded-lg border px-3 py-2 text-[11px] shadow-sm ${darkMode ? "border-zinc-800 bg-zinc-950/90 text-zinc-400" : "border-zinc-200 bg-white/90 text-zinc-600"}`}>
+              <strong className={darkMode ? "text-zinc-200" : "text-zinc-800"}>Open a level:</strong> double-click a component
+            </div>
+          </Panel>
+        )}
 
         {/* Empty state — shown when drill level has no visible components */}
         {nodes.length === 0 && !loading && (

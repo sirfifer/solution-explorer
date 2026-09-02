@@ -492,7 +492,7 @@ class TestRubyTreeSitter:
 class TestNoFallback:
     """A parser without its grammar refuses. It does not answer worse.
 
-    These four tests asserted the exact opposite until 2026-08-24. A VS Code
+    These four tests asserted the exact opposite until 2026-08-24. A private large-repository validation corpus
     regeneration ran under an interpreter with no tree-sitter installed, every
     TypeScript file was read by the regex tier, and the analyzer reported
     "Coverage: 100% of source analyzed, 0 gaps" while producing 355,617 symbols

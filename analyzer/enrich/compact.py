@@ -32,6 +32,12 @@ COMPACT_WIRE_VERSION = "compact/v1"
 # JSON punctuation and escaped characters around per-target budgets.
 COMPONENT_RESPONSE_BYTES = 3_600
 RELATIONSHIP_RESPONSE_BYTES = 720
+# Repair prompts carry failed-question history, current product, and
+# replacement evidence. The private large-repository validation corpus full run measured 2,007 bytes/target at
+# p99 in the terminal repair rung; applying the bulk 720-byte contract there
+# rejected otherwise delivered work. Keep bulk tight, but make the repair guard
+# a runaway boundary with roughly 20% p99 headroom.
+ESCALATION_RELATIONSHIP_RESPONSE_BYTES = 2_400
 RESPONSE_ENVELOPE_BYTES = 512
 RESPONSE_BUDGET_TOLERANCE = 1.08
 
@@ -67,6 +73,24 @@ def response_budget_bytes(*, components: int = 0, relationships: int = 0) -> int
         RESPONSE_ENVELOPE_BYTES
         + max(0, int(components)) * COMPONENT_RESPONSE_BYTES
         + max(0, int(relationships)) * RELATIONSHIP_RESPONSE_BYTES
+    )
+    return int(nominal * RESPONSE_BUDGET_TOLERANCE)
+
+
+def escalation_response_budget_bytes(
+    *, components: int = 0, relationships: int = 0,
+) -> int:
+    """Runaway guard for targeted repair calls, including tolerance.
+
+    This is separate from ``response_budget_bytes`` so widening a repair
+    envelope cannot weaken the much larger one-shot bulk calls. The exit audit
+    still enforces output density, preventing verbosity from being mistaken
+    for an efficient success.
+    """
+    nominal = (
+        RESPONSE_ENVELOPE_BYTES
+        + max(0, int(components)) * COMPONENT_RESPONSE_BYTES
+        + max(0, int(relationships)) * ESCALATION_RELATIONSHIP_RESPONSE_BYTES
     )
     return int(nominal * RESPONSE_BUDGET_TOLERANCE)
 
@@ -493,8 +517,54 @@ def validate_compact_response(
     schema = compact_json_schema(prefix, user)
     if schema is None:
         return obj, [], []
+    obj, aliases = _repair_misbranched_relationship_repairs(obj, user=user)
     sanitized, stripped = _strip_unknown(obj, schema)
-    return sanitized, _schema_issues(sanitized, schema), stripped
+    return sanitized, _schema_issues(sanitized, schema), [*aliases, *stripped]
+
+
+def _repair_misbranched_relationship_repairs(
+    obj: Any, *, user: str,
+) -> tuple[Any, list[str]]:
+    """Move an unmistakable relationship-only repair out of `components`.
+
+    Two live private large-repository validation corpus repair calls returned the exact requested relationship ids
+    and the exact `flow`/`why` delta shape, but used the component envelope's
+    `i`/`q` spelling. Translation is safe only for a closed ITEMS menu holding
+    relationships exclusively, with exact id coverage and no existing
+    relationship entries. Anything less specific remains a validation error.
+    """
+    if not isinstance(obj, dict):
+        return obj, []
+    items = _extract_payload(user, "ITEMS")
+    if not isinstance(items, list) or not items:
+        return obj, []
+    expected = [
+        str(item.get("target_id") or "") for item in items
+        if isinstance(item, dict) and item.get("target_kind") == "relationship"
+    ]
+    if len(expected) != len(items) or not all(expected):
+        return obj, []
+    components = obj.get("components")
+    relationships = obj.get("relationships")
+    if not isinstance(components, list) or relationships not in ([], None):
+        return obj, []
+    converted = []
+    observed = []
+    for entry in components:
+        if not isinstance(entry, dict) or set(entry) - {"i", "q"}:
+            return obj, []
+        questions = entry.get("q")
+        if not isinstance(questions, dict) or set(questions) - {"flow", "why"}:
+            return obj, []
+        key = str(entry.get("i") or "")
+        observed.append(key)
+        converted.append({"k": key, **questions})
+    if len(observed) != len(set(observed)) or set(observed) != set(expected):
+        return obj, []
+    repaired = dict(obj)
+    repaired["components"] = []
+    repaired["relationships"] = converted
+    return repaired, ["$.components relationship-repair envelope alias"]
 
 
 def salvage_compact_response(
@@ -532,6 +602,26 @@ def _invalid_evidence(reason: str) -> dict:
     # EvidenceValidator fails this closed and preserves a useful reason through
     # the ordinary E2 path.  Never silently drop a malformed compact citation.
     return {"kind": "compact-invalid", "reason": reason}
+
+
+def _raw_citation_snapshot(raw: Any) -> Any:
+    """Keep bounded, JSON-safe malformed input for deterministic replay.
+
+    The old compact-invalid row retained only our diagnosis, throwing away the
+    provider bytes needed to improve the parser without buying the answer
+    again. Compact citations are tiny by contract, but the bound makes that
+    invariant explicit even for a malformed object.
+    """
+    try:
+        encoded = json.dumps(raw, ensure_ascii=False, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        encoded = repr(raw)
+    if len(encoded.encode("utf-8")) <= 2_000:
+        try:
+            return json.loads(encoded)
+        except json.JSONDecodeError:
+            return encoded
+    return encoded[:2_000] + "…"
 
 
 def _component_evidence(
@@ -921,12 +1011,32 @@ def _answer(raw: Any, expand_evidence, *, default_evidence: Iterable[dict] = ())
         return {"claim": "", "status": "dropped", "reason": "answer was absent"}
     status = {"u": "uncertain", "d": "dropped"}.get(raw.get("s"), "answered")
     evidence_raw = raw.get("e") if isinstance(raw.get("e"), list) else []
+    # A recurring compact spelling flattens a single two-part citation into
+    # the evidence array itself: ``e:["S","View"]`` rather than the canonical
+    # ``e:[["S","View"]]``. Treat only closed, unambiguous pair markers as one
+    # citation. Numeric arrays remain multiple file citations, so this cannot
+    # guess between legitimate meanings.
+    if (
+        len(evidence_raw) == 2
+        and isinstance(evidence_raw[0], str)
+        and evidence_raw[0] in {
+            "S", "F", "source_declaration", "source_declarations",
+        }
+        and isinstance(evidence_raw[1], str)
+    ):
+        evidence_raw = [evidence_raw]
     expanded = []
     for item in evidence_raw:
         value = expand_evidence(item, str(raw.get("t") or ""))
         if isinstance(value, list):
             expanded.extend(value)
         else:
+            if (
+                isinstance(value, dict)
+                and value.get("kind") == "compact-invalid"
+                and "raw_citation" not in value
+            ):
+                value["raw_citation"] = _raw_citation_snapshot(item)
             expanded.append(value)
     answer = {
         "claim": str(raw.get("t") or "").strip(),

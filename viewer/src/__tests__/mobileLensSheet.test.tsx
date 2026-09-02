@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
-import { MobileLensSheet, shouldShowMobileLensSheet } from "../App";
+import { initialMobileLensSnap, MobileLensSheet, shouldShowMobileLensSheet } from "../App";
 import { useBottomSheet } from "../hooks/useBottomSheet";
 import { useArchStore } from "../store";
 import type { Architecture, Component } from "../types";
@@ -67,12 +67,17 @@ describe("shouldShowMobileLensSheet (O10)", () => {
     expect(shouldShowMobileLensSheet({ isPanelViewport: false, lens: "inventory", activePanel: "detail" })).toBe(false);
     expect(shouldShowMobileLensSheet({ isPanelViewport: false, lens: "inventory", activePanel: "review" })).toBe(false);
   });
+
+  it("opens the content-heavy Support report at the full phone snap", () => {
+    expect(initialMobileLensSnap("support")).toBe("full");
+    expect(initialMobileLensSnap("inventory")).toBe("half");
+  });
 });
 
 // A small harness: MobileLensSheet takes a real useBottomSheet instance, which
 // is a hook and so needs a component to call it from.
 function Harness({ lens }: { lens: string }) {
-  const bottomSheet = useBottomSheet({ onDismiss: () => {}, initialSnap: "half" });
+  const bottomSheet = useBottomSheet({ onDismiss: () => {}, initialSnap: initialMobileLensSnap(lens) });
   return <MobileLensSheet lens={lens} darkMode={false} bottomSheet={bottomSheet} />;
 }
 
@@ -97,5 +102,33 @@ describe("MobileLensSheet renders real panel content at the acceptance viewport 
     render(<Harness lens="rules" />);
     // RulesPanel's own empty-state copy, proving the real panel mounted.
     expect(screen.getByText(/no rules/i)).toBeTruthy();
+  });
+
+  it("gives Support a full-height sheet and puts external reliance first", () => {
+    useArchStore.setState({
+      architecture: makeArchitecture({
+        support: {
+          schema: "syscorpus.support/v1",
+          method_caveat: "Observed evidence only.",
+          configuration: [],
+          external_dependencies: [{ name: "Provider", category: "ai", component_id: "c", component_name: "C", evidence: {} }],
+          entry_points: [],
+          data_handled: [],
+          attention: [{ component_id: "c", component_name: "C", attention_score: 2, reasons: ["external reliance"] }],
+          counts: { configuration: 0, external_dependencies: 1, entry_points: 0, data_entities: 0, attention_components: 1 },
+        },
+      }),
+      darkMode: false,
+    });
+
+    render(<Harness lens="support" />);
+
+    const sheet = document.querySelector('[data-se="mobile-lens-sheet"]') as HTMLElement;
+    expect(sheet.style.height).toContain("90vh");
+    const headings = screen.getAllByRole("heading", { level: 3 });
+    expect(headings.map((heading) => heading.textContent)).toEqual([
+      "External reliance (1)",
+      "Ranked attention",
+    ]);
   });
 });

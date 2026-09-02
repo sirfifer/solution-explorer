@@ -250,6 +250,24 @@ def test_budget_meter_charging_is_thread_safe():
     assert abs(meter.spent - 8.0) < 1e-6
 
 
+def test_control_snapshot_refreshes_after_every_settlement(tmp_path):
+    control = tmp_path / "control.json"
+    meter = BudgetMeter(ceiling=100.0)
+    meter.configure_control(control, 90.0)
+    reservation = meter.reserve(slots=4)
+    reserved = json.loads(control.read_text())
+    assert reserved["reserved_usd"] == 25.0
+    assert reserved["completed_calls"] == 0
+
+    meter.settle(reservation, 1.25)
+    settled = json.loads(control.read_text())
+    assert settled["state"] == "running"
+    assert settled["spent_usd"] == 1.25
+    assert settled["reserved_usd"] == 0.0
+    assert settled["completed_calls"] == 1
+    assert settled["revision"] > reserved["revision"]
+
+
 def test_operator_checkpoint_pauses_then_resumes_without_losing_the_run(tmp_path):
     control = tmp_path / "control.json"
     meter = BudgetMeter()
@@ -348,6 +366,26 @@ def test_operator_pause_and_checkpoint_survive_process_reconstruction(tmp_path):
     assert persisted["state"] == "paused"
     assert persisted["revision"] == 9
     assert reconstructed.pause_at_usd == 12.0
+
+
+def test_terminal_control_snapshot_carries_final_accounting_and_no_actions(tmp_path):
+    control = tmp_path / "control.json"
+    meter = BudgetMeter()
+    meter.configure_control(control, None)
+    meter.spent = 12.5
+    meter.charges = 7
+
+    meter.finish_control(
+        state="incomplete",
+        reason="publication criterion s4 remains unmet",
+        recommendation="Review the report; no call remains in flight.",
+    )
+
+    packet = json.loads(control.read_text())
+    assert packet["state"] == "incomplete"
+    assert packet["spent_usd"] == 12.5
+    assert packet["completed_calls"] == 7
+    assert packet["actions"] == []
 
 
 def test_cost_reservations_cannot_sum_past_the_run_ceiling():

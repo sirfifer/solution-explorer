@@ -136,7 +136,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Checkout Solution Explorer
+      - name: Checkout SysCorpus
         uses: actions/checkout@v4
         with:
           repository: sirfifer/solution-explorer

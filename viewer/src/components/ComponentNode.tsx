@@ -5,6 +5,7 @@ import type { Component, AnnotationTarget, AnnotationTargetContext } from "../ty
 import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, getHeroGlow, ROLE_META, getRoleBadgeColors } from "../utils/layout";
 import { getWorstStatusLevel, getStatusSummary, getStatusDotClasses } from "../utils/status";
 import { useArchStore } from "../store";
+import { THEMES } from "../utils/themes";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, getPatternRef, TYPE_DESCRIPTIONS, METRIC_DESCRIPTIONS } from "../utils/techDocs";
 
@@ -25,7 +26,7 @@ interface FrameProps {
 
 function MobileFrame({ darkMode, children }: FrameProps) {
   return (
-    <div className={`
+    <div data-se="card" className={`
       relative rounded-[28px] border-[5px] min-w-[240px] max-w-[300px]
       ${darkMode ? "border-orange-700/60 bg-orange-950/40" : "border-orange-300 bg-orange-50"}
     `}>
@@ -54,7 +55,7 @@ function MobileFrame({ darkMode, children }: FrameProps) {
 
 function ServerFrame({ darkMode, colors, children }: FrameProps) {
   return (
-    <div className={`
+    <div data-se="card" className={`
       relative rounded-md border-[3px] border-l-[5px] min-w-[280px] max-w-[360px]
       ${darkMode ? "border-green-600/50 border-l-green-500/70" : "border-green-300 border-l-green-500/60"}
       ${colors.bg}
@@ -80,7 +81,7 @@ function ServerFrame({ darkMode, colors, children }: FrameProps) {
 
 function BrowserFrame({ darkMode, colors, children }: FrameProps) {
   return (
-    <div className={`
+    <div data-se="card" className={`
       relative rounded-xl border-[3px] min-w-[280px] max-w-[360px]
       ${darkMode ? "border-sky-600/40" : "border-sky-300"}
       ${colors.bg}
@@ -112,7 +113,7 @@ function BrowserFrame({ darkMode, colors, children }: FrameProps) {
 
 function EnhancedMobileFrame({ darkMode, children }: FrameProps) {
   return (
-    <div className={`
+    <div data-se="card" className={`
       relative w-[220px] min-h-[380px] rounded-[38px] border-[5px] flex flex-col
       ${darkMode ? "border-orange-700/60 bg-orange-950/40" : "border-orange-300 bg-orange-50"}
     `}
@@ -178,7 +179,7 @@ function EnhancedMobileFrame({ darkMode, children }: FrameProps) {
 
 function EnhancedWatchFrame({ darkMode, children }: FrameProps) {
   return (
-    <div className={`
+    <div data-se="card" className={`
       relative w-[200px] rounded-[48px] border-[5px] mt-[22px] mb-[22px]
       ${darkMode ? "border-pink-700/50 bg-pink-950/30" : "border-pink-300 bg-pink-50"}
     `}
@@ -211,7 +212,7 @@ function EnhancedWatchFrame({ darkMode, children }: FrameProps) {
 
 function WatchFrame({ darkMode, children }: FrameProps) {
   return (
-    <div className={`
+    <div data-se="card" className={`
       relative rounded-[28px] border-[5px] min-w-[220px] max-w-[280px]
       ${darkMode ? "border-pink-700/50 bg-pink-950/30" : "border-pink-300 bg-pink-50"}
     `}>
@@ -238,7 +239,7 @@ function WatchFrame({ darkMode, children }: FrameProps) {
 
 function DesktopFrame({ darkMode, colors, children }: FrameProps) {
   return (
-    <div className={`
+    <div data-se="card" className={`
       relative rounded-lg border-[3px] min-w-[280px] max-w-[360px]
       ${darkMode ? "border-teal-600/40" : "border-teal-300"}
       ${colors.bg}
@@ -265,7 +266,7 @@ function DesktopFrame({ darkMode, colors, children }: FrameProps) {
 
 function TerminalFrame({ darkMode, colors, children }: FrameProps) {
   return (
-    <div className={`
+    <div data-se="card" className={`
       relative rounded-lg border-[3px] min-w-[280px] max-w-[360px]
       ${darkMode ? "border-lime-700/40" : "border-lime-300"}
       ${colors.bg}
@@ -292,7 +293,7 @@ function TerminalFrame({ darkMode, colors, children }: FrameProps) {
 
 function ServiceFrame({ darkMode, colors, children }: FrameProps) {
   return (
-    <div className={`
+    <div data-se="card" className={`
       relative rounded-xl border-2 border-dashed min-w-[280px] max-w-[360px]
       ${darkMode ? "border-emerald-500/40" : "border-emerald-300"}
       ${colors.bg}
@@ -310,7 +311,7 @@ function ServiceFrame({ darkMode, colors, children }: FrameProps) {
 
 function ScreenFrame({ darkMode, children }: FrameProps) {
   return (
-    <div className={`
+    <div data-se="card" className={`
       relative rounded-[20px] border-[3px] min-w-[240px] max-w-[300px]
       ${darkMode ? "border-cyan-600/50 bg-cyan-950/40" : "border-cyan-300 bg-cyan-50"}
     `}>
@@ -334,7 +335,7 @@ function ScreenFrame({ darkMode, children }: FrameProps) {
 
 function TabContainerFrame({ darkMode, colors, children }: FrameProps) {
   return (
-    <div className={`
+    <div data-se="card" className={`
       relative rounded-xl border-2 min-w-[280px] max-w-[360px]
       ${darkMode ? "border-indigo-500/40" : "border-indigo-300"}
       ${colors.bg}
@@ -384,7 +385,7 @@ function DeviceFrame({ type, darkMode, colors, enhancedFrames, heroGlow, childre
     case "application":
       // Application: enhanced hero styling, no device frame
       return withGlow(
-        <div className={`
+        <div data-se="card" className={`
           rounded-xl border-[3px] min-w-[280px] max-w-[360px] backdrop-blur-sm
           ${colors.bg} ${colors.border}
           ring-1 ring-offset-0 ${darkMode ? "ring-white/10" : "ring-black/10"}
@@ -396,7 +397,7 @@ function DeviceFrame({ type, darkMode, colors, enhancedFrames, heroGlow, childre
     default:
       // Non-hero types (module, content, package, library, etc.)
       return (
-        <div className={`
+        <div data-se="card" className={`
           rounded-xl border-2 min-w-[240px] max-w-[320px] backdrop-blur-sm
           ${colors.bg} ${colors.border}
           ${type === "content" ? "opacity-50" : ""}
@@ -758,6 +759,7 @@ export const ComponentNode = memo(function ComponentNode({
   const drillInto = useArchStore((s) => s.drillInto);
   const darkMode = useArchStore((s) => s.darkMode);
   const enhancedFrames = useArchStore((s) => s.enhancedFrames);
+  const theme = useArchStore((s) => s.theme);
   const reviewMode = useArchStore((s) => s.reviewMode);
   // Subscribe to the annotations array reference and filter in render: a
   // filtering selector would re-run for every node on every store update
@@ -784,6 +786,7 @@ export const ComponentNode = memo(function ComponentNode({
   const nodeRef = useRef<HTMLDivElement>(null);
   const helpButtonRef = useRef<HTMLDivElement>(null);
   const isHero = isHeroType(component.type);
+  const glowsInThisTheme = THEMES[theme].heroGlow;
   const hasHelpContent = !!(getHelpContent(component));
   const isTouchDevice = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 
@@ -907,12 +910,12 @@ export const ComponentNode = memo(function ComponentNode({
       )}
 
       {/* Device-shaped frame wrapping all content */}
-      <DeviceFrame type={component.type} darkMode={darkMode} colors={colors} enhancedFrames={enhancedFrames} heroGlow={isHero ? getHeroGlow(component.type, darkMode) : undefined}>
+      <DeviceFrame type={component.type} darkMode={darkMode} colors={colors} enhancedFrames={enhancedFrames} heroGlow={isHero && glowsInThisTheme ? getHeroGlow(component.type, darkMode) : undefined}>
         {/* Header */}
         <div className={isHero ? "px-4 pt-3 pb-2" : "px-4 pt-3 pb-2"}>
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <h3 className={`font-semibold truncate ${isHero ? "text-base" : "text-sm"} ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
+              <h3 data-se="name" className={`font-semibold truncate ${isHero ? "text-base" : "text-sm"} ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
                 {TYPE_META[component.type]?.icon && <span className="mr-1.5">{TYPE_META[component.type].icon}</span>}
                 <ReviewTarget
                   targetType="component-name"
@@ -937,7 +940,7 @@ export const ComponentNode = memo(function ComponentNode({
                   targetContext={{ typeValue: component.type, componentPath: component.path }}
                 >
                   <Tooltip content={TYPE_DESCRIPTIONS[component.type] || component.type} position="bottom">
-                    <span className={`${isHero ? "text-[11px] px-2 py-0.5" : "text-[10px] px-1.5 py-0.5"} rounded-full font-medium ${colors.badge}`}>
+                    <span data-se="badge" className={`${isHero ? "text-[11px] px-2 py-0.5" : "text-[10px] px-1.5 py-0.5"} rounded-full font-medium ${colors.badge}`}>
                       {TYPE_META[component.type]?.label || component.type}
                     </span>
                   </Tooltip>

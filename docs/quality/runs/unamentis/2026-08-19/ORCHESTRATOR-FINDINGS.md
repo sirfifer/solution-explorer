@@ -316,7 +316,7 @@ so the score is being dragged down by exactly the dimension the harness measures
 worst. Every claim feeding it must be reproduced before it scores. Data-side
 findings need no such discount.
 
-## O13. Search fetches the entire index, sequentially, on first open. Demo-blocking at VS Code scale. VERIFIED
+## O13. Search fetches the entire index, sequentially, on first open. Demo-blocking at private large-repository validation corpus scale. VERIFIED
 
 Found while measuring the doc-indexing change, not by a persona, and invisible
 on this subject.
@@ -332,11 +332,11 @@ Measured index size:
 | Subject | Shards | Index size | Fetched on first search-open |
 |---|---:|---:|---|
 | UnaMentis | 9 | 7.67 MB (6.10 MB before doc indexing) | all of it, 9 serial requests |
-| VS Code | 84 | **61.0 MB** | all of it, **84 serial requests** |
+| private large-repository validation corpus | 84 | **61.0 MB** | all of it, **84 serial requests** |
 
-The VS Code figure is measured from the N2 pre-flight run and predates doc
+The private large-repository validation corpus figure is measured from the N2 pre-flight run and predates doc
 indexing. Extrapolating this subject's +25.7% growth would put it near 77 MB,
-but that extrapolation is weak: VS Code's documentation-to-code ratio differs
+but that extrapolation is weak: private large-repository validation corpus's documentation-to-code ratio differs
 from UnaMentis's, so the real figure needs measuring rather than estimating.
 
 **Why the comprehension review never caught it.** On UnaMentis the index is 6 MB
@@ -417,9 +417,9 @@ never checked what the origin actually transmits.
 
 **Measured against the live origin.** Cloudflare already serves these files
 brotli-compressed. One shard: 685,776 bytes on disk, **93,718 bytes over the
-wire**, 7.3x. The whole VS Code index compresses to **2.9 MB**, not 61 MB.
+wire**, 7.3x. The whole private large-repository validation corpus index compresses to **2.9 MB**, not 61 MB.
 
-**Measured against the real product.** Running VS Code's dataset through the
+**Measured against the real product.** Running private large-repository validation corpus's dataset through the
 actual viewer: search returns usable results in **451 ms**, with only 36 of 85
 shards loaded. Matching runs against the already-loaded architecture and the
 shards *enrich* an index that is usable from the start. Nobody waits for the
@@ -439,7 +439,7 @@ manifest order rather than arrival order so ranking stays deterministic, plus an
 "Indexing…" indicator that becomes "Index incomplete" if shard loading fails
 outright, so a failure never reads as a complete index.
 
-Verified in a real browser on the VS Code dataset: max concurrency 6, all 84
+Verified in a real browser on the private large-repository validation corpus dataset: max concurrency 6, all 84
 shards in **276 ms** against 1,171 ms sequential, indicator clearing correctly.
 
 **Why this belongs in the record.** It is the second time in this run that I

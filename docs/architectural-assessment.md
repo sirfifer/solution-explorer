@@ -1,10 +1,10 @@
 > **Historical snapshot (assessment 2025-02-17, banner updated 2026-07-13).** This document is a point-in-time assessment and is kept for its research and reasoning, not as a description of the current codebase. Since it was written, both Wave 1 (Changes 1-3) and Wave 2 (Changes 4-6) have shipped, and the analyzer was rebuilt again around the default v2 extract, derive, project index engine with a coverage ledger. In particular, the "single 4,525-line `analyze.py`" this document describes as current state no longer exists: `analyze.py` is a thin wrapper and the analyzer lives in the `analyzer/` package. Treat the numbers and "Where We Are" sections below as the state on 2025-02-17. See CHANGELOG.md and PROJECT-OVERVIEW.md for what ships today.
 
-# Solution Explorer: Architectural Assessment and Evolution Plan
+# SysCorpus: Architectural Assessment and Evolution Plan
 
 ## Executive Summary
 
-Solution Explorer is at an inflection point. The core concept is proven: static analysis produces a navigable architecture model, AI enhances it, and a web viewer makes it interactive. But the current implementation was built for "get it working" and now needs to be evaluated against "run it at scale on any codebase, with 100%+ coverage of every artifact."
+SysCorpus is at an inflection point. The core concept is proven: static analysis produces a navigable architecture model, AI enhances it, and a web viewer makes it interactive. But the current implementation was built for "get it working" and now needs to be evaluated against "run it at scale on any codebase, with 100%+ coverage of every artifact."
 
 After researching Sourcegraph, Sourcetrail, CodeScene, NDepend, Structure101, Semgrep, and others, and deeply analyzing our current codebase, here is what I found.
 

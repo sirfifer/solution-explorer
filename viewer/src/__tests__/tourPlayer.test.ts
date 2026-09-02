@@ -3,13 +3,13 @@ import { useArchStore } from "../store";
 import { hasTours, isTourStale, listTours } from "../tours/model";
 import { SAMPLE_FIXTURE_TOURS } from "../tours/fixtureTour";
 import type { Architecture, Component, Tour } from "../types";
-import sampleManifest from "../../public/architecture/manifest.json";
+import sampleManifest from "../../tests/gui/fixtures/march-unamentis-sample/architecture/manifest.json";
 
 // P6-7 Tours player. Regression tests against the REAL store: the player reads
 // tours from the projection (architecture.tours), plays them by selecting each
 // step's target on stable identity (I12), tracks progress (I11), surfaces
 // staleness (I5), and resets on reload. The hand-authored SAMPLE_FIXTURE_TOURS
-// prove the player end to end over the committed sample dataset.
+// prove the player end to end over the explicitly named March test fixture.
 
 function makeComponent(id: string, children: Component[] = [], files: string[] = []): Component {
   return {

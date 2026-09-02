@@ -22,7 +22,7 @@ export interface InitOptions {
 
 export async function init(options: InitOptions): Promise<void> {
   console.log();
-  console.log(pc.bold("Solution Explorer Setup"));
+  console.log(pc.bold("SysCorpus Setup"));
   if (options.live) {
     console.log(pc.dim("Mode: Full live monitoring"));
   } else {

@@ -137,7 +137,7 @@ DEFAULT_POLICY: dict[str, Any] = {
     "max_symbol_line_mismatch_share": 0.05,
     # Per-component ceilings, in the units a reader pays for.
     #
-    # These exist because of a real failure, not a theory. On the VS Code
+    # These exist because of a real failure, not a theory. On the private large-repository validation corpus
     # projection one component (src/vs/workbench) held 3,625 files and 47,339
     # symbols in a single 50 MB detail shard, and opening it pinned the browser
     # at 100% CPU and about 900 MB for over half an hour. Every earlier check
@@ -155,7 +155,7 @@ DEFAULT_POLICY: dict[str, Any] = {
     # The number that decides the verdict. max_shard_bytes above is only a cheap
     # prefilter that says "measure this one properly"; this is the budget for
     # what a reader actually waits for. 8 MB compressed is roughly a
-    # photograph-heavy page, and VS Code's heaviest component lands at 4.4 MB.
+    # photograph-heavy page, and private large-repository validation corpus's heaviest component lands at 4.4 MB.
     "max_shard_transfer_bytes": 8_000_000,
 }
 
@@ -1214,7 +1214,7 @@ class Linter:
             if max_bytes and size > max_bytes:
                 # Raw bytes are a prefilter, not the finding. What a reader pays
                 # is the COMPRESSED transfer, and JSON compresses about tenfold:
-                # VS Code's src/vs/workbench shard is 48 MB on disk and 4.4 MB on
+                # private large-repository validation corpus's src/vs/workbench shard is 48 MB on disk and 4.4 MB on
                 # the wire, which is an ordinary web payload rather than a defect.
                 # Measuring the raw number and calling it the cost overstated the
                 # problem by an order of magnitude, so the expensive measurement
@@ -1270,7 +1270,7 @@ class Linter:
         """Did the projection meet the parser it was supposed to meet?
 
         This band exists because of a real incident and would have caught it in
-        one line. A VS Code run was launched with an interpreter that had no
+        one line. A private large-repository validation corpus run was launched with an interpreter that had no
         tree-sitter installed, so every TypeScript file silently fell back to the
         regex parser. The result: 355,617 symbols instead of 153,231, all 28,501
         methods reclassified as plain functions, the detail directory doubled to
@@ -1311,7 +1311,7 @@ class Linter:
 
         # Methods PER CLASS, not methods outright. The first version of this band
         # tested for zero methods and missed the very incident it was written for:
-        # the degraded VS Code run still produced 55 of them, from the handful of
+        # the degraded private large-repository validation corpus run still produced 55 of them, from the handful of
         # files whose parser needs no tree-sitter. 55 methods against 14,744
         # classes is the real tell. A class with no members is a data holder, and
         # thousands in a row means nothing read the insides of a class.
@@ -1367,7 +1367,7 @@ class Linter:
 
         The whole question in the absolute-path band is WHOSE path it is. A path
         under the generating machine's root is ours and is a real leak. A path
-        that VS Code committed into its own test/unit/README.md is the subject's
+        that private large-repository validation corpus committed into its own test/unit/README.md is the subject's
         content, already public wherever the subject is public, and republishing
         it verbatim is what a faithful map does. Rewriting it would make our copy
         of a file disagree with the file.

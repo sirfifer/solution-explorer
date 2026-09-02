@@ -291,6 +291,10 @@ def _accounting(ctx, result) -> dict:
             "tokens_in": 0,
             "tokens_cached": 0,
             "tokens_cache_write": 0,
+            "tokens_cache_write_1h": 0,
+            "tokens_cache_write_5m": 0,
+            "tokens_cache_write_unknown": 0,
+            "tokens_fresh_in": 0,
             "tokens_out": 0,
             "response_bytes": 0,
             "output_budget_violations": 0,
@@ -305,6 +309,10 @@ def _accounting(ctx, result) -> dict:
         bucket["tokens_in"] += row.tokens_in or 0
         bucket["tokens_cached"] += row.tokens_cached or 0
         bucket["tokens_cache_write"] += row.tokens_cache_write or 0
+        bucket["tokens_cache_write_1h"] += row.tokens_cache_write_1h or 0
+        bucket["tokens_cache_write_5m"] += row.tokens_cache_write_5m or 0
+        bucket["tokens_cache_write_unknown"] += row.tokens_cache_write_unknown or 0
+        bucket["tokens_fresh_in"] += row.tokens_fresh_in or 0
         bucket["tokens_out"] += row.tokens_out or 0
         bucket["response_bytes"] += row.response_bytes or 0
         if row.output_budget_ok is False:
@@ -340,6 +348,74 @@ def _accounting(ctx, result) -> dict:
             round(bucket["cost_usd"] / grand_cost, 4) if grand_cost else 0.0
         )
 
+    cache_rows = []
+    for row in rows:
+        write_1h = int(row.tokens_cache_write_1h or 0)
+        write_5m = int(row.tokens_cache_write_5m or 0)
+        write_unknown = max(
+            int(row.tokens_cache_write_unknown or 0),
+            int(row.tokens_cache_write or 0) - write_1h - write_5m,
+        )
+        reads = int(row.tokens_cached or 0)
+        fresh = int(row.tokens_fresh_in or 0)
+        known = write_unknown == 0
+        actual_equivalent = (
+            fresh + 2.0 * write_1h + 1.25 * write_5m + 0.1 * reads
+            if known else None
+        )
+        uncached_equivalent = fresh + write_1h + write_5m + write_unknown + reads
+        cache_rows.append({
+            "policy": str(row.cache_policy or "unrecorded"),
+            "write_1h": write_1h,
+            "write_5m": write_5m,
+            "write_unknown": write_unknown,
+            "reads": reads,
+            "actual_equivalent": actual_equivalent,
+            "uncached_equivalent": uncached_equivalent,
+        })
+    cache_known = all(row["actual_equivalent"] is not None for row in cache_rows)
+    actual_cache_equivalent = (
+        sum(float(row["actual_equivalent"]) for row in cache_rows)
+        if cache_known else None
+    )
+    uncached_equivalent = sum(row["uncached_equivalent"] for row in cache_rows)
+    net_cache_equivalent = (
+        actual_cache_equivalent - uncached_equivalent
+        if actual_cache_equivalent is not None else None
+    )
+    by_cache_policy: dict[str, dict] = {}
+    for row in cache_rows:
+        key = row["policy"]
+        bucket = by_cache_policy.setdefault(key, {
+            "policy": key, "calls": 0, "write_1h": 0, "write_5m": 0,
+            "write_unknown": 0, "reads": 0,
+            "actual_input_equivalent": 0.0, "uncached_input_equivalent": 0.0,
+            "economics_known": True,
+        })
+        bucket["calls"] += 1
+        for field in ("write_1h", "write_5m", "write_unknown", "reads"):
+            bucket[field] += row[field]
+        bucket["uncached_input_equivalent"] += row["uncached_equivalent"]
+        if row["actual_equivalent"] is None:
+            bucket["economics_known"] = False
+        else:
+            bucket["actual_input_equivalent"] += row["actual_equivalent"]
+    for bucket in by_cache_policy.values():
+        if bucket["economics_known"]:
+            bucket["net_input_equivalent"] = round(
+                bucket["actual_input_equivalent"]
+                - bucket["uncached_input_equivalent"], 1
+            )
+            bucket["actual_input_equivalent"] = round(
+                bucket["actual_input_equivalent"], 1
+            )
+        else:
+            bucket["actual_input_equivalent"] = None
+            bucket["net_input_equivalent"] = None
+        bucket["uncached_input_equivalent"] = round(
+            bucket["uncached_input_equivalent"], 1
+        )
+
     return {
         "by_model": models,
         "totals": {
@@ -348,6 +424,11 @@ def _accounting(ctx, result) -> dict:
             "tokens_in": sum(b["tokens_in"] for b in models),
             "tokens_cached": sum(b["tokens_cached"] for b in models),
             "tokens_cache_write": sum(b["tokens_cache_write"] for b in models),
+            "tokens_cache_write_1h": sum(b["tokens_cache_write_1h"] for b in models),
+            "tokens_cache_write_5m": sum(b["tokens_cache_write_5m"] for b in models),
+            "tokens_cache_write_unknown": sum(
+                b["tokens_cache_write_unknown"] for b in models
+            ),
             "tokens_out": sum(b["tokens_out"] for b in models),
             "response_bytes": sum(b["response_bytes"] for b in models),
             "output_budget_violations": sum(
@@ -376,6 +457,9 @@ def _accounting(ctx, result) -> dict:
         "cache_efficiency": {
             "writes": sum(b["tokens_cache_write"] for b in models),
             "reads": sum(b["tokens_cached"] for b in models),
+            "write_1h": sum(b["tokens_cache_write_1h"] for b in models),
+            "write_5m": sum(b["tokens_cache_write_5m"] for b in models),
+            "write_unknown": sum(b["tokens_cache_write_unknown"] for b in models),
             "read_write_ratio": round(
                 sum(b["tokens_cached"] for b in models)
                 / max(1, sum(b["tokens_cache_write"] for b in models)), 4
@@ -383,13 +467,27 @@ def _accounting(ctx, result) -> dict:
             "prefix_hashes": sorted({
                 row.prefix_hash for row in rows if row.prefix_hash
             }),
+            "economics_known": cache_known,
+            "actual_input_equivalent": (
+                round(actual_cache_equivalent, 1)
+                if actual_cache_equivalent is not None else None
+            ),
+            "uncached_input_equivalent": round(uncached_equivalent, 1),
+            "net_input_equivalent": (
+                round(net_cache_equivalent, 1)
+                if net_cache_equivalent is not None else None
+            ),
+            "by_policy": sorted(by_cache_policy.values(), key=lambda b: b["policy"]),
             "mechanism_verified": True,
-            "budgeted_as_saving": any(b["tokens_cached"] for b in models),
+            "budgeted_as_saving": (
+                net_cache_equivalent is not None and net_cache_equivalent < 0
+            ),
             "note": (
-                "The F-9 live probe verified that the stable appended prefix is "
-                "cache-read only when dynamic system sections are excluded. "
-                "This report books no hypothetical saving: only cache reads "
-                "measured in this run count."
+                "Net cache value includes both sides: 1h writes at 2x, 5m "
+                "writes at 1.25x, and reads at 0.1x versus the same input "
+                "processed uncached. Unknown-TTL writes make the verdict "
+                "explicitly unavailable; reads alone are never called a saving. "
+                "Values are base-input-token equivalents, not Max quota."
             ),
         },
         # Filled in by hand after an isolated run. There is no API that reports
@@ -427,6 +525,8 @@ def _identity(ctx, result, engine_version: str) -> dict:
                 "min_rounds": policy.iteration.min_rounds,
                 "max_rounds": policy.iteration.max_rounds,
             },
+            "cache_policy": policy.cache_policy,
+            "cache_policy_overrides": dict(policy.cache_policy_overrides),
             "max_cost_usd": policy.max_cost_usd,
             "pause_at_cost_usd": policy.pause_at_cost_usd,
             "spot_check_fraction": policy.spot_check_fraction,
@@ -441,6 +541,11 @@ def _identity(ctx, result, engine_version: str) -> dict:
                 and result.total_cost_usd > result.cost_ceiling_usd + 1e-9
             ),
             "ceiling_hit": result.ceiling_hit,
+            **(
+                {"stop_reason": result.stop_reason}
+                if getattr(result, "stop_reason", None)
+                else {}
+            ),
             "failed_phases": result.failed_phases,
         },
         "dry_run": ctx.dry_run,
@@ -852,6 +957,13 @@ def _accounting_section(report: dict) -> list:
 
     output = acct.get("output_efficiency") or {}
     cache = acct.get("cache_efficiency") or {}
+    net_cache = cache.get("net_input_equivalent")
+    cache_verdict = (
+        "net saving" if isinstance(net_cache, (int, float)) and net_cache < 0
+        else "net cost" if isinstance(net_cache, (int, float)) and net_cache > 0
+        else "neutral" if net_cache == 0
+        else "unknown (TTL split incomplete)"
+    )
     lines += [
         f"Delivered response payload: {output.get('delivered_response_bytes', 0):,} "
         "UTF-8 bytes total. "
@@ -861,8 +973,16 @@ def _accounting_section(report: dict) -> list:
         "",
         f"Prompt cache: {cache.get('reads', 0):,} tokens read and "
         f"{cache.get('writes', 0):,} written "
-        f"(read/write {cache.get('read_write_ratio', 0.0):.2f}). "
-        "Only measured reads are counted as savings.",
+        f"({cache.get('write_1h', 0):,} at 1h; "
+        f"{cache.get('write_5m', 0):,} at 5m; read/write "
+        f"{cache.get('read_write_ratio', 0.0):.2f}). Verdict: {cache_verdict}",
+        (
+            f"Cache net versus uncached: {net_cache:+,.1f} base-input-token "
+            "equivalents. Negative saves; positive costs."
+            if isinstance(net_cache, (int, float)) else
+            "Cache net versus uncached cannot be calculated until every write "
+            "has a recorded TTL class."
+        ),
         "",
         output.get("note", ""),
         "",
@@ -945,9 +1065,10 @@ def render_markdown(report: dict) -> str:
         "",
     ]
     if totals.get("ceiling_hit"):
+        stop_reason = totals.get("stop_reason") or "run ceiling reached"
         lines += [
-            "**The run cost ceiling was reached.** Work below was left undone and "
-            "is recorded as skipped, not as complete.",
+            f"**The run stopped early:** {stop_reason} Work below was left undone "
+            "and is recorded as skipped, not as complete.",
             "",
         ]
     if totals.get("cost_ceiling_exceeded"):

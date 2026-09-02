@@ -1,5 +1,5 @@
 /**
- * Private-preview gate for a Solution Explorer demo (DISCLOSURE-POLICY.md step 3).
+ * Private-preview gate for a SysCorpus demo (DISCLOSURE-POLICY.md step 3).
  *
  * The policy is explicit that a preview must be gated SERVER SIDE, and that
  * "client-side-only gating is theater and is not acceptable". This is a

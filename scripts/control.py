@@ -44,7 +44,7 @@ Stdlib only, same as the board. No framework, no daemon to install.
 Usage:
     python3 scripts/control.py                      # board plus API, the default
     python3 scripts/control.py --port 4200 --open
-    python3 scripts/control.py run lint --slug vscode      # start a job, watch it
+    python3 scripts/control.py run lint --slug large-repository-validation      # start a job, watch it
     python3 scripts/control.py jobs                        # what can be run
 """
 

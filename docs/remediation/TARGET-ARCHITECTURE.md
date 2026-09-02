@@ -9,7 +9,7 @@ Audience: executor sessions (Opus 4.8 / Sonnet 5) implementing Program 2. Read t
 
 ## 1. The product goal this serves
 
-Solution Explorer exists because AI now writes code faster than humans can read it. The product must let a human, or an AI acting for a human, explore any codebase completely: every file accounted for, drill-down to the smallest meaningful unit, presented through perspectives that match how humans think (structure, capabilities, data, user flow), with zero silent omission. It must also answer architectural questions for AI agents with high token efficiency, backed by evidence, so agents stop re-reading whole repos.
+SysCorpus exists because AI now writes code faster than humans can read it. The product must let a human, or an AI acting for a human, explore any codebase completely: every file accounted for, drill-down to the smallest meaningful unit, presented through perspectives that match how humans think (structure, capabilities, data, user flow), with zero silent omission. It must also answer architectural questions for AI agents with high token efficiency, backed by evidence, so agents stop re-reading whole repos.
 
 Four properties define success:
 
@@ -27,7 +27,7 @@ Decisions below rest on these verified findings. Links preserved so future sessi
 - **SCIP became the vendor-neutral index standard** (https://scip-code.org/, steering committee with Uber and Meta). LSIF is dead. SCIP's contribution we adopt: stable, human-readable, globally unique symbol strings that make indexes mergeable across repos and diffable across commits.
 - **The agent-memory world contributes patterns, not engines.** Graphiti/Zep's bitemporal validity (facts carry the time and version they were derived from, superseded facts are invalidated, never silently served) maps directly onto AI-enrichment staleness. Zep's 300ms P95 comes from doing all extraction at ingest and never calling an LLM at query time. Cursor's Merkle-tree hash sync and Cognee's hash-per-file ingest are the incremental pattern.
 - **Curated tool surfaces win for agents.** Sourcegraph MCP ships a small default tool set; CodeGraph exposes nine tools; measured wins are 50 to 70 percent token reduction versus grep-only agents. Agents want search, overview, callers/callees, impact, and node detail. Not graph dumps.
-- **GraphRAG's lesson:** LLM-extracted graphs hallucinate structure. Code is the exception domain because parsers give ground-truth entities and edges. Build the graph deterministically; use AI only for the semantic annotation layer. This is already Solution Explorer's `ai_enhance` pattern, now elevated to a system invariant.
+- **GraphRAG's lesson:** LLM-extracted graphs hallucinate structure. Code is the exception domain because parsers give ground-truth entities and edges. Build the graph deterministically; use AI only for the semantic annotation layer. This is already SysCorpus's `ai_enhance` pattern, now elevated to a system invariant.
 
 ## 3. Non-negotiable invariants
 

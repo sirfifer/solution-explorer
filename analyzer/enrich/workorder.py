@@ -253,7 +253,11 @@ def execute_work_order(
     "the map got better", and a determination that cannot tell them apart will
     keep buying rounds that do nothing.
     """
-    from .compact import coverage_issues, normalize_compact_response, response_budget_bytes
+    from .compact import (
+        coverage_issues,
+        escalation_response_budget_bytes,
+        normalize_compact_response,
+    )
     from .evidence import EvidenceValidator
     from .ladder import LadderOutcome, LadderPhase
     from .partition import flatten_components
@@ -265,7 +269,7 @@ def execute_work_order(
         outcome.notes.append("not executed: " + "; ".join(problems))
         return outcome
     if not ctx.budget.under():
-        outcome.notes.append("not executed: run cost ceiling reached")
+        outcome.notes.append("not executed: " + ctx.budget.stop_reason())
         return outcome
 
     scope = list(dict.fromkeys(order.scope))[: order.max_targets]
@@ -377,7 +381,7 @@ def execute_work_order(
 
     for component_ids, partition_relationship_keys in target_batches:
         if not ctx.budget.under():
-            outcome.notes.append("stopped early: run cost ceiling reached")
+            outcome.notes.append("stopped early: " + ctx.budget.stop_reason())
             break
         if not component_ids and not partition_relationship_keys:
             continue
@@ -481,7 +485,7 @@ def execute_work_order(
             prompt = build_compact_escalation_prompt(
                 items, terminal=False, assignment=attempt_assignment
             )
-            output_budget = response_budget_bytes(
+            output_budget = escalation_response_budget_bytes(
                 components=len(pending_components),
                 relationships=len(pending_relationships),
             )
@@ -503,10 +507,10 @@ def execute_work_order(
             response_bytes = len(result.text.encode("utf-8"))
             if response_bytes > output_budget:
                 outcome.notes.append(
-                    f"partition response exceeded compact budget: "
-                    f"{response_bytes} > {output_budget} UTF-8 bytes"
+                    "efficiency warning: partition response exceeded its expected "
+                    f"compact size ({response_bytes} > {output_budget} UTF-8 bytes); "
+                    "validated paid work was retained"
                 )
-                break
             # Canonical object maps remain the compatibility seam for injected
             # providers and stored replays. Live compact arrays receive the same
             # field-level validation and sibling salvage as the ordinary ladder.

@@ -185,7 +185,7 @@ def test_empty_runs_dir_is_empty(runs_dir: Path) -> None:
 
 def test_a_finished_run_is_loaded_with_its_percent(runs_dir: Path) -> None:
     _write_run(runs_dir, "2026-08-23T00-00-00-crawl", {
-        "id": "crawl-1", "kind": "crawl", "subject": "vscode", "status": "passed",
+        "id": "crawl-1", "kind": "crawl", "subject": "large-repository-validation", "status": "passed",
         "completed": 7, "total": 20, "passed": 7, "failed": 0,
     })
     runs = tb.load_runs()
@@ -315,15 +315,15 @@ def test_a_registered_demo_with_nothing_on_disk_is_reported_unanalyzed(
 
 def test_an_analyzed_demo_reports_counts_sha_and_head(registry_dir: Path,
                                                       corpus_dir: Path) -> None:
-    _write_demo(registry_dir, corpus_dir, "vscode",
-                registry={"subject": {"name": "microsoft/vscode"}},
+    _write_demo(registry_dir, corpus_dir, "large-repository-validation",
+                registry={"subject": {"name": "microsoft/large-repository-validation"}},
                 manifest=_manifest(),
                 fetch_state={"resolved_sha": "1234abcd", "fetched_at": "2026-08-22T10:00:00Z"},
                 bundle=True)
     row = tb.load_fleet(dict(VERSIONS))[0]
     assert row["analyzed"] is True
-    assert row["subject"] == "microsoft/vscode"
-    assert row["url"] == "https://example.test/vscode"
+    assert row["subject"] == "microsoft/large-repository-validation"
+    assert row["url"] == "https://example.test/large-repository-validation"
     assert row["components"] == 2
     assert row["files"] == 9
     assert row["symbols"] == 40
@@ -406,13 +406,13 @@ def test_the_state_payload_carries_versions_runs_fleet_and_a_live_count(
     _write_run(runs_dir, "c-dead", {"id": "dead", "status": "running"},
                age_seconds=tb.STALE_AFTER_SECONDS + 60)
     _write_run(runs_dir, "d-done", {"id": "done", "status": "passed"})
-    _write_demo(registry_dir, corpus_dir, "vscode", manifest=_manifest())
+    _write_demo(registry_dir, corpus_dir, "large-repository-validation", manifest=_manifest())
 
     state = tb.build_state()
     assert state["versions"] == fixed_versions
     assert state["live_count"] == 2
     assert len(state["runs"]) == 4
-    assert [r["slug"] for r in state["fleet"]] == ["vscode"]
+    assert [r["slug"] for r in state["fleet"]] == ["large-repository-validation"]
     assert state["runs_dir"] == str(runs_dir)
     assert state["generated_at"]
 
@@ -435,18 +435,18 @@ def test_a_run_is_attached_to_the_demo_it_exercised(runs_dir: Path,
     """The join that makes this a board rather than two lists. A run names its
     subject the way a person would, so match on the slug or the subject name."""
     _write_run(runs_dir, "by-slug", {"id": "run-slug", "kind": "crawl",
-                                     "subject": "vscode", "status": "passed",
+                                     "subject": "large-repository-validation", "status": "passed",
                                      "passed": 12, "failed": 0})
     _write_run(runs_dir, "by-name", {"id": "run-name", "kind": "lint",
                                      "subject": "facebook/react", "status": "failed",
                                      "passed": 3, "failed": 1})
-    _write_demo(registry_dir, corpus_dir, "vscode", manifest=_manifest())
+    _write_demo(registry_dir, corpus_dir, "large-repository-validation", manifest=_manifest())
     _write_demo(registry_dir, corpus_dir, "react",
                 registry={"subject": {"name": "facebook/react"}}, manifest=_manifest())
     _write_demo(registry_dir, corpus_dir, "untouched", manifest=_manifest())
 
     rows = {r["slug"]: r for r in tb.build_state()["fleet"]}
-    assert rows["vscode"]["last_run"]["id"] == "run-slug"
+    assert rows["large-repository-validation"]["last_run"]["id"] == "run-slug"
     assert rows["react"]["last_run"]["id"] == "run-name"
     assert rows["react"]["last_run"]["failed"] == 1
     assert rows["untouched"]["last_run"] is None
@@ -456,8 +456,8 @@ def test_the_payload_is_json_serializable(runs_dir: Path, registry_dir: Path,
                                           corpus_dir: Path, fixed_versions: dict) -> None:
     """The board serves this over HTTP. A Path leaking into the payload would
     only surface as a 500 on someone else's machine."""
-    _write_run(runs_dir, "live", {"id": "r", "status": "running", "subject": "vscode"})
-    _write_demo(registry_dir, corpus_dir, "vscode", manifest=_manifest(),
+    _write_run(runs_dir, "live", {"id": "r", "status": "running", "subject": "large-repository-validation"})
+    _write_demo(registry_dir, corpus_dir, "large-repository-validation", manifest=_manifest(),
                 fetch_state={"resolved_sha": "abc"}, bundle=True)
     json.dumps(tb.build_state())
 

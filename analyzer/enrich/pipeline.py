@@ -95,6 +95,27 @@ DEFAULT_MODELS: dict[str, ModelSpec] = {
     "workorder": ModelSpec(DEFAULT_SOURCE, "sonnet"),
 }
 
+# Cache reuse is a property of the work shape, not merely the model.  These
+# defaults are derived from the 272-call UnaMentis full run: independent calls
+# wrote large one-use fact tails and lose under automatic caching, while the
+# listed iterative phases cleared the five-minute 0.2778 read/write break-even.
+# A live probe still gates promotion; keeping the mapping here makes the policy
+# visible, testable, and overrideable instead of an undocumented shell setting.
+ADAPTIVE_CACHE_POLICIES: dict[str, str] = {
+    "p1_orientation": "off",
+    "p2a_bulk": "off",
+    "p2b_escalated": "off",
+    "p2c_residue": "off",
+    "p4_synthesis": "off",
+    "p5_determination": "5m",
+    "workorder": "5m",
+    "grounding-spot-check": "5m",
+    "substitution-check": "5m",
+    "verify-identity": "5m",
+    "verify-edges": "off",
+    "verify-findings": "off",
+}
+
 
 def resolve_models(
     raw: Optional[dict] = None, *, default_source: str = DEFAULT_SOURCE
@@ -273,7 +294,11 @@ class BudgetMeter:
             "reserved_usd": round(self.reserved, 6),
             "completed_calls": self.charges,
             "wall_elapsed_s": self.wall_elapsed_s(),
-            "actions": ["resume-with-new-checkpoint", "cancel"],
+            "actions": (
+                ["resume-with-new-checkpoint", "cancel"]
+                if state in {"running", "paused"}
+                else []
+            ),
             "revision": int(current.get("revision") or 0) + 1,
             "updated_at": time.time(),
         }
@@ -288,6 +313,40 @@ class BudgetMeter:
                 tmp.unlink(missing_ok=True)
             except OSError:
                 pass
+
+    def finish_control(
+        self, *, state: str, reason: str, recommendation: str
+    ) -> None:
+        """Persist a terminal control-plane snapshot with final accounting.
+
+        The dashboard run record and the engine control packet are independent
+        artifacts.  Leaving the latter as ``running`` after the process exits
+        makes a completed run look resumable and freezes its call total one
+        tick behind the ledger.  Only terminal states are accepted here so a
+        caller cannot accidentally use this seam as another pause mechanism.
+        """
+        if state not in {"complete", "incomplete", "failed", "cancelled"}:
+            raise ValueError(f"not a terminal control state: {state!r}")
+        self._write_control(
+            state=state, reason=reason, recommendation=recommendation
+        )
+
+    def _refresh_control(self) -> None:
+        """Persist current spend/reservations without changing operator intent."""
+        if self.control_path is None:
+            return
+        current = self._control_snapshot()
+        state = str(current.get("state") or "running")
+        if state not in {"running", "paused", "cancelled"}:
+            state = "running"
+        self._write_control(
+            state=state,
+            reason=str(current.get("reason") or "run accounting updated"),
+            recommendation=str(
+                current.get("recommendation")
+                or "No action required; the run is proceeding."
+            ),
+        )
 
     def _await_operator(self) -> bool:
         """Apply persisted pause/cancel commands before a new launch.
@@ -376,6 +435,16 @@ class BudgetMeter:
                 self._consecutive_identical = 0
                 self._last_error_shape = None
                 return
+            # A subscription limit with an explicit reset time is already a
+            # conclusive run-wide diagnosis.  Waiting for five identical
+            # logical failures merely fans the same unavailable capacity out
+            # across more calls; pause before the next launch immediately.
+            from .retry import is_capacity_limit
+            if is_capacity_limit(error):
+                self._systemic_error = str(error)[:300]
+                self._last_error_shape = " ".join(str(error).lower().split())[:300]
+                self._consecutive_identical = 1
+                return
             shape = " ".join(str(error).lower().split())[:300]
             if shape == self._last_error_shape:
                 self._consecutive_identical += 1
@@ -391,6 +460,10 @@ class BudgetMeter:
     @property
     def systemic_failure(self) -> Optional[str]:
         return self._systemic_error
+
+    @property
+    def cancelled(self) -> bool:
+        return self._cancelled
 
     def under(self) -> bool:
         """True while new work may be launched and operator control permits it."""
@@ -448,7 +521,8 @@ class BudgetMeter:
             unit = self.ceiling / max(1, int(slots))
             amount = min(available, unit)
             self.reserved += amount
-            return amount
+        self._refresh_control()
+        return amount
 
     def settle(self, reservation: Optional[float], cost_usd: float) -> None:
         """Release a reservation and charge the provider's measured cost."""
@@ -457,6 +531,7 @@ class BudgetMeter:
                 self.reserved = max(0.0, self.reserved - max(0.0, reservation))
             self.spent += max(0.0, float(cost_usd or 0.0))
             self.charges += 1
+        self._refresh_control()
 
     def charge(self, cost_usd: float) -> None:
         # Locked: with parallel rungs, += from worker threads is a lost-update
@@ -464,6 +539,7 @@ class BudgetMeter:
         with self._lock:
             self.spent += max(0.0, float(cost_usd or 0.0))
             self.charges += 1
+        self._refresh_control()
 
     def require(self) -> None:
         if not self.under():
@@ -494,7 +570,13 @@ class LedgerRow:
     # loop. tokens_in remains the sum for every existing reader; the split is
     # additive.
     tokens_cache_write: int = 0
+    tokens_cache_write_1h: int = 0
+    tokens_cache_write_5m: int = 0
+    # Old providers/envelopes may report only the aggregate. Keep the remainder
+    # explicit instead of pretending it used either price.
+    tokens_cache_write_unknown: int = 0
     tokens_fresh_in: int = 0
+    cache_policy: Optional[str] = None
     effort: Optional[str] = None
     stop_reason: Optional[str] = None
     num_turns: int = 1
@@ -527,7 +609,11 @@ class LedgerRow:
             "tokens_cached": self.tokens_cached,
             "tokens_out": self.tokens_out,
             "tokens_cache_write": self.tokens_cache_write,
+            "tokens_cache_write_1h": self.tokens_cache_write_1h,
+            "tokens_cache_write_5m": self.tokens_cache_write_5m,
+            "tokens_cache_write_unknown": self.tokens_cache_write_unknown,
             "tokens_fresh_in": self.tokens_fresh_in,
+            "cache_policy": self.cache_policy,
             "effort": self.effort,
             "stop_reason": self.stop_reason,
             "num_turns": self.num_turns,
@@ -547,10 +633,11 @@ class LedgerRow:
         }
 
 
-def _usage_tokens(usage: dict) -> tuple[int, int, int, int, int]:
+def _usage_tokens(usage: dict) -> tuple[int, int, int, int, int, int, int, int]:
     """Pull token counts out of a CLI usage block.
 
-    Returns ``(input, cached, output, cache_write, fresh_in)`` where ``input``
+    Returns ``(input, cached, output, cache_write, fresh_in, write_1h,
+    write_5m, write_unknown)`` where ``input``
     is the historical sum ``fresh_in + cache_write`` kept for existing readers,
     and the last two are that sum's parts. They are reported separately because
     they bill at different rates: see :class:`LedgerRow`.
@@ -574,12 +661,27 @@ def _usage_tokens(usage: dict) -> tuple[int, int, int, int, int]:
 
     fresh = _int("input_tokens")
     cache_write = _int("cache_creation_input_tokens")
+    creation = usage.get("cache_creation")
+    if not isinstance(creation, dict):
+        creation = {}
+    try:
+        write_1h = int(creation.get("ephemeral_1h_input_tokens") or 0)
+    except (TypeError, ValueError):
+        write_1h = 0
+    try:
+        write_5m = int(creation.get("ephemeral_5m_input_tokens") or 0)
+    except (TypeError, ValueError):
+        write_5m = 0
+    write_unknown = max(0, cache_write - write_1h - write_5m)
     return (
         fresh + cache_write,
         _int("cache_read_input_tokens"),
         _int("output_tokens"),
         cache_write,
         fresh,
+        write_1h,
+        write_5m,
+        write_unknown,
     )
 
 
@@ -603,6 +705,7 @@ class MeteredInvoker:
         model: str,
         targets: int = 0,
         effort: Optional[str] = None,
+        cache_policy: Optional[str] = None,
         partition_id: Optional[int] = None,
         output_budget_bytes: Optional[int] = None,
     ) -> None:
@@ -613,6 +716,7 @@ class MeteredInvoker:
         self.model = model
         self.targets = targets
         self.effort = effort
+        self.cache_policy = cache_policy
         self.partition_id = partition_id
         self.output_budget_bytes = output_budget_bytes
         self.calls = 0
@@ -630,6 +734,7 @@ class MeteredInvoker:
                 rung=self.rung,
                 model=self.model,
                 targets=self.targets,
+                cache_policy=self.cache_policy,
                 ok=False,
                 error=reason,
             )
@@ -645,7 +750,8 @@ class MeteredInvoker:
                 reason = "not invoked: run cost ceiling is fully reserved"
                 self._ctx.record_ledger_row(LedgerRow(
                     phase=self.phase, rung=self.rung, model=self.model,
-                    targets=self.targets, ok=False, error=reason,
+                    targets=self.targets, cache_policy=self.cache_policy,
+                    ok=False, error=reason,
                 ))
                 return InvokeResult(ok=False, text="", error=reason)
             budget_setter(reservation)
@@ -663,6 +769,9 @@ class MeteredInvoker:
             tokens_out,
             tokens_cache_write,
             tokens_fresh_in,
+            tokens_cache_write_1h,
+            tokens_cache_write_5m,
+            tokens_cache_write_unknown,
         ) = _usage_tokens(result.usage)
         if reservation is not None:
             self._ctx.budget.settle(reservation, result.cost_usd)
@@ -739,21 +848,21 @@ class MeteredInvoker:
         # the cache boundary must not claim a prefix the provider never saw.
         prefix_tokens_est = round(result.prefix_chars / PREFIX_CHARS_PER_TOKEN)
         response_bytes = len((result.text or "").encode("utf-8"))
-        # The caller declared this a compact-budgeted call. That declaration,
-        # not the response's self-reported shape, makes the byte ceiling apply.
-        # Otherwise prose or a placeholder object can evade the exact gate.
+        # The caller declared an expected compact response size.  This is
+        # efficiency telemetry, not an answer-validity boundary: a verbose but
+        # schema-valid, evidence-valid answer is still paid work and must reach
+        # the contract validator.  Rejecting it here caused the private large-repository validation corpus run to
+        # discard 25 usable responses and buy the same work again.
         budget_applies = self.output_budget_bytes is not None
         output_budget_ok = (
             response_bytes <= self.output_budget_bytes
             if budget_applies and self.output_budget_bytes is not None else None
         )
         if output_budget_ok is False and result.ok:
-            result = replace(
-                result, ok=False,
-                error=(
-                    f"response exceeded its delivered-byte budget: "
-                    f"{response_bytes:,} > {self.output_budget_bytes:,} UTF-8 bytes"
-                ),
+            self._ctx.notes.append(
+                "efficiency warning: a validatable response exceeded its expected "
+                f"compact size ({response_bytes:,} > "
+                f"{self.output_budget_bytes:,} UTF-8 bytes); it was not discarded"
             )
         self._ctx.record_ledger_row(
             LedgerRow(
@@ -765,7 +874,11 @@ class MeteredInvoker:
                 tokens_cached=tokens_cached,
                 tokens_out=tokens_out,
                 tokens_cache_write=tokens_cache_write,
+                tokens_cache_write_1h=tokens_cache_write_1h,
+                tokens_cache_write_5m=tokens_cache_write_5m,
+                tokens_cache_write_unknown=tokens_cache_write_unknown,
                 tokens_fresh_in=tokens_fresh_in,
+                cache_policy=self.cache_policy,
                 effort=self.effort,
                 stop_reason=stop_reason,
                 num_turns=max(1, turns),
@@ -848,6 +961,10 @@ class LadderPolicy:
     max_work_orders: int = 3
     threshold: float = 85.0
     phases: tuple[str, ...] = PHASE_ORDER
+    # ``adaptive`` selects from ADAPTIVE_CACHE_POLICIES using the phase/rung
+    # work shape. Concrete values force a whole-run arm for controlled probes.
+    cache_policy: str = "adaptive"
+    cache_policy_overrides: dict[str, str] = field(default_factory=dict)
 
     def model_for(self, key: str) -> ModelSpec:
         """The tier binding for a phase or rung. Never returns a bare model name."""
@@ -855,6 +972,33 @@ class LadderPolicy:
         if spec is None:
             return ModelSpec(DEFAULT_SOURCE, "sonnet")
         return ModelSpec.parse(spec)
+
+    def cache_policy_for(
+        self, key: str, *, phase: str, rung: Optional[str] = None
+    ) -> str:
+        """Resolve the concrete cache policy for one invocation.
+
+        Override precedence is deliberately specific-to-general: rung, model
+        binding key, phase, then the global policy. This lets an operator change
+        one adjudicator pass without accidentally repointing every Opus call.
+        """
+        from .engine import CACHE_POLICIES
+
+        forced = str(self.cache_policy or "adaptive").strip().lower()
+        candidates = [rung, key, phase]
+        for candidate in candidates:
+            if candidate and candidate in self.cache_policy_overrides:
+                value = str(self.cache_policy_overrides[candidate]).strip().lower()
+                if value not in CACHE_POLICIES:
+                    raise ValueError(f"invalid cache policy override {candidate}={value}")
+                return value
+        if forced != "adaptive":
+            if forced not in CACHE_POLICIES:
+                raise ValueError(f"invalid cache policy {forced!r}")
+            return forced
+        return ADAPTIVE_CACHE_POLICIES.get(rung or "") or ADAPTIVE_CACHE_POLICIES.get(
+            key, "off"
+        )
 
 
 def default_invoker_factory(spec: ModelSpec) -> Invoker:
@@ -937,6 +1081,12 @@ class RunContext:
     commit_sha: Optional[str] = None
     seed: int = 0
     dry_run: bool = False
+    # Resume a previously banked ladder state.  This is deliberately distinct
+    # from a fresh run: P1 is reused, rung 2a is never regenerated, and only
+    # unresolved targets are eligible for the next rung.
+    update: bool = False
+    recovery_ledger: Optional[Path] = None
+    transcript_root: Optional[Path] = None
     clock: Clock = iso_now
     timer: Callable[[], float] = time.monotonic
     scorer: Any = None
@@ -1045,14 +1195,22 @@ class RunContext:
         latter and understated rung 2a's real work roughly fourfold.
         """
         spec = self.policy.model_for(key)
+        cache_policy = self.policy.cache_policy_for(
+            key, phase=phase, rung=rung
+        )
+        inner = self.invoker_factory(spec)
+        cache_setter = getattr(inner, "set_cache_policy", None)
+        if callable(cache_setter):
+            cache_setter(cache_policy)
         return MeteredInvoker(
-            self.invoker_factory(spec),
+            inner,
             ctx=self,
             phase=phase,
             rung=rung,
             model=spec.label,
             targets=targets,
             effort=spec.effort,
+            cache_policy=cache_policy,
             partition_id=partition_id,
             output_budget_bytes=output_budget_bytes,
         )
@@ -1127,6 +1285,7 @@ class PipelineResult:
     total_cost_usd: float = 0.0
     cost_ceiling_usd: Optional[float] = None
     ceiling_hit: bool = False
+    stop_reason: Optional[str] = None
     quality_status: str = "not-evaluated"
     quality_issues: list[str] = field(default_factory=list)
     audit: Optional[dict] = None
@@ -1151,6 +1310,7 @@ class PipelineResult:
             "total_cost_usd": round(self.total_cost_usd, 6),
             "cost_ceiling_usd": self.cost_ceiling_usd,
             "ceiling_hit": self.ceiling_hit,
+            "stop_reason": self.stop_reason,
             "failed_phases": self.failed_phases,
             "quality_status": self.quality_status,
             "quality_issues": list(self.quality_issues),
@@ -1213,6 +1373,7 @@ def run_pipeline(ctx: RunContext, phases: Iterable[Phase]) -> PipelineResult:
 
     if not ctx.budget.under():
         result.ceiling_hit = True
+        result.stop_reason = ctx.budget.stop_reason()
     result.ledger = list(ctx.ledger)
     result.total_cost_usd = ctx.budget.spent
     result.cost_ceiling_usd = ctx.budget.ceiling
@@ -1232,6 +1393,12 @@ class LadderConfig:
     run_dir: Path
     policy: LadderPolicy = field(default_factory=LadderPolicy)
     dry_run: bool = False
+    update: bool = False
+    # Optional, explicit recovery source for paid compact JSON that an earlier
+    # local byte guard rejected.  Both paths are required together; recovery is
+    # deterministic and happens before any new invocation.
+    recovery_ledger: Optional[Path] = None
+    transcript_root: Optional[Path] = None
     seed: int = 0
     # Cap the number of bulk targets, for cheap smoke runs. None means everything.
     max_partitions: Optional[int] = None
@@ -1313,6 +1480,9 @@ def build_run_context(
             commit_sha=current_commit_sha(str(root)),
             seed=config.seed,
             dry_run=config.dry_run,
+            update=config.update,
+            recovery_ledger=config.recovery_ledger,
+            transcript_root=config.transcript_root,
             max_partitions=config.max_partitions,
             max_lines=config.max_lines,
             max_components=config.max_components,
@@ -1421,6 +1591,43 @@ def run_ladder(
             )
             write_run_report(ctx, result)
         result.notes = list(ctx.notes)
+        if ctx.budget.cancelled:
+            control_state = "cancelled"
+            control_reason = "run cancelled by the operator"
+        elif result.quality_status == "complete":
+            control_state = "complete"
+            control_reason = "run finished and passed its quality audit"
+        else:
+            control_state = "incomplete"
+            control_reason = (
+                "run finished, but publication criteria or the quality audit "
+                "remain incomplete"
+            )
+        try:
+            ctx.budget.finish_control(
+                state=control_state,
+                reason=control_reason,
+                recommendation=(
+                    "Review REPORT.md and report.json; no model call remains in flight."
+                ),
+            )
+        except OSError:
+            # The report is already durable. Observability may miss its final
+            # tick, but it must never turn completed work into a failed run.
+            pass
         return result
+    except Exception:
+        try:
+            ctx.budget.finish_control(
+                state="failed",
+                reason="run exited before a final report and audit were completed",
+                recommendation=(
+                    "Inspect the terminal error and ledger.jsonl; resume with --update "
+                    "after correcting the operational failure."
+                ),
+            )
+        except OSError:
+            pass
+        raise
     finally:
         ctx.store.close()

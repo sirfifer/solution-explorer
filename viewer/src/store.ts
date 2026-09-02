@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { THEME_NAMES, THEMES, applyThemeToDocument, type ThemeName } from "./utils/themes";
 import type {
   Architecture,
   Annotation,
@@ -70,7 +71,66 @@ import { generateDirective, type DirectiveModel } from "./utils/directiveGenerat
 // Storage key for dark mode preference (localStorage for persistence across sessions)
 const DARK_MODE_KEY = "arch-dark-mode";
 const ENHANCED_FRAMES_KEY = "arch-enhanced-frames";
+const THEME_KEY = "arch-theme";
 const CHANGELOG_READ_KEY = "arch-changelog-read";
+const EXPERIENCE_PREFS_KEY = "arch-experience-preferences-v1";
+
+export type ExperienceMode = "overview" | "workbench";
+export type OverviewDirection = "portrait" | "questions" | "atlas";
+export type StartView = "overview" | "workbench" | "last";
+export type WorkbenchDensity = "focused" | "dense";
+export type SemanticLevel = "system" | "domain" | "component";
+
+interface ExperiencePreferences {
+  version: 1;
+  startView: StartView;
+  overviewDirection: OverviewDirection;
+  workbenchDensity: WorkbenchDensity;
+  rememberNavigation: boolean;
+  lastMode: ExperienceMode;
+}
+
+const DEFAULT_EXPERIENCE_PREFERENCES: ExperiencePreferences = {
+  version: 1,
+  startView: "overview",
+  overviewDirection: "portrait",
+  workbenchDensity: "focused",
+  rememberNavigation: true,
+  lastMode: "overview",
+};
+
+function getExperiencePreferences(): ExperiencePreferences {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(EXPERIENCE_PREFS_KEY) ?? "null");
+    if (parsed?.version === 1) {
+      return { ...DEFAULT_EXPERIENCE_PREFERENCES, ...parsed };
+    }
+  } catch {
+    // A corrupt preference cannot block the viewer.
+  }
+  return DEFAULT_EXPERIENCE_PREFERENCES;
+}
+
+function saveExperiencePreferences(preferences: ExperiencePreferences): void {
+  try {
+    localStorage.setItem(EXPERIENCE_PREFS_KEY, JSON.stringify(preferences));
+  } catch {
+    // Storage is optional (private browsing, embedded publications).
+  }
+}
+
+function initialExperienceMode(preferences: ExperiencePreferences): ExperienceMode {
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const explicit = params.get("mode");
+    if (explicit === "overview" || explicit === "workbench") return explicit;
+    if (["lens", "component", "drill", "file", "flow", "capability", "entity", "rule", "finding"].some((key) => params.has(key))) {
+      return "workbench";
+    }
+  }
+  if (preferences.startView === "last") return preferences.lastMode;
+  return preferences.startView;
+}
 
 // High-water mark + sparse read set for efficient read tracking.
 // w = watermark (everything at or below is read), r = individually-read serials above watermark.
@@ -139,6 +199,30 @@ function saveStoredDarkMode(value: boolean): void {
   }
 }
 
+// The theme (the dress) is an axis of its own, orthogonal to light/dark (the
+// time of day). Every theme carries both variants, so the two are stored and
+// switched independently.
+function getStoredTheme(): ThemeName {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored !== null && (THEME_NAMES as readonly string[]).includes(stored)) {
+      return stored as ThemeName;
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  // Signal is the original dress and stays the developer default.
+  return "signal";
+}
+
+function saveStoredTheme(value: ThemeName): void {
+  try {
+    localStorage.setItem(THEME_KEY, value);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 function getStoredEnhancedFrames(): boolean {
   try {
     const stored = localStorage.getItem(ENHANCED_FRAMES_KEY);
@@ -172,6 +256,26 @@ interface ArchStore {
   // absent or invalid, in which case the viewer renders exactly as today.
   publication: Publication | null;
   setPublication: (publication: Publication | null) => void;
+
+  // Adaptive front door. These are apertures over the same architecture, not
+  // separate products; switching never clears Workbench navigation state.
+  experienceMode: ExperienceMode;
+  overviewDirection: OverviewDirection;
+  startView: StartView;
+  workbenchDensity: WorkbenchDensity;
+  rememberNavigation: boolean;
+  semanticLevel: SemanticLevel;
+  overviewHandoff: boolean;
+  trustOpen: boolean;
+  preferencesOpen: boolean;
+  setExperienceMode: (mode: ExperienceMode) => void;
+  setOverviewDirection: (direction: OverviewDirection) => void;
+  setStartView: (view: StartView) => void;
+  setWorkbenchDensity: (density: WorkbenchDensity) => void;
+  setRememberNavigation: (remember: boolean) => void;
+  setSemanticLevel: (level: SemanticLevel) => void;
+  setTrustOpen: (open: boolean) => void;
+  setPreferencesOpen: (open: boolean) => void;
 
   // Navigation
   selectedComponentId: string | null;
@@ -269,6 +373,7 @@ interface ArchStore {
 
   // Theme
   darkMode: boolean;
+  theme: ThemeName;
   enhancedFrames: boolean;
 
   // Mobile UI
@@ -306,6 +411,7 @@ interface ArchStore {
   setSearchQuery: (query: string) => void;
 
   toggleDarkMode: () => void;
+  setTheme: (theme: ThemeName) => void;
   toggleEnhancedFrames: () => void;
 
   // Review actions
@@ -738,6 +844,7 @@ function computeDrillLevelView(
   drillLevel: string | null,
   nodeBudget: number,
   relationships: Relationship[],
+  focusId: string | null,
 ): { shown: Component[]; aggregates: AggregateNode[] } {
   const shown: Component[] = [];
   const hiddenByType: Record<string, Component[]> = {};
@@ -762,10 +869,18 @@ function computeDrillLevelView(
   const others = candidates.filter((c) => !isHeroType(c.type));
   // The same ordering the double-tap Read snap uses to pick what to frame
   // (utils/importance), so what is shown and what is framed cannot drift.
-  others.sort((a, b) => compareByImportance(a, b, degree));
+  others.sort((a, b) => {
+    // A deep link, search result, or guided route names a specific identity.
+    // Ranking may decide its neighbors, never whether the named answer exists
+    // on the canvas at all.
+    if (a.id === focusId) return -1;
+    if (b.id === focusId) return 1;
+    return compareByImportance(a, b, degree);
+  });
 
   shown.push(...heroes);
-  const room = Math.max(0, nodeBudget - heroes.length);
+  const focusedNonHero = focusId ? others.some((component) => component.id === focusId) : false;
+  const room = Math.max(focusedNonHero ? 1 : 0, nodeBudget - heroes.length);
   for (const [i, c] of others.entries()) {
     if (i < room) shown.push(c);
     else (hiddenByType[c.type] ??= []).push(c);
@@ -793,6 +908,7 @@ function drillView(
   architecture: Architecture,
   drillLevel: string | null,
   nodeBudget: number,
+  focusId: string | null,
 ): { shown: Component[]; aggregates: AggregateNode[] } {
   if (!drillLevel) {
     const shown = flattenTopLevel(architecture.components, architecture.relationships)
@@ -805,6 +921,7 @@ function drillView(
   const promoted = promoteDrillChildren(children);
   return computeDrillLevelView(
     promoted, drillLevel, nodeBudget, architecture.relationships,
+    focusId,
   );
 }
 
@@ -839,7 +956,7 @@ const LAYOUT_SPREAD = 1.75;
  * The hard ceiling on nodes handed to graph layout, whatever a lens returns.
  *
  * Layout cost is superlinear in node and edge count, and elk will happily
- * accept a graph it can never finish. Measured on the VS Code projection: the
+ * accept a graph it can never finish. Measured on the private large-repository validation corpus projection: the
  * Rules lens fed 194 owner components and 2,892 edges into layout, which pinned
  * the browser at 100% CPU indefinitely. The app never painted at all, not the
  * panel and not even the tree beside it. Every other lens entered in under
@@ -996,12 +1113,92 @@ function findOrCreateConcernSet(get: () => ArchStore, concernId: string): string
   return get().createSetFromConcern(concernId);
 }
 
+const initialExperiencePreferences = getExperiencePreferences();
+
 export const useArchStore = create<ArchStore>((set, get) => ({
   architecture: null,
   loading: true,
   error: null,
   publication: null,
   setPublication: (publication) => set({ publication }),
+
+  experienceMode: initialExperienceMode(initialExperiencePreferences),
+  overviewDirection: initialExperiencePreferences.overviewDirection,
+  startView: initialExperiencePreferences.startView,
+  workbenchDensity: initialExperiencePreferences.workbenchDensity,
+  rememberNavigation: initialExperiencePreferences.rememberNavigation,
+  semanticLevel: "system",
+  overviewHandoff: false,
+  trustOpen: false,
+  preferencesOpen: false,
+  setExperienceMode: (mode) => {
+    const state = get();
+    if (state.rememberNavigation) {
+      saveExperiencePreferences({
+        version: 1,
+        startView: state.startView,
+        overviewDirection: state.overviewDirection,
+        workbenchDensity: state.workbenchDensity,
+        rememberNavigation: state.rememberNavigation,
+        lastMode: mode,
+      });
+    }
+    set({
+      experienceMode: mode,
+      overviewHandoff: state.experienceMode === "overview" && mode === "workbench",
+    });
+  },
+  setOverviewDirection: (overviewDirection) => {
+    const state = get();
+    saveExperiencePreferences({
+      version: 1,
+      startView: state.startView,
+      overviewDirection,
+      workbenchDensity: state.workbenchDensity,
+      rememberNavigation: state.rememberNavigation,
+      lastMode: state.experienceMode,
+    });
+    set({ overviewDirection });
+  },
+  setStartView: (startView) => {
+    const state = get();
+    saveExperiencePreferences({
+      version: 1,
+      startView,
+      overviewDirection: state.overviewDirection,
+      workbenchDensity: state.workbenchDensity,
+      rememberNavigation: state.rememberNavigation,
+      lastMode: state.experienceMode,
+    });
+    set({ startView });
+  },
+  setWorkbenchDensity: (workbenchDensity) => {
+    const state = get();
+    saveExperiencePreferences({
+      version: 1,
+      startView: state.startView,
+      overviewDirection: state.overviewDirection,
+      workbenchDensity,
+      rememberNavigation: state.rememberNavigation,
+      lastMode: state.experienceMode,
+    });
+    set({ workbenchDensity });
+  },
+  setRememberNavigation: (rememberNavigation) => {
+    const state = get();
+    saveExperiencePreferences({
+      version: 1,
+      startView: state.startView,
+      overviewDirection: state.overviewDirection,
+      workbenchDensity: state.workbenchDensity,
+      rememberNavigation,
+      lastMode: state.experienceMode,
+    });
+    set({ rememberNavigation });
+  },
+  setSemanticLevel: (semanticLevel) => set({ semanticLevel }),
+  setTrustOpen: (trustOpen) => set({ trustOpen }),
+  setPreferencesOpen: (preferencesOpen) => set({ preferencesOpen }),
 
   selectedComponentId: null,
   breadcrumbs: [],
@@ -1024,6 +1221,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   searchQuery: "",
 
   darkMode: getStoredDarkMode(),
+  theme: getStoredTheme(),
   enhancedFrames: getStoredEnhancedFrames(),
 
   componentDetailCache: {},
@@ -1459,8 +1657,23 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   toggleDarkMode: () => set((s) => {
     const newValue = !s.darkMode;
     saveStoredDarkMode(newValue);
+    applyThemeToDocument(s.theme, newValue);
     return { darkMode: newValue };
   }),
+  setTheme: (theme) => {
+    saveStoredTheme(theme);
+    // Move to the variant the theme was drawn in. Signal is a control room and
+    // is conceived dark; Ledger and Atlas are paper and parchment and are
+    // conceived light. Picking a dress and staying in the previous theme's
+    // time of day is why a paper theme can look like a recoloured Signal.
+    // The appearance control still overrides, and the choice is remembered.
+    const nextDark = THEMES[theme].defaultDark;
+    saveStoredDarkMode(nextDark);
+    // Synchronously, before React commits: the canvas resolves its grid colour
+    // by reading this off the root, and its effect runs before App's.
+    applyThemeToDocument(theme, nextDark);
+    set({ theme, darkMode: nextDark });
+  },
   toggleEnhancedFrames: () => set((s) => {
     const newValue = !s.enhancedFrames;
     saveStoredEnhancedFrames(newValue);
@@ -2025,7 +2238,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   getAggregateNodes: () => {
     const { architecture, drillLevel } = get();
     if (!architecture) return [];
-    return drillView(architecture, drillLevel, get().nodeBudget).aggregates;
+    return drillView(architecture, drillLevel, get().nodeBudget, get().selectedComponentId).aggregates;
   },
 
   loadCoverageRows: async () => {
@@ -2356,7 +2569,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     // onto the canvas; they are browsed as a ranked list in the panel, so the
     // canvas can never degrade into unreadable specks. Nothing is ever hidden
     // without a visible, counted trace.
-    const { shown } = drillView(architecture, drillLevel, get().nodeBudget);
+    const { shown } = drillView(architecture, drillLevel, get().nodeBudget, get().selectedComponentId);
     return shown;
   },
 

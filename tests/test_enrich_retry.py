@@ -138,6 +138,26 @@ def test_structured_status_wins_over_free_text_marker():
     assert classify_outcome(r) is RetryDecision.DETERMINISTIC
 
 
+def test_subscription_capacity_stop_is_not_retried_even_when_reported_as_429():
+    r = InvokeResult(
+        ok=False,
+        text="",
+        error="claude exited 1: You've hit your session limit · resets 5pm",
+        status_code=429,
+    )
+    assert classify_outcome(r) is RetryDecision.DETERMINISTIC
+    base = SequenceBase([r, _ok("must not be reached")])
+    clock = FakeClock()
+    inv = RetryingInvoker(
+        base, RetryPolicy(max_attempts=4),
+        sleep=clock.sleep, monotonic=clock.monotonic,
+    )
+    result = inv("prompt")
+    assert not result.ok
+    assert base.calls == 1
+    assert clock.sleeps == []
+
+
 def test_no_false_positive_on_numeric_token_count():
     # A token count of 1500 must NOT be read as a 500 server error (phrase
     # markers only, no bare 3-digit numbers).
@@ -301,6 +321,15 @@ class TestSystemicFailureCircuit:
         assert not m.under()
         assert "systemic failure circuit open" in m.stop_reason()
         assert "authenticate" in m.stop_reason()
+
+    def test_explicit_capacity_reset_opens_the_circuit_immediately(self):
+        m = self._meter()
+        m.note_result(
+            False,
+            "claude exited 1: You've hit your session limit · resets 5pm",
+        )
+        assert not m.under()
+        assert "session limit" in m.stop_reason()
 
     def test_distinct_failures_never_trip_it(self):
         """Interleaved different errors are a flaky transport, not a dead one."""

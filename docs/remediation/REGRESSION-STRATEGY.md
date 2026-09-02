@@ -79,7 +79,7 @@ demo strength once the harness is proven (FastAPI). The research's alternative
 (FastAPI first for breadth) is defensible; the owner decides the order, but the
 pairing and the FastAPI pin are the firm recommendations.
 
-Keep vscode as a SEPARATE scale proof (3.47M lines is a scale benchmark, not a
+Keep large-repository-validation as a SEPARATE scale proof (3.47M lines is a scale benchmark, not a
 daily-diff corpus). Django is deliberately excluded here (the richest benchmark
 repo but 500k+ LOC, too large for a frequent full diff). Add a respected
 TypeScript repo later for language diversity (NestJS is the strongest fit on the

@@ -118,7 +118,7 @@ export function subscribeShardLoadState(
  * query alone. So a query typed before the shards landed was answered once,
  * against a partial index, and never recomputed. Components and files were
  * unaffected because they come from the manifest and are indexed at boot; all
- * 153,231 VS Code symbols live only in the shards, so symbol search returned
+ * 153,231 private large-repository validation corpus symbols live only in the shards, so symbol search returned
  * "No results" permanently.
  *
  * It was invisible on a small subject, where the shards land in milliseconds.

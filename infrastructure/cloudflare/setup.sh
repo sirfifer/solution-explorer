@@ -14,7 +14,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKER_DIR="$SCRIPT_DIR/worker"
 
-echo "=== Solution Explorer: Cloudflare Infrastructure Setup ==="
+echo "=== SysCorpus: Cloudflare Infrastructure Setup ==="
 echo ""
 
 cd "$WORKER_DIR"

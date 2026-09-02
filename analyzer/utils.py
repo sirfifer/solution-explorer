@@ -209,9 +209,11 @@ def _is_generated_projection(raw: bytes) -> bool:
     The tool emits its own datasets (the monolith ``architecture.json`` and the
     split ``manifest.json`` and detail shards). When such a dataset is
     committed into a repository the stats counted the tool's own output as
-    source. The check requires the generator keys the projection always writes
-    (``analyzer_version``, ``generated_at``, ``components``) as TOP-LEVEL keys
-    of the JSON object, via a string-and-depth-aware scan of the head window.
+    source. The check requires distinctive generator keys as TOP-LEVEL keys of
+    the JSON object, via a string-and-depth-aware scan of the head window. A
+    split manifest may place ``generated_at`` after a very large components
+    array, so its early ``component_detail_index`` key is accepted as the split
+    signature instead of reading megabytes of generated output.
     A user file that merely mentions those names nested or as values is NOT a
     projection and stays parsed (adversarial-review fix: the previous substring
     check silently pruned such files while claiming full coverage).
@@ -220,7 +222,9 @@ def _is_generated_projection(raw: bytes) -> bool:
     if not head.startswith(b"{"):
         return False
     keys = _top_level_keys(head)
-    return {"analyzer_version", "generated_at", "components"} <= keys
+    monolith = {"analyzer_version", "generated_at", "components"} <= keys
+    split = {"analyzer_version", "component_detail_index", "components"} <= keys
+    return monolith or split
 
 
 def _is_generated_dataset_dir(dirpath: str) -> bool:
@@ -230,9 +234,10 @@ def _is_generated_dataset_dir(dirpath: str) -> bool:
     sitting directly in the directory AND the split-output shard shape beside
     it (a ``data/`` or ``search/`` directory). Requiring the shard shape is the
     adversarial-review fix: a lone lookalike manifest must never prune a
-    directory of real user source. The whole subtree is generated output, so
-    it is pruned and ledgered as one ``excluded:skipped_directory`` row. Only
-    the manifest head is read.
+    directory of real user source. The whole subtree is generated output.
+    Enumeration does not parse it as product source, but records every
+    contained file as ``excluded:generated`` so repository accounting remains
+    file-complete. Only the manifest head is read to classify the directory.
     """
     d = Path(dirpath)
     if not ((d / "data").is_dir() or (d / "search").is_dir()):

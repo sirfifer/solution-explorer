@@ -4,9 +4,49 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Architecture Visualizer</title>
+    <!--
+      Theme faces: Libre Franklin + IBM Plex Mono (Ledger), Fraunces + Alegreya
+      (Atlas), Baloo 2 + Courier Prime (Fold). Signal uses the system stack and
+      needs none of them.
+
+      Loaded with display=swap and a real fallback stack behind every family in
+      themes.css, so a viewer opened offline or behind a proxy renders in the
+      fallback immediately rather than waiting on a face it cannot fetch.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Alegreya:ital,wght@0,400;0,500;0,700;1,400&family=Baloo+2:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏗️</text></svg>" />
   </head>
-  <body class="bg-zinc-950 text-zinc-100 antialiased">
+  <body class="bg-[var(--se-page)] text-zinc-100 antialiased">
+    <!--
+      Apply the stored dress and appearance before first paint. React sets both
+      from the store in an effect, which runs after the first frame; without
+      this, opening the viewer on Ledger or Atlas flashes Signal's near-black
+      first. Reads only, and falls through to the defaults on any failure.
+    -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("arch-theme");
+          if (t === "ledger" || t === "atlas" || t === "fold" || t === "signal") {
+            document.documentElement.dataset.theme = t;
+          }
+          var d = localStorage.getItem("arch-dark-mode");
+          var dark = d === null ? true : JSON.parse(d);
+          document.documentElement.classList.toggle("dark", !!dark);
+          document.documentElement.classList.toggle("light", !dark);
+          document.body.className = dark
+            ? "bg-[var(--se-page)] text-zinc-100 antialiased"
+            : "bg-[var(--se-page)] text-zinc-900 antialiased";
+        } catch (e) {
+          /* defaults in the markup already cover this */
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

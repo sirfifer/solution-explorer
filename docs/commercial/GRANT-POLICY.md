@@ -1,6 +1,6 @@
 # Grant policy
 
-How requests for free or discounted use of Solution Explorer are decided. This
+How requests for free or discounted use of SysCorpus are decided. This
 is guidance for the copyright holder, published so that the decisions look
 consistent rather than arbitrary. It is not a license and creates no
 entitlement. See [COMMERCIAL-LICENSE.md](../../COMMERCIAL-LICENSE.md) for the
@@ -55,7 +55,7 @@ negotiation, no fee.
 - Consultancies and agencies using it in billable client work.
 - Embedding in a product or service sold to others. This is an OEM
   conversation, not a grant.
-- Anyone building a substitute for Solution Explorer.
+- Anyone building a substitute for SysCorpus.
 - Anyone who has already been using it commercially without a license and is
   asking retroactively to avoid paying rather than to come into compliance.
 

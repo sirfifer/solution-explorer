@@ -29,10 +29,11 @@ rules are ordered and the first match wins, so more specific contexts (a file
 inside a build-output bundle) win over broader ones (its extension).
 
 Pruned-directory ruling (matches the coverage ledger, TARGET-ARCHITECTURE.md
-section 7): an excluded directory is ONE ledger row standing for everything
-beneath it. This module classifies that single row honestly as what the ledger
-knows and never fabricates per-file counts under it, so a pruned ``node_modules``
-contributes one row to the vendored group, not thousands.
+section 7): an ordinary excluded directory is ONE ledger row standing for
+everything beneath it. Recognized generated SysCorpus projections are
+the exception: their files are cheap to enumerate and each receives an
+``excluded:generated`` row, preserving exact repository accounting without
+letting serialized projection data impersonate product source.
 """
 
 from __future__ import annotations
@@ -215,7 +216,7 @@ CATEGORY_META: dict[str, dict] = {
         "flags": {"security_sensitive": False, "likely_unwanted": False, "gitignore_candidate": False},
     },
     "tool_state": {
-        "label": "Solution Explorer state",
+        "label": "SysCorpus state",
         "explanation": "The tool's own store and learned rules for this repo, kept under .solution-explorer. Accounted as one row and never scanned as source.",
         "recommendation": "Keep. The rules subdirectory travels with the repo; the store stays local.",
         "flags": {"security_sensitive": False, "likely_unwanted": False, "gitignore_candidate": False},

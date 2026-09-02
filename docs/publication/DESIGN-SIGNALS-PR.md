@@ -223,7 +223,7 @@ A separate session verified this branch before shipping, treating everything
 above as claims. What held: the full posture reproduced exactly (pytest,
 ruff, both corpora, tsc, eslint, and the vitest failing-file set was diffed
 against a fresh main-checkout baseline, not against this file). The
-MCP-versus-projection agreement held on the real VS Code store, not just the
+MCP-versus-projection agreement held on the real private large-repository validation corpus store, not just the
 polyglot fixture. What did not hold is recorded here, because the next reader
 should trust the round, not the original claims.
 
@@ -234,7 +234,7 @@ main so those fixes survive; a naive merge of the original branch would have
 silently reverted all three.
 
 **The derivation contradicted its own method caveat, and the vet run caught
-it on VS Code.** The caveat promises "static import and declared
+it on private large-repository validation corpus.** The caveat promises "static import and declared
 communication edges only"; the graph consumed every edge type at every
 confidence tier, including 2,621 inferred name-matched `uses` edges and 62
 inferred imports. Some were demonstrably false (a TypeScript `util` import
@@ -242,7 +242,7 @@ resolved to the Rust CLI's util component; `electron` and
 `@vscode/prompt-tsx` resolved to unrelated local components), and they merged
 three real cycles of 119, 23 and 20 members into one reported 209-member
 cycle. The dependency graph now admits certain imports, declared structural
-edges and communication edges only (`is_dependency_edge`); on VS Code the top
+edges and communication edges only (`is_dependency_edge`); on private large-repository validation corpus the top
 finding is now a real 119-part cycle. Boundary strength still classifies
 every seam. The bare-name resolver producing those false edges is a
 pre-existing analyzer behavior and is follow-on 10 below.

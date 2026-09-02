@@ -692,8 +692,8 @@ def build_state() -> dict:
         }
 
     # Runs are keyed by every name they can honestly be known by. A registry
-    # calls the demo "Visual Studio Code" while a harness records the manifest
-    # name "vscode", so a subject-only join quietly reported "never checked" for
+    # calls the demo "private large-repository validation corpus" while a harness records the manifest
+    # name "large-repository-validation", so a subject-only join quietly reported "never checked" for
     # a demo that had in fact just been checked. The data_dir is the one
     # unambiguous link, since it is the very directory the run read.
     by_key: dict[str, dict] = {}

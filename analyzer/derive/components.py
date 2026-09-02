@@ -230,10 +230,10 @@ def associate_files(d: Deriver) -> None:
 
     for frow in sorted(d.view.files, key=lambda f: f["path"]):
         rel = frow["path"]
-        if frow.get("parse_status") == "ci_config":
-            # Store-internal rows cached for the root-bounded CI check; the
-            # old engine excludes these paths from the architecture's files.
-            continue
+        # Root-bounded CI files are intentionally cached without a language
+        # parser, but they are still real repository files. Keep them in the
+        # architecture and assign them to the nearest component (normally the
+        # repository root) so ownership and search never silently lose them.
         if d._is_under_vendored(rel):
             continue
         lang = frow["language"] or ""

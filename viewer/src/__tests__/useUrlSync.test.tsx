@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { renderHook, act, cleanup } from "@testing-library/react";
 import { useArchStore } from "../store";
 import { useUrlSync } from "../hooks/useUrlSync";
-import { parseUrlState, pushUrlState } from "../utils/urlState";
+import { interfaceHref, parseUrlState, pushUrlState } from "../utils/urlState";
 import { registerLens, type LensDefinition } from "../lenses";
 import type { Architecture, Component } from "../types";
 
@@ -233,6 +233,13 @@ describe("useUrlSync lens state (P6-1)", () => {
 });
 
 describe("data param survival (M1 adversarial-review blocker)", () => {
+  it("changes only mode when constructing a side-by-side interface URL", () => {
+    window.history.replaceState({}, "", "/demo?data=.%2Farchitecture&component=app&future=kept&mode=overview#focus");
+    expect(interfaceHref("workbench")).toBe(
+      "/demo?data=.%2Farchitecture&component=app&future=kept&mode=workbench#focus",
+    );
+  });
+
   it("pushUrlState preserves ?data= so member views survive navigation", () => {
     window.history.replaceState({}, "", "/?data=./architecture/members/web");
     pushUrlState({ component: "app", tab: null, drill: null, lens: "structure" } as never);
@@ -240,6 +247,16 @@ describe("data param survival (M1 adversarial-review blocker)", () => {
     expect(params.get("data")).toBe("./architecture/members/web");
     expect(params.get("component")).toBe("app");
     window.history.replaceState({}, "", "/");
+  });
+
+  it("preserves host and future parameters during ordinary URL rewrites", () => {
+    window.history.replaceState({}, "", "/?embed=compare&future=kept&mode=overview");
+    pushUrlState({ mode: "workbench", component: "app" });
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get("mode")).toBe("workbench");
+    expect(params.get("component")).toBe("app");
+    expect(params.get("embed")).toBe("compare");
+    expect(params.get("future")).toBe("kept");
   });
 
   it("pushUrlState emits no data param outside a member view", () => {

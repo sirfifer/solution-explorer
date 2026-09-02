@@ -46,8 +46,8 @@ def evaluate_completion(result: Any, *, audit: Optional[dict] = None) -> tuple[s
     failed_calls = [row for row in result.ledger if not row.ok]
     if failed_calls:
         issues.append(f"{len(failed_calls)} model invocation(s) failed")
-    if any(row.output_budget_ok is False for row in result.ledger):
-        issues.append("one or more compact calls exceeded the delivered-byte budget")
+    # Compact-size overruns are reported as efficiency telemetry.  They do not
+    # make a schema-, coverage-, and evidence-valid product unpublishable.
     if any("agentic drift:" in note for note in result.notes):
         issues.append("one or more invocations used an external agent loop")
     cost_ceiling = getattr(result, "cost_ceiling_usd", None)

@@ -32,6 +32,15 @@ export function useUrlSync(): void {
     const urlState = parseUrlState();
     const store = useArchStore.getState();
 
+    const hasWorkbenchIntent = Boolean(
+      urlState.lens || urlState.component || urlState.drill || urlState.file ||
+      urlState.flow || urlState.capability || urlState.entity || urlState.rule ||
+      urlState.finding,
+    );
+    if (urlState.mode) store.setExperienceMode(urlState.mode);
+    else if (hasWorkbenchIntent) store.setExperienceMode("workbench");
+    if (urlState.level) store.setSemanticLevel(urlState.level);
+
     // Restore the lens first so the graph selects the right nodes/edges before
     // drill/selection are applied (P6-1). Unknown/unavailable ids fall back to
     // Structure inside setLens.
@@ -119,8 +128,12 @@ export function useUrlSync(): void {
       const ruleChanged = state.selectedRuleId !== prev.selectedRuleId;
       const findingChanged =
         state.selectedDesignFindingId !== prev.selectedDesignFindingId;
-      if (selChanged || drillChanged || lensChanged || flowChanged || capEntityChanged || ruleChanged || findingChanged) {
+      const experienceChanged = state.experienceMode !== prev.experienceMode;
+      const levelChanged = state.semanticLevel !== prev.semanticLevel;
+      if (selChanged || drillChanged || lensChanged || flowChanged || capEntityChanged || ruleChanged || findingChanged || experienceChanged || levelChanged) {
         const update = {
+          mode: state.experienceMode,
+          level: state.semanticLevel,
           component: state.selectedComponentId || undefined,
           drill: state.drillLevel || undefined,
           // Carry the active lens so a lens switch is shareable and survives
@@ -164,6 +177,13 @@ export function useUrlSync(): void {
       applyingPopStateRef.current = true;
       try {
         // Restore the lens from the target URL (absent means the default).
+        const hasWorkbenchIntent = Boolean(
+          urlState.lens || urlState.component || urlState.drill || urlState.file ||
+          urlState.flow || urlState.capability || urlState.entity || urlState.rule ||
+          urlState.finding,
+        );
+        store.setExperienceMode(urlState.mode ?? (hasWorkbenchIntent ? "workbench" : "overview"));
+        store.setSemanticLevel(urlState.level ?? "system");
         store.setLens(urlState.lens ?? "structure");
 
         // Flow follow state (P6-2): restore or clear it to match the target URL,

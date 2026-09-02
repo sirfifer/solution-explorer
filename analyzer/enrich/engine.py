@@ -21,6 +21,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -47,6 +48,11 @@ from .partition import Partition, PartitionPlan, flatten_components, plan_partit
 from .prompts import StoreFacts, build_architecture_prompt, build_partition_prompt
 from .provenance import Clock, current_commit_sha, iso_now, stamp_enrichment
 from .staleness import enrichment_staleness
+from .subject_identity import (
+    SUBJECT_IDENTITY_CONTRACT_VERSION,
+    build_subject_identity,
+    subject_identity_errors,
+)
 
 __all__ = [
     "EnhanceConfig",
@@ -62,6 +68,7 @@ __all__ = [
     "KNOWN_EFFORTS",
     "DEFAULT_MAX_PARALLEL",
     "DEFAULT_MAX_COST_USD",
+    "CACHE_POLICIES",
 ]
 
 DEFAULT_MODEL = "sonnet"
@@ -173,6 +180,10 @@ def _recover_transcript_usage(session_id: str) -> tuple[dict, dict]:
     usage = {
         "input_tokens": 0, "cache_creation_input_tokens": 0,
         "cache_read_input_tokens": 0, "output_tokens": 0,
+        "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0,
+        },
     }
     by_model: dict[str, dict] = {}
     try:
@@ -212,6 +223,18 @@ def _recover_transcript_usage(session_id: str) -> tuple[dict, dict]:
                 value = int(block.get(source) or 0)
                 usage[aggregate] += value
                 model_block[model_key] += value
+            creation = block.get("cache_creation") or {}
+            if isinstance(creation, dict):
+                for ttl_key in (
+                    "ephemeral_1h_input_tokens",
+                    "ephemeral_5m_input_tokens",
+                ):
+                    try:
+                        usage["cache_creation"][ttl_key] += int(
+                            creation.get(ttl_key) or 0
+                        )
+                    except (TypeError, ValueError):
+                        pass
             stop_reason = message.get("stop_reason") or stop_reason
         if not seen:
             return {}, {}
@@ -251,12 +274,41 @@ class ClaudeCliInvoker:
         timeout: int = 600,
         effort: str = DEFAULT_EFFORT,
         max_budget_usd: Optional[float] = None,
+        cache_policy: str = "provider-default",
     ):
         self.model = model
         self.claude_bin = claude_bin
         self.timeout = timeout
         self.effort = effort
         self.max_budget_usd = max_budget_usd
+        self.set_cache_policy(cache_policy)
+
+    def set_cache_policy(self, value: str) -> None:
+        """Select a deterministic Claude Code prompt-cache policy.
+
+        The policy is applied to the child environment for every attempt.  It
+        never mutates ``os.environ`` and therefore cannot leak from a probe into
+        the operator's shell or a concurrent session.
+        """
+        policy = str(value or "provider-default").strip().lower()
+        if policy not in CACHE_POLICIES:
+            raise ValueError(
+                f"unknown cache policy {value!r}; expected one of "
+                + ", ".join(sorted(CACHE_POLICIES))
+            )
+        self.cache_policy = policy
+
+    def _child_env(self) -> dict[str, str]:
+        env = dict(os.environ)
+        for key in _CACHE_ENV_KEYS:
+            env.pop(key, None)
+        if self.cache_policy == "5m":
+            env["FORCE_PROMPT_CACHING_5M"] = "1"
+        elif self.cache_policy == "1h":
+            env["ENABLE_PROMPT_CACHING_1H"] = "1"
+        elif self.cache_policy == "off":
+            env["DISABLE_PROMPT_CACHING"] = "1"
+        return env
 
     def set_max_budget_usd(self, value: Optional[float]) -> None:
         """Set the CLI's best-effort allowance for the next invocation.
@@ -318,10 +370,11 @@ class ClaudeCliInvoker:
             from .prompts import split_cached_prompt
 
             prefix, user_prompt = split_cached_prompt(prompt)
+            child_env = self._child_env()
             if prefix is None:
                 proc = subprocess.run(
                     argv, input=user_prompt, capture_output=True, text=True,
-                    timeout=self.timeout,
+                    timeout=self.timeout, env=child_env,
                 )
             else:
                 prefix_chars = len(prefix)
@@ -344,7 +397,7 @@ class ClaudeCliInvoker:
                             "--max-turns", "1",
                         ],
                         input=user_prompt, capture_output=True, text=True,
-                        timeout=self.timeout,
+                        timeout=self.timeout, env=child_env,
                     )
         except (OSError, subprocess.SubprocessError) as exc:
             # Spawn failure or subprocess timeout: a bounded transient (R2).
@@ -558,6 +611,25 @@ def _envelope_error(stdout: str) -> tuple[Optional[int], Optional[str]]:
 # path); it does not touch the deterministic analyzer output or the golden legs.
 DEFAULT_MAX_COST_USD = 10.0
 
+# Prompt-cache policy is an invocation property, not a machine setting.  The
+# enrichment runner creates hundreds of independent CLI processes; inheriting a
+# user's cache environment would make two nominally identical runs bill
+# differently.  ``provider-default`` deliberately clears every known override
+# and lets Claude Code choose from the authentication mode.  The ladder's
+# higher-level ``adaptive`` policy resolves to one of these concrete values
+# before an invoker is built.
+CACHE_POLICIES = frozenset({"provider-default", "1h", "5m", "off"})
+_CACHE_ENV_KEYS = (
+    "FORCE_PROMPT_CACHING_5M",
+    "ENABLE_PROMPT_CACHING_1H",
+    "CLAUDE_CODE_PROMPT_CACHE_TTL",
+    "DISABLE_PROMPT_CACHING",
+    "DISABLE_PROMPT_CACHING_HAIKU",
+    "DISABLE_PROMPT_CACHING_SONNET",
+    "DISABLE_PROMPT_CACHING_OPUS",
+    "DISABLE_PROMPT_CACHING_FABLE",
+)
+
 
 @dataclass
 class EnhanceConfig:
@@ -579,6 +651,10 @@ class EnhanceConfig:
     # explicitly injected invoker is used as-is, so tests wrap their own).
     max_cost_usd: Optional[float] = DEFAULT_MAX_COST_USD
     retry_policy: Optional[RetryPolicy] = None
+    # Classic enhancement consists of independent one-shot partitions.  Under
+    # ``adaptive`` those calls run uncached; explicit values exist for the same
+    # controlled A/B probes as the ladder CLI.
+    cache_policy: str = "adaptive"
 
 
 @dataclass
@@ -887,7 +963,7 @@ def _clean_relationship_payload(scorer: Any, ai: dict, clock: Clock) -> dict:
 _ARCH_ALLOWED = frozenset({
     "summary", "data_flow_narrative", "component_groups", "recent_changes_summary",
     "observations", "tech_diversity", "test_health_summary",
-    "ai_enhanced_at", "ai_enhance_version",
+    "ai_enhanced_at", "ai_enhance_version", "subject_identity_contract_version",
 })
 
 
@@ -895,16 +971,21 @@ def _clean_architecture_payload(ai: dict, clock: Clock) -> dict:
     out = {k: v for k, v in ai.items() if k in _ARCH_ALLOWED}
     out["ai_enhanced_at"] = clock()
     out["ai_enhance_version"] = 2
+    out["subject_identity_contract_version"] = SUBJECT_IDENTITY_CONTRACT_VERSION
     return out
 
 
-def _validate_architecture_payload(scorer: Any, ai: dict) -> list[str]:
+def _validate_architecture_payload(
+    scorer: Any, ai: dict, *, subject_identity: Optional[dict] = None
+) -> list[str]:
     errors = []
     for field_name in ("summary", "data_flow_narrative"):
         if not ai.get(field_name):
             errors.append(f"Root ai_enhance: missing '{field_name}'")
     for idx, obs in enumerate(ai.get("observations", []) or []):
         errors.extend(scorer.validate_observation(obs, idx))
+    if subject_identity is not None:
+        errors.extend(subject_identity_errors(ai, subject_identity))
     return errors
 
 
@@ -949,6 +1030,15 @@ def _select_update_targets(
         (r for r in rows if r["target_kind"] == "architecture"), None
     )
     arch_stale = arch_row is None or arch_row.get("stale") is not False
+    if arch_row is not None:
+        payload = arch_row.get("payload") or {}
+        identity = build_subject_identity(arch)
+        if (
+            payload.get("subject_identity_contract_version")
+            != SUBJECT_IDENTITY_CONTRACT_VERSION
+            or subject_identity_errors(payload, identity)
+        ):
+            arch_stale = True
     regenerate_arch = bool(targets) or arch_stale
     return targets, regenerate_arch
 
@@ -1053,7 +1143,15 @@ def run_enhance(
         from .retry import RetryingInvoker, RetryPolicy
 
         policy = config.retry_policy or RetryPolicy()
-        invoker = RetryingInvoker(ClaudeCliInvoker(model=config.model), policy=policy)
+        concrete_cache_policy = (
+            "off" if config.cache_policy == "adaptive" else config.cache_policy
+        )
+        invoker = RetryingInvoker(
+            ClaudeCliInvoker(
+                model=config.model, cache_policy=concrete_cache_policy
+            ),
+            policy=policy,
+        )
 
     store = FactStore(str(config.store_path))
     try:
@@ -1069,6 +1167,10 @@ def run_enhance(
             store.rules(),
             arch.get("relationships", []),
             root=config.root,
+        )
+        commit_sha = current_commit_sha(str(config.root))
+        subject_identity = build_subject_identity(
+            arch, root=config.root, commit_sha=commit_sha
         )
 
         include_ids: Optional[set[str]] = None
@@ -1119,7 +1221,9 @@ def run_enhance(
                     "prompt_tokens_est": len(prompt) // 4,
                 })
             if regenerate_arch:
-                aprompt = build_architecture_prompt(facts)
+                aprompt = build_architecture_prompt(
+                    facts, subject_identity=subject_identity
+                )
                 report.plan_preview.append({
                     "id": "architecture",
                     "prompt_chars": len(aprompt),
@@ -1221,7 +1325,6 @@ def run_enhance(
         # the partitions that already succeeded still stamp. _enhance_architecture
         # already handles invoke/validation failures in-band (returns None); this
         # only adds the bulkhead for an unexpected raise. Retry/cost untouched.
-        commit_sha = current_commit_sha(str(config.root))
         arch_payload: Optional[dict] = None
         if regenerate_arch and ceiling is not None and running_cost >= ceiling:
             # The ceiling was reached during the partitions; the architecture
@@ -1234,7 +1337,8 @@ def run_enhance(
         elif regenerate_arch:
             try:
                 arch_payload, arch_cost, arch_errs = _enhance_architecture(
-                    facts, scorer, invoker, clock
+                    facts, scorer, invoker, clock,
+                    subject_identity=subject_identity,
                 )
                 report.total_cost_usd += arch_cost
                 if arch_payload is None:
@@ -1291,9 +1395,15 @@ def run_enhance(
 
 
 def _enhance_architecture(
-    facts: StoreFacts, scorer: Any, invoker: Invoker, clock: Clock
+    facts: StoreFacts,
+    scorer: Any,
+    invoker: Invoker,
+    clock: Clock,
+    *,
+    subject_identity: Optional[dict] = None,
 ) -> tuple[Optional[dict], float, list[str]]:
-    prompt = build_architecture_prompt(facts)
+    identity = subject_identity or build_subject_identity(facts.arch)
+    prompt = build_architecture_prompt(facts, subject_identity=identity)
     cost = 0.0
     errors: list[str] = ["not attempted"]
     feedback = ""
@@ -1310,7 +1420,9 @@ def _enhance_architecture(
             feedback = "\n\nPREVIOUS ATTEMPT was not valid JSON. Return ONLY a JSON object."
             continue
         cleaned = _clean_architecture_payload(obj, clock)
-        errs = _validate_architecture_payload(scorer, cleaned)
+        errs = _validate_architecture_payload(
+            scorer, cleaned, subject_identity=identity
+        )
         if errs:
             errors = errs
             feedback = (

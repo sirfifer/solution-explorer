@@ -614,7 +614,7 @@ def _symbol_population(methods: int, functions: int, classes: int) -> list:
 def test_classes_without_methods_are_a_degraded_parser(projection: Path) -> None:
     """The regression test for a real incident.
 
-    A VS Code run was launched with an interpreter that had no tree-sitter, so
+    A private large-repository validation corpus run was launched with an interpreter that had no tree-sitter, so
     every TypeScript file fell back to the regex parser. The analyzer reported
     100% coverage and 0 gaps throughout, because every file genuinely WAS parsed.
     What no check noticed was that none of them was parsed well: 55 methods

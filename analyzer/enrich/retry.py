@@ -99,6 +99,22 @@ _TRANSIENT_MARKERS = (
     "server error", "internal error",
 )
 
+# Subscription-capacity stops are not ordinary 429s.  The provider has already
+# told us that no request can succeed until a named reset time, so retrying the
+# same call seconds later can only create more failed subprocesses.  Check this
+# before the structured-status branch because Claude may report the stop as 429.
+_CAPACITY_LIMIT_MARKERS = (
+    "session limit",
+    "weekly limit",
+    "usage limit",
+)
+
+
+def is_capacity_limit(error: Optional[str]) -> bool:
+    """True when the provider explicitly says capacity is unavailable until reset."""
+    low = str(error or "").lower()
+    return "reset" in low and any(marker in low for marker in _CAPACITY_LIMIT_MARKERS)
+
 
 def classify_outcome(result: InvokeResult) -> RetryDecision:
     """Classify one invoke outcome. Pure function, exhaustively tested.
@@ -112,6 +128,8 @@ def classify_outcome(result: InvokeResult) -> RetryDecision:
     err = result.error or ""
     # Parse failure: a well-formed run returned non-JSON. Never retried here.
     if err.startswith(PARSE_FAILURE_PREFIX):
+        return RetryDecision.DETERMINISTIC
+    if is_capacity_limit(err):
         return RetryDecision.DETERMINISTIC
     # Structured API status is the primary, unambiguous signal.
     if result.status_code is not None:
@@ -192,6 +210,17 @@ class RetryingInvoker:
         """Bound the whole logical invoke, including all retry attempts."""
         self.max_budget_usd = value
 
+    def set_cache_policy(self, value: str) -> None:
+        """Forward a transport policy through the retry wrapper.
+
+        Cache policy must apply to every attempt of one logical call; setting it
+        only on the outer wrapper would make retries silently fall back to the
+        operator's ambient Claude Code default.
+        """
+        setter = getattr(self._base, "set_cache_policy", None)
+        if callable(setter):
+            setter(value)
+
     def _full_jitter(self, attempt: int) -> float:
         """Full-jitter backoff for a 1-based attempt index: uniform(0, cap)."""
         exp = self._policy.base_delay * (2 ** (attempt - 1))
@@ -246,4 +275,5 @@ __all__ = [
     "classify_outcome",
     "SPAWN_FAILURE_PREFIX",
     "PARSE_FAILURE_PREFIX",
+    "is_capacity_limit",
 ]

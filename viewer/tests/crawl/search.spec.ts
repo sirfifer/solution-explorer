@@ -137,7 +137,7 @@ test.describe("search", () => {
 
     // ONE cold load for the whole sweep, then stay in the app.
     //
-    // The first version reloaded the page for every target. On VS Code that
+    // The first version reloaded the page for every target. On private large-repository validation corpus that
     // meant re-fetching and re-indexing a 60 MB search index up to 45 times,
     // and the case ran past four minutes while measuring nothing anyone does:
     // a reader searches repeatedly within one loaded page, they do not reload
@@ -225,7 +225,7 @@ test.describe("search", () => {
         // Each kind lands on its OWN detail view, and asserting the component
         // panel for all three was simply wrong: a symbol result correctly opens
         // the symbol view, which is a different component with no
-        // data-component-id. That mistake reported 15 false failures on VS Code
+        // data-component-id. That mistake reported 15 false failures on private large-repository validation corpus
         // and briefly went on the record as a product defect. The lesson is that
         // a selector contract covering one of three detail kinds will be misused.
         const landedOn = async (): Promise<string> => {

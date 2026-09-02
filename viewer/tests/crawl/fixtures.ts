@@ -104,7 +104,7 @@ function queryFor(params: Record<string, string | number | undefined>): string {
  * COLD navigation: a real page load at a real URL, as a pasted deep link is.
  *
  * Use this where arriving from outside is the thing under test. It is the
- * honest way to check a deep link, and it is expensive by nature: on VS Code
+ * honest way to check a deep link, and it is expensive by nature: on private large-repository validation corpus
  * the app parses a 29 MB manifest on every load, so a sweep built entirely
  * out of cold loads is an hour-scale job.
  */

@@ -461,6 +461,10 @@ def _symbol_reference_edges(d: Deriver, add, content_ids: set) -> None:
       same file shows another relationship with that component (a
       non-common-name reference or a module import of it). Honest boundary
       recorded in TASKS.md.
+    - A Swift name defined in the source component is never resolved to a
+      same-named type in another component. With no per-name import evidence,
+      that is an intra-component reference or an ambiguity, not proof of a
+      cross-component dependency.
 
     Edges are aggregated so one edge carries the total reference count and up to
     :data:`_MAX_USES_EVIDENCE` file:line evidence rows. Emission is deterministic
@@ -503,10 +507,19 @@ def _symbol_reference_edges(d: Deriver, add, content_ids: set) -> None:
             if not name:
                 continue
             count = v.get("count") or 1
-            targets = defn.get(name)
-            if not targets:
+            all_targets = defn.get(name)
+            if not all_targets:
                 continue
-            targets = {t for t in targets if t != source_comp.id}
+            # Do not discard the local definition before assessing ambiguity.
+            # Doing so made a local Swift reference look uniquely external
+            # whenever one nested component happened to define the same name.
+            # Python/TypeScript/JavaScript can still select an external definer
+            # through their per-name import evidence below; Swift cannot.
+            if fi.language == "swift" and source_comp.id in all_targets:
+                if len(all_targets) > 1:
+                    d._uses_ambiguous_dropped += 1
+                continue
+            targets = {t for t in all_targets if t != source_comp.id}
             if not targets:
                 continue  # defined only in the same component: intra-component
             if len(targets) > 1:
@@ -711,20 +724,29 @@ def _driver_edges(d: Deriver, add, content_ids: set) -> None:
 
 
 def _external_services(d: Deriver, content_ids: set) -> None:
-    by_comp: dict = {}
+    by_comp: dict[str, dict[tuple[str, str, str], dict]] = {}
     for fi in d._all_files:
         comp = d._find_component_for_file(fi.path)
         if not comp or comp.id in content_ids:
             continue
-        for url, _ln in _url_signals(d, fi.path):
+        for url, line in _url_signals(d, fi.path):
             for domain, (service_name, category) in EXTERNAL_CLOUD_APIS.items():
                 if domain in url:
-                    by_comp.setdefault(comp.id, set()).add((service_name, category))
+                    parsed = urlsplit(url)
+                    scheme = parsed.scheme.lower() or "unknown"
+                    default_port = {"https": 443, "wss": 443, "http": 80, "ws": 80}.get(scheme)
+                    key = (service_name, category, scheme)
+                    by_comp.setdefault(comp.id, {}).setdefault(key, {
+                        "name": service_name,
+                        "category": category,
+                        "protocol": scheme,
+                        "port": parsed.port or default_port,
+                        "authentication": "not_observable",
+                        "evidence": {"file": fi.path, "line": line, "host": parsed.hostname or domain},
+                    })
     for comp in d._component_map.values():
         if comp.id in by_comp:
-            comp.external_services = [
-                {"name": n, "category": c} for n, c in sorted(by_comp[comp.id])
-            ]
+            comp.external_services = [by_comp[comp.id][key] for key in sorted(by_comp[comp.id])]
 
 
 def _combined_code(d: Deriver, comp_id: str, content_ids: set) -> str:

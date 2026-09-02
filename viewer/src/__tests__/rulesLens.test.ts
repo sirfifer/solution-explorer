@@ -62,6 +62,7 @@ function makeRulesArch(): Architecture {
   const rules: Rule[] = [
     rule({
       id: "rule:web:policy:switch-1", kind: "policy", component_id: "web",
+      confidence: "certain",
       summary: 'switch zone -> ["a", "b", "c"]',
       detail: { anchor: "switch", inputs: ["zone"], outputs: ['"a"', '"b"', '"c"'] },
       evidence: [{ file: "web/ship.ts", line: 32, snippet: "switch (zone) {" }],
@@ -148,6 +149,13 @@ describe("Rules lens availability (P6-6)", () => {
 
   it("is NOT available when the rules key is present but empty", () => {
     expect(hasRules(makeArchitecture({ rules: [] }))).toBe(false);
+  });
+
+  it("is NOT available when every rule is an unverified inference", () => {
+    const inferredOnly = makeRulesArch();
+    inferredOnly.rules = inferredOnly.rules?.map((item) => ({ ...item, confidence: "inferred" }));
+    expect(hasRules(inferredOnly)).toBe(false);
+    expect(listAvailableLenses(inferredOnly).map((lens) => lens.id)).not.toContain("rules");
   });
 });
 

@@ -2,7 +2,7 @@
 
 ## Context
 
-Solution Explorer currently answers "what is here" and "how is it composed." This document
+SysCorpus currently answers "what is here" and "how is it composed." This document
 researches the next question a reviewer actually has: "is this architecture any good, and
 where is it weak?" The source material is the body of software design theory that treats
 boundaries, isolation, and dependency structure as measurable things. Much of it is
@@ -93,7 +93,7 @@ arithmetic over facts we already hold.
 *Clean Architecture* catalogs boundaries by mechanism: a source-level boundary (an import
 across packages), a deployment boundary (separately built artifacts), a process boundary,
 a service boundary (network protocol). Each step up buys isolation and costs latency and
-operational complexity. Solution Explorer's relationship model already encodes exactly
+operational complexity. SysCorpus's relationship model already encodes exactly
 this spectrum: structural edges (import, ffi) versus communication edges (http, websocket,
 grpc, database). What the model does not yet do is treat the spectrum as a *strength*
 attribute that can be reasoned about: "these two components are separated only by

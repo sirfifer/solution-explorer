@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from .engine import (
+    CACHE_POLICIES,
     DEFAULT_MAX_COST_USD,
     DEFAULT_MAX_PARALLEL,
     DEFAULT_MODEL,
@@ -144,6 +145,19 @@ def build_parser() -> argparse.ArgumentParser:
         "into (default: <root>/.solution-explorer/runs/<timestamp>). Ladder only.",
     )
     parser.add_argument(
+        "--recover-rejected-from-ledger",
+        default=None,
+        help="On --ladder --update, deterministically revalidate paid JSON that "
+        "an earlier run rejected only at its local response-byte guard. Pass "
+        "that run's ledger.jsonl; no provider call is made for recovered rows.",
+    )
+    parser.add_argument(
+        "--claude-transcript-root",
+        default=None,
+        help="Claude project transcript directory containing <session-id>.jsonl "
+        "for --recover-rejected-from-ledger.",
+    )
+    parser.add_argument(
         "--phase-model",
         action="append",
         default=None,
@@ -212,6 +226,22 @@ def build_parser() -> argparse.ArgumentParser:
         "(default: 4). Deterministic failures (parse errors, 4xx) are never "
         "retried.",
     )
+    parser.add_argument(
+        "--cache-policy",
+        choices=("adaptive", *sorted(CACHE_POLICIES)),
+        default="adaptive",
+        help="Prompt-cache policy. 'adaptive' disables caching for independent "
+        "one-shot work and uses five-minute caching only for measured iterative "
+        "phases. Concrete values force a whole-run validation arm.",
+    )
+    parser.add_argument(
+        "--phase-cache",
+        action="append",
+        default=None,
+        metavar="KEY=POLICY",
+        help="Override adaptive caching for one ladder key, phase, or rung. "
+        "POLICY is provider-default, 1h, 5m, or off. Repeatable; ladder only.",
+    )
     return parser
 
 
@@ -264,6 +294,7 @@ def main(argv: list[str]) -> int:
             else args.max_cost_usd
         ),
         retry_policy=retry_policy,
+        cache_policy=args.cache_policy,
     )
 
     report = run_enhance(config)
@@ -362,6 +393,24 @@ def _parse_phase_models(
     return models, errors
 
 
+def _parse_phase_cache(pairs: Optional[list[str]]) -> tuple[dict[str, str], list[str]]:
+    overrides: dict[str, str] = {}
+    errors: list[str] = []
+    for raw in pairs or []:
+        key, sep, value = raw.partition("=")
+        key, value = key.strip(), value.strip().lower()
+        if not sep or not key:
+            errors.append(f"--phase-cache expects KEY=POLICY, got {raw!r}")
+        elif value not in CACHE_POLICIES:
+            errors.append(
+                f"--phase-cache {key}: unknown policy {value!r}; expected "
+                + ", ".join(sorted(CACHE_POLICIES))
+            )
+        else:
+            overrides[key] = value
+    return overrides, errors
+
+
 def _run_ladder_path(args, root: Path, store_path: Path) -> int:
     """The --ladder entry: build the policy, run the pipeline, print the summary."""
     from .pipeline import IterationPolicy, LadderConfig, LadderPolicy, run_ladder
@@ -369,6 +418,8 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
     models, errors = _parse_phase_models(
         args.phase_model, args.model_source or DEFAULT_SOURCE
     )
+    cache_overrides, cache_errors = _parse_phase_cache(args.phase_cache)
+    errors.extend(cache_errors)
     if errors:
         for err in errors:
             print(f"Error: {err}", file=sys.stderr)
@@ -395,6 +446,8 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
         retry_attempts=(
             4 if args.retry_attempts is None else max(1, int(args.retry_attempts))
         ),
+        cache_policy=args.cache_policy,
+        cache_policy_overrides=cache_overrides,
     )
     if args.max_wall_minutes is not None:
         policy.max_wall_minutes = args.max_wall_minutes
@@ -412,6 +465,15 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
         run_dir=run_dir,
         policy=policy,
         dry_run=args.dry_run,
+        update=args.update,
+        recovery_ledger=(
+            Path(args.recover_rejected_from_ledger).resolve()
+            if args.recover_rejected_from_ledger else None
+        ),
+        transcript_root=(
+            Path(args.claude_transcript_root).resolve()
+            if args.claude_transcript_root else None
+        ),
         max_partitions=args.max_partitions,
         max_lines=args.max_lines,
         max_components=args.max_components,
@@ -437,7 +499,8 @@ def _run_ladder_path(args, root: Path, store_path: Path) -> int:
             "(metered against the owner's subscription, not money spent)"
         )
     if result.ceiling_hit:
-        print("  note: run cost ceiling reached; partial state reported honestly")
+        reason = getattr(result, "stop_reason", None) or "run ceiling reached"
+        print(f"  note: {reason}; partial state reported honestly")
     if result.failed_phases:
         print(f"  FAILED phases: {result.failed_phases}")
     if not result.ok:

@@ -137,6 +137,57 @@ def test_correction_applies_at_projection_with_provenance(tmp_path):
     assert marker["evidence"]["file"] == "server/app.py"
 
 
+def test_optional_identity_field_can_be_corrected_to_explicit_null(tmp_path):
+    """A verifier can remove a false framework label without inventing one."""
+    repo, db = _build(tmp_path)
+    cfg = VerifyConfig(store_path=db, root=repo)
+    corrected = _fields(framework={
+        "status": "corrected", "value": None,
+        "reason": "The manifest contains no application framework.",
+        "evidence": {"file": "server/pyproject.toml", "line": 1},
+    })
+
+    report = verify_identity(cfg, invoker=_mock(corrected), clock=FIXED_CLOCK)
+
+    assert report.ok
+    arch = _overlaid_arch(repo, db)
+    server = _find(arch, "server")
+    assert server["framework"] is None
+    marker = server["identity_corrections"]["framework"]
+    assert marker["to"] is None
+
+
+def test_optional_absence_prose_sentinel_is_canonicalized_to_null(tmp_path):
+    repo, db = _build(tmp_path)
+    cfg = VerifyConfig(store_path=db, root=repo)
+    corrected = _fields(framework={
+        "status": "corrected", "value": "none detected",
+        "reason": "The manifest contains no application framework.",
+        "evidence": {"file": "server/pyproject.toml", "line": 1},
+    })
+
+    report = verify_identity(cfg, invoker=_mock(corrected), clock=FIXED_CLOCK)
+
+    assert report.ok
+    server = _find(_overlaid_arch(repo, db), "server")
+    assert server["framework"] is None
+    assert server["identity_corrections"]["framework"]["to"] is None
+
+
+def test_required_identity_field_cannot_be_corrected_to_null(tmp_path):
+    repo, db = _build(tmp_path)
+    cfg = VerifyConfig(store_path=db, root=repo)
+    corrected = _fields(type={
+        "status": "corrected", "value": None,
+        "reason": "The classification is wrong.",
+        "evidence": {"file": "server/pyproject.toml", "line": 1},
+    })
+
+    report = verify_identity(cfg, invoker=_mock(corrected), clock=FIXED_CLOCK)
+
+    assert not report.ok
+
+
 def test_uncertain_identity_lands_in_the_honest_gaps_record(tmp_path):
     repo, db = _build(tmp_path)
     cfg = VerifyConfig(store_path=db, root=repo)

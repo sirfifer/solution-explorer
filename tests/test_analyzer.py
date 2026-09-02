@@ -15,7 +15,7 @@ from analyzer.parsers.base import BaseParser
 # Imported from their own modules, never from analyzer.parsers, because the
 # package no longer re-exports them. These are regex helpers that a real parser
 # delegates to for framework and import sniffing; registering one as a language's
-# parser is what produced a silently degraded VS Code projection, and the import
+# parser is what produced a silently degraded private large-repository validation corpus projection, and the import
 # path is now a reminder of which tier a class belongs to.
 from analyzer.parsers.go import GoParser
 from analyzer.parsers.python_lang import PythonParser

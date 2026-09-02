@@ -252,6 +252,36 @@ def test_overlay_store_wins_over_inline_ai_enhance():
     store.close()
 
 
+def test_overlay_prunes_dangling_architecture_group_members():
+    store, _ = _mini_store()
+    idx = DigestIndex.from_store(store)
+    stamp_enrichment(
+        store,
+        "architecture",
+        ARCH_TARGET_ID,
+        {
+            "summary": "Grouped system",
+            "component_groups": [
+                {"name": "Live", "component_ids": ["a", "removed-generated-tree"]},
+                {"name": "Removed", "component_ids": ["removed-generated-tree"]},
+            ],
+        },
+        digest_index=idx,
+        clock=FIXED_CLOCK,
+    )
+    arch = {
+        "components": [{"id": "a", "children": []}, {"id": "b", "children": []}],
+        "relationships": [],
+    }
+
+    apply_enrichment_overlay(arch, store)
+
+    assert arch["ai_enhance"]["component_groups"] == [
+        {"name": "Live", "component_ids": ["a"]},
+    ]
+    store.close()
+
+
 def test_overlay_is_noop_without_enrichment():
     store, _ = _mini_store()
     arch = {"components": [{"id": "a", "children": [], "ai_enhance": {"x": 1}}], "relationships": []}

@@ -1,7 +1,7 @@
 """Maturity-channel gating for the analyzer (card R3).
 
 The gating model from ROBUSTNESS-STRATEGY.md ("Maturity gating (readiness), not
-boolean flags") is the Kubernetes / Rust maturity model, not a SaaS feature-flag
+boolean flags") is the large-infrastructure / Rust maturity model, not a SaaS feature-flag
 platform. It is in-repo and server-free: a small module that resolves a channel
 and decides which gated features are active, plus a deterministic provenance
 stamp that makes any non-default output self-explaining.

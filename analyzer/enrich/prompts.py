@@ -21,6 +21,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Optional
 
 from .partition import Partition
+from .subject_identity import subject_identity_prompt
 
 __all__ = [
     "StoreFacts",
@@ -135,7 +136,7 @@ metadata, password hashes"
 """
 
 
-# Character budgets for one component's fact block. The 569-block VS Code mean is
+# Character budgets for one component's fact block. The 569-block private large-repository validation corpus mean is
 # 1,417 characters, so these bound the pathological tail without touching a
 # normal block. A prompt that cannot fit in a context window is not a quality
 # choice, it is a failed call.
@@ -621,7 +622,7 @@ class StoreFacts:
 
         Bounded in BYTES before it is returned, not just in item counts. Every
         list here was already capped by length, which is no protection at all
-        when one entry is enormous: on the VS Code snapshot a single `cli`
+        when one entry is enormous: on the private large-repository validation corpus snapshot a single `cli`
         capability carried a 366,116-character `detail` full of inferred test
         records, making `cli/src/util` a 373,027-character block, 263 times the
         569-block mean and larger on its own than any context window this runs
@@ -1218,6 +1219,45 @@ class StoreFacts:
             "system_relationship_count": self._relationship_count,
             "evidence": evidence,
         }
+        # Relationship meaning sometimes depends on what each endpoint defines,
+        # not just on the inferred call site. Supply a bounded parser-owned menu
+        # from both endpoints. This also lets enrichment explain a refuted edge
+        # without inventing a rationale for the mechanically incorrect target.
+        endpoint_declarations = []
+        endpoint_references = []
+        for role, component_id in (
+            ("source", rel.get("source")), ("target", rel.get("target")),
+        ):
+            if not component_id or component_id not in self.component_index:
+                continue
+            endpoint = self.component_facts(str(component_id))
+            for item in (endpoint.get("source_declarations") or [])[:3]:
+                if not isinstance(item, dict):
+                    continue
+                endpoint_declarations.append({
+                    field: value for field, value in {
+                        "endpoint": role, "component": component_id,
+                        "file": item.get("file"), "line": item.get("line"),
+                        "name": item.get("name"), "kind": item.get("kind"),
+                        "code_preview": str(item.get("code_preview") or "")[:500],
+                    }.items() if value not in (None, "", [])
+                })
+            for item in (endpoint.get("source_references") or [])[:2]:
+                if not isinstance(item, dict):
+                    continue
+                endpoint_references.append({
+                    field: value for field, value in {
+                        "endpoint": role, "component": component_id,
+                        "file": item.get("file"), "line": item.get("line"),
+                        "referenced_symbol": item.get("referenced_symbol"),
+                        "caller_symbol": item.get("caller_symbol"),
+                        "code_preview": str(item.get("code_preview") or "")[:500],
+                    }.items() if value not in (None, "", [])
+                })
+        if endpoint_declarations:
+            facts["source_declarations"] = endpoint_declarations[:6]
+        if endpoint_references:
+            facts["source_references"] = endpoint_references[:4]
         # Relationship intent is often declared only by subject-level
         # documentation (for example, a fixture README saying that its one
         # edge exists to exercise relationship detection).  Make that source a
@@ -1288,7 +1328,12 @@ def build_partition_prompt(partition: Partition, facts: StoreFacts) -> str:
     return "\n".join(parts)
 
 
-def build_architecture_prompt(facts: StoreFacts, *, changelog: Optional[list] = None) -> str:
+def build_architecture_prompt(
+    facts: StoreFacts,
+    *,
+    changelog: Optional[list] = None,
+    subject_identity: Optional[dict] = None,
+) -> str:
     """Build the architecture-level (root) enhancement prompt."""
     arch = facts.arch
     summary_components = []
@@ -1320,12 +1365,25 @@ through the system end to end.",
 }
 
 summary and data_flow_narrative are REQUIRED and must be non-empty. Group the \
-top-level components into meaningful layers. Do not add fields beyond those shown.
+top-level components into meaningful layers. The summary describes the subject \
+identified below, not the local mechanics used to acquire or analyze it. Do not \
+add fields beyond those shown.
 """
+    identity = subject_identity or {
+        "mode": "canonical_repository_snapshot",
+        "name": arch.get("name"),
+        "repository": arch.get("repository"),
+        "default_branch": arch.get("default_branch") or "main",
+        "commit_sha": None,
+    }
     parts = [
         "You are writing the architecture-level summary for a software system.",
         "",
         contract,
+        "",
+        "AUTHORITATIVE SUBJECT IDENTITY (this overrides in-repository package "
+        "names and any inference from the checkout):",
+        subject_identity_prompt(identity),
         "",
         "TOP-LEVEL COMPONENTS:",
         json.dumps(summary_components, indent=2, default=str),
@@ -1747,6 +1805,9 @@ RULES:
 - corrected: the evidence contradicts the claim and shows what the value
   should be. "value" (the corrected value), "reason" (one sentence), and
   "evidence" (a file from the evidence below, line if known) are REQUIRED.
+  For optional "framework" and "port" claims, use an explicit JSON null value
+  when the correction is to remove a false label. Never use null for "name" or
+  "type".
   For "type", correct toward the neutral end when in doubt: a test suite,
   docs tree, or script collection is "module" or "package", never a server.
 - uncertain: the evidence cannot decide. "reason" is REQUIRED. Never guess.
@@ -2009,11 +2070,13 @@ One entry per id. Generate each meaning ONCE. The coordinator constructs the
 3-5 sentence help_text from purpose + mechanism + place + why_matters, uses label
 as description, data as data_handled, and uses the same grounded atoms for the
 audit contract. Every atom must therefore be clear reader prose, not shorthand.
-Optional product fields are:
-architectural_role, tech_context, testing_assessment, testing_maturity,
-port_assessment, complexity_assessment, external_services_assessment,
-actions_summary, key_user_flows. Omit nulls, empties, defaults, and all fields not
-listed here.
+Optional product fields use these EXACT JSON shapes (they are product prose,
+not {"t","e"} evidence objects): architectural_role, tech_context,
+testing_assessment, port_assessment, complexity_assessment,
+external_services_assessment, and actions_summary are strings;
+testing_maturity is exactly "comprehensive", "adequate", "minimal", or
+"untested"; key_user_flows is an array of at most five strings. Omit nulls,
+empties, defaults, and all fields not listed here.
 
 EVIDENCE applies to purpose, mechanism, place, why_matters, next, and data. It
 uses the target's ZERO-BASED files menu: 0 (or the exact supplied path) = the
@@ -2108,7 +2171,8 @@ One entry per key. flow and why MUST use the compact answer form with only the
 citations their clauses need (the structural maximum is twelve)
 citations into that edge's evidence menu: {"t":"...","e":[0]}. Analyzer
 facts supplied on the relationship use ["F","system_relationship_count"] or
-["F","subject_documentation"]. When the
+["F","subject_documentation"]. Endpoint declaration and usage menus use
+["F","source_declarations"] and ["F","source_references"]. When the
 evidence is insufficient, use {"t":"...","s":"u","r":"why",
 "l":"fact|judgment","need":"only with fact"}. Omit nulls, empties, status for
 answered claims, and fields not shown. The coordinator uses flow.t as both the
@@ -2395,6 +2459,11 @@ RULES:
 - Judge every component INDEPENDENTLY, using only its own facts.
 - Return one entry for EVERY id below, using the id exactly as written.
 - Every one of the four fields must be present for every component.
+- confirmed: omit value, reason, and evidence.
+- corrected: include value, a one-sentence reason, and evidence.file. For the
+  optional framework and port fields, value may be explicit JSON null to remove
+  a false label; name and type may never be null.
+- uncertain: include a reason and never guess.
 - Do not invent evidence. Where a claim cannot be checked from the facts given,
   say uncertain.
 """

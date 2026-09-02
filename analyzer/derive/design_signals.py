@@ -250,7 +250,7 @@ DEFAULT_BOUNDARY_STRENGTH = "source"
 #
 # Excluded, and why:
 #   - ``uses`` edges: always confidence "inferred", produced by matching a
-#     symbol name to a component name. On the VS Code vet run (2026-08-21)
+#     symbol name to a component name. On the private large-repository validation corpus vet run (2026-08-21)
 #     name matching resolved TypeScript imports of ``util`` (Node's builtin)
 #     to the Rust CLI's ``cli/src/util`` component, and npm package names
 #     (``electron``, ``@vscode/prompt-tsx``) to unrelated local components.

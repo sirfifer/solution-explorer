@@ -2,7 +2,7 @@
 
 # Analyzer Package Architecture
 
-The `analyzer/` package is the core of Solution Explorer's static analysis. It scans codebases to extract components, relationships, symbols, and metrics, producing structured JSON for the interactive viewer.
+The `analyzer/` package is the core of SysCorpus's static analysis. It scans codebases to extract components, relationships, symbols, and metrics, producing structured JSON for the interactive viewer.
 
 ## Package Structure
 

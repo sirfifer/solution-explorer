@@ -1,10 +1,10 @@
-# Solution Explorer: Interactive Architecture Visualization for AI-Era Codebases
+# SysCorpus: Evidence-Linked System Comprehension for AI-Era Codebases
 
 AI coding assistants can generate entire codebases in hours. They scaffold projects, implement features, wire up services, and write tests. But the output is files. Hundreds of files across dozens of directories, with architecture that lives only in the AI's context window. The person who needs to review, extend, and maintain that code faces the same old problem: understanding what was built. Except now the pace of generation far outstrips the pace of comprehension.
 
-Solution Explorer closes that gap. It scans any codebase, extracts the full component structure, relationships, and metrics, then renders everything as an interactive architecture diagram. An optional AI enhancement layer adds human-readable descriptions, role classifications, and criticality ratings to every component. And a built-in review system lets you annotate anything you see, then export those annotations as structured prompts that go back to the AI for implementation. The loop closes: AI builds, human reviews, AI refines.
+SysCorpus closes that gap. It scans a codebase or multi-repository system, extracts its component structure, relationships, metrics, and evidence, then renders human- and machine-readable views over the same fact base. Optional enrichment adds grounded explanations and guided paths. A built-in review system lets people annotate what they see and export structured directives for implementation. The loop closes: AI builds, humans understand and review, AI refines.
 
-A note on names. Solution Explorer is the tool: the codebase, the CLI, the packages. **SysCorpus** (`syscorpus.com`) is the name the work is going public under: a maintained corpus of well-known systems mapped by the tool, published as interactive demos and refreshed on a schedule. When this document says Solution Explorer, it means the engine; when it says SysCorpus, it means the published program built on it.
+Some package names, repository paths, configuration filenames, and URL compatibility values retain earlier internal identifiers. They are implementation details, not a second public product name.
 
 This document covers the vision, the user experience, the system architecture, and the project's evolution. For installation and configuration, see [README.md](README.md). For contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -20,7 +20,7 @@ This problem intensifies with AI-generated code. An AI assistant can produce a f
 
 ### The Approach
 
-Solution Explorer is built on three principles:
+SysCorpus is built on three principles:
 
 **1. Representation for humans.** The architecture diagram is the primary artifact. Every component appears as a visual card shaped like the device it represents: an iOS app looks like an iPhone, a web client looks like a browser window, an API server looks like a server rack. You do not need to know that the project uses SwiftUI or React or Express. The visual representation tells you what each component is and how it relates to the others. User interface workflows and navigation flows are the primary gateways into understanding the application, not raw class hierarchies or API specifications.
 
@@ -30,7 +30,7 @@ Solution Explorer is built on three principles:
 
 ### What This Is Not
 
-Solution Explorer is not a linter, a test framework, a runtime monitor, or a documentation generator (though it extracts existing documentation). It is a comprehension and review tool. It answers the question: "What did the AI build, and what do I want to change?"
+SysCorpus is not a linter, a test framework, a runtime monitor, or a documentation generator (though it extracts existing documentation). It is a comprehension and review tool. It answers the question: "What did the AI build, and what do I want to change?"
 
 ---
 
@@ -38,7 +38,7 @@ Solution Explorer is not a linter, a test framework, a runtime monitor, or a doc
 
 ### First Impression: The Architecture Graph
 
-When you open Solution Explorer, an interactive graph fills the screen. Each node is a component card. Arrows connect related components. The layout is automatic, computed by the ELK layout engine with a layered algorithm that places client applications at the top and servers below. A subtle dot grid provides spatial context. Zoom controls sit at the bottom-left, and a color-coded minimap at the bottom-right shows your current viewport within the full graph.
+When you open SysCorpus, an interactive graph fills the screen. Each node is a component card. Arrows connect related components. The layout is automatic, computed by the ELK layout engine with a layered algorithm that places client applications at the top and servers below. A subtle dot grid provides spatial context. Zoom controls sit at the bottom-left, and a color-coded minimap at the bottom-right shows your current viewport within the full graph.
 
 <p align="center">
   <img src="docs/screenshots/architecture-overview.png" alt="Architecture overview showing components and relationships" width="800">
@@ -202,7 +202,7 @@ Annotations are visible throughout the interface. Annotated nodes show a count b
 
 ### Pipeline Overview
 
-Solution Explorer is a static pipeline:
+SysCorpus is a static pipeline:
 
 ```
 Codebase  ──>  Analyzer (Python)  ──>  architecture.json  ──>  AI Enhancement (optional)  ──>  Viewer (React)  ──>  Deploy
@@ -234,7 +234,7 @@ How it works:
 
 **SwiftUI flow detection** is a specialized capability. The SwiftUIFlowDetector identifies TabView tabs, NavigationLink targets, sheet and fullScreenCover modals, and embedded view composition. It uses distance-based breadth-first search to assign screens to their closest tab, preventing contamination across navigation hierarchies. The result is a faithful representation of an iOS app's navigation structure rendered as navigable nodes in the viewer.
 
-**Analysis engine (v2, default).** The default engine is an extract, derive, project pipeline over a persistent fact store. Extraction parses each file once and records its symbols and signals in the store, keyed by content hash, so a warm run re-parses only the files whose content changed. Derivation builds components, relationships, and metrics from the store without re-reading source. Projection writes the same `architecture.json` or split output the viewer already renders. Two properties fall out of this design: a coverage ledger that accounts for every file under the root exactly once (parsed, skipped for a stated reason, or inside a pruned directory recorded as a single row), and incremental analysis by construction (the store is the baseline, so `--incremental` and its sibling flags are accepted as no-ops). There is no symbol cap in v2. On the VS Code codebase (4.94M lines across 15,256 parsed files) a cold run took 136 seconds, peaked at 1.9 GB, and produced a complete ledger. The legacy v1 single-pass scanner remains available via `--engine v1` for rollback and is scheduled for removal at a later gate.
+**Analysis engine (v2, default).** The default engine is an extract, derive, project pipeline over a persistent fact store. Extraction parses each file once and records its symbols and signals in the store, keyed by content hash, so a warm run re-parses only the files whose content changed. Derivation builds components, relationships, and metrics from the store without re-reading source. Projection writes the same `architecture.json` or split output the viewer already renders. Two properties fall out of this design: a coverage ledger that accounts for every file under the root exactly once (parsed, skipped for a stated reason, or inside a pruned directory recorded as a single row), and incremental analysis by construction (the store is the baseline, so `--incremental` and its sibling flags are accepted as no-ops). There is no symbol cap in v2. On a private 4.94M-line validation corpus spanning 15,256 parsed files, a cold run took 136 seconds, peaked at 1.9 GB, and produced a complete ledger. The corpus identity remains unpublished until its map is ready. The legacy v1 single-pass scanner remains available via `--engine v1` for rollback and is scheduled for removal at a later gate.
 
 **Output modes:** The analyzer supports two output formats. Single-file mode produces one `architecture.json` with everything. Split mode (`--split` flag) produces a directory with a lightweight `manifest.json` (~20-100 KB) containing the component tree, relationships, and stats, plus per-component detail files loaded on demand. Under the legacy v1 engine, single-file mode applies a configurable default 5,000 symbol cap (lifted with `--max-symbols 0` or `--split`); the default v2 engine never caps symbols.
 
@@ -275,6 +275,8 @@ In the viewer, the Design lens renders these findings plain-language first with 
 
 The viewer is built with React 19, TypeScript, and Tailwind CSS. React Flow renders the graph. ELK (Eclipse Layout Kernel) computes automatic layouts. Zustand manages state. Vite builds the production bundle.
 
+The comprehension-first **Overview is the primary and default interface**. It starts with a bounded system portrait, guided questions, and trust context, then opens detailed evidence in place. The former dense workspace is now a deprecated compatibility surface, retained temporarily under `?mode=workbench` for existing deep links, historical comparison, and validation. It is not a parallel product direction.
+
 The key architectural decision in the viewer is hierarchical drill-down. At any level of the hierarchy, the viewer displays at most ~100 nodes. This keeps React Flow's SVG-based rendering performant without needing a Canvas or WebGL replacement. The performance bottleneck in architecture visualization is never the rendering engine. It is data loading. Split mode addresses this: the manifest loads on startup (~20-100 KB), and per-component details load on demand when a user opens a detail panel.
 
 ### The Machine Front Door
@@ -304,7 +306,7 @@ A GitHub Action workflow handles the full pipeline. Push to main triggers the an
 
 ### Live Monitoring
 
-Solution Explorer supports continuous architecture updates as the codebase changes. When enabled, a dedicated CI workflow (`live-monitor.yml`) runs on every push to main:
+SysCorpus supports continuous architecture updates as the codebase changes. When enabled, a dedicated CI workflow (`live-monitor.yml`) runs on every push to main:
 
 1. Restores the previous architecture baseline from cache
 2. Runs incremental analysis (only changed files and their importers)
@@ -383,7 +385,7 @@ The analyzer captures four core types:
 
 ## Multi-Repository Support
 
-Many real solutions span multiple repositories: a mobile client in one repo, an API server in another, shared libraries in a third. Solution Explorer handles this with a `solution-explorer.json` configuration file that declares repositories (local paths or git URLs), cross-repo relationships, and solution metadata.
+Many real solutions span multiple repositories: a mobile client in one repo, an API server in another, shared libraries in a third. SysCorpus handles this with a `solution-explorer.json` configuration file that declares repositories (local paths or git URLs), cross-repo relationships, and solution metadata.
 
 The analyzer clones remote repositories, analyzes each independently, then merges the results into a single architecture. Repository-level grouping nodes appear in the viewer, and explicit cross-repo relationships supplement the automatic detection. Private repositories are supported via the `GITHUB_TOKEN` environment variable.
 

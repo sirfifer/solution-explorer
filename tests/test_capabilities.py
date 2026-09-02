@@ -265,6 +265,37 @@ def test_event_capability_from_queue_topic(tmp_path):
     assert produced and consumed
 
 
+def test_swift_argument_label_topic_is_not_an_event_capability(tmp_path):
+    """A Swift ``topic:`` argument is not a queue declaration or operation."""
+    (tmp_path / "Telemetry.swift").write_text(
+        "func record() {\n"
+        "    logger.log(topic: \"voice.latency\", value: 42)\n"
+        "    monitor.measure(topic: \"session.health\")\n"
+        "}\n"
+    )
+    store = FactStore(":memory:")
+    extract_repo(str(tmp_path), store)
+    derive_all(store, "app")
+    assert [c for c in store.capabilities() if c["kind"] == "event"] == []
+
+
+def test_queue_assignment_remains_event_evidence(tmp_path):
+    (tmp_path / "events.py").write_text("import pika\ntopic = 'orders.created'\n")
+    store = FactStore(":memory:")
+    extract_repo(str(tmp_path), store)
+    derive_all(store, "svc")
+    events = [c for c in store.capabilities() if c["kind"] == "event"]
+    assert [c["detail"]["topic"] for c in events] == ["orders.created"]
+
+
+def test_plain_topic_assignment_without_queue_driver_is_not_event_evidence(tmp_path):
+    (tmp_path / "model.py").write_text("topic = 'curriculum'\n")
+    store = FactStore(":memory:")
+    extract_repo(str(tmp_path), store)
+    derive_all(store, "app")
+    assert [c for c in store.capabilities() if c["kind"] == "event"] == []
+
+
 def test_job_capability_from_scheduled_task(tmp_path):
     (tmp_path / "tasks.py").write_text(
         "from celery import shared_task\n"

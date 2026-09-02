@@ -1,4 +1,4 @@
-# Cloudflare Infrastructure for Solution Explorer
+# Cloudflare Infrastructure for SysCorpus
 
 Optional Cloudflare-enhanced backend that provides real-time CI status updates and faster data hosting compared to GitHub Pages alone.
 

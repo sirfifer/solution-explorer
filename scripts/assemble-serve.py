@@ -10,9 +10,13 @@ Two decisions worth stating, because both were mistakes at some point today:
   tests code that no longer exists, and the failure looks exactly like a real
   defect. Pass --no-build only when you have just built it yourself.
 
-  The projection is SYMLINKED, not copied. VS Code's is 268 MB, and copying it
+  The projection is SYMLINKED, not copied. private large-repository validation corpus's is 268 MB, and copying it
   for every crawl is a minute of disk churn per run for no benefit. Python's
-  http.server follows symlinks, so the served bytes are identical.
+  http.server follows symlinks, so the served bytes are identical. When a
+  canonical projection predates the human-first sidecars, assembly creates a
+  small derived overlay: canonical files remain symlinks and only the three
+  deterministic sidecars are newly written. The source projection is never
+  modified.
 
 The layout mirrors what scripts/gui-datasets.py assemble produces, so the two
 harnesses serve datasets the same way and a bundle from either is crawlable.
@@ -29,9 +33,23 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from analyzer.project.human_views import (  # noqa: E402 - repo root must precede local import
+    ORIENTATION_FILENAME,
+    SECURITY_FILENAME,
+    SUPPORT_FILENAME,
+    build_orientation,
+    build_security_view,
+    build_support_view,
+    write_human_view,
+)
+
 VIEWER = REPO_ROOT / "viewer"
 DIST = VIEWER / "dist"
 SERVE_ROOT = REPO_ROOT / ".testboard" / "serve"
+DERIVED_ROOT = REPO_ROOT / ".testboard" / "derived"
 
 # Data baked into the viewer's own public/ directory. It has to go, or the app
 # loads the repo's committed dataset instead of the subject under test, and the
@@ -55,6 +73,65 @@ def resolve_projection(slug: str, explicit: str | None) -> Path:
 def build_viewer() -> None:
     print("[assemble] building the viewer")
     subprocess.run(["npm", "run", "build"], cwd=str(VIEWER), check=True)
+
+
+def _load_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        sys.exit(f"error: cannot read projection document {path}: {exc}")
+
+
+def _projection_with_human_views(slug: str, projection: Path) -> tuple[Path, list[str]]:
+    """Return a projection root with all human-view sidecars available.
+
+    Existing canonical sidecars are used as-is. If any are absent, build a
+    derived directory whose canonical entries are absolute symlinks and whose
+    missing sidecars are pure, deterministic derivatives of manifest.json and
+    coverage.json. This keeps the canonical run byte-for-byte immutable.
+    """
+    sidecars = (ORIENTATION_FILENAME, SUPPORT_FILENAME, SECURITY_FILENAME)
+    missing = [name for name in sidecars if not (projection / name).is_file()]
+    if not missing:
+        return projection, []
+
+    derived = DERIVED_ROOT / slug / "architecture"
+    if derived.exists() or derived.is_symlink():
+        if derived.is_symlink() or derived.is_file():
+            derived.unlink()
+        else:
+            shutil.rmtree(derived)
+    derived.mkdir(parents=True, exist_ok=True)
+
+    for source in sorted(projection.iterdir(), key=lambda path: path.name):
+        (derived / source.name).symlink_to(source.resolve())
+
+    manifest = _load_json(projection / "manifest.json")
+    coverage_path = projection / "coverage.json"
+    coverage = _load_json(coverage_path) if coverage_path.is_file() else None
+    support = (
+        _load_json(projection / SUPPORT_FILENAME)
+        if (projection / SUPPORT_FILENAME).is_file()
+        else build_support_view(manifest)
+    )
+    security = (
+        _load_json(projection / SECURITY_FILENAME)
+        if (projection / SECURITY_FILENAME).is_file()
+        else build_security_view(manifest)
+    )
+    generated = {
+        SUPPORT_FILENAME: support,
+        SECURITY_FILENAME: security,
+        ORIENTATION_FILENAME: build_orientation(
+            manifest,
+            coverage=coverage,
+            support=support,
+            security=security,
+        ),
+    }
+    for name in missing:
+        write_human_view(generated[name], derived / name)
+    return derived, missing
 
 
 def assemble(slug: str, projection: Path, build: bool = True) -> Path:
@@ -86,12 +163,16 @@ def assemble(slug: str, projection: Path, build: bool = True) -> Path:
         elif target.is_dir():
             shutil.rmtree(target)
 
-    (serve / "architecture").symlink_to(projection)
+    served_projection, generated_sidecars = _projection_with_human_views(slug, projection)
+    (serve / "architecture").symlink_to(served_projection)
 
-    manifest = json.loads((projection / "manifest.json").read_text(encoding="utf-8"))
+    manifest = _load_json(projection / "manifest.json")
     components = len(manifest.get("component_detail_index") or {})
     print(f"[assemble] {slug}: {serve}")
     print(f"[assemble]   projection {projection} ({components} components)")
+    if served_projection != projection:
+        print(f"[assemble]   derived overlay {served_projection}")
+        print(f"[assemble]   deterministic sidecars {', '.join(generated_sidecars)}")
     print(f"[assemble]   serve with: python3 -m http.server <port> --directory {serve}")
     return serve
 

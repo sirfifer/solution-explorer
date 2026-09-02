@@ -476,6 +476,39 @@
     margin-top: 40px; overflow: hidden;
     border: 1px solid var(--panel-edge); border-radius: 16px;
   }
+  .validation-panel {
+    margin-top: 30px; padding: 22px;
+    border: 1px solid rgba(34, 211, 238, .27); border-radius: 16px;
+    background: linear-gradient(135deg, rgba(34, 211, 238, .055), rgba(167, 139, 250, .025));
+  }
+  .validation-panel .validation-head {
+    display: flex; justify-content: space-between; gap: 18px; align-items: baseline;
+  }
+  .validation-panel h3 { font-family: var(--display); font-size: 18px; }
+  .validation-panel .validation-state {
+    color: var(--amber); font-family: var(--mono); font-size: 11px;
+    letter-spacing: .05em; text-transform: uppercase;
+  }
+  .validation-facts {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    margin-top: 18px;
+  }
+  .validation-fact {
+    padding: 14px; border: 1px solid var(--panel-edge); border-radius: 10px;
+    background: rgba(8, 8, 14, .34);
+  }
+  .validation-fact strong {
+    display: block; color: var(--text); font-family: var(--display);
+    font-size: 22px; line-height: 1.1;
+  }
+  .validation-fact span { display: block; margin-top: 6px; color: var(--text-dim); font-size: 11.5px; line-height: 1.35; }
+  .validation-note { margin-top: 15px; color: var(--text-dim); font-size: 13.5px; line-height: 1.5; }
+  @media (max-width: 760px) {
+    .validation-panel .validation-head { display: block; }
+    .validation-panel .validation-state { display: block; margin-top: 6px; }
+    .validation-facts { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 430px) { .validation-facts { grid-template-columns: 1fr; } }
   .status-row {
     display: grid; grid-template-columns: 190px 132px 1fr; gap: 18px;
     align-items: start; padding: 20px 22px; background: var(--panel);
@@ -801,18 +834,31 @@
 </section>
 
 <section id="status">
-  <div class="kicker accent-amber">Where it stands · 27 August 2026</div>
+  <div class="kicker accent-amber">Where it stands · 1 September 2026</div>
   <h2>Substantial machinery exists. Public proof is the next threshold.</h2>
   <div class="prose">
     <p>Status below distinguishes what exists in the repository from what is under validation and what remains required for the public program.</p>
   </div>
+  <aside class="validation-panel" aria-label="Measured private validation completed on September 1, 2026">
+    <div class="validation-head">
+      <h3>Measured private validation</h3>
+      <span class="validation-state">Completed, gated, and unpublished</span>
+    </div>
+    <div class="validation-facts">
+      <div class="validation-fact"><strong>4.9M</strong><span>source lines in the analyzed codebase</span></div>
+      <div class="validation-fact"><strong>474</strong><span>successful provider invocations in 3h 04m</span></div>
+      <div class="validation-fact"><strong>106</strong><span>claims independently checked; zero unsupported after unsupported clauses were quarantined</span></div>
+      <div class="validation-fact"><strong>195</strong><span>unresolved items retained as honest gaps</span></div>
+    </div>
+    <p class="validation-note">The full five-phase run completed with zero provider failures, retries, or output-budget violations. It did not pass the publication gate: one subject criterion and one universal criterion remain unmet. This is internal validation evidence, not a public demo.</p>
+  </aside>
   <div class="status-list">
     <article class="status-row"><h3>Core and updates</h3><span class="status-pill status-validating">Built foundation</span><p>The persistent fact store, content hashing, coverage ledger, multi-repository composition, parser families, and single/split projections are built. Changed files update without re-parsing unchanged files; fuller dependency and blast-radius propagation is the next v2 treatment.</p></article>
-    <article class="status-row"><h3>Interactive viewer</h3><span class="status-pill status-built">Built</span><p>Hierarchical graph, eight gated lenses, search, source deep links, code previews, annotations, tours, activity and ownership signals, mobile behavior, live status, and administration surfaces exist.</p></article>
+    <article class="status-row"><h3>Interactive viewer</h3><span class="status-pill status-built">Built</span><p>The comprehension-first Overview is the primary interface, with a system portrait, guided questions, and focused technical entry. The hierarchical graph, eight gated lenses, search, source deep links, code previews, annotations, tours, activity and ownership signals, mobile behavior, live status, and administration surfaces exist. The former dense workspace is deprecated and retained temporarily for compatibility and validation.</p></article>
     <article class="status-row"><h3>Machine access</h3><span class="status-pill status-built">Built</span><p><code>ai.json</code>, <code>llms.txt</code>, and a zero-dependency MCP server with twelve read-only tools are implemented and checked against the same fact store.</p></article>
     <article class="status-row"><h3>Supply chain and SBOM</h3><span class="status-pill status-built">Built</span><p>Eight manifest ecosystems feed the evidence-linked supply-chain view. Each dependency-bearing repository projection emits CycloneDX 1.5 <code>sbom.json</code>.</p></article>
     <article class="status-row"><h3>Security and vulnerabilities</h3><span class="status-pill status-validating">Go-live requirement</span><p>Useful inputs already exist: network schemes and edges, authentication patterns, environment variables, secret-shaped inventory, rules, dependency pinning, and CRA hygiene checks. A unified security view and package/version matching against maintained vulnerability feeds, with CVEs surfaced as evidence, are required before go-live and are not claimed as complete today.</p></article>
-    <article class="status-row"><h3>Evidence-bound enrichment</h3><span class="status-pill status-validating">Validating</span><p>The five-phase engine, completeness contract, independent adjudication, usage ledger, run reports, quality audit, and pause/resume controls are built. Current work is validating full real-subject behavior.</p></article>
+    <article class="status-row"><h3>Evidence-bound enrichment</h3><span class="status-pill status-validating">Private run complete</span><p>The five-phase engine, completeness contract, independent adjudication, usage ledger, run reports, quality audit, pause/resume controls, and provider circuit stops are built. A full large-repository run completed; deterministic reconciliation and two remaining gate criteria still prevent publication.</p></article>
     <article class="status-row"><h3>Public maintained corpus</h3><span class="status-pill status-next">Next threshold</span><p>The harness, private preview, attribution and license review, comprehension instrument, and graduation gates exist. No public subject map has graduated, and no subject is announced before its map is ready.</p></article>
   </div>
   <div class="boundary-grid" aria-label="Supply-chain and vulnerability boundary">
@@ -846,7 +892,9 @@
     <p>
       SysCorpus is early, independent, and currently the work of Richard
       Amerman. The engine, viewer, SBOM and supply-chain surface, quality gates,
-      and comprehension instruments represent substantial completed work. The
+      and comprehension instruments represent substantial completed work. A
+      full-scale private validation run has completed, but its result remains
+      gated and unpublished. The
       unified security view and maintained CVE/advisory correlation are explicit
       go-live work, not present-tense claims. The public proof comes next: maps
       of codebases people already know, refreshed on a schedule and open to

@@ -38,6 +38,7 @@ from ..derive.importance import ImportanceRanking, rank_components
 from .engine import _parse_json_object
 from .pipeline import PhaseResult, RunContext
 from .provenance import stamp_enrichment
+from .subject_identity import build_subject_identity, subject_identity_prompt
 
 __all__ = [
     "BRIEF_TARGET_KIND",
@@ -151,6 +152,25 @@ def universal_criteria() -> list[Criterion]:
             why="An honest map says what it does not know. A gap papered over with a "
             "plausible sentence is worse than a gap.",
             how_to_check="Every honest-gap item carries a non-empty reason.",
+            universal=True,
+        ),
+        Criterion(
+            id="u4",
+            statement=(
+                "The published narrative represents the analyzed repository at "
+                "its recorded snapshot identity without inventing a fork, "
+                "upstream/downstream, or special-version relationship."
+            ),
+            why=(
+                "A structurally accurate map of the wrong claimed subject is "
+                "still false, and readers encounter the narrative before its "
+                "supporting evidence."
+            ),
+            how_to_check=(
+                "Compare the architecture summary and data-flow narrative with "
+                "the deterministic subject identity and any explicit operator "
+                "variant declaration."
+            ),
             universal=True,
         ),
     ]
@@ -287,7 +307,9 @@ def build_orientation_prompt(
     ai_surface_summary: Optional[dict] = None,
     scope_note: Optional[str] = None,
     selected_slice: Optional[dict] = None,
+    subject_identity: Optional[dict] = None,
 ) -> str:
+    identity = subject_identity or build_subject_identity({"name": name})
     parts = [
         "You are orienting an automated enrichment pipeline before it maps a "
         "software system. Everything below was derived mechanically. Your output "
@@ -298,6 +320,11 @@ def build_orientation_prompt(
         "",
         f"SUBJECT: {name}",
         f"MECHANICAL DESCRIPTION: {description or '(none derived)'}",
+        "",
+        "AUTHORITATIVE SUBJECT IDENTITY:",
+        subject_identity_prompt(identity),
+        "Treat this identity as a release constraint: subject-specific criteria "
+        "must catch a published map that contradicts it.",
         "",
     ]
     if scope_note:
@@ -471,6 +498,26 @@ class OrientationPhase:
     name = "p1_orientation"
 
     def run(self, ctx: RunContext) -> PhaseResult:
+        if ctx.update:
+            brief = load_brief(ctx.store)
+            if brief is None:
+                raise RuntimeError(
+                    "ladder --update requires the previously banked subject brief; "
+                    "refusing to buy a replacement orientation"
+                )
+            try:
+                ctx.run_path("subject-brief.json").write_text(
+                    json.dumps(brief.to_dict(), indent=2), encoding="utf-8"
+                )
+            except OSError as exc:  # pragma: no cover - filesystem edge
+                ctx.notes.append(f"subject brief file not written: {exc}")
+            return PhaseResult(
+                name=self.name,
+                status="ok",
+                notes=["resume: reused the banked subject brief; no provider call"],
+                data={"brief": brief},
+            )
+
         ranking = rank_components(ctx.store)
         readme = _collect_readme(ctx.arch, ctx.root)
         selected_slice = None
@@ -509,6 +556,9 @@ class OrientationPhase:
                 else None
             ),
             selected_slice=selected_slice,
+            subject_identity=build_subject_identity(
+                ctx.arch, root=ctx.root, commit_sha=ctx.commit_sha
+            ),
         )
 
         if ctx.dry_run:

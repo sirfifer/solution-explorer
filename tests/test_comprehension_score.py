@@ -120,7 +120,7 @@ def test_comparing_across_charter_versions_is_refused(tmp_path, capsys):
 
 def test_comparing_different_subjects_is_allowed_but_flagged(tmp_path, capsys):
     a = write_run(tmp_path / "a", [card("P1", 3, subject="unamentis")])
-    b = write_run(tmp_path / "b", [card("P1", 2, subject="vscode")])
+    b = write_run(tmp_path / "b", [card("P1", 2, subject="large-repository-validation")])
     assert cs.main(["compare", str(b), str(a)]) == 1
     out = capsys.readouterr().out
     assert "DIFFERENT SUBJECTS" in out

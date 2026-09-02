@@ -93,12 +93,37 @@ REQUIRED_RELATIONSHIP_FIELDS = frozenset({
 OPTIONAL_RELATIONSHIP_FIELDS = frozenset({
     "ai_discovered", "authentication_detail", "payload_examples",
     "error_handling", "sla_notes", "security_notes", "port_context",
+    # Like component gaps, a relationship gap is a truthful terminal result,
+    # not an unexpected product field.
+    "honest_gaps",
 })
 
 # Rough ISO 8601 timestamp pattern (YYYY-MM-DDThh:mm:ssZ or with offset)
 _ISO_TIMESTAMP_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
 )
+
+
+def _honest_gap_questions(ai):
+    """Return the named questions covered by well-formed honest-gap rows."""
+    gaps = ai.get("honest_gaps") if isinstance(ai, dict) else None
+    if not isinstance(gaps, list):
+        return set()
+    return {
+        str(gap.get("question") or "").strip()
+        for gap in gaps
+        if isinstance(gap, dict) and gap.get("question") and gap.get("why")
+    }
+
+
+def _component_gap_covers_field(field, gap_questions):
+    if field == "data_handled":
+        return "data_handled" in gap_questions
+    if field == "help_text":
+        return {"purpose", "mechanism", "place", "why_matters"}.issubset(
+            gap_questions
+        )
+    return False
 
 
 # --- Phase 4a: Schema validation ---
@@ -110,9 +135,15 @@ def validate_component_ai_enhance(comp_id, ai, component_data=None):
     if not isinstance(ai, dict):
         return [f"Component '{comp_id}': ai_enhance is not a dict"]
 
-    # Check required fields
+    # Check required fields. A complete named honest-gap outcome is an explicit
+    # result for the corresponding reader field; requiring invented prose in
+    # addition would turn this sanity validator into a hallucination incentive.
+    gap_questions = _honest_gap_questions(ai)
     for field in REQUIRED_COMPONENT_FIELDS:
-        if field not in ai or ai[field] is None:
+        if (
+            (field not in ai or ai[field] is None)
+            and not _component_gap_covers_field(field, gap_questions)
+        ):
             errors.append(f"Component '{comp_id}': missing required field '{field}'")
 
     # Validate enum values
@@ -177,8 +208,10 @@ def validate_relationship_ai_enhance(rel_key, ai):
     if is_discovered:
         required = frozenset({"data_flow_description", "importance"})
 
+    gap_questions = _honest_gap_questions(ai)
     for field in required:
-        if field not in ai or ai[field] is None:
+        gap_covers_field = field == "data_flow_description" and "flow" in gap_questions
+        if (field not in ai or ai[field] is None) and not gap_covers_field:
             errors.append(f"{label}: missing required field '{field}'")
 
     # Validate enum values
@@ -246,26 +279,33 @@ def score_component(comp_id, ai, component_data=None):
     points = 0
     max_points = 0
 
-    # Required field completeness (50% of score)
+    gap_questions = _honest_gap_questions(ai)
+
+    # Required field completeness (50% of score). Honest gaps are neutral: do
+    # not reward them, but do not penalize a run for refusing to invent prose.
     for field in REQUIRED_COMPONENT_FIELDS:
-        max_points += 10
         val = ai.get(field)
         if val is not None and val != "":
+            max_points += 10
             points += 10
+        elif _component_gap_covers_field(field, gap_questions):
+            continue
         else:
+            max_points += 10
             details[f"missing_{field}"] = True
 
     # help_text length conformance (10% of score)
-    max_points += 10
     help_text = ai.get("help_text", "")
-    sentences = _count_sentences(help_text)
-    if 3 <= sentences <= 5:
-        points += 10
-    elif 2 <= sentences <= 7:
-        points += 5
-        details["help_text_length"] = f"{sentences} sentences (target: 3-5)"
-    else:
-        details["help_text_length"] = f"{sentences} sentences (target: 3-5)"
+    if help_text or not _component_gap_covers_field("help_text", gap_questions):
+        max_points += 10
+        sentences = _count_sentences(help_text)
+        if 3 <= sentences <= 5:
+            points += 10
+        elif 2 <= sentences <= 7:
+            points += 5
+            details["help_text_length"] = f"{sentences} sentences (target: 3-5)"
+        else:
+            details["help_text_length"] = f"{sentences} sentences (target: 3-5)"
 
     # Optional field population (context-aware, 30% of score)
     comp = component_data or {}

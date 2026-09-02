@@ -43,6 +43,11 @@ from .orientation import (
 )
 from .pipeline import PhaseResult, RunContext
 from .prompts import _cached_prompt
+from .subject_identity import (
+    build_subject_identity,
+    subject_identity_errors,
+    subject_identity_prompt,
+)
 from .workorder import WorkOrder, WorkOrderOutcome, make_descender, parse_work_orders
 
 __all__ = [
@@ -264,6 +269,14 @@ Work from what you are given below. Do not ask for a re-read of the components:
 the census is the record of what was established about them, and it is what you
 are judging.
 
+Repository identity is a publication fact, not stylistic polish. Compare the
+actual architecture narrative with the authoritative subject identity. A clone
+or worktree does not make a subject a fork, and an internal package name is not
+the repository identity. Unless an explicit operator declaration says otherwise,
+any fork, upstream/downstream, modified-version, or special-edition claim is an
+unmet release criterion. Do not issue a component work order for that failure;
+the architecture narrative itself must be regenerated under its identity contract.
+
 The run_analysis is the learning channel, not filler. Use only measurements in
 the operations digest and findings in the supplied evidence. Empty arrays are
 correct when the run established no recommendation. Never propose moving an
@@ -294,6 +307,8 @@ def build_determination_prompt(
     mechanical_map: Optional[dict] = None,
     scope_note: Optional[str] = None,
     operations: Optional[dict] = None,
+    subject_identity: Optional[dict] = None,
+    architecture_narrative: Optional[dict] = None,
 ) -> str:
     # The prompt splits at the stable/variable seam. Everything identical
     # across a run's determination calls (instructions, contract, brief,
@@ -315,6 +330,20 @@ def build_determination_prompt(
     ]
     if brief:
         prefix_parts += ["THE SUBJECT BRIEF:", json.dumps(brief, indent=2, default=str), ""]
+    if subject_identity:
+        prefix_parts += [
+            "AUTHORITATIVE SUBJECT IDENTITY:",
+            subject_identity_prompt(subject_identity),
+            "",
+        ]
+    if architecture_narrative:
+        prefix_parts += [
+            "THE ACTUAL PUBLISHED ARCHITECTURE NARRATIVE YOU MUST REVIEW:",
+            json.dumps(architecture_narrative, indent=2, default=str),
+            "Reject any identity claim that contradicts the authoritative subject "
+            "identity, even when the rest of the narrative is useful.",
+            "",
+        ]
     if scope_note:
         prefix_parts += ["RUN SCOPE:", scope_note, ""]
     prefix_parts += [
@@ -590,11 +619,24 @@ def _adjudication_digest(adjudication: Optional[dict]) -> Optional[dict]:
 
     def pass_summary(value: Any) -> dict:
         value = value if isinstance(value, dict) else {}
-        return {
+        summary = {
             key: value.get(key) for key in
             ("pass", "target_count", "done", "failed", "verdicts", "total_cost_usd")
             if key in value
         }
+        # Aggregate counts hide the exact deterministic verdict a subject
+        # criterion may name. A live criterion named an edge verify-edges had
+        # refuted, but P5 saw only "2 refuted" and repeatedly tried to enrich a
+        # rationale for the bad edge. Preserve the bounded per-target verdicts.
+        summary["outcomes"] = [
+            {
+                key: item.get(key) for key in ("id", "status", "verdict", "errors")
+                if item.get(key) not in (None, "", [])
+            }
+            for item in (value.get("outcomes") or [])[:200]
+            if isinstance(item, dict)
+        ]
+        return summary
 
     unsupported = [
         item for item in (adjudication.get("spot_checks") or [])
@@ -651,6 +693,69 @@ def _synthesis_digest(synthesis: Optional[dict]) -> Optional[dict]:
     if not isinstance(synthesis, dict):
         return None
     return dict(synthesis)
+
+
+def _architecture_narrative_digest(ctx: RunContext) -> Optional[dict]:
+    """The exact reader-facing root prose, not a parallel model summary."""
+    for row in ctx.store.enrichment():
+        if row.get("target_kind") != "architecture":
+            continue
+        payload = row.get("payload") or {}
+        return {
+            "summary": payload.get("summary"),
+            "data_flow_narrative": payload.get("data_flow_narrative"),
+            "subject_identity_contract_version": payload.get(
+                "subject_identity_contract_version"
+            ),
+            "derived_from_current_commit": bool(
+                ctx.commit_sha and row.get("commit_sha") == ctx.commit_sha
+            ),
+        }
+    return None
+
+
+def _subject_identity_verdict(
+    ctx: RunContext, criterion: Criterion
+) -> CriterionVerdict:
+    """Mechanically gate the narrative against repository provenance."""
+    identity = build_subject_identity(
+        ctx.arch, root=ctx.root, commit_sha=ctx.commit_sha
+    )
+    narrative = _architecture_narrative_digest(ctx)
+    if narrative is None:
+        return CriterionVerdict(
+            criterion_id=criterion.id,
+            statement=criterion.statement,
+            verdict="unmet",
+            evidence=["no architecture narrative was published"],
+            reasoning=(
+                "The final review cannot establish subject identity because the "
+                "reader-facing architecture narrative is absent."
+            ),
+        )
+    errors = subject_identity_errors(narrative, identity)
+    if ctx.commit_sha and narrative.get("derived_from_current_commit") is not True:
+        errors.append(
+            "published architecture narrative was not derived from the current "
+            "repository commit"
+        )
+    repository = identity.get("repository") or identity.get("name") or "local source tree"
+    return CriterionVerdict(
+        criterion_id=criterion.id,
+        statement=criterion.statement,
+        verdict="unmet" if errors else "met",
+        evidence=[
+            f"subject mode={identity.get('mode')}; repository={repository}; "
+            f"snapshot_commit_recorded={bool(identity.get('commit_sha'))}",
+            *(errors or ["published narrative contains no unsupported whole-subject identity claim"]),
+        ],
+        reasoning=(
+            "The published narrative contradicts deterministic subject provenance."
+            if errors
+            else "The published narrative is consistent with the deterministic "
+            "snapshot identity and any explicit operator declaration."
+        ),
+    )
 
 
 def _mechanical_map_digest(ctx: RunContext, ladder=None) -> dict:
@@ -743,9 +848,9 @@ class DeterminationPhase:
             return PhaseResult(name=self.name, status="ok", notes=outcome.notes,
                                data={"determination": outcome})
 
-        # The three universal gates are answered by code before anything is
+        # The universal gates are answered by code before anything is
         # asked of a model, so their verdicts cannot be talked out of.
-        mechanical = self._mechanical(criteria, census, adjudication)
+        mechanical = self._mechanical(ctx, criteria, census, adjudication)
 
         policy = ctx.policy.iteration.normalized()
         ctx.descend = make_descender(ctx, ladder)
@@ -772,7 +877,7 @@ class DeterminationPhase:
                 break
             if not ctx.budget.under():
                 outcome.notes.append(
-                    f"round {round_number + 1} not run: run cost ceiling reached"
+                    f"round {round_number + 1} not run: {ctx.budget.stop_reason()}"
                 )
                 break
             round_number += 1
@@ -828,7 +933,7 @@ class DeterminationPhase:
             census = self._census(ctx, ladder=ladder)
             if ladder is not None:
                 ladder.census = census
-            mechanical = self._mechanical(criteria, census, adjudication)
+            mechanical = self._mechanical(ctx, criteria, census, adjudication)
             judged = self._judge(
                 ctx, outcome, criteria, census, adjudication, synthesis, brief,
                 forced_round=False,
@@ -897,7 +1002,7 @@ class DeterminationPhase:
                 )
                 census = self._census(ctx, ladder=ladder)
                 ladder.census = census
-                mechanical = self._mechanical(criteria, census, adjudication)
+                mechanical = self._mechanical(ctx, criteria, census, adjudication)
                 judged = self._judge(
                     ctx, outcome, criteria, census, adjudication, synthesis, brief,
                     forced_round=False,
@@ -939,10 +1044,13 @@ class DeterminationPhase:
             return list(brief.criteria)
         return universal_criteria()
 
-    def _mechanical(self, criteria, census, adjudication) -> dict:
+    def _mechanical(self, ctx, criteria, census, adjudication) -> dict:
         out: dict[str, CriterionVerdict] = {}
         for criterion in criteria:
             if not criterion.universal:
+                continue
+            if criterion.id == "u4":
+                out[criterion.id] = _subject_identity_verdict(ctx, criterion)
                 continue
             verdict = evaluate_universal(
                 criterion, census=census, adjudication=adjudication
@@ -959,7 +1067,9 @@ class DeterminationPhase:
         *, forced_round: bool, rounds_so_far: Optional[list[dict]] = None,
     ) -> dict:
         if not ctx.budget.under():
-            outcome.notes.append("determination not judged: run cost ceiling reached")
+            outcome.notes.append(
+                f"determination not judged: {ctx.budget.stop_reason()}"
+            )
             return {}
         ceiling = ctx.policy.max_cost_usd
         remaining = ctx.budget.remaining()
@@ -988,6 +1098,10 @@ class DeterminationPhase:
             operations=_operations_digest(
                 ctx, (ctx.phase_data("p2_ladder") or {}).get("ladder")
             ),
+            subject_identity=build_subject_identity(
+                ctx.arch, root=ctx.root, commit_sha="recorded in run metadata"
+            ),
+            architecture_narrative=_architecture_narrative_digest(ctx),
             scope_note=(
                 "This is a bounded validation canary over only the selected "
                 f"{ctx.max_partitions} most important planned partition(s). Judge "
@@ -1035,9 +1149,38 @@ class DeterminationPhase:
     ) -> None:
         """Mechanical gates win; the model answers the rest."""
         model_verdicts: dict[str, dict] = {}
+        conflicted_ids: set[str] = set()
+        normalized_alias = False
         for item in (judged.get("criteria") or []):
-            if isinstance(item, dict) and item.get("criterion_id"):
-                model_verdicts[str(item["criterion_id"])] = item
+            if not isinstance(item, dict):
+                continue
+            canonical = item.get("criterion_id")
+            alias = item.get("id")
+            if canonical and alias and str(canonical) != str(alias):
+                conflicted_ids.update((str(canonical), str(alias)))
+                outcome.notes.append(
+                    "ignored a criterion verdict whose criterion_id and id "
+                    "disagreed"
+                )
+                continue
+            key = canonical or alias
+            if not key:
+                continue
+            key = str(key)
+            if key in model_verdicts:
+                conflicted_ids.add(key)
+                outcome.notes.append(
+                    f"ignored duplicate model verdicts for criterion {key!r}"
+                )
+                continue
+            model_verdicts[key] = item
+            normalized_alias = normalized_alias or (not canonical and bool(alias))
+        for key in conflicted_ids:
+            model_verdicts.pop(key, None)
+        if normalized_alias:
+            outcome.notes.append(
+                "normalized the documented criteria[].id alias to criterion_id"
+            )
 
         merged: list[CriterionVerdict] = []
         for criterion in criteria:

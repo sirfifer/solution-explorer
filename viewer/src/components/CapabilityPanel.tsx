@@ -158,7 +158,10 @@ export function CapabilityPanel({ mobile = false }: { mobile?: boolean } = {}) {
                             <span className={`text-[10px] truncate ${darkMode ? "text-zinc-500" : "text-zinc-400"}`} title={owner}>
                               {owner}
                             </span>
-                            <TestedBadge tested={capabilityIsTested(cap)} darkMode={darkMode} />
+                            <span className="flex items-center gap-1">
+                              <span className={`text-[10px] uppercase tracking-wide ${cap.confidence === "certain" ? "text-emerald-500" : "text-amber-500"}`}>{cap.confidence}</span>
+                              <TestedBadge tested={capabilityIsTested(cap)} darkMode={darkMode} />
+                            </span>
                           </div>
                         </button>
                       </li>

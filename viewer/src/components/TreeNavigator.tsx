@@ -386,7 +386,7 @@ export function TreeNavigator() {
     // not recurse into its children, so a node five levels down is reached by
     // expanding the grouped ancestor and then walking down inside it. Matching
     // only the selected id left every deep component under extensions/ with no
-    // row at all, which is what the crawl caught on VS Code after this fix
+    // row at all, which is what the crawl caught on private large-repository validation corpus after this fix
     // looked correct on a smaller subject.
     const chain = [...ancestors, selectedComponentId];
     const group = otherGroups.find((g) =>

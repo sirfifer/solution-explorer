@@ -6,7 +6,7 @@ Only the latest release on the main branch is supported with security updates. W
 
 ## Reporting a Vulnerability
 
-We take security seriously. If you discover a security vulnerability in Solution Explorer, please report it responsibly.
+We take security seriously. If you discover a security vulnerability in SysCorpus, please report it responsibly.
 
 To report a vulnerability:
 
@@ -40,4 +40,4 @@ The GitHub Action runs in your own CI environment (GitHub Actions runner) and do
 
 We aim to acknowledge security reports within 48 hours and will work to develop and release a fix as quickly as possible. The timeline for a fix depends on the severity and complexity of the vulnerability.
 
-Thank you for helping keep Solution Explorer secure.
+Thank you for helping keep SysCorpus secure.

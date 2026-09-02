@@ -152,7 +152,7 @@ export default class TestboardReporter implements Reporter {
     // The directory name gets a sanitised subject; the record below keeps the
     // real one. `subject` is read from the analysed project's manifest, so it
     // is the SUBJECT's data rather than ours, and a repo-style name such as
-    // "microsoft/vscode" would silently nest the run two levels down where the
+    // "microsoft/large-repository-validation" would silently nest the run two levels down where the
     // board cannot find it. A leading ".." would climb out of .testboard
     // entirely, and ":" is simply not a legal filename character on Windows.
     this.runDir = path.join(root, `${stamp}-crawl-${pathSafe(subject)}`);

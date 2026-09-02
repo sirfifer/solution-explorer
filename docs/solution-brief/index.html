@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="A fact-led overview of SysCorpus, dated August 27, 2026.">
+  <meta name="description" content="A fact-led overview of SysCorpus, dated September 1, 2026.">
   <title>SysCorpus | Product and Vision Overview</title>
   <style>
     :root {
@@ -516,6 +516,22 @@
     .validating { color: #875900; background: var(--amber-soft); }
     .direction { color: #563e92; background: var(--violet-soft); }
 
+    .validation-proof {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-top: .08in;
+    }
+    .validation-proof div {
+      padding: 6px 7px;
+      border: 1px solid #cbd9dd;
+      border-radius: 7px;
+      background: #f3f8f9;
+    }
+    .validation-proof strong { display: block; color: var(--ink); font-family: var(--serif); font-size: 11pt; font-weight: 500; line-height: 1; }
+    .validation-proof span { display: block; margin-top: 3px; color: var(--muted); font-size: 5.45pt; line-height: 1.22; }
+    .validation-proof-note { margin: 4px 2px 0; color: var(--muted); font-size: 5.8pt; line-height: 1.25; }
+
     .honesty-box {
       display: grid;
       grid-template-columns: .72fr 1.28fr;
@@ -563,7 +579,7 @@
         </span>
         SysCorpus
       </div>
-      <div class="date-chip">Working overview · 27 Aug 2026</div>
+      <div class="date-chip">Working overview · 1 Sep 2026</div>
     </div>
 
     <h1 class="hero-title">Living maps of real software, <em>deep enough to reach the code.</em></h1>
@@ -824,22 +840,30 @@
       <p class="dek">Status below is intentionally dated. It distinguishes what exists in the repository from what is under validation and what remains direction.</p>
     </div>
 
-    <table class="status-table" aria-label="Current product status as of August 27, 2026">
-      <thead><tr><th>Area</th><th>Status</th><th>Factual state on 27 Aug 2026</th></tr></thead>
+    <table class="status-table" aria-label="Current product status as of September 1, 2026">
+      <thead><tr><th>Area</th><th>Status</th><th>Factual state on 1 Sep 2026</th></tr></thead>
       <tbody>
         <tr><td>Core and updates</td><td><span class="pill validating">Built foundation</span></td><td>The v2 fact store, content hashing, coverage ledger, multi-repository composition, parser families, and single/split projections are built. Changed files update without re-parsing unchanged files. Full dependency and blast-radius propagation is the explicit next v2 treatment.</td></tr>
-        <tr><td>Interactive viewer</td><td><span class="pill built">Built</span></td><td>Hierarchical graph, eight gated lenses, search, source deep links, code previews, annotations, tours, activity and ownership signals, mobile behavior, live status, and administration surfaces exist.</td></tr>
+        <tr><td>Interactive viewer</td><td><span class="pill built">Built</span></td><td>The comprehension-first Overview is primary and opens focused paths into the hierarchical graph, eight gated lenses, search, source deep links, code previews, annotations, tours, activity and ownership signals, mobile behavior, live status, and administration surfaces. The former dense workspace is deprecated and retained temporarily for compatibility and validation.</td></tr>
         <tr><td>Machine access</td><td><span class="pill built">Built</span></td><td>ai.json, llms.txt, and a zero-dependency MCP server with twelve read-only, evidence-oriented tools are implemented and checked against the same fact store.</td></tr>
         <tr><td>Supply chain and SBOM</td><td><span class="pill built">Built</span></td><td>Eight manifest ecosystems feed an evidence-linked supply-chain view with resolved versions, direct/transitive scope, pin state, SDK targets, vendored code, fixture separation, and parse warnings. Each dependency-bearing repository projection emits CycloneDX 1.5 sbom.json.</td></tr>
         <tr><td>Security and vulnerabilities</td><td><span class="pill validating">Go-live requirement</span></td><td>Useful inputs already exist: network schemes and edges, authentication patterns, environment variables, secret-shaped inventory, rules, dependency pinning, and CRA hygiene checks. A unified security view and SBOM package/version matching against maintained vulnerability feeds, with CVEs surfaced as evidence, are required before go-live and are not claimed as complete today.</td></tr>
-        <tr><td>Evidence-bound enrichment</td><td><span class="pill validating">Validating</span></td><td>The five-phase engine, completeness contract, adjudication, usage ledger, run reports, quality audit, and pause/resume controls are built. Current work is validating final run analysis and full real-subject behavior.</td></tr>
+        <tr><td>Evidence-bound enrichment</td><td><span class="pill validating">Private run complete</span></td><td>The five-phase engine, completeness contract, adjudication, usage ledger, run reports, quality audit, pause/resume controls, and provider circuit stops are built. A full large-repository run completed; deterministic reconciliation and two remaining gate criteria still prevent publication.</td></tr>
         <tr><td>Public maintained corpus</td><td><span class="pill direction">Next threshold</span></td><td>The harness, private preview, attribution and license review, comprehension instrument, and graduation gates exist. Major open-source maps will publish one at a time, stamped with source and commit and refreshed on a project-appropriate schedule. No subject is announced before its map is ready.</td></tr>
       </tbody>
     </table>
 
+    <div class="validation-proof" aria-label="Measured private validation completed September 1, 2026">
+      <div><strong>4.9M</strong><span>source lines in the analyzed codebase</span></div>
+      <div><strong>474</strong><span>successful invocations in 3h 04m</span></div>
+      <div><strong>106</strong><span>claims checked; zero unsupported after quarantine</span></div>
+      <div><strong>195</strong><span>unresolved items kept as honest gaps</span></div>
+    </div>
+    <p class="validation-proof-note">The full private run completed with zero provider failures, retries, or output-budget violations. It remains gated and unpublished because one subject criterion and one universal criterion are unmet. This is validation evidence, not a public demo.</p>
+
     <div class="honesty-box">
       <h3>Where this stands, honestly.</h3>
-      <p>SysCorpus is early and independent. The engine, viewer, SBOM and supply-chain surface, quality gates, and comprehension instruments represent substantial completed work. No public subject map has graduated. The unified security view and CVE/advisory correlation are explicit go-live work, not present-tense claims. Engineering stops when quality, completion, or evidence does not hold, repairs the system, and reruns bounded canaries.</p>
+      <p>SysCorpus is early and independent. The engine, viewer, SBOM and supply-chain surface, quality gates, and comprehension instruments represent substantial completed work. A full-scale private validation run has completed; its result remains gated and unpublished. No public subject map has graduated. The unified security view and CVE/advisory correlation are explicit go-live work, not present-tense claims.</p>
     </div>
 
     <div class="not-list" aria-label="Supply-chain and vulnerability boundary">
@@ -852,7 +876,7 @@
       <div class="card">
         <h3>Near-term proof</h3>
         <ul class="muted" style="font-size:6.3pt;line-height:1.28">
-          <li>Complete the independent review and bounded enrichment validation now in progress.</li>
+          <li>Resolve the remaining deterministic reconciliation blockers found by the completed large-repository validation run.</li>
           <li>Finish the unified security surface and maintained SBOM-to-advisory/CVE correlation required for go-live.</li>
           <li>Graduate the first real public map through coverage, security, quality, attribution, license, and comprehension gates.</li>
         </ul>

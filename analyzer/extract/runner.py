@@ -99,7 +99,13 @@ from .signals import extract_entity_signals, extract_rule_signals, extract_signa
 # every markdown search-index entry carried empty text). Markdown has no
 # parser, so parser_version() never tier-tags it; bumping EXTRACT_TIER is the
 # only way to invalidate cached FileFacts rows that predate this fix.
-EXTRACT_TIER = "p5-extract/8"
+# /10 (comprehension review): queue names no longer accept Swift-style
+# ``topic:`` argument labels, websocket URLs join the transport evidence, and
+# assignment-shaped queue names require an observed queue driver. JSON/Markdown
+# are routed away from the executable-code rule extractor. Warm stores must
+# refresh these signals once or they preserve the exact false capabilities and
+# rules this tier corrected.
+EXTRACT_TIER = "p5-extract/10"
 INLINE_THRESHOLD = 8  # below this many cache misses, parse inline (no pool)
 
 # In-run retry for transient extraction failures (P4-8). A worker crash, an
@@ -351,24 +357,32 @@ def _enumerate(
                 for ci_path in _ci_files_in_pruned_dir(dirpath, d):
                     add_ci_candidate(ci_path)
             elif _is_generated_dataset_dir(os.path.join(dirpath, d)):
-                # The tool's own emitted projection dataset (D1). Prune the whole
-                # subtree and account it as one build-output row rather than
-                # parsing its manifest and detail shards as source. The prune is
-                # LOUD (adversarial-review fix): it names the directory and the
-                # file count it stands for, so a wrongly-identified directory
-                # can never vanish silently behind a green badge.
-                n_dropped = sum(
-                    len(fs) for _, _, fs in os.walk(os.path.join(dirpath, d))
-                )
+                # The tool's own emitted projection dataset (D1). Do not parse
+                # its serialized code previews as product source, but keep the
+                # repository accounting file-complete. Every file receives its
+                # own generated disposition and remains available to the
+                # inventory/human-classification path.
+                generated_root = os.path.join(dirpath, d)
+                generated_files: list[str] = []
+                for generated_dir, generated_dirs, generated_names in os.walk(generated_root):
+                    generated_dirs.sort()
+                    for generated_name in sorted(generated_names):
+                        generated_files.append(os.path.relpath(
+                            os.path.join(generated_dir, generated_name), root
+                        ))
+                for generated_rel in generated_files:
+                    ledger.append((
+                        generated_rel,
+                        "excluded:generated",
+                        "generated: solution-explorer projection dataset",
+                    ))
                 print(
                     f"NOTE: {child}/ accounted as a generated solution-explorer "
-                    f"projection dataset ({n_dropped} files under one ledger row); "
+                    f"projection dataset ({len(generated_files)} files classified individually); "
                     "if this directory is real source, rename its manifest.json "
                     "or report this as a misdetection.",
                     file=sys.stderr,
                 )
-                ledger.append((child, "excluded:skipped_directory",
-                               "generated: solution-explorer projection dataset"))
             elif _is_vendored_repo(os.path.join(dirpath, d)):
                 ledger.append((child, "excluded:vendored_repo", d))
             else:

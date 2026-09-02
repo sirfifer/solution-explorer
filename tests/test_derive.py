@@ -362,6 +362,22 @@ def test_ci_detection_is_bounded_to_the_scan_root(tmp_path):
     _, arch2 = derive_all(store2, "host")
     root2 = arch2["components"][0]
     assert root2["testing"].get("has_ci_tests") is True
+    workflow = ".github/workflows/ci.yml"
+    assert any(row["path"] == workflow for row in arch2["files"])
+    assert workflow in root2["files"]
+
+
+def test_external_service_preserves_transport_and_auth_unknown(tmp_path):
+    (tmp_path / "client.swift").write_text(
+        'let endpoint = URL(string: "wss://api.deepgram.com/v1/listen")!\n'
+    )
+    _, _, arch = _extract_and_derive(tmp_path, "client")
+    root = arch["components"][0]
+    service = next(row for row in root["external_services"] if row["name"] == "Deepgram")
+    assert service["protocol"] == "wss"
+    assert service["port"] == 443
+    assert service["authentication"] == "not_observable"
+    assert service["evidence"]["file"] == "client.swift"
 
 
 def test_test_files_are_classified_within_root_only(tmp_path):

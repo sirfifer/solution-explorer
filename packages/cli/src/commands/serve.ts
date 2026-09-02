@@ -30,7 +30,7 @@ export interface ServeOptions {
 
 export async function serve(options: ServeOptions): Promise<void> {
   console.log();
-  console.log(pc.bold("Solution Explorer"));
+  console.log(pc.bold("SysCorpus"));
   console.log();
 
   // Step 1: Detect Python

@@ -667,11 +667,11 @@ function OverviewTab({
           </h4>
           <div className="space-y-1">
             {docs.api_endpoints.map((ep, i) => (
-              <div key={i} className={`
+              <div key={i} data-se="row" className={`
                 flex items-center gap-2 px-2 py-1.5 rounded-md font-mono text-xs
                 ${darkMode ? "bg-zinc-800/50" : "bg-zinc-50"}
               `}>
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold
+                <span data-se="method" className={`px-1.5 py-0.5 rounded text-[10px] font-bold
                   ${ep.method === "GET" ? (darkMode ? "bg-green-900/40 text-green-400" : "bg-green-100 text-green-700") :
                     ep.method === "POST" ? (darkMode ? "bg-blue-900/40 text-blue-400" : "bg-blue-100 text-blue-700") :
                     ep.method === "DELETE" ? (darkMode ? "bg-red-900/40 text-red-400" : "bg-red-100 text-red-700") :
@@ -884,8 +884,8 @@ function DocsTab({ component }: { component: Component }) {
 
 function StatCard({ label, value, darkMode }: { label: string; value: string; darkMode: boolean }) {
   return (
-    <div className={`px-3 py-2 rounded-lg ${darkMode ? "bg-zinc-800/50" : "bg-zinc-50"}`}>
-      <div className={`text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>{label}</div>
+    <div data-se="stat" className={`px-3 py-2 rounded-lg ${darkMode ? "bg-zinc-800/50" : "bg-zinc-50"}`}>
+      <div data-se="stat-key" className={`text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>{label}</div>
       <div className={`text-lg font-semibold tabular-nums ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
         {value}
       </div>
@@ -1478,7 +1478,7 @@ function MethodBadge({ method }: { method: string }) {
     m === "DELETE" ? (darkMode ? "bg-red-900/40 text-red-400" : "bg-red-100 text-red-700") :
     (darkMode ? "bg-yellow-900/40 text-yellow-400" : "bg-yellow-100 text-yellow-700");
   return (
-    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${color}`}>{m}</span>
+    <span data-se="method" className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${color}`}>{m}</span>
   );
 }
 
@@ -2385,7 +2385,7 @@ function RelationshipsTab({
 // The file and symbol views carry their own identity, parallel to the component
 // view's data-testid="detail-panel". Without them the crawl had no way to assert
 // "a symbol result opened its symbol", so it asserted the component panel
-// instead and reported 15 false failures on VS Code. A selector contract that
+// instead and reported 15 false failures on private large-repository validation corpus. A selector contract that
 // only covers one of three detail kinds invites exactly that mistake.
 function FileDetail({ file }: { file: FileInfo }) {
   const { darkMode, closeDetail, architecture } = useArchStore();

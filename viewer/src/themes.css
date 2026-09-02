@@ -1,0 +1,608 @@
+/*
+ * The character half of the theme seam. themes.generated.css re-dresses the
+ * palette; this file carries everything a palette cannot say: what a theme is
+ * made of, how it sets type, how sharp its corners are, and what its canvas
+ * is drawn on.
+ *
+ * Both halves work the same way. The viewer's components resolve their
+ * Tailwind utilities through CSS variables, so overriding those variables
+ * under a [data-theme] selector re-dresses the application without editing a
+ * component. Nothing here touches data, layout, or interaction, which is the
+ * constraint the theme proposal puts on theming.
+ *
+ * Adding a theme means adding a block here and an entry in
+ * scripts/generate-themes.mjs. No component changes.
+ */
+
+@import "./themes.generated.css";
+
+/* ---------------------------------------------------------------------------
+ * Signal: the original dress, and the source of the default values every
+ * other theme overrides. Named so it can be discussed and switched away from.
+ * Its palette is Tailwind's own, so it needs no generated block.
+ * ------------------------------------------------------------------------ */
+
+html.dark {
+  --se-page: var(--color-zinc-950);
+  --se-grid: #27272a;
+  --se-raise: var(--color-zinc-900);
+}
+
+html.light {
+  --se-page: #ffffff;
+  --se-grid: #e4e4e7;
+  --se-raise: #ffffff;
+}
+
+body {
+  background-color: var(--se-page);
+}
+
+/* ---------------------------------------------------------------------------
+ * Ledger: engineering drawing meets annual report.
+ *
+ * Paper and ink, hairline rules, corners that are cut rather than moulded,
+ * and figures that line up in a column. The palette does the color work; this
+ * block supplies the discipline.
+ * ------------------------------------------------------------------------ */
+
+html[data-theme="ledger"] {
+  --font-sans: "Libre Franklin", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-serif: "Libre Franklin", Georgia, serif;
+
+  /* Drafted, not moulded. */
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+  --radius-3xl: 8px;
+  --radius-4xl: 10px;
+  --xy-node-border-radius: 3px;
+
+  /* Offset ink shadow rather than a soft glow. */
+  --shadow-sm: 2px 2px 0 rgb(0 0 0 / 0.06);
+  --shadow-md: 3px 3px 0 rgb(0 0 0 / 0.07);
+  --shadow-lg: 4px 4px 0 rgb(0 0 0 / 0.08);
+  --shadow-xl: 5px 5px 0 rgb(0 0 0 / 0.09);
+  --shadow-2xl: 6px 6px 0 rgb(0 0 0 / 0.10);
+
+  /* Numbers in a ledger line up. */
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The ruling of the paper is drawn by React Flow's own Background component,
+ * at 28px in --se-grid, and by nothing else.
+ *
+ * It used to be drawn twice: once by that component and once by a CSS grid
+ * painted on .react-flow. Two grids at different pitches never resolve into
+ * one surface, and the interference is what made the ground assertive rather
+ * than quiet. Worse, only one of the two panned. A CSS background sits still
+ * while the map moves under it, so the ruling slid off whatever it was
+ * supposedly helping you line up against.
+ *
+ * A canvas gets exactly one grid, and it belongs to the layer that pans.
+ */
+
+/* Edges are drafted lines: solid, even, no glow. */
+html[data-theme="ledger"] .react-flow__edge-path {
+  stroke-width: 1.6;
+}
+
+/*
+ * The card as a ruled entry rather than a lit panel.
+ *
+ * White stock, a hairline ink rule on three sides, and the component's type
+ * colour kept as a 4px rule along the top. That top rule is the one border
+ * side deliberately left alone: its colour is set by the type utility on the
+ * element, so the type stays legible at a glance without a stylesheet needing
+ * to know which type it is. The shadow is offset ink, not a blur, because
+ * paper stacks and does not glow.
+ */
+html[data-theme="ledger"] [data-se="card"] {
+  background-color: var(--se-raise);
+  border-style: solid;
+  border-width: 1px;
+  border-top-width: 4px;
+  border-right-color: var(--color-zinc-800);
+  border-bottom-color: var(--color-zinc-800);
+  border-left-color: var(--color-zinc-800);
+  border-radius: 3px;
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--color-zinc-900) 9%, transparent);
+  backdrop-filter: none;
+}
+
+/* Tags are stamped, not filled: squared, outlined in their own ink, tracked. */
+html[data-theme="ledger"] [data-se="badge"] {
+  background-color: transparent;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+html[data-theme="ledger"] [data-se="name"] {
+  letter-spacing: -0.004em;
+}
+
+/* The side panel is a facing page, divided by a rule rather than a shadow. */
+html[data-theme="ledger"] [data-se="panel"] {
+  background-color: var(--se-raise);
+  border-left-color: var(--color-zinc-300);
+}
+
+/*
+ * Figures in a ledger are ruled off above and sit on the page, not in a tray.
+ * The label is set small and tracked, the way a column head is.
+ */
+html[data-theme="ledger"] [data-se="stat"] {
+  background-color: transparent;
+  border-top: 1px solid var(--color-zinc-800);
+  border-radius: 0;
+  padding: 8px 2px;
+}
+html[data-theme="ledger"] [data-se="stat-key"] {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Endpoint rows are boxed entries, squared, hairline ruled. */
+html[data-theme="ledger"] [data-se="row"] {
+  border: 1px solid var(--color-zinc-200);
+  border-radius: 0;
+}
+
+/*
+ * Methods are solid ink stamps, not tinted washes.
+ *
+ * The chip's own utility class sets its colour to the method's ink and its
+ * background to a pale wash of the same. Painting the background from
+ * currentColor promotes that ink to the fill without a stylesheet needing to
+ * know which method it is. The glyphs are then lifted back out with
+ * -webkit-text-fill-color, which overrides the rendered text colour only and
+ * leaves currentColor, and therefore the fill, as the ink. Setting `color`
+ * instead would move both and stamp the text in its own background.
+ */
+html[data-theme="ledger"] [data-se="method"] {
+  border-radius: 0;
+  background-color: currentColor;
+  -webkit-text-fill-color: var(--se-raise);
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+/*
+ * The summary sits on the page, not on a coloured slab. It is the largest
+ * surface in the window after the canvas, and a saturated wash across it is
+ * the one thing that still reads as a dashboard once everything else is
+ * paper. The ink keeps the accent; the stock does not.
+ */
+html[data-theme="ledger"] [data-se="summary"] {
+  background-color: var(--se-page);
+  border-bottom-color: var(--color-zinc-300);
+}
+
+/* ---------------------------------------------------------------------------
+ * Atlas: the product says "living maps", so Atlas takes it literally.
+ *
+ * Parchment and contour, etched landmark cards, expedition routes, and a
+ * serif that belongs to an engraved plate rather than a dashboard.
+ * ------------------------------------------------------------------------ */
+
+html[data-theme="atlas"] {
+  --font-sans: "Alegreya", "Iowan Old Style", Palatino, Georgia, serif;
+  --font-serif: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 14px;
+  --radius-3xl: 18px;
+  --radius-4xl: 22px;
+  --xy-node-border-radius: 8px;
+
+  font-optical-sizing: auto;
+}
+
+/* Headings are set from the plate, the body from the caption. */
+html[data-theme="atlas"] h1,
+html[data-theme="atlas"] h2,
+html[data-theme="atlas"] h3 {
+  font-family: var(--font-serif);
+  letter-spacing: 0.01em;
+}
+
+/*
+ * Faint contour. Two very low-frequency wave layers at different scales read
+ * as elevation lines without ever resolving into a repeating tile the eye can
+ * lock onto.
+ */
+/*
+ * Atlas gets the same single panning grid, plus atmosphere.
+ *
+ * The contour rings and the two soft washes are lighting on old stock, not
+ * structure, which is the one thing a fixed background is honest about: light
+ * falls on the sheet and stays put while the map moves under it. They are
+ * held at the alpha the site specimen uses, low enough to be the tone of the
+ * paper rather than a pattern you read.
+ */
+html[data-theme="atlas"] .react-flow {
+  background-image:
+    radial-gradient(ellipse 46% 40% at 18% 82%, var(--se-wash-warm), transparent 62%),
+    radial-gradient(ellipse 38% 38% at 85% 12%, var(--se-wash-cool), transparent 60%),
+    repeating-radial-gradient(circle at 30% 40%, transparent 0 34px, var(--se-rule) 34px 35px),
+    repeating-radial-gradient(circle at 75% 70%, transparent 0 46px, var(--se-rule) 46px 47px);
+}
+html[data-theme="atlas"].light {
+  --se-rule: color-mix(in srgb, var(--color-zinc-500) 9%, transparent);
+  --se-wash-warm: color-mix(in srgb, var(--color-zinc-500) 13%, transparent);
+  --se-wash-cool: color-mix(in srgb, var(--color-blue-700) 10%, transparent);
+}
+html[data-theme="atlas"].dark {
+  --se-rule: color-mix(in srgb, var(--color-zinc-100) 5%, transparent);
+  --se-wash-warm: color-mix(in srgb, var(--color-amber-200) 5%, transparent);
+  --se-wash-cool: color-mix(in srgb, var(--color-blue-300) 6%, transparent);
+}
+
+/*
+ * Landmark cards are etched: a hairline outside the border, the way a double
+ * rule is engraved around a plate.
+ */
+html[data-theme="atlas"] .react-flow__node {
+  box-shadow:
+    0 0 0 1.5px var(--se-page),
+    0 0 0 2.5px var(--color-zinc-300),
+    0 2px 6px rgb(0 0 0 / 0.07);
+}
+
+/* Routes, not wires. */
+html[data-theme="atlas"] .react-flow__edge-path {
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+/*
+ * The card as an etched landmark.
+ *
+ * The double rule is drawn as two rings rather than a border: a band of the
+ * card's own parchment, then a tan hairline outside it, which is how a plate
+ * is engraved and what a single border cannot express. The element's own
+ * 1px border is left to the type colour, so the map keeps saying what each
+ * component is while every card is cut from the same stock.
+ */
+html[data-theme="atlas"] [data-se="card"] {
+  border-width: 1px;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 3px var(--se-raise),
+    0 0 0 4px var(--color-zinc-300),
+    2px 4px 10px color-mix(in srgb, var(--color-zinc-900) 14%, transparent);
+  backdrop-filter: none;
+}
+
+/* Captions on a plate are set in italic, and the labels follow. */
+html[data-theme="atlas"] [data-se="badge"] {
+  border-radius: 999px;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* Landmark names are engraved, so they come off the display face. */
+html[data-theme="atlas"] [data-se="name"] {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: 0.006em;
+}
+
+/* The side panel is the sheet's margin, divided by a double rule. */
+html[data-theme="atlas"] [data-se="panel"] {
+  border-left: 3px double var(--color-zinc-400);
+}
+
+/* Figures sit in tinted panels, the way a cartouche is laid onto a chart. */
+html[data-theme="atlas"] [data-se="stat"] {
+  background-color: color-mix(in srgb, var(--color-zinc-400) 20%, transparent);
+  border-radius: 6px;
+}
+html[data-theme="atlas"] [data-se="stat-key"] {
+  font-style: italic;
+}
+
+html[data-theme="atlas"] [data-se="row"] {
+  background-color: color-mix(in srgb, var(--color-zinc-400) 16%, transparent);
+  border-radius: 6px;
+}
+
+/* Methods are lozenges struck in the jewel inks, glyphs left as parchment. */
+html[data-theme="atlas"] [data-se="method"] {
+  border-radius: 999px;
+  background-color: currentColor;
+  -webkit-text-fill-color: var(--se-raise);
+  letter-spacing: 0.03em;
+}
+
+/* The summary is written onto the sheet, not pasted over it. */
+html[data-theme="atlas"] [data-se="summary"] {
+  background-color: var(--se-page);
+  border-bottom-color: var(--color-zinc-300);
+}
+
+/* ---------------------------------------------------------------------------
+ * Motion. Switching a theme repaints most of the window at once; letting the
+ * palette cross-fade is what makes the switch read as one map changing dress
+ * rather than as a page reload.
+ * ------------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Fold: the map as a hand-built paper diorama.
+ *
+ * The furthest material from a software dashboard, which is the whole point of
+ * the striking slot: a working map of real code, made of cut paper, should
+ * feel like a magic trick. Everything here is craft rather than genre, so it
+ * carries the imaginative distance without narrowing the audience.
+ *
+ * This is also the seam's stress test. Fold changes stock, ink, type, corner,
+ * shadow language, edge treatment and the shape of every tile, and it does it
+ * with one generated palette block, this stylesheet, and one registry entry.
+ * No component was touched to add it.
+ * ------------------------------------------------------------------------ */
+
+html[data-theme="fold"] {
+  --font-sans: "Baloo 2", "Trebuchet MS", "Segoe UI", sans-serif;
+  --font-serif: "Baloo 2", "Trebuchet MS", sans-serif;
+  --font-mono: "Courier Prime", "Courier New", ui-monospace, monospace;
+
+  /* Scissors, not a die-cutter: soft but not moulded. */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 7px;
+  --radius-xl: 9px;
+  --radius-2xl: 12px;
+  --radius-3xl: 16px;
+  --radius-4xl: 20px;
+  --xy-node-border-radius: 7px;
+}
+
+/*
+ * The bench. Two broad washes stand in for the light falling across a table;
+ * the dot grid React Flow draws is the cutting mat under the work.
+ */
+html[data-theme="fold"] .react-flow {
+  background-image:
+    radial-gradient(ellipse 52% 44% at 12% 88%, var(--se-wash-warm), transparent 64%),
+    radial-gradient(ellipse 44% 40% at 88% 8%, var(--se-wash-cool), transparent 62%);
+}
+html[data-theme="fold"].light {
+  --se-wash-warm: color-mix(in srgb, var(--color-amber-500) 9%, transparent);
+  --se-wash-cool: color-mix(in srgb, var(--color-blue-400) 8%, transparent);
+}
+html[data-theme="fold"].dark {
+  --se-wash-warm: color-mix(in srgb, var(--color-amber-300) 7%, transparent);
+  --se-wash-cool: color-mix(in srgb, var(--color-blue-300) 5%, transparent);
+}
+
+/*
+ * A card is a sheet lying on the bench, not a panel drawn on it.
+ *
+ * The depth is three stacked shadows rather than one: a tight contact shadow
+ * where the paper meets the surface, a broader soft one for the lift, and a
+ * hairline of the sheet's own colour along the top edge standing in for the
+ * lit cut. A single blurred shadow reads as a drop shadow; these three read
+ * as a physical object. That is the entire difference between craft and a
+ * card component with elevation.
+ */
+html[data-theme="fold"] [data-se="card"] {
+  /* Most frames already carry this; the plain application and module cards do
+     not, and the tape below is positioned against it. */
+  position: relative;
+  background-color: var(--se-raise);
+  border-width: 0;
+  border-radius: 7px;
+  box-shadow:
+    0 1px 1px color-mix(in srgb, var(--color-zinc-900) 16%, transparent),
+    0 6px 14px -4px color-mix(in srgb, var(--color-zinc-900) 22%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-white) 70%, transparent);
+  backdrop-filter: none;
+}
+
+/*
+ * Washi tape across the top corner. Drawn on the card itself with a gradient
+ * rather than added to the markup, because a theme may not change what is on
+ * the page, only how it looks.
+ */
+html[data-theme="fold"] [data-se="card"]::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 14px;
+  width: 46px;
+  height: 15px;
+  transform: rotate(-4deg);
+  border-radius: 1px;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-amber-500) 42%, transparent) 0 4px,
+      color-mix(in srgb, var(--color-amber-500) 24%, transparent) 4px 8px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Labels are punched tags, set in the rounded face the theme is built on. */
+html[data-theme="fold"] [data-se="badge"] {
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+html[data-theme="fold"] [data-se="name"] {
+  font-weight: 700;
+  letter-spacing: 0.004em;
+}
+
+/*
+ * Edges are stitched thread. The dash is the stitch, so it is stated here
+ * rather than left to the relationship's own dash pattern, and the round cap
+ * gives each stitch its thread end.
+ */
+html[data-theme="fold"] .react-flow__edge-path {
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 5 4;
+}
+
+/* The panel is another sheet, laid alongside rather than butted against. */
+html[data-theme="fold"] [data-se="panel"] {
+  background-color: var(--se-page);
+  border-left-color: color-mix(in srgb, var(--color-zinc-900) 12%, transparent);
+}
+
+/* Stat tiles are sticky notes: square-ish, tinted, each one slightly askew. */
+html[data-theme="fold"] [data-se="stat"] {
+  background-color: color-mix(in srgb, var(--color-amber-500) 20%, transparent);
+  border-radius: 2px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-zinc-900) 16%, transparent);
+}
+html[data-theme="fold"] [data-se="stat"]:nth-child(odd) { transform: rotate(-0.5deg); }
+html[data-theme="fold"] [data-se="stat"]:nth-child(even) { transform: rotate(0.5deg); }
+html[data-theme="fold"] [data-se="stat-key"] {
+  font-weight: 600;
+}
+
+html[data-theme="fold"] [data-se="row"] {
+  border-radius: 3px;
+  background-color: color-mix(in srgb, var(--color-zinc-400) 16%, transparent);
+}
+
+/* Methods are punched chips in the craft inks. */
+html[data-theme="fold"] [data-se="method"] {
+  border-radius: 3px;
+  background-color: currentColor;
+  -webkit-text-fill-color: var(--se-raise);
+  font-weight: 700;
+}
+
+/* The summary is written on the bench paper, not on a coloured slab. */
+html[data-theme="fold"] [data-se="summary"] {
+  background-color: var(--se-page);
+  border-bottom-color: color-mix(in srgb, var(--color-zinc-900) 12%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+ * Lumen: the map as a living reef at depth.
+ *
+ * Light is the information carrier. The geometry remains disciplined and the
+ * content hierarchy unchanged, but panels feel grown rather than machined.
+ * The light variant is a sunlit shallows, not an inverted control room.
+ * ------------------------------------------------------------------------ */
+
+html[data-theme="lumen"] {
+  --font-sans: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  --font-serif: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 26px;
+  --radius-3xl: 32px;
+  --radius-4xl: 38px;
+  --xy-node-border-radius: 18px;
+}
+
+html[data-theme="lumen"] .react-flow {
+  background-image:
+    radial-gradient(ellipse 42% 34% at 16% 82%, var(--se-lumen-green), transparent 68%),
+    radial-gradient(ellipse 38% 32% at 86% 16%, var(--se-lumen-violet), transparent 66%),
+    radial-gradient(circle at 48% 44%, var(--se-lumen-blue), transparent 52%);
+}
+
+html[data-theme="lumen"].dark {
+  --se-lumen-green: color-mix(in srgb, var(--color-emerald-400) 7%, transparent);
+  --se-lumen-violet: color-mix(in srgb, var(--color-violet-400) 7%, transparent);
+  --se-lumen-blue: color-mix(in srgb, var(--color-sky-400) 4%, transparent);
+}
+
+html[data-theme="lumen"].light {
+  --se-lumen-green: color-mix(in srgb, var(--color-emerald-500) 9%, transparent);
+  --se-lumen-violet: color-mix(in srgb, var(--color-violet-500) 7%, transparent);
+  --se-lumen-blue: color-mix(in srgb, var(--color-sky-500) 8%, transparent);
+}
+
+html[data-theme="lumen"] [data-se="card"] {
+  background-color: color-mix(in srgb, var(--se-raise) 91%, transparent);
+  border-width: 1px;
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, currentColor 20%, transparent),
+    0 0 24px -8px color-mix(in srgb, currentColor 54%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-white) 10%, transparent);
+  backdrop-filter: blur(12px) saturate(1.08);
+}
+
+html[data-theme="lumen"] [data-se="badge"] {
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 999px;
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+  letter-spacing: 0.025em;
+}
+
+html[data-theme="lumen"] [data-se="name"] {
+  letter-spacing: 0.008em;
+  text-shadow: 0 0 16px color-mix(in srgb, currentColor 32%, transparent);
+}
+
+html[data-theme="lumen"] .react-flow__edge-path {
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 38%, transparent));
+}
+
+html[data-theme="lumen"] [data-se="panel"] {
+  background-color: color-mix(in srgb, var(--se-page) 88%, transparent);
+  border-left-color: color-mix(in srgb, var(--color-cyan-400) 28%, transparent);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+html[data-theme="lumen"] [data-se="stat"] {
+  border: 1px solid color-mix(in srgb, var(--color-cyan-400) 18%, transparent);
+  border-radius: 14px;
+  background-color: color-mix(in srgb, var(--color-cyan-500) 8%, transparent);
+}
+
+html[data-theme="lumen"] [data-se="row"] {
+  border-radius: 12px;
+  background-color: color-mix(in srgb, var(--color-sky-500) 7%, transparent);
+}
+
+html[data-theme="lumen"] [data-se="method"] {
+  border-radius: 999px;
+  box-shadow: 0 0 12px color-mix(in srgb, currentColor 25%, transparent);
+}
+
+html[data-theme="lumen"] [data-se="summary"] {
+  background:
+    radial-gradient(ellipse at 20% 50%, color-mix(in srgb, var(--color-emerald-500) 8%, transparent), transparent 56%),
+    var(--se-page);
+  border-bottom-color: color-mix(in srgb, var(--color-cyan-400) 22%, transparent);
+}

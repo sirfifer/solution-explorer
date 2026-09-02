@@ -1,12 +1,12 @@
-> **Historical snapshot (written 2026-02-22, banner added 2026-08-20).** This document describes Solution Explorer's architecture as it existed then and is kept for its research and reasoning, not as a description of the current codebase. Since it was written, tree-sitter parsers replaced the six regex-only parsers it describes, the analyzer was rebuilt around the default v2 extract, derive, project index engine with a coverage ledger, and an MCP server (`solution-explorer-mcp`) shipped for AI agents. None of that exists in the description below. Treat this document as the state on 2026-02-22. See CHANGELOG.md and PROJECT-OVERVIEW.md for what ships today.
+> **Historical snapshot (written 2026-02-22, banner added 2026-08-20).** This document describes SysCorpus's architecture as it existed then and is kept for its research and reasoning, not as a description of the current codebase. Since it was written, tree-sitter parsers replaced the six regex-only parsers it describes, the analyzer was rebuilt around the default v2 extract, derive, project index engine with a coverage ledger, and an MCP server (`solution-explorer-mcp`) shipped for AI agents. None of that exists in the description below. Treat this document as the state on 2026-02-22. See CHANGELOG.md and PROJECT-OVERVIEW.md for what ships today.
 
-# Solution Explorer: Technical Architecture
+# SysCorpus: Technical Architecture
 
-This document describes the internal architecture of Solution Explorer, covering the analyzer, viewer, data model, CI/CD pipelines, and infrastructure.
+This document describes the internal architecture of SysCorpus, covering the analyzer, viewer, data model, CI/CD pipelines, and infrastructure.
 
 ## System Overview
 
-Solution Explorer has three main layers:
+SysCorpus has three main layers:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -334,7 +334,7 @@ Runs on push to main, after architecture-viz completes, or on manual dispatch.
 
 ## Cloudflare Backend (Optional)
 
-For projects that need lower-latency live updates, Solution Explorer includes a Cloudflare Worker backend.
+For projects that need lower-latency live updates, SysCorpus includes a Cloudflare Worker backend.
 
 ### Infrastructure
 

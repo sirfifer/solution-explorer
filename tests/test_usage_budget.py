@@ -77,6 +77,47 @@ def test_a_cache_write_costs_more_than_a_fresh_read():
     assert written > fresh
 
 
+def test_ttl_split_prices_one_hour_at_twice_base_and_five_minutes_at_125x():
+    model = "anthropic-claude-cli:sonnet"
+    one_hour, _, _ = ub.api_equivalent_usd({model: {
+        "cache_creation_input_tokens": 1_000_000,
+        "cache_creation_input_tokens_1h": 1_000_000,
+    }})
+    five_minute, _, _ = ub.api_equivalent_usd({model: {
+        "cache_creation_input_tokens": 1_000_000,
+        "cache_creation_input_tokens_5m": 1_000_000,
+    }})
+    assert one_hour == pytest.approx(3.0 * 2.0)
+    assert five_minute == pytest.approx(3.0 * 1.25)
+
+
+def test_accounting_report_does_not_erase_cache_writes_or_double_count_them(tmp_path):
+    report = tmp_path / "report.json"
+    report.write_text(json.dumps({
+        "accounting": {
+            "by_model": [{
+                "model": "anthropic-claude-cli:sonnet",
+                "invocations": 1,
+                "tokens_in": 1_000_100,
+                "tokens_fresh_in": 100,
+                "tokens_cache_write": 1_000_000,
+                "tokens_cache_write_1h": 1_000_000,
+                "tokens_cache_write_5m": 0,
+                "tokens_cached": 0,
+                "tokens_out": 0,
+                "cost_usd": 6.0003,
+            }],
+            "totals": {"cost_usd": 6.0003},
+        }
+    }), encoding="utf-8")
+    usage, _ = ub._read_usage(report)
+    bucket = usage["anthropic-claude-cli:sonnet"]
+    assert bucket["input_tokens"] == 100
+    assert bucket["cache_creation_input_tokens"] == 1_000_000
+    total, _, _ = ub.api_equivalent_usd(usage)
+    assert total == pytest.approx(6.0003)
+
+
 def test_an_unrecognised_model_is_not_free():
     """A binding nobody anticipated must not silently count as zero.
 
