@@ -606,10 +606,19 @@ class Linter:
                         f"which does not resolve to a component",
                     )
 
-        # The changelog names what changed. A removal legitimately names an id
-        # that is gone; every other kind must resolve, or the entry is a link
-        # into nothing.
-        for i, entry in enumerate(self.manifest.get("changelog") or []):
+        # The changelog is cumulative history. A removal legitimately names an
+        # id that is gone, and its tombstone also makes earlier add/modify
+        # records for that same id valid history rather than dangling current
+        # navigation. A never-tombstoned missing target remains an error.
+        changelog = self.manifest.get("changelog") or []
+        tombstones = {
+            change.get("target_id")
+            for entry in changelog if isinstance(entry, dict)
+            for change in (entry.get("changes") or []) if isinstance(change, dict)
+            if "removed" in (change.get("kind") or "")
+            or "deleted" in (change.get("kind") or "")
+        }
+        for i, entry in enumerate(changelog):
             if not isinstance(entry, dict):
                 continue
             for j, change in enumerate(entry.get("changes") or []):
@@ -618,6 +627,8 @@ class Linter:
                 kind = change.get("kind") or ""
                 tid = change.get("target_id")
                 if "removed" in kind or "deleted" in kind:
+                    continue
+                if tid in tombstones:
                     continue
                 if not isinstance(tid, str) or not tid:
                     continue

@@ -310,6 +310,25 @@ def test_search_shards_store_enrichment_wins_over_inline():
     store.close()
 
 
+def test_search_shards_omit_enrichment_for_removed_components():
+    store, _ = _mini_store()
+    idx = DigestIndex.from_store(store)
+    stamp_enrichment(
+        store, "component", "removed-generated-tree", {"help_text": "STALE help"},
+        digest_index=idx, clock=FIXED_CLOCK,
+    )
+    arch = {
+        "components": [{"id": "a", "name": "a", "path": "a", "files": [],
+                        "children": []}],
+        "files": [], "symbols": [],
+    }
+
+    entries = build_search_entries(arch, store)
+
+    assert not any(entry["component"] == "removed-generated-tree" for entry in entries)
+    store.close()
+
+
 # ---------------------------------------------------------------------------
 # import bridge round-trip
 # ---------------------------------------------------------------------------

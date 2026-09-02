@@ -93,6 +93,9 @@ def build_search_entries(arch: dict, store=None) -> list[dict]:
 
     components = arch.get("components", [])
     owner = _component_file_owner(components)
+    component_ids = {
+        comp.get("id") for comp in _iter_components(components) if comp.get("id")
+    }
 
     # Store enrichment is CANONICAL, so it is added FIRST: `add` keeps the first
     # entry per (ref_kind, ref_id), so a store enrichment row wins over any
@@ -104,6 +107,16 @@ def build_search_entries(arch: dict, store=None) -> list[dict]:
             payload = row.get("payload") or {}
             help_text = payload.get("help_text") if isinstance(payload, dict) else None
             if help_text:
+                # The fact store deliberately retains enrichment for components
+                # that disappear from a later projection. That history remains
+                # useful for audit and recovery, but it is not a live navigation
+                # target. Search must only publish component enrichment that can
+                # resolve in the current component tree.
+                if (
+                    row.get("target_kind") == "component"
+                    and row.get("target_id") not in component_ids
+                ):
+                    continue
                 ref = f"{row['target_kind']}:{row['target_id']}"
                 add("enrichment", ref, "", "", row["target_id"], help_text)
 

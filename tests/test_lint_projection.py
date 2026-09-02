@@ -352,6 +352,28 @@ def test_changelog_edge_target_is_split_into_endpoints(projection: Path) -> None
     assert "ref.changelog_target" in _rules(_run(projection))
 
 
+def test_changelog_history_may_reference_a_later_removed_component(projection: Path) -> None:
+    def add_history(doc: dict) -> None:
+        doc["changelog"].extend([
+            {"changes": [{"kind": "component_added", "target_id": "retired"}]},
+            {"changes": [{"kind": "component_modified", "target_id": "retired"}]},
+            {"changes": [{"kind": "component_removed", "target_id": "retired"}]},
+        ])
+
+    _edit_manifest(projection, add_history)
+    assert "ref.changelog_target" not in _rules(_run(projection))
+
+
+def test_changelog_missing_component_without_tombstone_is_still_an_error(projection: Path) -> None:
+    _edit_manifest(
+        projection,
+        lambda doc: doc["changelog"].append({
+            "changes": [{"kind": "component_modified", "target_id": "ghost"}],
+        }),
+    )
+    assert "ref.changelog_target" in _rules(_run(projection))
+
+
 def test_search_hit_that_navigates_nowhere(projection: Path) -> None:
     path = projection / "search" / "search-0000.json"
     entries = json.loads(path.read_text(encoding="utf-8"))
