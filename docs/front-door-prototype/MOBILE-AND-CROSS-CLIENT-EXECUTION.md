@@ -209,8 +209,8 @@ metadata are sufficient.
 ### M4 — paired evaluation
 
 - Pin a multi-project cohort to immutable descriptors.
-- Run counterbalanced web/iOS missions and a same-browser old/new web comparison
-  where the legacy interface remains available.
+- Run counterbalanced web/iOS missions and compare the guided Overview with
+  direct Workbench entry on the same immutable projection.
 - Produce an automated surface-parity report and a qualitative issue ledger.
 - Iterate only after separating data gaps, contract gaps, and interface gaps.
 

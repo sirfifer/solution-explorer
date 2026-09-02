@@ -64,7 +64,7 @@ export function HelpSystem() {
   useEffect(() => {
     const dismissed = localStorage.getItem(HELP_DISMISSED_KEY);
     // Overview is now the first-run guide. Replacing it immediately with the
-    // legacy five-step modal makes a deliberate handoff feel like a restart.
+    // first-run five-step modal makes a deliberate handoff feel like a restart.
     // Keep the modal for people who enter Workbench directly.
     if (!dismissed && !overviewHandoff) {
       setShowWelcome(true);

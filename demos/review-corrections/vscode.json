@@ -1,0 +1,14 @@
+{
+  "schema": "syscorpus.review-corrections/v1",
+  "subject": {
+    "repository": "https://github.com/microsoft/vscode",
+    "commit": "474a349ad5b745e512ef86b864d1c74f7264dd7a"
+  },
+  "manifest_edits": [
+    {
+      "field_path": "ai_enhance.summary",
+      "expected_sha256": "8bc36f48e2cedaa83c9c6b5a36f15a2f8156081bfa6823710605838ff7c50e7e",
+      "replacement": "This snapshot contains the Visual Studio Code source code at the recorded Microsoft repository commit. The system follows a layered architecture of base utilities, platform services, editor, and workbench across Electron main, browser renderer, Node, and web-worker targets. It includes bundled extensions and AI-oriented subsystems such as Copilot, agenthost, and sessions; a Rust command-line interface supports tunneling, and the remote server supports headless and remote-development scenarios."
+    }
+  ]
+}

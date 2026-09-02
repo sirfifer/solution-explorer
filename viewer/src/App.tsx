@@ -38,7 +38,6 @@ import { ExperienceSwitcher } from "./components/ExperienceSwitcher";
 import { WorkbenchTrustStrip } from "./components/WorkbenchTrustStrip";
 import { TrustDrawer } from "./components/TrustLedger";
 import { ViewerPreferences } from "./components/ViewerPreferences";
-import { LegacyInterfaceNotice } from "./components/LegacyInterfaceNotice";
 import { useLiveMonitor } from "./hooks/useLiveMonitor";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { useBottomSheet } from "./hooks/useBottomSheet";
@@ -394,7 +393,7 @@ function NavStateBeacon() {
   // Whether this workbench was ARRIVED AT from Overview rather than entered
   // directly. The app already branches on it (HelpSystem suppresses the
   // first-run modal after a handoff, because "replacing it immediately with the
-  // legacy five-step modal makes a deliberate handoff feel like a restart"), so
+  // first-run five-step modal makes a deliberate handoff feel like a restart"), so
   // a test that could not see it would be blind to the difference between the
   // two ways of standing in the same place.
   const overviewHandoff = useArchStore((s) => s.overviewHandoff);
@@ -946,8 +945,6 @@ export function App() {
       {/* Publication header banner (always region), rendered at the very top per
           the placement contract. Absent-file behavior: renders nothing. */}
       <PublicationBanner />
-      <LegacyInterfaceNotice />
-
       {/* Header */}
       <header
         className={`

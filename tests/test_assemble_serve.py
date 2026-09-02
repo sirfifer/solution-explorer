@@ -104,3 +104,65 @@ def test_assembly_links_canonical_data_and_derives_missing_human_views(
         for name in sidecar_hashes
     } == sidecar_hashes
     assert _sha256(manifest_path) == canonical_hash
+
+
+def test_assembly_applies_review_correction_only_to_derived_overlay(
+    tmp_path: Path,
+) -> None:
+    assembler = _load_assembler()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("viewer", encoding="utf-8")
+
+    projection = tmp_path / "canonical" / "architecture"
+    projection.mkdir(parents=True)
+    manifest = {
+        "name": "vscode",
+        "repository": "https://github.com/microsoft/vscode",
+        "description": "Canonical fixture",
+        "ai_enhance": {"summary": "This is a fork of code-oss-dev."},
+        "components": [],
+        "relationships": [],
+        "tours": [{
+            "id": "tour:one",
+            "provenance": {"derived_from_commit": "abc123"},
+            "steps": [],
+        }],
+        "stats": {"total_relationships": 0},
+        "component_detail_index": {},
+    }
+    manifest_path = projection / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+    canonical_hash = _sha256(manifest_path)
+    corrections = tmp_path / "vscode-corrections.json"
+    corrections.write_text(json.dumps({
+        "schema": "syscorpus.review-corrections/v1",
+        "subject": {
+            "repository": "https://github.com/microsoft/vscode",
+            "commit": "abc123",
+        },
+        "manifest_edits": [{
+            "field_path": "ai_enhance.summary",
+            "expected": "This is a fork of code-oss-dev.",
+            "replacement": "This is the Visual Studio Code source snapshot.",
+        }],
+    }), encoding="utf-8")
+
+    assembler.DIST = dist
+    assembler.SERVE_ROOT = tmp_path / "serve"
+    assembler.DERIVED_ROOT = tmp_path / "derived"
+
+    serve = assembler.assemble(
+        "vscode", projection, build=False, corrections=corrections
+    )
+    overlay = assembler.DERIVED_ROOT / "vscode" / "architecture"
+
+    assert (serve / "architecture").resolve() == overlay.resolve()
+    assert not (overlay / "manifest.json").is_symlink()
+    assert json.loads((overlay / "manifest.json").read_text())["ai_enhance"]["summary"] == (
+        "This is the Visual Studio Code source snapshot."
+    )
+    assert "Visual Studio Code source snapshot" in json.loads(
+        (overlay / "orientation.json").read_text()
+    )["orientation"]["interpreted_statement"]["text"]
+    assert _sha256(manifest_path) == canonical_hash

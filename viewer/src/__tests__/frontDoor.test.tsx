@@ -6,7 +6,6 @@ import { getLens, listAvailableLenses } from "../lenses";
 import { ExperienceSwitcher } from "../components/ExperienceSwitcher";
 import { conciseOverviewStatement, SystemOverview } from "../components/SystemOverview";
 import { ViewerPreferences } from "../components/ViewerPreferences";
-import { LegacyInterfaceNotice } from "../components/LegacyInterfaceNotice";
 import { HelpSystem } from "../components/HelpSystem";
 import { SupportPanel } from "../components/SupportPanel";
 import type { Architecture, Component, SecurityProjection, SupportProjection } from "../types";
@@ -170,14 +169,14 @@ describe("experience aperture", () => {
   it("switches without clearing Workbench navigation and persists the last mode", () => {
     useArchStore.setState({ architecture: architecture(), selectedComponentId: "api" });
     render(<ExperienceSwitcher />);
-    fireEvent.click(screen.getByRole("button", { name: "Deprecated legacy interface" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Workbench" }));
     expect(useArchStore.getState().experienceMode).toBe("workbench");
     expect(useArchStore.getState().selectedComponentId).toBe("api");
     expect(JSON.parse(localStorage.getItem("arch-experience-preferences-v1") ?? "{}").lastMode).toBe("workbench");
     expect(useArchStore.getState().overviewHandoff).toBe(true);
   });
 
-  it("makes the A/B boundary explicit and opens either UI on the exact same data URL", () => {
+  it("opens either current view on the exact same data URL", () => {
     window.history.replaceState({}, "", "/demo?data=.%2Farchitecture&component=api&lens=support&mode=overview#compare");
     useArchStore.setState({
       architecture: architecture(),
@@ -188,15 +187,15 @@ describe("experience aperture", () => {
     render(<ViewerPreferences />);
 
     expect(screen.getByText("Same data")).toBeTruthy();
-    expect(screen.getByText(/Comparing/).textContent).toContain("Transit");
-    const classicNewTab = screen.getByRole("link", {
-      name: "Open Legacy workspace (deprecated) in a new tab with the same data",
+    expect(screen.getByText(/Viewing/).textContent).toContain("Transit");
+    const workbenchNewTab = screen.getByRole("link", {
+      name: "Open Workbench in a new tab with the same data",
     });
-    expect(classicNewTab.getAttribute("href")).toBe(
+    expect(workbenchNewTab.getAttribute("href")).toBe(
       "/demo?data=.%2Farchitecture&component=api&lens=support&mode=workbench#compare",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Switch to Legacy workspace (deprecated)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Workbench" }));
     expect(useArchStore.getState().experienceMode).toBe("workbench");
     expect(useArchStore.getState().preferencesOpen).toBe(false);
   });
@@ -206,15 +205,15 @@ describe("experience aperture", () => {
     expect(useArchStore.getState().experienceMode).toBe("overview");
   });
 
-  it("marks the legacy surface deprecated and returns to the primary Overview", () => {
-    useArchStore.setState({ experienceMode: "workbench" });
-    render(<LegacyInterfaceNotice />);
-    expect(screen.getByText("Deprecated interface.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Return to primary Overview" }));
-    expect(useArchStore.getState().experienceMode).toBe("overview");
+  it("presents Workbench as a current expert aperture, never a legacy interface", () => {
+    useArchStore.setState({ architecture: architecture(), preferencesOpen: true });
+    render(<ViewerPreferences />);
+    expect(screen.getAllByText("Workbench")).toHaveLength(2);
+    expect(screen.getAllByText(/full technical workspace/i)).toHaveLength(2);
+    expect(screen.queryByText(/legacy|deprecated/i)).toBeNull();
   });
 
-  it("does not stack the legacy welcome modal on an Overview handoff", () => {
+  it("does not stack the first-run welcome modal on an Overview handoff", () => {
     useArchStore.setState({ overviewHandoff: true });
     render(<HelpSystem />);
     expect(screen.queryByText("Welcome to Architecture Visualizer")).toBeNull();

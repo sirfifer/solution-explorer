@@ -145,8 +145,3 @@ ignore:
       React Flow edge renderer; it draws the route ELK solved and reveals the
       label above a zoom threshold. Nothing to click. Exercised implicitly by
       every graph case (V1, V2). No standalone user flow.
-  - file: LegacyInterfaceNotice.tsx
-    reason: >
-      Static deprecation notice above the legacy workspace. Its one control is
-      a shortcut into Overview, which is the same store transition
-      ExperienceSwitcher owns and is covered there. No surface of its own.

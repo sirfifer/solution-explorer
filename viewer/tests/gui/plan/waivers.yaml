@@ -140,7 +140,7 @@
 - token: component:ExperienceSwitcher
   reason: >
     Exercised by the deterministic crawl (overview.spec.ts moves between
-    Overview and the legacy workspace through open-workbench and
+    Overview and Workbench through open-workbench and
     open-overview). No AI-plan case yet; retire with the Overview vector.
 - token: component:ViewerPreferences
   reason: >
@@ -161,7 +161,7 @@
 - token: component:WorkbenchTrustStrip
   reason: >
     The compact chip row carrying the ledger, findings, supply-chain and tours
-    entries in the legacy workspace. Exercised by the deterministic crawl
+    entries in Workbench. Exercised by the deterministic crawl
     (surfaces.spec.ts opens every present entry). No AI-plan case claims the
     strip itself; retire with the Overview vector.
 - token: component:SupportPanel

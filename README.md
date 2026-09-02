@@ -178,7 +178,7 @@ pip install -e ".[all]"          # Everything above
 
 ## Viewer Features
 
-The comprehension-first **Overview is the primary and default interface**. It establishes the system portrait, offers guided questions, and opens focused technical paths without requiring the reader to understand the stack first. The former dense workspace remains reachable through `?mode=workbench`, but it is deprecated and retained temporarily only for historical comparison, deep-link compatibility, and validation. Both surfaces read the same projection and route state; see [viewer/README.md](viewer/README.md).
+The comprehension-first **Overview is the default interface**. It establishes the system portrait, offers guided questions, and opens focused technical paths without requiring the reader to understand the stack first. **Workbench** is the current full technical interface for direct graph, lens, source, evidence, and review work. Both apertures read the same projection and route state; see [viewer/README.md](viewer/README.md).
 
 - **Hierarchical drill-down**: Click to see details, double-click to drill into sub-components
 - **Breadcrumb navigation**: Always know where you are, click to jump back

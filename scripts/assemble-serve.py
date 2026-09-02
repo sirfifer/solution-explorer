@@ -45,6 +45,7 @@ from analyzer.project.human_views import (  # noqa: E402 - repo root must preced
     build_support_view,
     write_human_view,
 )
+from analyzer.project.review import apply_review_corrections  # noqa: E402
 
 VIEWER = REPO_ROOT / "viewer"
 DIST = VIEWER / "dist"
@@ -82,7 +83,11 @@ def _load_json(path: Path) -> dict:
         sys.exit(f"error: cannot read projection document {path}: {exc}")
 
 
-def _projection_with_human_views(slug: str, projection: Path) -> tuple[Path, list[str]]:
+def _projection_with_human_views(
+    slug: str,
+    projection: Path,
+    corrections: Path | None = None,
+) -> tuple[Path, list[str]]:
     """Return a projection root with all human-view sidecars available.
 
     Existing canonical sidecars are used as-is. If any are absent, build a
@@ -92,8 +97,11 @@ def _projection_with_human_views(slug: str, projection: Path) -> tuple[Path, lis
     """
     sidecars = (ORIENTATION_FILENAME, SUPPORT_FILENAME, SECURITY_FILENAME)
     missing = [name for name in sidecars if not (projection / name).is_file()]
-    if not missing:
+    if not missing and corrections is None:
         return projection, []
+    generated_sidecars = list(missing)
+    if corrections is not None and ORIENTATION_FILENAME not in generated_sidecars:
+        generated_sidecars.append(ORIENTATION_FILENAME)
 
     derived = DERIVED_ROOT / slug / "architecture"
     if derived.exists() or derived.is_symlink():
@@ -104,9 +112,18 @@ def _projection_with_human_views(slug: str, projection: Path) -> tuple[Path, lis
     derived.mkdir(parents=True, exist_ok=True)
 
     for source in sorted(projection.iterdir(), key=lambda path: path.name):
-        (derived / source.name).symlink_to(source.resolve())
+        target = derived / source.name
+        if corrections is not None and source.name == "manifest.json":
+            shutil.copy2(source, target)
+        elif corrections is not None and source.name == ORIENTATION_FILENAME:
+            continue
+        else:
+            target.symlink_to(source.resolve())
 
-    manifest = _load_json(projection / "manifest.json")
+    if corrections is not None:
+        apply_review_corrections(derived, corrections)
+
+    manifest = _load_json(derived / "manifest.json")
     coverage_path = projection / "coverage.json"
     coverage = _load_json(coverage_path) if coverage_path.is_file() else None
     support = (
@@ -129,12 +146,17 @@ def _projection_with_human_views(slug: str, projection: Path) -> tuple[Path, lis
             security=security,
         ),
     }
-    for name in missing:
+    for name in generated_sidecars:
         write_human_view(generated[name], derived / name)
-    return derived, missing
+    return derived, generated_sidecars
 
 
-def assemble(slug: str, projection: Path, build: bool = True) -> Path:
+def assemble(
+    slug: str,
+    projection: Path,
+    build: bool = True,
+    corrections: Path | None = None,
+) -> Path:
     if not projection.is_dir():
         sys.exit(
             f"error: no projection at {projection}\n"
@@ -163,7 +185,9 @@ def assemble(slug: str, projection: Path, build: bool = True) -> Path:
         elif target.is_dir():
             shutil.rmtree(target)
 
-    served_projection, generated_sidecars = _projection_with_human_views(slug, projection)
+    served_projection, generated_sidecars = _projection_with_human_views(
+        slug, projection, corrections
+    )
     (serve / "architecture").symlink_to(served_projection)
 
     manifest = _load_json(projection / "manifest.json")
@@ -184,8 +208,15 @@ def main(argv: list[str] | None = None) -> int:
                         help="projection directory (default: the corpus output for this slug)")
     parser.add_argument("--no-build", action="store_true",
                         help="skip the viewer build; only when you just built it yourself")
+    parser.add_argument("--corrections", default=None,
+                        help="exact review-correction JSON applied only to the derived assembly")
     args = parser.parse_args(argv)
-    assemble(args.slug, resolve_projection(args.slug, args.projection), build=not args.no_build)
+    assemble(
+        args.slug,
+        resolve_projection(args.slug, args.projection),
+        build=not args.no_build,
+        corrections=Path(args.corrections).resolve() if args.corrections else None,
+    )
     return 0
 
 

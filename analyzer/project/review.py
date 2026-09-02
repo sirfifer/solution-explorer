@@ -79,6 +79,9 @@ def apply_review_corrections(projection, corrections) -> dict:
         )
 
     applied: list[str] = []
+    for edit in spec.get("manifest_edits") or []:
+        applied.append(_apply_exact_edit(manifest, edit, "manifest"))
+
     for edit in spec.get("tour_edits") or []:
         tour_id = edit.get("tour_id")
         tour = tours.get(tour_id)

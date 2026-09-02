@@ -83,5 +83,5 @@ neither is an architecture-data fallback.
 
 ## Local review
 
-- New interface: `http://127.0.0.1:5173/?mode=overview`
-- Classic interface: `http://127.0.0.1:5173/?mode=workbench`
+- Guided Overview: `http://127.0.0.1:5173/?mode=overview`
+- Technical Workbench: `http://127.0.0.1:5173/?mode=workbench`

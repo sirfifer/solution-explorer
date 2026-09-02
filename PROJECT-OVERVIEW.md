@@ -275,7 +275,7 @@ In the viewer, the Design lens renders these findings plain-language first with 
 
 The viewer is built with React 19, TypeScript, and Tailwind CSS. React Flow renders the graph. ELK (Eclipse Layout Kernel) computes automatic layouts. Zustand manages state. Vite builds the production bundle.
 
-The comprehension-first **Overview is the primary and default interface**. It starts with a bounded system portrait, guided questions, and trust context, then opens detailed evidence in place. The former dense workspace is now a deprecated compatibility surface, retained temporarily under `?mode=workbench` for existing deep links, historical comparison, and validation. It is not a parallel product direction.
+The comprehension-first **Overview is the default interface**. It starts with a bounded system portrait, guided questions, and trust context, then hands off without losing context. **Workbench** is the current full technical interface for direct graph, lens, source, evidence, and review work. They are two apertures over one product and one projection.
 
 The key architectural decision in the viewer is hierarchical drill-down. At any level of the hierarchy, the viewer displays at most ~100 nodes. This keeps React Flow's SVG-based rendering performant without needing a Canvas or WebGL replacement. The performance bottleneck in architecture visualization is never the rendering engine. It is data loading. Split mode addresses this: the manifest loads on startup (~20-100 KB), and per-component details load on demand when a user opens a detail panel.
 
