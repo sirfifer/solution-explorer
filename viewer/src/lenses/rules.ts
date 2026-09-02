@@ -30,6 +30,7 @@
 import type { Architecture, Component, Relationship, Rule } from "../types";
 import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 // The kinds in the order the panel and the graph present them: decisions and
 // constraints most likely to carry business meaning first (policy, validation),
@@ -230,6 +231,7 @@ export const RULE_QUESTIONS: LensQuestion[] = [
 export const rulesLens: LensDefinition = {
   id: "rules",
   label: "Rules",
+  maturity: LENS_MATURITY.rules,
   description:
     "Where the decisions live: the policies, validations, calculations, and io constraints the system enforces, each drilled to its lines.",
   isAvailable: hasRules,

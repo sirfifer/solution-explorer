@@ -88,7 +88,7 @@ export function CapabilityPanel({ mobile = false }: { mobile?: boolean } = {}) {
       }`;
 
   return (
-    <div className={containerClass}>
+    <div className={containerClass} data-testid="lens-panel" data-lens="capability">
       <div className={`px-4 py-3 border-b shrink-0 ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
         <div className="flex items-center gap-1.5">
           <span>{"\u{1F6E0}"}</span>
@@ -132,6 +132,10 @@ export function CapabilityPanel({ mobile = false }: { mobile?: boolean } = {}) {
                     return (
                       <li key={cap.id}>
                         <button
+                          data-testid="lens-row"
+                          data-lens="capability"
+                          data-row-id={cap.id}
+                          data-selected={selected}
                           onClick={() => selectCapability(cap.id)}
                           className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${
                             selected

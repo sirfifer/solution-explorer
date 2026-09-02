@@ -9,6 +9,7 @@
  * answers it, and the gestures are exercised in a test.
  */
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 // The Structure question list (I14), spanning Sillito's scopes with the gestures
 // the viewer supports today. Each id is exercised in lensQuestions.test.
@@ -51,6 +52,7 @@ export const STRUCTURE_QUESTIONS: LensQuestion[] = [
 export const structureLens: LensDefinition = {
   id: "structure",
   label: "Structure",
+  maturity: LENS_MATURITY.structure,
   description: "How the codebase is organized: containers, components, and their dependencies.",
   // Structure applies to every dataset.
   isAvailable: () => true,

@@ -28,7 +28,7 @@ export function ViewerPreferences() {
   if (!state.preferencesOpen) return null;
   const dark = state.darkMode;
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end bg-black/45" role="dialog" aria-modal="true" aria-label="Viewer preferences">
+    <div data-testid="preferences-drawer" className="fixed inset-0 z-[70] flex justify-end bg-black/45" role="dialog" aria-modal="true" aria-label="Viewer preferences">
       <button className="absolute inset-0" aria-label="Close preferences" onClick={() => state.setPreferencesOpen(false)} />
       <aside className={`relative h-full w-full max-w-md overflow-y-auto border-l p-6 shadow-2xl ${dark ? "border-zinc-800 bg-zinc-950" : "border-zinc-200 bg-zinc-50"}`}>
         <div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-500">Viewer preferences</p><h2 className={`mt-1 text-xl font-bold ${dark ? "text-zinc-100" : "text-zinc-900"}`}>Choose how you return</h2></div><button className="min-h-11 min-w-11 rounded-lg p-2 text-zinc-500" onClick={() => state.setPreferencesOpen(false)} aria-label="Close viewer preferences">✕</button></div>

@@ -516,10 +516,23 @@ function ComponentDetail({
       </div>
 
       {/* Tab content */}
+      {/* min-h-40 is the floor, and it is load bearing on a phone.
+          Every row above this one, the component header, the metric chips and
+          the tab strip, has a min-content height it cannot shrink below, while
+          this row's flex-basis is 0. So when the panel is shorter than its own
+          chrome, the whole shortfall lands here and the tab content is laid out
+          at zero height: on a 390x664 phone the header alone is 245px, and in
+          the 249px detail sheet the Files tab measured 0px with the file the
+          reader had just asked to see inside it (GUI crawl 2026-09-02,
+          tour.evidence_dead, "the evidence link left the reader on the files
+          tab, which never names the file"). With a floor the panel overflows
+          its container instead, and the sheet's own scroll takes over, which is
+          the behaviour a short viewport should have. Never binds on a desktop
+          panel, where this row is the tallest thing in the column. */}
       <div
         data-testid="detail-tabpanel"
         data-tab={activeTab}
-        className="flex-1 overflow-y-auto"
+        className="min-h-40 flex-1 overflow-y-auto"
       >
         {activeTab === "overview" && (
           <OverviewTab component={component} symbols={symbols} />

@@ -27,6 +27,8 @@ export function SearchOverlay() {
     darkMode,
     createSetFromSearchResults,
     setActivePanel,
+    setExperienceMode,
+    requestDetailReveal,
   } = useArchStore();
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -112,6 +114,16 @@ export function SearchOverlay() {
   };
 
   const handleSelect = (result: SearchResult) => {
+    // Search is the one overlay the Overview mounts too, and every result it
+    // offers is a workbench object. Picking one used to select it in the store
+    // and leave the reader on the front door with nothing to show for it (GUI
+    // crawl 2026-09-01, overview.search_dead). The handoff goes here, where the
+    // Overview's other handoffs put it (SystemOverview.openComponent), rather
+    // than inside navigateToComponent, whose other callers are workbench panels
+    // that are already in the workbench.
+    if (useArchStore.getState().experienceMode === "overview") {
+      setExperienceMode("workbench");
+    }
     if (result.type === "component") {
       navigateToComponent(result.id);
     } else if (result.type === "file") {
@@ -155,6 +167,11 @@ export function SearchOverlay() {
         });
       }
     }
+    // A picked result is a selection made for the reader, whichever kind it is:
+    // the monolithic-mode branches above route through showDetail, which many
+    // in-panel affordances also use, so the request is made here rather than
+    // there. On a phone this is what opens the detail sheet past its peek snap.
+    requestDetailReveal();
     setSearchOpen(false);
   };
 

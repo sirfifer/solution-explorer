@@ -21,6 +21,7 @@
 import type { Architecture, Capability, Component, Relationship } from "../types";
 import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 // The kinds in the order the panel and the graph present them.
 export const CAP_KIND_ORDER: Capability["kind"][] = ["api", "cli", "event", "job"];
@@ -155,6 +156,7 @@ export const CAPABILITY_QUESTIONS: LensQuestion[] = [
 export const capabilityLens: LensDefinition = {
   id: "capability",
   label: "Capability",
+  maturity: LENS_MATURITY.capability,
   description:
     "What can it do: API operations, CLI commands, events, and jobs grouped by kind, each owned by a component and proven (or not) by tests.",
   isAvailable: hasCapabilities,

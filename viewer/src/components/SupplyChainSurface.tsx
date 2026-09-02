@@ -216,6 +216,7 @@ export function SupplyChainSurface() {
 
   return (
     <div
+      data-testid="supply-chain-surface"
       className="fixed inset-0 z-50 flex items-start justify-center pt-[6vh] px-4"
       role="dialog"
       aria-modal="true"

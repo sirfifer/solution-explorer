@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, within, act } from "@testing-library/react";
 import { Tooltip } from "../components/Tooltip";
+import { previewPlacement } from "../components/ComponentNode";
 import { LensSwitcher } from "../components/LensSwitcher";
 import { CoverageBadge } from "../components/CoverageBadge";
 import { FindingsEntry } from "../components/FindingsEntry";
@@ -280,5 +281,57 @@ describe("dispositionTooltip fallback semantics", () => {
       TOOLTIP_COPY.coverage.disposition.unknownExcluded,
     );
     expect(dispositionTooltip("timeout")).not.toBe(TOOLTIP_COPY.coverage.disposition.parsed);
+  });
+});
+
+// The graph node's hover preview is the third popup on this surface, and it was
+// the only one drawn in a portal at fixed coordinates, so nothing about the
+// layout stopped it from covering the header. On a projection with one root the
+// node sits centred near the top of the canvas and the popup took the lens
+// switcher, the level toggle, Review and part of Search with it (GUI crawl
+// 2026-09-01, graph.preview_covers_header).
+//
+// React Flow's NodeToolbar carries the card now, so the anchor, the offset and
+// the "does not scale with zoom" are the engine's. NodeToolbar has no notion of
+// the canvas edges, so the flip and the sideways clamp stay here. Both are
+// pure, so they are checked here rather than through a browser.
+describe("node hover preview placement", () => {
+  const canvas = { left: 0, right: 1000, top: 100 };
+  const card = { width: 360, height: 200 };
+
+  it("stays above the node when there is room above it", () => {
+    const node = { left: 480, right: 620, top: 500, bottom: 560 };
+    const { flipBelow, shiftX } = previewPlacement(node, canvas, card);
+    expect(flipBelow).toBe(false);
+    // Centred on the node is where NodeToolbar puts it, so nothing to correct.
+    expect(shiftX).toBe(0);
+  });
+
+  it("flips below the node rather than over the header", () => {
+    // A node 40px below the canvas top has no room for a 200px card above it.
+    const node = { left: 480, right: 620, top: 140, bottom: 200 };
+    expect(previewPlacement(node, canvas, card).flipBelow).toBe(true);
+  });
+
+  it("shifts inside the canvas rather than off either edge", () => {
+    // Centred on a node at the left edge the card would start at -150.
+    const nearLeft = { left: 0, right: 60, top: 500, bottom: 560 };
+    expect(previewPlacement(nearLeft, canvas, card).shiftX).toBe(8 - -150);
+
+    const nearRight = { left: 960, right: 1000, top: 500, bottom: 560 };
+    expect(previewPlacement(nearRight, canvas, card).shiftX).toBe(1000 - 360 - 8 - 800);
+  });
+
+  it("pins the card's start on screen when the canvas is narrower than it is", () => {
+    const phone = { left: 0, right: 360, top: 100 };
+    const node = { left: 100, right: 290, top: 500, bottom: 560 };
+    const { shiftX } = previewPlacement(node, phone, card);
+    // Centred would start at 15; the only satisfiable edge is the left one.
+    expect(shiftX).toBe(8 - 15);
+  });
+
+  it("leaves NodeToolbar's own placement alone when there is no canvas to clamp against", () => {
+    const node = { left: 480, right: 620, top: 40, bottom: 100 };
+    expect(previewPlacement(node, null, card)).toEqual({ flipBelow: false, shiftX: 0 });
   });
 });

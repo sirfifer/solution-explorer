@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useArchStore } from "../store";
 import { isTourStale, tourStepCount } from "../tours/model";
 import { evidenceLabel } from "../findings/model";
@@ -14,6 +14,21 @@ import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 //     link per step ("show me the code"), and a stale marker on the tour.
 // Each step selects its target on stable identity (I12), handled by the store.
 // Tours are a projection artifact (architecture.tours); no store table.
+
+/**
+ * Whether the step panel's narration and step list start open.
+ *
+ * The panel is 22rem wide and up to 70vh tall. On a desktop that sits in a
+ * corner of a large canvas; on a phone it covered the whole diagram, so a tour
+ * narrated a picture the reader could not see (GUI crawl 2026-09-01). Below the
+ * sm breakpoint the panel is therefore a compact docked strip, capped so at
+ * least 55% of the viewport stays with the canvas, and the prose is one tap
+ * away on the header. Exported so the default is testable without a viewport.
+ */
+export function tourPanelStartsExpanded(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
+  return window.matchMedia("(min-width: 640px)").matches;
+}
 
 function StaleMarker({ darkMode }: { darkMode: boolean }) {
   return (
@@ -50,6 +65,7 @@ export function TourPlayer() {
   const exitTour = useArchStore((s) => s.exitTour);
   const closeTours = useArchStore((s) => s.closeTours);
   const openFileDeepLink = useArchStore((s) => s.openFileDeepLink);
+  const [expanded, setExpanded] = useState(tourPanelStartsExpanded);
 
   const activeTour = activeTourId ? getTourById(activeTourId) : null;
 
@@ -77,21 +93,50 @@ export function TourPlayer() {
     return (
       <div
         data-testid="tour-step-panel"
-        className={`fixed bottom-4 left-4 z-40 w-[22rem] max-w-[calc(100vw-2rem)] max-h-[70vh] flex flex-col rounded-2xl border shadow-2xl ${
+        data-tour-id={activeTour.id}
+        data-step={step}
+        data-step-count={steps.length}
+        data-expanded={expanded}
+        // Below sm this is a docked strip across the bottom, capped at 45vh so
+        // at least 55% of the viewport stays with the diagram the narration is
+        // about. From sm up it is the floating corner card it has always been.
+        className={`fixed z-40 flex flex-col border shadow-2xl inset-x-0 bottom-0 max-h-[45vh] rounded-t-2xl sm:inset-x-auto sm:bottom-4 sm:left-4 sm:w-[22rem] sm:max-w-[calc(100vw-2rem)] sm:max-h-[70vh] sm:rounded-2xl ${
           darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-200" : "bg-white border-zinc-200 text-zinc-800"
         }`}
       >
-        {/* Header: tour title, stale marker, exit */}
+        {/* Header: tour title, stale marker, progress, exit. Tapping it opens
+            and closes the narration and step list below, which is the whole
+            mechanism on a phone; on a desktop it starts open and the tap is
+            simply available. */}
         <div className={`shrink-0 px-4 pt-3 pb-2 border-b ${darkMode ? "border-zinc-800" : "border-zinc-200"}`}>
           <div className="flex items-center gap-1.5">
-            <span>{"\u{1F5FA}️"}</span>
-            <h2 className="text-sm font-bold truncate">{activeTour.title}</h2>
-            {isTourStale(activeTour) && <StaleMarker darkMode={darkMode} />}
-            {activeTour.statement_kind === "authored_interpretation" && <InterpretationMarker darkMode={darkMode} />}
+            <div
+              data-testid="tour-panel-toggle"
+              role="button"
+              tabIndex={0}
+              aria-expanded={expanded}
+              onClick={() => setExpanded((open) => !open)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                setExpanded((open) => !open);
+              }}
+              title={expanded ? "Hide the narration" : "Show the narration"}
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
+            >
+              <span>{"\u{1F5FA}️"}</span>
+              <h2 className="text-sm font-bold truncate">{activeTour.title}</h2>
+              {isTourStale(activeTour) && <StaleMarker darkMode={darkMode} />}
+              {activeTour.statement_kind === "authored_interpretation" && <InterpretationMarker darkMode={darkMode} />}
+              <span aria-hidden className={`ml-auto shrink-0 text-[10px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                {expanded ? "▾" : "▸"}
+              </span>
+            </div>
             <button
               type="button"
+              data-testid="tour-exit"
               onClick={exitTour}
-              className={`ml-auto p-1 rounded ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"}`}
+              className={`shrink-0 p-1 rounded ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"}`}
               title="Exit tour (Esc)"
             >
               {"✕"}
@@ -103,8 +148,10 @@ export function TourPlayer() {
           </p>
         </div>
 
-        {/* Body: current step narration + evidence */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {/* Body: current step narration + evidence. Always mounted, hidden while
+            collapsed, so the step list and the evidence link stay in the DOM in
+            both states and nothing that addresses them by name disappears. */}
+        <div className={expanded ? "flex-1 overflow-y-auto px-4 py-3 space-y-3" : "hidden"}>
           <div>
             <div className={`text-sm font-semibold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
               {current.title}
@@ -139,6 +186,9 @@ export function TourPlayer() {
                 <li key={`${s.target}:${i}`}>
                   <button
                     type="button"
+                    data-testid="tour-step-item"
+                    data-step={i}
+                    data-current={isCurrent}
                     onClick={() => tourGoToStep(i)}
                     className={`w-full flex items-center gap-2 px-2 py-1 rounded-md text-left text-[12px] ${
                       isCurrent
@@ -201,6 +251,7 @@ export function TourPlayer() {
 
   return (
     <div
+      data-testid="tours-list-overlay"
       className="fixed inset-0 z-50 flex items-start justify-center pt-[6vh] px-4"
       role="dialog"
       aria-modal="true"
@@ -234,6 +285,9 @@ export function TourPlayer() {
                 key={tour.id}
                 type="button"
                 data-testid="tour-list-item"
+                data-tour-id={tour.id}
+                data-step-count={tourStepCount(tour)}
+                data-stale={isTourStale(tour)}
                 onClick={() => startTour(tour.id)}
                 className={`w-full text-left rounded-lg border px-3 py-2.5 ${darkMode ? "border-zinc-800 hover:bg-zinc-900/60" : "border-zinc-200 hover:bg-zinc-50"}`}
                 title="Play this walkthrough"

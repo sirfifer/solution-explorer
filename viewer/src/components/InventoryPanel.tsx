@@ -312,6 +312,7 @@ export function InventoryPanel({ open, onClose }: { open: boolean; onClose: () =
 
   return (
     <div
+      data-testid="inventory-panel"
       className="fixed inset-0 z-50 flex items-start justify-center pt-[6vh] px-3"
       role="dialog"
       aria-modal="true"

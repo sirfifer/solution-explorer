@@ -21,31 +21,42 @@
 
 import {
   test,
+  requireLegacyContract,
   reportFinding,
+  reportDiscovery,
   expect,
   gotoState,
   expectNoErrorBoundary,
   expandWholeTree,
+  ensureTree,
   cssEscape,
 } from "./fixtures";
 import { componentBudget, sampleComponents } from "./contract";
 
 test.describe("reachability", () => {
-  test("the app boots and renders the tree the projection describes", async ({
-    crawlPage,
-    contract,
-    recorder,
-  }) => {
-    await gotoState(crawlPage, {});
-    await expectNoErrorBoundary(crawlPage);
-    expect(recorder.problems(), "boot must be clean").toEqual([]);
+  // The one existing case the mobile project also runs: if the app does not
+  // boot on a phone, every mobile-tagged case after it is noise.
+  test(
+    "the app boots and renders the tree the projection describes",
+    { tag: ["@desktop", "@mobile"] },
+    async ({ crawlPage, contract, recorder }) => {
+      await requireLegacyContract(crawlPage);
+      await gotoState(crawlPage, {});
+      await expectNoErrorBoundary(crawlPage);
+      expect(recorder.problems(), "boot must be clean").toEqual([]);
 
-    const nodes = crawlPage.locator('[data-testid="tree-node"]');
-    expect(await nodes.count(), "the tree renders at least one node").toBeGreaterThan(0);
-    expect(contract.components.size, "the projection holds components").toBeGreaterThan(0);
-  });
+      // The sidebar starts collapsed under the focused density, so the tree is
+      // asked for the way a reader asks for it before it is counted.
+      const treeAvailable = await ensureTree(crawlPage);
+      expect(treeAvailable, "the tree navigator can be opened").toBe(true);
+      const nodes = crawlPage.locator('[data-testid="tree-node"]');
+      expect(await nodes.count(), "the tree renders at least one node").toBeGreaterThan(0);
+      expect(contract.components.size, "the projection holds components").toBeGreaterThan(0);
+    },
+  );
 
-  test("every component is addressable by URL", async ({ crawlPage, contract, recorder }) => {
+  test("every component is addressable by URL", { tag: ["@desktop"] }, async ({ crawlPage, contract, recorder }) => {
+      await requireLegacyContract(crawlPage);
     const budget = componentBudget();
     const { chosen, dropped } = sampleComponents(contract, budget);
     test.info().annotations.push({
@@ -81,6 +92,12 @@ test.describe("reachability", () => {
       if (problems.length) noisy.push(`${comp.id}: ${problems.slice(0, 2).join(" | ")}`);
     }
 
+    reportDiscovery("component_sample", {
+      chosen: chosen.length,
+      total: contract.components.size,
+      dropped,
+      budget,
+    });
     reportFinding("reach.unreachable", unreachable, { title: "components whose deep link renders no detail panel" });
 
     expect(unreachable, "components whose deep link renders no detail panel").toEqual([]);
@@ -90,12 +107,14 @@ test.describe("reachability", () => {
     expect(noisy, "components whose detail view logged an error or a 404").toEqual([]);
   });
 
-  test("the tree exposes every component the projection holds", async ({
+  test("the tree exposes every component the projection holds", { tag: ["@desktop"] }, async ({
     crawlPage,
     contract,
     recorder,
   }) => {
+      await requireLegacyContract(crawlPage);
     await gotoState(crawlPage, {});
+    await ensureTree(crawlPage);
     const walk = await expandWholeTree(crawlPage);
 
     expect(walk.converged, "tree expansion converged rather than hitting the pass cap").toBe(true);
@@ -124,10 +143,11 @@ test.describe("reachability", () => {
     ).toEqual([]);
   });
 
-  test("every expanded parent reveals exactly the children the data names", async ({
+  test("every expanded parent reveals exactly the children the data names", { tag: ["@desktop"] }, async ({
     crawlPage,
     contract,
   }) => {
+      await requireLegacyContract(crawlPage);
     // Depth is only trustworthy level by level. Rather than assert a global
     // depth number (which the "Internal Components" grouping legitimately
     // flattens), the whole tree is opened once and then each parent's revealed
@@ -137,6 +157,7 @@ test.describe("reachability", () => {
     // business, not this one's; counting them here would report the same defect
     // twice under two names.
     await gotoState(crawlPage, {});
+    await ensureTree(crawlPage);
     await expandWholeTree(crawlPage);
 
     const parents = [...contract.components.values()].filter((c) => c.childIds.length > 0);
@@ -185,10 +206,11 @@ test.describe("reachability", () => {
     expect(wrong.slice(0, 25), "parents whose expansion does not match the data").toEqual([]);
   });
 
-  test("a deep link reveals its component in the tree, not just in the panel", async ({
+  test("a deep link reveals its component in the tree, not just in the panel", { tag: ["@desktop"] }, async ({
     crawlPage,
     contract,
   }) => {
+      await requireLegacyContract(crawlPage);
     // Arriving at a component has to leave the reader somewhere they can carry
     // on from. A detail panel with no corresponding row in the navigator is a
     // dead end: there is no "where am I", no siblings, and no way down without
@@ -202,19 +224,35 @@ test.describe("reachability", () => {
     const stride = Math.max(1, Math.floor(nested.length / Math.min(budget, 20)));
     const chosen = nested.filter((_, i) => i % stride === 0).slice(0, Math.min(budget, 20));
 
+    // The reveal is an effect that expands the ancestor chain after the tree
+    // mounts, so a single count() can read the DOM one tick before the row
+    // lands and report a defect that is not there. Poll in Node with a bounded
+    // budget instead, and keep the times: a row that takes two seconds is a
+    // different fact from a row that never comes, and only one of them is this
+    // finding.
+    const REVEAL_TIMEOUT_MS = 3000;
     const hidden: string[] = [];
+    const waitsMs: number[] = [];
     for (const comp of chosen) {
       await gotoState(crawlPage, { component: comp.id });
+      await ensureTree(crawlPage);
       const node = crawlPage.locator(
         `[data-testid="tree-node"][data-component-id="${cssEscape(comp.id)}"]`,
       );
-      if ((await node.count()) === 0) {
+      const startedAt = Date.now();
+      try {
+        await node.first().waitFor({ state: "attached", timeout: REVEAL_TIMEOUT_MS });
+        waitsMs.push(Date.now() - startedAt);
+      } catch {
         hidden.push(`${comp.id} (depth ${comp.depth})`);
       }
     }
+    const slowest = waitsMs.length ? Math.max(...waitsMs) : 0;
     test.info().annotations.push({
       type: "coverage",
-      description: `${chosen.length} nested components deep-linked and looked for in the tree`,
+      description:
+        `${chosen.length} nested components deep-linked and looked for in the tree, ` +
+        `polled up to ${REVEAL_TIMEOUT_MS} ms each; slowest row appeared in ${slowest} ms`,
     });
     reportFinding("reach.deep_link_hidden", hidden, { title: "deep-linked components whose tree row is never revealed" });
     expect(

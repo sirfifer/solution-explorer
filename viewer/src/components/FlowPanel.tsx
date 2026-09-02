@@ -71,10 +71,11 @@ export function FlowPanel({ mobile = false }: { mobile?: boolean } = {}) {
       : "bg-zinc-200 text-zinc-700 hover:bg-zinc-300 disabled:opacity-40";
 
     return (
-      <div className={containerClass}>
+      <div className={containerClass} data-testid="lens-panel" data-lens="flow">
         {header}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           <button
+            data-testid="flow-exit"
             onClick={clearFlow}
             className={`text-[11px] ${darkMode ? "text-blue-400 hover:text-blue-300" : "text-blue-600 hover:text-blue-700"}`}
           >
@@ -94,6 +95,7 @@ export function FlowPanel({ mobile = false }: { mobile?: boolean } = {}) {
 
           <div className="flex items-center gap-2">
             <button
+              data-testid="flow-prev"
               onClick={flowStepPrev}
               disabled={step <= 0}
               className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium ${chipBtn}`}
@@ -102,6 +104,7 @@ export function FlowPanel({ mobile = false }: { mobile?: boolean } = {}) {
               {"←"} Previous
             </button>
             <button
+              data-testid="flow-next"
               onClick={flowStepNext}
               disabled={step >= path.length - 1}
               className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium ${chipBtn}`}
@@ -154,7 +157,7 @@ export function FlowPanel({ mobile = false }: { mobile?: boolean } = {}) {
 
   // LANDING: the ranked entry flows (I11).
   return (
-    <div className={containerClass}>
+    <div className={containerClass} data-testid="lens-panel" data-lens="flow">
       {header}
       <div className="flex-1 overflow-y-auto px-3 py-3">
         <SectionLabel darkMode={darkMode}>Entry flows, most reach first</SectionLabel>
@@ -169,6 +172,8 @@ export function FlowPanel({ mobile = false }: { mobile?: boolean } = {}) {
               return (
                 <li key={e.id}>
                   <button
+                    data-testid="flow-entry"
+                    data-flow-id={e.id}
                     onClick={() => setFlowEntry(e.id)}
                     className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left ${
                       isSelected

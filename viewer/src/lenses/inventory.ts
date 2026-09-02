@@ -10,6 +10,7 @@
  */
 import type { Architecture, Component } from "../types";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 export interface CriticalEntry {
   id: string;
@@ -153,6 +154,7 @@ export const INVENTORY_QUESTIONS: LensQuestion[] = [
 export const inventoryLens: LensDefinition = {
   id: "inventory",
   label: "Inventory",
+  maturity: LENS_MATURITY.inventory,
   description:
     "What matters and what it depends on: criticality ranking, external services, and listening ports.",
   // Available for every dataset: dependencies and ports are deterministic;

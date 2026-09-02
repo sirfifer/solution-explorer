@@ -19,6 +19,7 @@
  * specific surfaces (ranking, knowledge, coupling) live in ActivityPanel.
  */
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 // The Activity question list (I14), each pairing a human question with the exact
 // gesture that answers it. Every id is exercised in activityQuestions.test.
@@ -58,6 +59,7 @@ export const ACTIVITY_QUESTIONS: LensQuestion[] = [
 export const activityLens: LensDefinition = {
   id: "activity",
   label: "Activity",
+  maturity: LENS_MATURITY.activity,
   description:
     "What is alive here and who knows it: hotspots, knowledge map, and change coupling from git history.",
   // Available only when the P5-4 activity pass read git history. P5-4 emits the

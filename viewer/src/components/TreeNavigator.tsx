@@ -37,7 +37,7 @@ interface TreeNodeProps {
 }
 
 const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggleExpand }: TreeNodeProps) {
-  const { selectedComponentId, selectComponent, drillInto, darkMode, annotations } = useArchStore();
+  const { selectedComponentId, selectComponent, drillInto, darkMode, annotations, requestDetailReveal } = useArchStore();
   const hasAnnotation = annotations.some((a) => a.componentId === component.id);
   const expanded = expandedIds.has(component.id);
   const hasChildren = component.children.length > 0;
@@ -86,7 +86,12 @@ const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggl
           }
         `}
         style={{ paddingLeft: `${depth * 16 + 12}px` }}
-        onClick={() => selectComponent(component.id)}
+        // A tree row is a selection made for the reader in the sense the
+        // mobile sheet cares about: on a phone the tree is a drawer that covers
+        // the canvas, so the reader never sees the node this selects and a
+        // peek-height sheet shows them a name they just tapped. Ask for the
+        // detail to be revealed; a direct tap on a graph node does not.
+        onClick={() => { selectComponent(component.id); requestDetailReveal(); }}
         onDoubleClick={() => hasChildren && drillInto(component)}
       >
         {/* Expand/collapse */}

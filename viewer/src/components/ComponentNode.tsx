@@ -1,6 +1,14 @@
-import { memo, useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { memo, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import {
+  Handle,
+  NodeToolbar,
+  Position,
+  useNodeId,
+  useReactFlow,
+  useViewport,
+  type NodeProps,
+} from "@xyflow/react";
 import type { Component, AnnotationTarget, AnnotationTargetContext } from "../types";
 import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, getHeroGlow, ROLE_META, getRoleBadgeColors } from "../utils/layout";
 import { getWorstStatusLevel, getStatusSummary, getStatusDotClasses } from "../utils/status";
@@ -461,11 +469,83 @@ function ReviewTarget({
 
 // ─── HoverCard ─────────────────────────────────────────────────────────────────
 
+/** Gap kept between the preview and both the node and the canvas edge. */
+export const PREVIEW_PAD = 8;
+
+/**
+ * The two things React Flow's NodeToolbar will not decide for the preview.
+ *
+ * The preview is carried by NodeToolbar now, so the engine owns the anchor: it
+ * places the card relative to the node in screen space, at a fixed size
+ * whatever the zoom, and keeps it there through pans and layout changes. What
+ * NodeToolbar does NOT do is stay inside the canvas. Its transform
+ * (getNodeToolbarTransform in @xyflow/system) is the node rect, the viewport,
+ * the position, the offset and the alignment, and nothing else: there is no
+ * collision handling and no flip, and `align` moves the card by whole node and
+ * card widths, which is far too coarse to hold a 360px card inside a 390px
+ * phone canvas.
+ *
+ * So two residual decisions stay here, both fed from measured screen rects
+ * rather than from any arithmetic on the viewport transform:
+ *
+ *   flipBelow  which Position to hand NodeToolbar. Above the node by default;
+ *              below it when there is no room above, because on a projection
+ *              with a single root the node sits centred near the top and the
+ *              popup covered the lens switcher, the level toggle, Review and
+ *              part of Search, none of which could be clicked while it was up
+ *              (GUI crawl 2026-09-01, graph.preview_covers_header).
+ *   shiftX     how far to slide the card off the centre NodeToolbar gives it so
+ *              it clears neither side of the canvas.
+ *
+ * Pure and exported so both are testable without a browser.
+ */
+export function previewPlacement(
+  anchor: { left: number; right: number; top: number; bottom: number },
+  canvas: { left: number; right: number; top: number } | null,
+  card: { width: number; height: number },
+): { flipBelow: boolean; shiftX: number } {
+  if (!canvas) return { flipBelow: false, shiftX: 0 };
+  const flipBelow = anchor.top - PREVIEW_PAD - card.height < canvas.top + PREVIEW_PAD;
+  const centred = (anchor.left + anchor.right) / 2 - card.width / 2;
+  const minLeft = canvas.left + PREVIEW_PAD;
+  const maxLeft = canvas.right - card.width - PREVIEW_PAD;
+  // A canvas narrower than the card cannot satisfy both edges; pinning to the
+  // left one keeps the popup's start on screen rather than its end.
+  const clamped = maxLeft < minLeft ? minLeft : Math.min(Math.max(centred, minLeft), maxLeft);
+  return { flipBelow, shiftX: clamped - centred };
+}
+
 function HoverCard({ component, darkMode, triggerRef }: {
   component: Component;
   darkMode: boolean;
   triggerRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  // The anchor comes from React Flow, not from the DOM: getNodesBounds gives
+  // this node's measured bounds and flowToScreenPosition puts them on screen
+  // through the one viewport transform the app has. That is the same rect
+  // NodeToolbar itself will position against, so the residual clamp below
+  // cannot disagree with where the engine actually draws the card. Subscribing
+  // to the viewport re-runs it while the reader pans, which the old
+  // fixed-position portal never did.
+  const nodeId = useNodeId();
+  const { getNodesBounds, flowToScreenPosition } = useReactFlow();
+  useViewport();
+  // Measured rather than assumed: the card's height depends on how much
+  // documentation the component carries, and clamping against the 320px maximum
+  // would push a short card below a node it would have fitted above. Hooks stay
+  // above the early returns below (rules of hooks).
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [card, setCard] = useState({ width: 360, height: 320 });
+  useLayoutEffect(() => {
+    const box = cardRef.current?.getBoundingClientRect();
+    if (!box) return;
+    setCard((prev) =>
+      prev.width === box.width && prev.height === box.height
+        ? prev
+        : { width: box.width, height: box.height },
+    );
+  });
+
   const docs = component.docs;
   if (!docs) return null;
 
@@ -474,13 +554,27 @@ function HoverCard({ component, darkMode, triggerRef }: {
 
   if (!hasDocs && !component.description) return null;
 
-  const rect = triggerRef.current?.getBoundingClientRect();
-  if (!rect) return null;
+  const bounds = nodeId ? getNodesBounds([nodeId]) : null;
+  if (!bounds || bounds.width <= 0 || bounds.height <= 0) return null;
+  const topLeft = flowToScreenPosition({ x: bounds.x, y: bounds.y });
+  const bottomRight = flowToScreenPosition({
+    x: bounds.x + bounds.width,
+    y: bounds.y + bounds.height,
+  });
+  const canvas = triggerRef.current?.closest(".react-flow")?.getBoundingClientRect() ?? null;
+  const { flipBelow, shiftX } = previewPlacement(
+    { left: topLeft.x, right: bottomRight.x, top: topLeft.y, bottom: bottomRight.y },
+    canvas,
+    card,
+  );
 
-  return createPortal(
+  const preview = (
     <div
+      ref={cardRef}
+      data-testid="node-preview"
+      data-component-id={component.id}
       className={`
-        fixed z-[9999] pointer-events-auto
+        pointer-events-auto
         w-[360px] max-h-[320px] overflow-y-auto
         rounded-xl border shadow-2xl text-xs
         ${darkMode
@@ -489,11 +583,7 @@ function HoverCard({ component, darkMode, triggerRef }: {
         }
         backdrop-blur-md
       `}
-      style={{
-        left: rect.left + rect.width / 2,
-        top: rect.top - 8,
-        transform: "translate(-50%, -100%)",
-      }}
+      style={{ transform: `translateX(${shiftX}px)` }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-3 space-y-2">
@@ -625,8 +715,18 @@ function HoverCard({ component, darkMode, triggerRef }: {
           )}
         </div>
       </div>
-    </div>,
-    document.body
+    </div>
+  );
+
+  return (
+    <NodeToolbar
+      isVisible
+      position={flipBelow ? Position.Bottom : Position.Top}
+      offset={PREVIEW_PAD}
+      align="center"
+    >
+      {preview}
+    </NodeToolbar>
   );
 }
 
@@ -797,6 +897,22 @@ export const ComponentNode = memo(function ComponentNode({
     };
   }, []);
 
+  // A preview can open with no gesture behind it: arriving in the workbench from
+  // the Overview draws a node under wherever the pointer was left, and the
+  // browser treats that as an enter. Nothing then guarantees the matching leave,
+  // so the popup can outlive the reason it appeared. Any pointer move that is
+  // not over this node closes it. Coarse pointers are left alone, so the 500ms
+  // touch-and-hold path is unchanged.
+  useEffect(() => {
+    if (!hovered || isTouchDevice) return;
+    const onPointerMove = (e: PointerEvent) => {
+      const node = nodeRef.current;
+      if (node && !node.contains(e.target as Node)) setHovered(false);
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    return () => window.removeEventListener("pointermove", onPointerMove);
+  }, [hovered, isTouchDevice]);
+
   const handleMouseEnter = () => {
     if (isTouchDevice) return;
     hoverTimeout.current = setTimeout(() => setHovered(true), 400);
@@ -824,6 +940,10 @@ export const ComponentNode = memo(function ComponentNode({
   return (
     <div
       ref={nodeRef}
+      data-testid="graph-node"
+      data-component-id={component.id}
+      data-selected={Boolean(selected)}
+      data-has-children={hasChildren}
       className={`
         relative
         ${selected ? "node-selected" : ""}

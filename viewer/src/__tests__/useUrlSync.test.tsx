@@ -167,6 +167,60 @@ describe("useUrlSync popstate suppression (F-VW-2 / P1-4)", () => {
     expect(parseUrlState().tab).toBe("symbols");
   });
 
+  it("pushes a history entry when the reader crosses into the workbench", () => {
+    // The handoff from the front door used to REPLACE the entry it arrived on,
+    // so browser Back left the site entirely (GUI crawl 2026-09-01,
+    // overview.back_wrong_mode). history.length is the mechanism, not a guess
+    // about where Back happens to land.
+    useArchStore.setState({ architecture: makeArchitecture(), experienceMode: "overview" });
+    renderHook(() => useUrlSync());
+
+    const before = window.history.length;
+    act(() => { useArchStore.getState().setExperienceMode("workbench"); });
+
+    expect(window.history.length).toBe(before + 1);
+    // The entry the push wrote names the aperture it is for.
+    expect(parseUrlState().mode).toBe("workbench");
+  });
+
+  it("Back from the workbench lands on the Overview with the workbench state gone", () => {
+    useArchStore.setState({ architecture: makeArchitecture(), experienceMode: "overview" });
+    renderHook(() => useUrlSync());
+
+    act(() => { useArchStore.getState().setExperienceMode("workbench"); });
+    act(() => { useArchStore.getState().selectComponent("A"); });
+    expect(parseUrlState().mode).toBe("workbench");
+    expect(parseUrlState().component).toBe("A");
+
+    // The browser restores the URL of the entry the handoff pushed over, then
+    // fires popstate.
+    act(() => {
+      window.history.replaceState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    expect(useArchStore.getState().experienceMode).toBe("overview");
+    expect(useArchStore.getState().selectedComponentId).toBeNull();
+    expect(parseUrlState().mode).toBeUndefined();
+    expect(parseUrlState().component).toBeUndefined();
+  });
+
+  it("drops a stale ?tab= once nothing is selected (journey.context_leak)", () => {
+    // A tab belongs to a detail panel. It used to outlive Home, Escape and a
+    // pane click and sit in the URL naming a panel nobody could see.
+    useArchStore.setState({ architecture: makeArchitecture() });
+    renderHook(() => useUrlSync());
+
+    act(() => { useArchStore.getState().selectComponent("A"); });
+    window.history.replaceState({}, "", "/?component=A&tab=symbols");
+    expect(parseUrlState().tab).toBe("symbols");
+
+    act(() => { useArchStore.getState().selectComponent(null); });
+
+    expect(parseUrlState().component).toBeUndefined();
+    expect(parseUrlState().tab).toBeUndefined();
+  });
+
   it("consumes an inbound ?file=&line= deep link on load, composing with ?tab (P3-2)", () => {
     // Child B lives under A and owns a file. A deep link should drill to A and
     // select B, honoring the explicit tab param.

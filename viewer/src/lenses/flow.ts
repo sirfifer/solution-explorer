@@ -23,6 +23,7 @@
  */
 import type { Architecture, Component, Relationship } from "../types";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 // The component types that participate in a screen flow.
 export const FLOW_COMPONENT_TYPES = new Set(["screen", "tab", "tab-container"]);
@@ -281,6 +282,7 @@ export const FLOW_QUESTIONS: LensQuestion[] = [
 export const flowLens: LensDefinition = {
   id: "flow",
   label: "Flow",
+  maturity: LENS_MATURITY.flow,
   description:
     "What happens when: screens and navigation as a walkable flow diagram, with entry flows ranked and each hop labeled by kind.",
   // Available only when the dataset carries flow-bearing data. Non-UI repos

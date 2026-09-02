@@ -593,6 +593,58 @@ def test_missing_allowlist_for_404_probe_fails(tmp_path, capsys):
     assert "does not allowlist /live-config.json" in capsys.readouterr().out
 
 
+# A helper that loads several files through one parameterized fetch is ONE
+# inventory entry (entries are keyed by source and argument text), so its
+# allow_path carries the list of paths it can request. Every one of them is
+# still enforced against the allowlists.
+_LIST_ALLOW_DATASETS = """
+datasets:
+  dogfood:
+    layout: monolith
+    generate: []
+    allow_errors:
+      - path: "/live-config.json"
+        reason: "probe"
+      - path: "/a.json"
+        reason: "optional sidecar"
+      - path: "/b.json"
+        reason: "optional sidecar"
+probe_inventory:
+  - match: 'dataUrl(path)'
+    source: hooks/useLiveMonitor.ts
+    fires: every boot, once per sidecar
+    allow_path:
+      - "/a.json"
+      - "/b.json"
+    can_404_on: [monolith]
+"""
+
+
+def test_list_allow_path_is_accepted_when_every_path_is_allowlisted(tmp_path):
+    root = _make_tree(tmp_path)
+    _write_plan(root, FULL_PLAN)
+    (root / "viewer" / "src" / "hooks" / "useLiveMonitor.ts").write_text(
+        "const res = await fetch(dataUrl(path));\n"
+    )
+    (root / "viewer" / "tests" / "gui" / "datasets.yaml").write_text(_LIST_ALLOW_DATASETS)
+    assert _run(root) == 0
+
+
+def test_list_allow_path_fails_when_one_path_is_not_allowlisted(tmp_path, capsys):
+    root = _make_tree(tmp_path)
+    _write_plan(root, FULL_PLAN)
+    (root / "viewer" / "src" / "hooks" / "useLiveMonitor.ts").write_text(
+        "const res = await fetch(dataUrl(path));\n"
+    )
+    (root / "viewer" / "tests" / "gui" / "datasets.yaml").write_text(
+        _LIST_ALLOW_DATASETS.replace(
+            '      - path: "/b.json"\n        reason: "optional sidecar"\n', ""
+        )
+    )
+    assert _run(root) == 1
+    assert "does not allowlist /b.json" in capsys.readouterr().out
+
+
 # --- Shard-order convention lint (adjustment from the first run's review:
 # the welcome-dialog and first-load semantics cost a review cycle as prose;
 # now they are findings). ---

@@ -37,6 +37,7 @@ import type {
 } from "../types";
 import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
+import { LENS_MATURITY } from "../utils/lensMaturity";
 
 // The panel order, taken from the ranked-finding list in Part 3 of the research
 // document. This is the order a reader meets the findings in, chosen because
@@ -379,6 +380,7 @@ export const DESIGN_QUESTIONS: LensQuestion[] = [
 export const designLens: LensDefinition = {
   id: "design",
   label: "Design",
+  maturity: LENS_MATURITY.design,
   description:
     "Where the architecture is weak: parts locked together, load-bearing pieces with no flexibility, and boundaries that history says are drawn in the wrong place.",
   isAvailable: hasDesignSignals,

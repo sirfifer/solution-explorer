@@ -9,6 +9,7 @@ export function ExperienceSwitcher({ className = "" }: { className?: string }) {
       {(["overview", "workbench"] as const).map((item) => (
         <button
           key={item}
+          data-testid={item === "overview" ? "open-overview" : "open-workbench"}
           onClick={() => setMode(item)}
           aria-pressed={mode === item}
           aria-label={item === "overview" ? "Primary Overview interface" : "Deprecated legacy interface"}
