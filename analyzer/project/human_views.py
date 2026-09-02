@@ -444,7 +444,11 @@ def build_support_view(arch: dict) -> dict:
     }
 
 
-def build_security_view(arch: dict) -> dict:
+def build_security_view(
+    arch: dict,
+    *,
+    signals_by_path: Optional[dict[str, list[dict]]] = None,
+) -> dict:
     """Build an observable-security view without producing a security verdict."""
     components, index = _component_index(arch)
     credentials: list[dict] = []
@@ -531,6 +535,8 @@ def build_security_view(arch: dict) -> dict:
     # first-class observed mechanisms when component file facts provide direct
     # import, path, module-doc, or symbol-name evidence.
     seen_local: set[tuple[str, str]] = set()
+    local_candidates: list[tuple[int, str, str, str, str, dict]] = []
+    signals_by_path = signals_by_path or {}
     file_rows = [row for row in arch.get("files") or [] if isinstance(row, dict)]
     candidates_by_file: dict[str, list[dict]] = defaultdict(list)
     for component in components:
@@ -568,33 +574,65 @@ def build_security_view(arch: dict) -> dict:
         imports = {str(value) for value in file_row.get("imports") or []}
         symbols = " ".join(str(value) for value in file_row.get("symbols") or [])
         searchable = " ".join([path, str(file_row.get("module_doc") or ""), symbols])
-        local: list[tuple[str, str]] = []
-        if "Security" in imports and re.search(r"keychain|api.?key", searchable, re.I):
-            local.append(("iOS Keychain", "credential storage"))
-        if re.search(r"file.?protection|NSFileProtection", searchable, re.I):
-            local.append(("iOS file protection", "protected local storage"))
-        for mechanism, purpose in local:
-            key = (component_id, mechanism)
-            if key in seen_local:
+        direct_symbols: list[tuple[str, Optional[int]]] = []
+        for signal in signals_by_path.get(path, []):
+            if signal.get("kind") != "symbol_reference":
                 continue
-            seen_local.add(key)
-            mechanisms.append({
-                "source": component_id,
-                "target": "device-security-boundary",
-                "mechanism": mechanism,
-                "purpose": purpose,
+            value = signal.get("value") or {}
+            name = str(value.get("name") or "") if isinstance(value, dict) else ""
+            if name:
+                direct_symbols.append((name, signal.get("line")))
+
+        local: list[tuple[int, str, str, dict]] = []
+        if "Security" in imports and re.search(r"keychain|api.?key", searchable, re.I):
+            local.append((0, "iOS Keychain", "credential storage", {
+                "file": path,
+                "signal": "Security import and Keychain symbol",
+            }))
+        protection_refs = [
+            (name, line) for name, line in direct_symbols
+            if name in {"FileProtectionType", "NSPersistentStoreFileProtectionKey"}
+        ]
+        if protection_refs:
+            line = min((int(line) for _, line in protection_refs if line is not None), default=None)
+            evidence = {
+                "file": path,
+                "signal": "FileProtectionType / NSPersistentStoreFileProtectionKey symbol reference",
+            }
+            if line is not None:
+                evidence["line"] = line
+            local.append((0, "iOS file protection", "protected local storage", evidence))
+        elif re.search(r"file.?protection|NSFileProtection", searchable, re.I):
+            local.append((1, "iOS file protection", "protected local storage", {
+                "file": path,
+                "signal": "import/symbol/documentation reference",
+            }))
+        for rank, mechanism, purpose, evidence in local:
+            local_candidates.append((rank, component_id, mechanism, path, purpose, evidence))
+
+    for _, component_id, mechanism, _path, purpose, evidence in sorted(local_candidates):
+        component = index.get(component_id) or {}
+        key = (component_id, mechanism)
+        if key in seen_local:
+            continue
+        seen_local.add(key)
+        mechanisms.append({
+            "source": component_id,
+            "target": "device-security-boundary",
+            "mechanism": mechanism,
+            "purpose": purpose,
+            "confidence": "certain",
+            "evidence": evidence,
+        })
+        if mechanism == "iOS Keychain":
+            credentials.append({
+                "key": "API keys",
+                "component_id": component_id,
+                "component_name": str(component.get("name") or component_id),
+                "claim": "credential storage in iOS Keychain is referenced",
                 "confidence": "certain",
-                "evidence": {"file": path, "signal": "import/symbol"},
+                "evidence": evidence,
             })
-            if mechanism == "iOS Keychain":
-                credentials.append({
-                    "key": "API keys",
-                    "component_id": component_id,
-                    "component_name": str(component.get("name") or component_id),
-                    "claim": "credential storage in iOS Keychain is referenced",
-                    "confidence": "certain",
-                    "evidence": {"file": path, "signal": "Security import and Keychain symbol"},
-                })
 
     sensitive_data: list[dict] = []
     for entity in sorted(arch.get("data_entities") or [], key=lambda e: str(e.get("id", ""))):
@@ -820,7 +858,11 @@ def build_orientation(
         "trust": {
             "source_coverage": _coverage_trust(coverage),
             "interpretation": {
-                "status": "present" if interpreted else "absent",
+                "status": (
+                    "stale" if interpreted and bool(ai.get("stale", False))
+                    else "present" if interpreted
+                    else "absent"
+                ),
                 "component_count": sum(1 for c in components if c.get("ai_enhance")),
                 "total_components": len(components),
             },

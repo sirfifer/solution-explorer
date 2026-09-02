@@ -8,11 +8,50 @@ review file was applied. A stale correction fails loudly instead of drifting.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 
 SCHEMA = "syscorpus.review-corrections/v1"
+
+
+def _components(tree):
+    for component in tree or []:
+        yield component
+        yield from _components(component.get("children") or [])
+
+
+def _apply_exact_edit(target: dict, edit: dict, target_label: str) -> str:
+    field_path = edit.get("field_path") or edit.get("field")
+    keys = field_path.split(".") if isinstance(field_path, str) else list(field_path or [])
+    if not keys:
+        raise ValueError(f"review correction has no field at {target_label}")
+    parent = target
+    for key in keys[:-1]:
+        value = parent.get(key)
+        if not isinstance(value, dict):
+            raise ValueError(f"review correction field path missing at {target_label}.{'.'.join(keys)}")
+        parent = value
+    field = keys[-1]
+    current = parent.get(field)
+    if "expected" in edit:
+        if current != edit.get("expected"):
+            raise ValueError(
+                f"review correction stale at {target_label}.{'.'.join(keys)}: "
+                f"expected {edit.get('expected')!r}, found {current!r}"
+            )
+    elif edit.get("expected_sha256"):
+        actual_hash = hashlib.sha256(str(current).encode("utf-8")).hexdigest()
+        if actual_hash != edit["expected_sha256"]:
+            raise ValueError(
+                f"review correction stale at {target_label}.{'.'.join(keys)}: "
+                f"expected sha256 {edit['expected_sha256']!r}, found {actual_hash!r}"
+            )
+    else:
+        raise ValueError(f"review correction lacks an exact expectation at {target_label}")
+    parent[field] = edit.get("replacement")
+    return f"{target_label}.{'.'.join(keys)}"
 
 
 def apply_review_corrections(projection, corrections) -> dict:
@@ -57,15 +96,19 @@ def apply_review_corrections(projection, corrections) -> dict:
                 )
             target = matches[0]
             target_label += f"/step:{step_title}"
-        field = edit.get("field")
-        expected = edit.get("expected")
-        replacement = edit.get("replacement")
-        if target.get(field) != expected:
-            raise ValueError(
-                f"review correction stale at {target_label}.{field}: expected {expected!r}, found {target.get(field)!r}"
-            )
-        target[field] = replacement
-        applied.append(f"{target_label}.{field}")
+        applied.append(_apply_exact_edit(target, edit, target_label))
+
+    components = {
+        component.get("id"): component
+        for component in _components(manifest.get("components") or [])
+        if component.get("id")
+    }
+    for edit in spec.get("component_edits") or []:
+        component_id = edit.get("component_id")
+        component = components.get(component_id)
+        if component is None:
+            raise ValueError(f"review correction component not found: {component_id!r}")
+        applied.append(_apply_exact_edit(component, edit, f"component:{component_id}"))
 
     manifest["review_corrections"] = {
         "schema": SCHEMA,
@@ -79,4 +122,3 @@ def apply_review_corrections(projection, corrections) -> dict:
         encoding="utf-8",
     )
     return manifest["review_corrections"]
-

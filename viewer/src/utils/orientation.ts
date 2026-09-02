@@ -145,7 +145,10 @@ export function buildOrientationFallback(architecture: Architecture): Orientatio
       interpreted_statement: interpreted ? {
         text: interpreted,
         status: "interpreted",
-        provenance: { stale: false },
+        provenance: {
+          derived_from_commit: architecture.ai_enhance?.derived_from_commit,
+          stale: Boolean(architecture.ai_enhance?.stale),
+        },
       } : null,
       default_path: architecture.tours?.[0]
         ? { kind: "tour", id: architecture.tours[0].id }
@@ -179,7 +182,11 @@ export function buildOrientationFallback(architecture: Architecture): Orientatio
         } : {}),
         target: "coverage.json",
       },
-      interpretation: { status: interpreted ? "present" : "absent", component_count: 0, total_components: components.length },
+      interpretation: {
+        status: interpreted ? architecture.ai_enhance?.stale ? "stale" : "present" : "absent",
+        component_count: 0,
+        total_components: components.length,
+      },
       producer_gaps: architecture.gaps?.length ?? 0,
       producer_gap_status: producerGapStatus,
       findings: {

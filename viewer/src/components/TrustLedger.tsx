@@ -58,6 +58,8 @@ export function TrustDrawer() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [open, setOpen]);
   if (!open || !architecture?.orientation) return null;
+  const interpreted = architecture.orientation.orientation.interpreted_statement;
+  const interpretationStale = Boolean(interpreted?.provenance.stale);
   return (
     <div className="fixed inset-0 z-[70] flex justify-end bg-black/45" role="dialog" aria-modal="true" aria-label="Evidence and coverage">
       <button className="absolute inset-0" aria-label="Close evidence and coverage" onClick={() => setOpen(false)} />
@@ -65,8 +67,9 @@ export function TrustDrawer() {
         <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-500">Trust ledger</p><h2 className={`mt-1 text-xl font-bold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>What this view knows—and what it does not</h2></div><button className="min-h-11 min-w-11 rounded-lg p-2 text-zinc-500 hover:bg-zinc-800/20" onClick={() => setOpen(false)} aria-label="Close">✕</button></div>
         <div className="mt-6"><TrustLedger /></div>
         <section className={`mt-6 rounded-xl border p-4 ${darkMode ? "border-violet-500/20 bg-violet-500/5" : "border-violet-200 bg-violet-50"}`}>
-          <h3 className={`text-xs font-semibold ${darkMode ? "text-violet-200" : "text-violet-800"}`}>Interpretation</h3>
-          <p className={`mt-2 text-sm leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{architecture.orientation.orientation.interpreted_statement?.text ?? "No interpreted system statement is present. The Overview uses only deterministic grouping and counts."}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2"><h3 className={`text-xs font-semibold ${darkMode ? "text-violet-200" : "text-violet-800"}`}>Interpretation</h3>{interpretationStale && <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${darkMode ? "bg-amber-400/10 text-amber-300" : "bg-amber-100 text-amber-800"}`}>Stale · withheld</span>}</div>
+          <p className={`mt-2 text-sm leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{interpretationStale ? "An older interpreted summary is retained in the projection for auditability, but is not rendered as product copy because its mapped evidence changed. The Overview now uses the current repository description and structured measurements." : interpreted?.text ?? "No interpreted system statement is present. The Overview uses only deterministic grouping and counts."}</p>
+          {interpretationStale && interpreted?.provenance.derived_from_commit && <p className={`mt-2 break-all text-xs ${darkMode ? "text-zinc-500" : "text-zinc-600"}`}>Interpretation derived from commit {interpreted.provenance.derived_from_commit}.</p>}
           <p className={`mt-2 text-xs ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>Status: {architecture.orientation.trust.interpretation.status}. Interpreted copy is presentation context, not a replacement for mapped evidence.</p>
         </section>
         {architecture.security && <section className={`mt-4 rounded-xl border p-4 ${darkMode ? "border-amber-500/20 bg-amber-500/5" : "border-amber-200 bg-amber-50"}`}><h3 className={`text-xs font-semibold ${darkMode ? "text-amber-200" : "text-amber-800"}`}>Security boundary</h3><p className={`mt-2 text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{architecture.security.method_caveat}</p></section>}

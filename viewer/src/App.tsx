@@ -191,6 +191,15 @@ export function shouldShowMobileLensSheet({ isPanelViewport, lens, activePanel }
   return !isPanelViewport && lens !== "structure" && activePanel !== "detail" && activePanel !== "review";
 }
 
+// Support is a ranked operational report, not a terse control strip. Opening
+// it into the generic half-height snap left only ~199 px for the real content
+// on a phone and put external reliance more than a screen below the fold.
+// Give that lens the full mobile canvas immediately; the drag handle still
+// allows the user to collapse or dismiss it.
+export function initialMobileLensSnap(lens: string): SnapPoint {
+  return lens === "support" ? "full" : "half";
+}
+
 // The mobile counterpart to the desktop-docked lens panel (O10). Below the md
 // breakpoint the docked panel is display:none (its own `hidden md:flex`
 // wrapper), so without this a lens picked on a phone rendered nothing with no
@@ -397,7 +406,7 @@ export function App() {
   // render a mostly blank sheet for a lens the user just deliberately picked.
   const lensBottomSheet = useBottomSheet({
     onDismiss: () => useArchStore.getState().setLens("structure"),
-    initialSnap: "half" as SnapPoint,
+    initialSnap: initialMobileLensSnap(lens),
   });
   const mobileGraphBottomReserve = !isDesktopViewport
     && (activePanel === "detail" || activePanel === "review")

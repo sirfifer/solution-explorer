@@ -142,6 +142,30 @@ describe("experience aperture", () => {
     expect(conciseOverviewStatement("word ".repeat(80))).toMatch(/…$/);
   });
 
+  it("withholds stale interpreted prose from the headline and discloses why", () => {
+    const staleText = "About 161K lines of code across 751 files power the application.";
+    const arch = attachHumanViews(architecture({
+      description: "Current voice learning application for iOS.",
+      ai_enhance: { summary: staleText, stale: true, derived_from_commit: "old-commit" },
+    }), {});
+    useArchStore.setState({
+      architecture: arch,
+      experienceMode: "overview",
+      overviewDirection: "portrait",
+      publication: null,
+      trustOpen: false,
+    });
+
+    render(<SystemOverview displayName="Transit" />);
+
+    expect(screen.getByRole("heading", { name: "Current voice learning application for iOS." })).toBeTruthy();
+    expect(screen.queryByText(staleText)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /older interpreted summary was withheld/i }));
+    expect(screen.getByText("Stale · withheld")).toBeTruthy();
+    expect(screen.getByText(/derived from commit old-commit/i)).toBeTruthy();
+    expect(screen.queryByText(staleText)).toBeNull();
+  });
+
   it("switches without clearing Workbench navigation and persists the last mode", () => {
     useArchStore.setState({ architecture: architecture(), selectedComponentId: "api" });
     render(<ExperienceSwitcher />);

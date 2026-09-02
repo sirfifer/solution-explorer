@@ -46,6 +46,35 @@ def _mark(payload: dict, stale: Optional[bool], commit_sha: Optional[str]) -> di
     return out
 
 
+def _prune_component_groups(payload: dict, component_ids: set[str]) -> dict:
+    """Remove enrichment group members that are absent from the live model.
+
+    Architecture enrichment can outlive a component when a newly classified
+    generated tree is removed from derivation. Keep the authored grouping, but
+    never project a dangling stable identity that the viewer cannot resolve.
+    Empty groups are removed rather than presented as real system areas.
+    """
+    groups = payload.get("component_groups")
+    if not isinstance(groups, list):
+        return payload
+    cleaned: list[dict] = []
+    for raw_group in groups:
+        if not isinstance(raw_group, dict):
+            continue
+        group = copy.deepcopy(raw_group)
+        members = group.get("component_ids")
+        if not isinstance(members, list):
+            continue
+        group["component_ids"] = [
+            member for member in members
+            if isinstance(member, str) and member in component_ids
+        ]
+        if group["component_ids"]:
+            cleaned.append(group)
+    payload["component_groups"] = cleaned
+    return payload
+
+
 def apply_enrichment_overlay(
     arch: dict, store, *, digest_index: Optional[DigestIndex] = None
 ) -> dict:
@@ -83,9 +112,22 @@ def apply_enrichment_overlay(
         stale = staleness_of(row.get("derived_from_hash"), current)
         return _mark(row.get("payload") or {}, stale, row.get("commit_sha"))
 
+    def component_ids(components: list) -> set[str]:
+        result: set[str] = set()
+        for component in components:
+            component_id = component.get("id")
+            if component_id:
+                result.add(str(component_id))
+            result.update(component_ids(component.get("children", [])))
+        return result
+
+    live_component_ids = component_ids(arch.get("components", []))
+
     # Architecture root.
     if arch_row is not None:
-        arch["ai_enhance"] = marked_payload(arch_row)
+        arch["ai_enhance"] = _prune_component_groups(
+            marked_payload(arch_row), live_component_ids
+        )
 
     # Components (recursive; store wins over any inline ai_enhance).
     def walk(components: list) -> None:

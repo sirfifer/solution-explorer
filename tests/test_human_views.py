@@ -152,6 +152,42 @@ def test_security_view_joins_top_level_file_facts_to_component_paths():
     assert any(row["mechanism"] == "iOS Keychain" for row in security["mechanisms"])
 
 
+def test_security_view_prefers_source_symbol_evidence_over_documentation():
+    arch = deepcopy(_architecture())
+    arch["components"][0]["files"] = [
+        "PRE_BETA_AUDIT.md",
+        "apps/web/PersistenceController.swift",
+    ]
+    arch["files"] = [{
+        "path": "PRE_BETA_AUDIT.md",
+        "imports": [],
+        "symbols": [],
+        "module_doc": "The application enables file protection.",
+    }, {
+        "path": "apps/web/PersistenceController.swift",
+        "imports": ["CoreData"],
+        "symbols": ["PersistenceController"],
+        "module_doc": "Core Data stack",
+    }]
+    security = build_security_view(arch, signals_by_path={
+        "apps/web/PersistenceController.swift": [{
+            "kind": "symbol_reference",
+            "value": {"name": "FileProtectionType"},
+            "line": 101,
+        }],
+    })
+
+    mechanism = next(
+        row for row in security["mechanisms"]
+        if row["mechanism"] == "iOS file protection"
+    )
+    assert mechanism["evidence"] == {
+        "file": "apps/web/PersistenceController.swift",
+        "line": 101,
+        "signal": "FileProtectionType / NSPersistentStoreFileProtectionKey symbol reference",
+    }
+
+
 def test_orientation_exposes_interpreted_deployment_posture():
     arch = _architecture()
     arch["components"][0]["docs"] = {
@@ -170,6 +206,22 @@ def test_orientation_exposes_interpreted_deployment_posture():
     }
     assert all(row["statement_kind"] == "repository_claim" for row in posture["items"])
     assert all(row["evidence"]["source"].endswith("claude_md") for row in posture["items"])
+
+
+def test_orientation_marks_stale_architecture_interpretation_in_trust():
+    arch = _architecture()
+    arch["ai_enhance"] = {
+        "summary": "Old measured prose across 751 files.",
+        "stale": True,
+        "derived_from_commit": "old-commit",
+    }
+    orientation = build_orientation(arch)
+
+    assert orientation["orientation"]["interpreted_statement"]["provenance"] == {
+        "derived_from_commit": "old-commit",
+        "stale": True,
+    }
+    assert orientation["trust"]["interpretation"]["status"] == "stale"
 
 
 def test_orientation_prefers_credible_area_entry_targets():

@@ -4,6 +4,14 @@
     "repository": "https://github.com/UnaMentis/unamentis-ios",
     "commit": "a5717bf00918be39e8e5d1bbc0662ea11ebd7b9c"
   },
+  "component_edits": [
+    {
+      "component_id": "unamentis/core/audio",
+      "field_path": "ai_enhance.help_text",
+      "expected_sha256": "c4787543c902a23da81748c7797e07cda0b6908f79f5a7cb68475c86b7936652",
+      "replacement": "Implements the core audio pipeline for voice sessions. AudioEngine captures microphone input and manages playback; VAD and barge-in components detect and respond to user speech; caches and AudioPlaybackOrchestrator coordinate synthesized audio. Session and Knowledge Bowl flows use this module, which in turn connects to Telemetry, service protocols, TTS, and Voice. The component's mapped files and relationships provide the current measured detail."
+    }
+  ],
   "tour_edits": [
     {
       "tour_id": "live-voice-loop",
@@ -55,4 +63,3 @@
     }
   ]
 }
-

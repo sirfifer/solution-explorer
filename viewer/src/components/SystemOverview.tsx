@@ -89,15 +89,19 @@ export function SystemOverview({ displayName }: { displayName: string }) {
 function Portrait({ orientation, darkMode, onTarget, onComponent, onTrust }: { orientation: OrientationProjection; darkMode: boolean; onTarget: (target: OrientationTarget, question?: string) => void; onComponent: (id?: string) => void; onTrust: () => void }) {
   const architecture = useArchStore((state) => state.architecture)!;
   const primary = orientation.question_routes.filter((route) => route.available).slice(0, 3);
-  const interpreted = orientation.orientation.interpreted_statement?.text;
-  const openingStatement = conciseOverviewStatement(interpreted ?? orientation.orientation.deterministic_statement);
+  const interpretedStatement = orientation.orientation.interpreted_statement;
+  const interpreted = interpretedStatement?.provenance.stale ? undefined : interpretedStatement?.text;
+  const openingSource = interpreted || architecture.description || orientation.orientation.deterministic_statement;
+  const openingStatement = conciseOverviewStatement(openingSource);
   const hasLongerDescription = Boolean(interpreted && interpreted.trim() !== openingStatement);
+  const staleInterpretationWithheld = Boolean(interpretedStatement?.provenance.stale);
   return <div className="grid gap-8 py-8 xl:grid-cols-[minmax(0,0.88fr)_minmax(560px,1.12fr)] xl:items-start">
     <section>
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-500">{orientation.subject.name} at a glance</p>
       <h2 className={`mt-4 max-w-3xl text-3xl font-black leading-[1.08] sm:text-4xl xl:text-[3.25rem] ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{openingStatement}</h2>
       <p className={`mt-4 max-w-2xl text-sm leading-7 ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{orientation.orientation.deterministic_statement}</p>
       {hasLongerDescription && <details className={`mt-3 max-w-2xl text-xs leading-6 ${darkMode ? "text-zinc-500" : "text-zinc-600"}`}><summary className="flex min-h-11 cursor-pointer items-center font-semibold text-cyan-500 sm:min-h-0">Read the full system description</summary><p className="mt-2">{interpreted}</p></details>}
+      {staleInterpretationWithheld && <button onClick={onTrust} className={`mt-3 flex min-h-11 items-center text-left text-xs font-semibold sm:min-h-0 ${darkMode ? "text-amber-300" : "text-amber-700"}`}>An older interpreted summary was withheld because its mapped evidence changed. Review provenance →</button>}
       {orientation.deployment_posture?.items.length ? <section className={`mt-5 max-w-2xl rounded-2xl border p-4 ${darkMode ? "border-violet-500/20 bg-violet-500/5" : "border-violet-200 bg-violet-50"}`}>
         <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Deployment posture</p><span className="text-[11px] text-zinc-500">evidence-tiered</span></div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">{orientation.deployment_posture.items.map((item) => <div key={item.id} className={`rounded-xl border p-3 ${darkMode ? "border-zinc-800 bg-zinc-950/50" : "border-violet-100 bg-white/80"}`}><strong className={`block text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>{item.label}</strong><span className="mt-1 block text-[11px] font-semibold uppercase tracking-wide text-violet-500">{item.posture.replaceAll("_", " ")}</span>{item.detail && <small className="mt-1 block text-xs leading-5 text-zinc-500">{item.detail}</small>}<span className="mt-2 block text-[11px] text-zinc-500">{item.statement_kind === "repository_claim" ? "Repository claim" : "Observed source reference"}</span></div>)}</div>

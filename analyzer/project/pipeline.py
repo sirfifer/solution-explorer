@@ -379,6 +379,8 @@ def _emit_human_views(
     coverage: Optional[dict],
     iso: Isolator,
     indent,
+    *,
+    store=None,
 ) -> tuple[Optional[Path], Optional[Path], Optional[Path]]:
     """Build and write the three bounded human-entry sidecars.
 
@@ -403,8 +405,20 @@ def _emit_human_views(
             default=None,
         )
 
+    signals_by_path: dict[str, list[dict]] = {}
+    if store is not None:
+        file_paths = {row["id"]: row["path"] for row in store.files()}
+        for signal in store.signals():
+            path = file_paths.get(signal.get("file_id"))
+            if path:
+                signals_by_path.setdefault(path, []).append(signal)
+
     security = iso.run(
-        "project.security-view", build_security_view, prepared, default=None
+        "project.security-view",
+        build_security_view,
+        prepared,
+        signals_by_path=signals_by_path,
+        default=None,
     )
     security_path = None
     if security is not None:
@@ -576,7 +590,7 @@ def project_split(
         iso.run("project.activity-json", _dump_json, activity_path, activity, indent)
 
     orientation_path, support_path, security_path = _emit_human_views(
-        prepared, output_dir, coverage, iso, indent
+        prepared, output_dir, coverage, iso, indent, store=store
     )
 
     ai_json_path, llms_txt_path = iso.run(
@@ -704,7 +718,7 @@ def project_monolith(
     # endpoint map pointing at that one file (no shards in monolith mode). Runs
     # before the monolith write so its gap, if any, rides on the monolith.
     orientation_path, support_path, security_path = _emit_human_views(
-        prepared, output_path.parent, coverage, iso, indent
+        prepared, output_path.parent, coverage, iso, indent, store=store
     )
 
     ai_json_path, llms_txt_path = iso.run(

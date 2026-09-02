@@ -313,6 +313,8 @@ export interface ArchitectureAIEnhance {
   // Enhancement metadata
   ai_enhanced_at?: string;
   ai_enhance_version?: number;
+  derived_from_commit?: string;
+  stale?: boolean;
 }
 
 // Live monitoring types
@@ -1034,7 +1036,7 @@ export interface OrientationProjection {
       binary?: number;
       target: string;
     };
-    interpretation: { status: "present" | "absent"; component_count: number; total_components: number };
+    interpretation: { status: "present" | "stale" | "absent"; component_count: number; total_components: number };
     producer_gaps: number;
     producer_gap_status?: Record<string, number>;
     findings: { total: number; unverified: number };
