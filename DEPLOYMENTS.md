@@ -6,6 +6,7 @@ Tracks where solution-explorer is installed and how to redeploy after changes.
 
 | Project | GitHub Repo | CF Project | URL | Live Mode | Live Data URL |
 |---------|-------------|------------|-----|-----------|---------------|
+| UnaMentis iOS (SysCorpus demo) | `UnaMentis/unamentis-ios` @ `a5717bf` | `unamentis-ios-demo` | [unamentis-ios-demo.pages.dev](https://unamentis-ios-demo.pages.dev) | reviewed snapshot | [canonical split manifest](https://unamentis-ios-demo.pages.dev/architecture/manifest.json) |
 | UnaMentis (static) | `UnaMentis/unamentis` | `um-solution-explorer` | [um-arch.unamentis.org](https://um-arch.unamentis.org) | - | - |
 | UnaMentis (full) | `UnaMentis/unamentis` | `solution-explorer-unamentis` | [solution-explorer.unamentis.org](https://solution-explorer.unamentis.org) | github | [unamentis.github.io/unamentis](https://unamentis.github.io/unamentis) |
 
@@ -13,6 +14,17 @@ Tracks where solution-explorer is installed and how to redeploy after changes.
 - `architecture.yml`: Static build and Cloudflare Pages deploy (all installations)
 - `architecture-full.yml`: Advanced build with live-config injection and Cloudflare Pages deploy
 - `live-monitor.yml`: Live data generation, GitHub Pages + optional R2 deploy (if live mode is set)
+
+### UnaMentis iOS public demo (2026-09-02)
+
+The first public SysCorpus demo is a reviewed, point-in-time split projection of
+`UnaMentis/unamentis-ios` at commit
+`a5717bf00918be39e8e5d1bbc0662ea11ebd7b9c`. The production Pages deployment
+is `35beb518-1b96-4c40-8ce4-4f9a25b46478`, built from solution-explorer commit
+`0cf0ba3165b6f73029ada51030f153a8c8de31eb`. Its production branch is `main`.
+The published manifest has 165 components, 559 mapped files, 458 relationships,
+4 tours, and 8 commit-bound review corrections. The bundle carries the upstream
+MIT license, notice, and public owner publication metadata.
 
 ## Analysis engine (v2 cutover, 2026-07-13)
 
