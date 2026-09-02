@@ -68,6 +68,7 @@ from pathlib import Path
 from typing import Optional
 from urllib import error as urlerror
 from urllib import request as urlrequest
+from urllib.parse import urlparse
 
 SCRIPTS = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPTS.parent
@@ -113,6 +114,7 @@ class Job:
         cwd: Path = REPO_ROOT,
         env: Optional[Callable[[dict], dict]] = None,
         needs_slug: bool = False,
+        validate: Optional[Callable[[dict], Optional[str]]] = None,
     ) -> None:
         self.name = name
         self.summary = summary
@@ -120,6 +122,10 @@ class Job:
         self.cwd = cwd
         self.env = env
         self.needs_slug = needs_slug
+        # Extra param validation beyond the slug check, for a job whose params
+        # need more than "is it present": crawl's slug-or-url either/or, for
+        # instance. Returns an error string, or None when params are fine.
+        self.validate = validate
 
     def describe(self) -> dict:
         return {
@@ -155,6 +161,73 @@ def _serve_dir_for(slug: str) -> Path:
     return REPO_ROOT / ".testboard" / "serve" / slug
 
 
+def _validate_crawl(params: dict) -> Optional[str]:
+    """crawl takes a slug OR a url, never neither, and a url must be http(s).
+
+    Every other job in this file needs a slug unconditionally (needs_slug on
+    the Job). crawl is the one exception: GUI-CRAWL-DESIGN.md added the
+    ability to point the crawl at a published origin directly, which has no
+    local slug at all. So crawl carries needs_slug=False and validates its
+    own either/or here instead.
+    """
+    url = params.get("url")
+    slug = params.get("slug")
+    if url:
+        parsed = urlparse(str(url))
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return f"'{url}' is not a usable url; it must start with http:// or https://"
+    elif not slug:
+        return "job 'crawl' needs a slug or a url"
+    elif not _SLUG_RE.fullmatch(slug):
+        return (
+            f"'{slug}' is not a usable slug. A slug names a registry "
+            "entry, so it may hold letters, digits, dots, dashes and "
+            "underscores and nothing else."
+        )
+
+    profile = params.get("profile")
+    if profile and profile not in ("quick", "full"):
+        return f"'{profile}' is not a usable profile; it must be 'quick' or 'full'"
+    return None
+
+
+def _mobile_disabled(params: dict) -> bool:
+    """Whether the mobile Playwright project should be switched off.
+
+    Mobile defaults to on (GUI-CRAWL-DESIGN.md's mobile project runs unless
+    told not to), so this only ever returns True on an explicit opt-out. A
+    JSON body carries a real bool; `--param mobile=false` from the CLI
+    carries a string, so both spellings are read.
+    """
+    value = params.get("mobile")
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return not value
+    return str(value).strip().lower() in ("0", "false", "no", "off")
+
+
+def _validate_params(job: "Job", params: dict) -> Optional[str]:
+    """The one place slug and job-specific validation happen.
+
+    Shared between JobRunner.start() (the HTTP path) and the CLI's --dry-run,
+    so the two never drift apart on what counts as a usable set of params.
+    """
+    if job.needs_slug:
+        slug = params.get("slug")
+        if not slug:
+            return f"job '{job.name}' needs a slug"
+        if not _SLUG_RE.fullmatch(slug):
+            return (
+                f"'{slug}' is not a usable slug. A slug names a registry "
+                "entry, so it may hold letters, digits, dots, dashes and "
+                "underscores and nothing else."
+            )
+    if job.validate:
+        return job.validate(params)
+    return None
+
+
 JOBS: dict[str, Job] = {
     "lint": Job(
         "lint",
@@ -173,28 +246,45 @@ JOBS: dict[str, Job] = {
     "assemble": Job(
         "assemble",
         "Build the viewer and stage it beside a subject's projection so the "
-        "crawl has something to point at. Cheap, and the crawl needs it first.",
+        "crawl has something to point at. `projection` overrides the "
+        "projection directory (default: the corpus output for this slug). "
+        "Cheap, and the crawl needs it first.",
         needs_slug=True,
         build=lambda p: [
             _python(), str(SCRIPTS / "assemble-serve.py"), p["slug"],
+            *(["--projection", p["projection"]] if p.get("projection") else []),
             *(["--no-build"] if p.get("no_build") else []),
         ],
     ),
     "crawl": Job(
         "crawl",
-        "Drive a real browser over a served build and prove everything in the "
-        "data is reachable and renders. Minutes to hours by subject size. "
-        "Needs `assemble` to have run for this subject first.",
-        needs_slug=True,
+        "Drive a real browser over a served build, or a remote origin, and "
+        "prove everything in the data is reachable and renders. `slug` "
+        "crawls a locally assembled subject (needs `assemble` to have run "
+        "first); `url` crawls a remote origin instead and needs no slug. "
+        "`profile` is `quick` (bounded sweeps, both projects, the default) "
+        "or `full` (no budget, hour-scale). `mobile` defaults to on; pass "
+        "false to run the desktop project alone. Minutes to hours by subject "
+        "size and profile.",
+        needs_slug=False,
         cwd=VIEWER,
+        validate=_validate_crawl,
         build=lambda p: [
             "npx", "playwright", "test", "-c", CRAWL_CONFIG,
             *(["-g", p["grep"]] if p.get("grep") else []),
         ],
         env=lambda p: {
-            "CRAWL_SERVE_DIR": str(_serve_dir_for(p["slug"])),
-            "CRAWL_BASE_URL": p.get("base_url") or "http://127.0.0.1:4310",
+            **(
+                {"CRAWL_BASE_URL": p["url"]}
+                if p.get("url")
+                else {
+                    "CRAWL_SERVE_DIR": str(_serve_dir_for(p["slug"])),
+                    "CRAWL_BASE_URL": p.get("base_url") or "http://127.0.0.1:4310",
+                }
+            ),
+            "CRAWL_PROFILE": p.get("profile") or "quick",
             **({"CRAWL_MAX_COMPONENTS": str(p["max_components"])} if p.get("max_components") else {}),
+            **({"CRAWL_MOBILE": "0"} if _mobile_disabled(p) else {}),
         },
     ),
     "fetch": Job(
@@ -300,19 +390,9 @@ class JobRunner:
                 "status": 409,
                 "run_it_yourself": command,
             }
-        if job.needs_slug:
-            slug = params.get("slug")
-            if not slug:
-                return {"error": f"job '{name}' needs a slug", "status": 400}
-            if not _SLUG_RE.fullmatch(slug):
-                return {
-                    "error": (
-                        f"'{slug}' is not a usable slug. A slug names a registry "
-                        "entry, so it may hold letters, digits, dots, dashes and "
-                        "underscores and nothing else."
-                    ),
-                    "status": 400,
-                }
+        err = _validate_params(job, params)
+        if err:
+            return {"error": err, "status": 400}
 
         with self._lock:
             self._reap()
@@ -566,19 +646,97 @@ def _post(url: str, payload: dict) -> dict:
         return {"error": f"no control plane reachable at {url}: {exc}", "status": 503}
 
 
+def _run_params(args: argparse.Namespace) -> dict:
+    """Assemble a job's params from the run subcommand's flags.
+
+    Only includes a key when the matching flag was actually given, so a job's
+    own default (e.g. crawl's `profile` defaulting to "quick" in its env
+    lambda) is what applies, not an accidental None sent over the wire.
+    """
+    params: dict = {}
+    if args.slug:
+        params["slug"] = args.slug
+    if getattr(args, "url", None):
+        params["url"] = args.url
+    if getattr(args, "projection", None):
+        params["projection"] = args.projection
+    if getattr(args, "profile", None):
+        params["profile"] = args.profile
+    if getattr(args, "no_mobile", False):
+        params["mobile"] = False
+    for extra in args.param or []:
+        if "=" in extra:
+            key, value = extra.split("=", 1)
+            params[key] = value
+    return params
+
+
+def _wait_for_job(base: str, job_id: str) -> None:
+    """Block until job_id is no longer in the runner's running list.
+
+    Only the CLI's `run crawl` path waits like this (see cmd_run); the HTTP
+    API stays fire-and-forget, same as every other job. There is no timeout:
+    a `full` profile crawl is hour-scale by design (GUI-CRAWL-DESIGN.md), so
+    bounding this wait would just mean guessing wrong on some subject's size.
+    A heartbeat prints every 30s so a long wait still looks alive rather than
+    hung.
+    """
+    last_print = 0.0
+    while True:
+        try:
+            with urlrequest.urlopen(f"{base}/api/jobs", timeout=10) as resp:
+                snap = json.loads(resp.read())
+        except OSError as exc:
+            print(f"  (lost contact with the control plane while waiting: {exc})",
+                  file=sys.stderr)
+            return
+        running = {r["id"]: r for r in snap.get("running", [])}
+        run = running.get(job_id)
+        if run is None:
+            return
+        now = time.time()
+        if now - last_print >= 30:
+            print(f"  ...still running, {run['elapsed_s']}s elapsed")
+            last_print = now
+        time.sleep(5)
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Ask a running control plane to start a job.
 
     Deliberately does NOT fall back to running the job locally when no control
     plane answers. That fallback is exactly how work ends up unobserved again,
     which is the problem this exists to solve. It says how to start one instead.
+
+    --dry-run is the one path that never contacts the control plane at all: it
+    builds the same command and environment JobRunner.start() would and prints
+    them, so a slug/url/profile combination can be checked before anything
+    actually runs a browser.
     """
     base = f"http://127.0.0.1:{args.port}"
-    params = {"slug": args.slug}
-    for extra in args.param or []:
-        if "=" in extra:
-            key, value = extra.split("=", 1)
-            params[key] = value
+    job = JOBS[args.job]  # argparse's choices=sorted(JOBS) guarantees this exists
+    params = _run_params(args)
+
+    if args.dry_run:
+        err = _validate_params(job, params)
+        if err:
+            print(f"error: {err}", file=sys.stderr)
+            return 1
+        if args.job in CLAUDE_GATED:
+            print(f"[dry-run] {args.job} is claude-gated: {CLAUDE_GATED[args.job]}")
+        command = job.build(params)
+        env_overrides = job.env(params) if job.env else {}
+        print(f"[dry-run] {args.job} (nothing started; no control plane contacted)")
+        print(f"  cwd      {job.cwd}")
+        print(f"  command  {' '.join(shlex.quote(c) for c in command)}")
+        if env_overrides:
+            print("  env")
+            for key, value in sorted(env_overrides.items()):
+                print(f"    {key}={value}")
+        else:
+            print("  env      (no overrides beyond the inherited environment)")
+        return 0
+
     result = _post(f"{base}/api/jobs/{args.job}", params)
 
     if result.get("status") == 503:
@@ -598,6 +756,22 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"started {result['job']} as {result['id']}")
     print(f"  watch   {base}/")
     print(f"  log     {result['log']}")
+
+    if args.job == "crawl":
+        # Documented follow-up, CLI-only (see docs/testing/DETERMINISTIC-CHECKS.md
+        # and GUI-CRAWL-DESIGN.md): the job runner itself stays fire-and-forget,
+        # so this waits here instead of inside JobRunner, then renders the
+        # finished run's REPORT.md via scripts/crawl-report.py. The HTTP API
+        # does not do this; only `control.py run crawl` from a terminal does.
+        print("  the CLI now waits for this crawl to finish so it can render "
+              "REPORT.md (scripts/crawl-report.py); Ctrl-C to stop waiting, the "
+              "crawl itself keeps running either way")
+        _wait_for_job(base, result["id"])
+        report_rc = subprocess.run(
+            [_python(), str(SCRIPTS / "crawl-report.py"), "--latest"]
+        ).returncode
+        if report_rc != 0:
+            print(f"warning: crawl-report.py exited {report_rc}", file=sys.stderr)
     return 0
 
 
@@ -628,7 +802,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_run = sub.add_parser("run", help="start a job on the control plane")
     p_run.add_argument("job", choices=sorted(JOBS))
     p_run.add_argument("--slug", default=None)
+    p_run.add_argument("--url", default=None,
+                        help="crawl only: a remote origin to crawl instead of --slug")
+    p_run.add_argument("--projection", default=None,
+                        help="assemble only: projection directory (default: this slug's corpus output)")
+    p_run.add_argument("--profile", choices=["quick", "full"], default=None,
+                        help="crawl only: quick (bounded, default) or full (no budget, hour-scale)")
+    p_run.add_argument("--no-mobile", action="store_true",
+                        help="crawl only: disable the mobile Playwright project (CRAWL_MOBILE=0)")
     p_run.add_argument("--param", action="append", help="extra key=value for the job")
+    p_run.add_argument("--dry-run", action="store_true",
+                        help="print the command and environment without starting anything")
     p_run.set_defaults(func=cmd_run)
 
     sub.add_parser("jobs", help="list what can be run").set_defaults(func=cmd_jobs)

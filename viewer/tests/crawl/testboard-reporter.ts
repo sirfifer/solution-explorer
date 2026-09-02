@@ -123,6 +123,8 @@ export default class TestboardReporter implements Reporter {
     fs.mkdirSync(this.runDir, { recursive: true });
   }
   private currentStarted: number | null = null;
+  /** What this build exposes, keyed by fact name. Written as discovery.json. */
+  private discovery: Record<string, unknown> = {};
 
   onBegin(config: FullConfig, suite: Suite): void {
     // A listing is not a run, and nothing in onBegin can tell the difference:
@@ -155,7 +157,8 @@ export default class TestboardReporter implements Reporter {
     // "microsoft/large-repository-validation" would silently nest the run two levels down where the
     // board cannot find it. A leading ".." would climb out of .testboard
     // entirely, and ":" is simply not a legal filename character on Windows.
-    this.runDir = path.join(root, `${stamp}-crawl-${pathSafe(subject)}`);
+    const targetTag = process.env.CRAWL_REMOTE === "1" ? "-remote" : "";
+    this.runDir = path.join(root, `${stamp}-crawl-${pathSafe(subject)}${targetTag}`);
     this.eventsPath = path.join(this.runDir, "events.jsonl");
 
     this.record = {
@@ -169,6 +172,13 @@ export default class TestboardReporter implements Reporter {
       duration_ms: null,
       data_dir: resolvedDataDir ?? null,
       base_url: process.env.CRAWL_BASE_URL ?? null,
+      // A run against the deployed site and a run against a locally assembled
+      // root are different claims, and telling them apart on the board must not
+      // depend on reading a URL and guessing. globalSetup sets these when it
+      // mirrors a remote projection; a local run leaves them false and null.
+      remote: process.env.CRAWL_REMOTE === "1",
+      remote_generated_at: process.env.CRAWL_REMOTE_GENERATED_AT || null,
+      profile: process.env.CRAWL_PROFILE ?? "quick",
       budget: process.env.CRAWL_MAX_COMPONENTS ?? "0 (full sweep)",
       versions,
       total: suite.allTests().length,
@@ -178,6 +188,17 @@ export default class TestboardReporter implements Reporter {
       skipped: 0,
       current: null,
       cases: [],
+      // Set when the contract-presence gate fires: the build under test does
+      // not publish the selector contract, so most of the suite was skipped.
+      limited: false,
+      // Free-text notes from the parameters file, so a run record says what the
+      // person who set the parameters meant by them.
+      params_notes: null as string | null,
+      params_source: process.env.CRAWL_PARAMS ?? null,
+      // Per-project tallies. The mobile project is a real project with real
+      // failures, and rolling it into one number would hide exactly the case
+      // the second viewport exists to catch.
+      by_project: {} as Record<string, { passed: number; failed: number; skipped: number }>,
       coverage: [],
       findings: [],
       finding_totals: {
@@ -203,21 +224,35 @@ export default class TestboardReporter implements Reporter {
     this.heartbeat.unref?.();
   }
 
+  /** The project a case belongs to, so desktop and mobile stay distinguishable. */
+  private projectOf(test: TestCase): string {
+    return test.parent?.project()?.name ?? "default";
+  }
+
   onTestBegin(test: TestCase): void {
     this.publish();
     this.currentStarted = Date.now();
-    this.record.current = test.titlePath().slice(-2).join(" › ");
+    this.record.current = `[${this.projectOf(test)}] ` + test.titlePath().slice(-2).join(" › ");
     this.emit({ type: "case_start", title: this.record.current });
     this.flush();
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
     if (!this.published) return;
-    const title = test.titlePath().slice(-2).join(" › ");
+    const project = this.projectOf(test);
+    const title = `[${project}] ` + test.titlePath().slice(-2).join(" › ");
     this.record.completed += 1;
-    if (result.status === "passed") this.record.passed += 1;
-    else if (result.status === "skipped") this.record.skipped += 1;
-    else this.record.failed += 1;
+    const tally = (this.record.by_project[project] ??= { passed: 0, failed: 0, skipped: 0 });
+    if (result.status === "passed") {
+      this.record.passed += 1;
+      tally.passed += 1;
+    } else if (result.status === "skipped") {
+      this.record.skipped += 1;
+      tally.skipped += 1;
+    } else {
+      this.record.failed += 1;
+      tally.failed += 1;
+    }
 
     // The suite reports its own reach through annotations ("94/94 components
     // swept"); surfacing them is what turns a green tick into a claim you can
@@ -265,8 +300,21 @@ export default class TestboardReporter implements Reporter {
       }));
     for (const f of findings) this.record.findings.push(f);
 
+    // Discoveries: what this build exposes, as opposed to what is wrong with
+    // it. Collected here and written once at the end as discovery.json.
+    for (const a of test.annotations) {
+      if (a.type !== "discovery") continue;
+      try {
+        const { key, value } = JSON.parse(a.description ?? "{}");
+        if (typeof key === "string") this.discovery[key] = value;
+      } catch {
+        /* a malformed discovery must never fail a run */
+      }
+    }
+
     const entry = {
       title,
+      project,
       status: result.status,
       duration_ms: result.duration,
       coverage,
@@ -300,10 +348,37 @@ export default class TestboardReporter implements Reporter {
         .filter((f) => f.severity === "warn")
         .reduce((n, f) => n + f.instances, 0),
     };
-    this.record.status = result.status === "passed" ? "passed" : "failed";
+    // A run whose contract-presence gate fired covered a fraction of what the
+    // suite can check, and calling that "passed" on the board would be the
+    // board asserting something it has no evidence for. It is reported as
+    // LIMITED: not a failure (nothing was wrong with what did run), but never
+    // green either.
+    const limited = (this.record.coverage as string[]).some((line) =>
+      line.startsWith("contract.absent:"),
+    );
+    // Every case skipped for the same absence is not a run at all. Saying
+    // "failed" would blame the product for attributes it does not carry, and
+    // saying "passed" would claim evidence that was never gathered.
+    if (limited && this.record.passed === 0 && this.record.failed === 0) {
+      this.record.status = "limited";
+      this.record.limited = true;
+      this.record.ended_at = new Date().toISOString();
+      this.record.duration_ms = Date.now() - this.startedAt;
+    }
+    this.record.limited = limited;
+    this.record.status =
+      result.status !== "passed" ? "failed" : limited ? "limited" : "passed";
     this.record.ended_at = new Date().toISOString();
     this.record.duration_ms = Date.now() - this.startedAt;
     this.record.current = null;
+    // The slowest cases, named. The owner's standard is that Playwright is
+    // fast and a slow suite means the suite is being used badly, so the record
+    // has to make "which cases cost the time" answerable without a stopwatch.
+    this.record.slowest = [...(this.record.cases as any[])]
+      .sort((a, b) => (b.duration_ms ?? 0) - (a.duration_ms ?? 0))
+      .slice(0, 8)
+      .map((c) => ({ title: c.title, duration_ms: c.duration_ms, status: c.status }));
+
     this.emit({
       type: "run_end",
       status: this.record.status,
@@ -311,6 +386,7 @@ export default class TestboardReporter implements Reporter {
       failed: this.record.failed,
     });
     this.flush();
+    this.writeDiscovery();
   }
 
   private emit(event: Record<string, unknown>): void {
@@ -318,6 +394,36 @@ export default class TestboardReporter implements Reporter {
       fs.appendFileSync(
         this.eventsPath,
         JSON.stringify({ ts: new Date().toISOString(), ...event }) + "\n",
+        "utf8",
+      );
+    } catch {
+      /* observability must never be able to fail a test run */
+    }
+  }
+
+  /**
+   * `discovery.json`: the machine-readable inventory of what this version
+   * exposes, so a later orchestrator reads it instead of re-deriving it by
+   * running the suite again and parsing prose.
+   */
+  private writeDiscovery(): void {
+    try {
+      fs.writeFileSync(
+        path.join(this.runDir, "discovery.json"),
+        JSON.stringify(
+          {
+            run_id: this.record.id,
+            subject: this.record.subject,
+            base_url: this.record.base_url,
+            remote: this.record.remote,
+            limited: this.record.limited,
+            params_source: this.record.params_source,
+            generated_at: new Date().toISOString(),
+            ...this.discovery,
+          },
+          null,
+          2,
+        ) + "\n",
         "utf8",
       );
     } catch {

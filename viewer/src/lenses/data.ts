@@ -26,6 +26,7 @@ import type {
 } from "../types";
 import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
+import { LENS_MATURITY } from "./maturity";
 
 // The kinds in the order the panel presents them, most specific source first.
 export const ENTITY_KIND_ORDER: DataEntity["kind"][] = ["model", "table", "migration", "schema"];
@@ -246,6 +247,7 @@ export const DATA_QUESTIONS: LensQuestion[] = [
 export const dataLens: LensDefinition = {
   id: "data",
   label: "Data",
+  maturity: LENS_MATURITY.data,
   description:
     "What it knows: data entities and who reads and writes them, as an ego view of the components that touch each entity.",
   isAvailable: hasDataEntities,

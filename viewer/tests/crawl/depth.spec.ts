@@ -16,6 +16,7 @@
  */
 
 import { test,
+  requireLegacyContract,
   reportFinding, expect, gotoState, navigateState, expectNoErrorBoundary } from "./fixtures";
 import {
   componentBudget,
@@ -28,11 +29,12 @@ import {
 const MIN_PANEL_TEXT = 3;
 
 test.describe("depth", () => {
-  test("every tab of every component renders something honest", async ({
+  test("every tab of every component renders something honest", { tag: ["@desktop"] }, async ({
     crawlPage,
     contract,
     recorder,
   }) => {
+      await requireLegacyContract(crawlPage);
     const budget = componentBudget();
     const { chosen, dropped } = sampleComponents(contract, budget);
     test.info().annotations.push({
@@ -92,10 +94,11 @@ test.describe("depth", () => {
     expect(broken.slice(0, 25), "tabs that logged an error or a failed request").toEqual([]);
   });
 
-  test("a component with symbols shows them, and one without says so", async ({
+  test("a component with symbols shows them, and one without says so", { tag: ["@desktop"] }, async ({
     crawlPage,
     contract,
   }) => {
+      await requireLegacyContract(crawlPage);
     // The strongest per-level claim available without re-deriving the analysis:
     // the detail index states a symbol count per component, and the symbols tab
     // is the surface that count is about. A component the data says is full
@@ -148,11 +151,12 @@ test.describe("depth", () => {
     ).toEqual([]);
   });
 
-  test("every lens the dataset offers can be entered and used", async ({
+  test("every lens the dataset offers can be entered and used", { tag: ["@desktop"] }, async ({
     crawlPage,
     contract,
     recorder,
   }) => {
+      await requireLegacyContract(crawlPage);
     // A per-lens budget is only half the protection. The suite-wide timeout is
     // measured in hours so the full sweeps can finish, which means a step that
     // escapes its own budget could still burn the whole afternoon. This test
@@ -229,7 +233,7 @@ test.describe("depth", () => {
         broken.push(`lens ${lens}: not usable within ${elapsed}s (${failure})`);
         // The page is probably still spinning, and a spinning page fails every
         // lens after it. Park it somewhere inert so the rest get a fair test.
-        await crawlPage.goto("about:blank", { timeout: 10_000 }).catch(() => {});
+        await crawlPage.goto("about:blank", { timeout: 10_000  }).catch(() => {});
         continue;
       }
       timings.push(`${lens} ${elapsed}s`);
@@ -248,10 +252,11 @@ test.describe("depth", () => {
     expect(broken, "lenses that error or will not settle when entered").toEqual([]);
   });
 
-  test("the heaviest component in the subject can still be opened", async ({
+  test("the heaviest component in the subject can still be opened", { tag: ["@desktop"] }, async ({
     crawlPage,
     contract,
   }) => {
+      await requireLegacyContract(crawlPage);
     // The worst case, tested deliberately and once.
     //
     // The biggest component is usually the most interesting thing in the whole
@@ -309,10 +314,11 @@ test.describe("depth", () => {
     ).toBeNull();
   });
 
-  test("enrichment-only surfaces are consistent with the dataset's posture", async ({
+  test("enrichment-only surfaces are consistent with the dataset's posture", { tag: ["@desktop"] }, async ({
     crawlPage,
     contract,
   }) => {
+      await requireLegacyContract(crawlPage);
     // A deterministic run carries no ai_enhance, so the AI tab must either be
     // absent or say plainly that there is nothing. Half a posture is the defect:
     // some components offering enriched content and others not, in a dataset

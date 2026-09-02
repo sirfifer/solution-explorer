@@ -1,6 +1,7 @@
 import type { Architecture } from "../types";
 import { collectComponentsByIds } from "../utils/collectComponents";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
+import { LENS_MATURITY } from "./maturity";
 
 export const SECURITY_QUESTIONS: LensQuestion[] = [
   { id: "mechanisms", question: "What authentication mechanisms are visible?", gesture: "Inspect a confirmed mechanism and its exact boundary." },
@@ -21,6 +22,7 @@ export function hasSecurityEvidence(architecture: Architecture): boolean {
 export const securityLens: LensDefinition = {
   id: "security",
   label: "Security",
+  maturity: LENS_MATURITY.security,
   description: "Repository-observable security mechanisms, boundaries, leads, and explicit unknowns—not a verdict.",
   isAvailable: hasSecurityEvidence,
   getGraph: ({ architecture }) => {

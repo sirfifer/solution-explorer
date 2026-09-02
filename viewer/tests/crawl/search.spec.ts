@@ -19,7 +19,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { test,
-  reportFinding, expect, gotoState, expectNoErrorBoundary } from "./fixtures";
+  requireLegacyContract,
+  reportFinding, expect, gotoState, expectNoErrorBoundary, ensureTree } from "./fixtures";
 import { componentBudget, type Contract } from "./contract";
 
 /**
@@ -109,11 +110,12 @@ function drawTargets(contract: Contract, perKind: number): Target[] {
 }
 
 test.describe("search", () => {
-  test("every kind of search result navigates to what it named", async ({
+  test("every kind of search result navigates to what it named", { tag: ["@desktop"] }, async ({
     crawlPage,
     contract,
     recorder,
   }) => {
+      await requireLegacyContract(crawlPage);
     const targets = drawTargets(contract, perKindBudget());
     if (targets.length === 0) {
       test.info().annotations.push({
@@ -206,7 +208,7 @@ test.describe("search", () => {
           `[data-testid="search-result"][data-result-kind="${target.kind}"]`,
         );
         try {
-          await expect(row.first()).toBeVisible({ timeout: 15_000 });
+          await expect(row.first()).toBeVisible({ timeout: 15_000  });
         } catch {
           noResults.push(`${target.kind} "${target.query}" returns no ${target.kind} row`);
           continue;
@@ -228,15 +230,25 @@ test.describe("search", () => {
         // data-component-id. That mistake reported 15 false failures on private large-repository validation corpus
         // and briefly went on the record as a product defect. The lesson is that
         // a selector contract covering one of three detail kinds will be misused.
-        const landedOn = async (): Promise<string> => {
-          const symbol = crawlPage.locator('[data-testid="symbol-detail"]');
-          if (await symbol.count()) return `symbol:${await symbol.first().getAttribute("data-symbol-id")}`;
-          const file = crawlPage.locator('[data-testid="file-detail"]');
-          if (await file.count()) return `file:${await file.first().getAttribute("data-file-path")}`;
-          const comp = crawlPage.locator('[data-testid="detail-panel"]');
-          if (await comp.count()) return `component:${await comp.first().getAttribute("data-component-id")}`;
-          return "nothing";
-        };
+        // One evaluate, not six locator calls. Reading the count and then the
+        // attribute is two reads of a page that is still changing, and a symbol
+        // result changes it twice by design: navigateToComponent mounts the
+        // component panel, then the detail fetch resolves and showDetail swaps
+        // it for the symbol view. A count that found the component panel was
+        // followed by a getAttribute on an element the swap had already
+        // removed, which waited out the whole poll and was recorded as
+        // "the search UI could not be driven at all" (search.unusable, three
+        // runs, always a symbol target). The torn read was the finding.
+        const landedOn = async (): Promise<string> =>
+          crawlPage.evaluate(() => {
+            const symbol = document.querySelector('[data-testid="symbol-detail"]');
+            if (symbol) return `symbol:${symbol.getAttribute("data-symbol-id")}`;
+            const file = document.querySelector('[data-testid="file-detail"]');
+            if (file) return `file:${file.getAttribute("data-file-path")}`;
+            const comp = document.querySelector('[data-testid="detail-panel"]');
+            if (comp) return `component:${comp.getAttribute("data-component-id")}`;
+            return "nothing";
+          });
 
         // Closing the search overlay and resolving a symbol shard are separate
         // React updates.  Reading immediately after the overlay disappears can
@@ -245,8 +257,24 @@ test.describe("search", () => {
         // Poll the product outcome rather than treating that transient frame as
         // a wrong landing (the failure screenshot showed the correct symbol
         // panel a moment after the assertion had already recorded "nothing").
-        await expect.poll(landedOn, { timeout: 10_000 }).not.toBe("nothing");
-        const landed = await landedOn();
+        // Keep the value the poll ACCEPTED rather than reading the page again.
+        // The old code polled until a detail view existed and then re-read the
+        // DOM one more time, which is the very between-views frame the comment
+        // above says not to trust: a target that had already landed correctly
+        // was reported as "opened no detail view at all", and the second read
+        // could also time out on an element the first had just found, which
+        // came back as "the search UI could not be driven at all". One
+        // Node-enforced poll, one answer.
+        let landed = "nothing";
+        await expect
+          .poll(
+            async () => {
+              landed = await landedOn();
+              return landed;
+            },
+            { timeout: 10_000, intervals: [100] },
+          )
+          .not.toBe("nothing");
         if (landed === "nothing") {
           wrongLanding.push(`${target.kind} "${target.query}" opened no detail view at all`);
           continue;
@@ -275,11 +303,22 @@ test.describe("search", () => {
           // marked where the reader can see it.
           acceptable = landed === `file:${target.id}` || landed.startsWith("component:");
           if (acceptable && landed.startsWith("component:")) {
-            const marked = await crawlPage
-              .locator('[data-testid="detail-tabpanel"][data-tab="files"]')
-              .innerText()
-              .catch(() => "");
             const leaf = target.id.split("/").pop() ?? target.id;
+            const filesPanel = crawlPage.locator(
+              '[data-testid="detail-tabpanel"][data-tab="files"]',
+            );
+            // Poll: in split mode the component's file list arrives with the
+            // detail shard, so the tab reads "Loading files..." for a moment
+            // after the landing itself is settled. Reading once reported the
+            // loading frame as a file the product never shows.
+            await expect
+              .poll(async () => (await filesPanel.innerText().catch(() => "")).includes(leaf), {
+                timeout: 10_000,
+                intervals: [100],
+              })
+              .toBe(true)
+              .catch(() => {});
+            const marked = await filesPanel.innerText().catch(() => "");
             if (marked && !marked.includes(leaf)) {
               wrongLanding.push(
                 `file "${target.query}" drilled to ${landed} but the Files tab does not show ${leaf}`,
@@ -300,10 +339,12 @@ test.describe("search", () => {
         broke.push(
           `${target.kind} "${target.query}": ${(err as Error).message.split("\n")[0]}`,
         );
-        await crawlPage.goto("/").catch(() => {});
-        await crawlPage
-          .waitForSelector('[data-testid="tree-navigator"]', { timeout: 30_000 })
-          .catch(() => {});
+        // gotoState, not a bare goto: a bare URL now lands on the Overview
+        // front door, and every target after the first failure would then be
+        // driven against an aperture that has no tree, no graph and no detail
+        // panel. One recovery that changes what is under test invalidates the
+        // rest of the sweep.
+        await gotoState(crawlPage, {}).catch(() => {});
         previous = `recovery reload after ${target.kind} "${target.query}"`;
       }
     }
@@ -331,7 +372,8 @@ test.describe("search", () => {
     expect(noisy.slice(0, 25), "search routes that logged an error or a 404").toEqual([]);
   });
 
-  test("a search result leaves the reader placed in the tree", async ({ crawlPage, contract }) => {
+  test("a search result leaves the reader placed in the tree", { tag: ["@desktop"] }, async ({ crawlPage, contract }) => {
+      await requireLegacyContract(crawlPage);
     // Same complaint as the deep-link case, by a different route. Arriving via
     // search has to leave you somewhere you can carry on from, not on an
     // orphaned panel.
@@ -340,6 +382,7 @@ test.describe("search", () => {
 
     const unplaced: string[] = [];
     await gotoState(crawlPage, {});
+    await ensureTree(crawlPage);
     for (const target of targets) {
       await crawlPage.keyboard.press("Escape").catch(() => {});
       await crawlPage.keyboard.press("ControlOrMeta+k");
@@ -355,6 +398,14 @@ test.describe("search", () => {
       const node = crawlPage.locator(
         `[data-testid="tree-node"][data-component-id="${target.id.replace(/["\\]/g, "\\$&")}"]`,
       );
+      // The tree reveals an ancestor chain in a passive effect, one commit after
+      // the click that selected the component, so a bare count() here races the
+      // render it is asking about. Node-enforced wait, short ceiling: a row that
+      // takes longer than this to appear has not been revealed.
+      await expect
+        .poll(async () => node.count(), { timeout: 10_000, intervals: [100] })
+        .toBeGreaterThan(0)
+        .catch(() => {});
       if ((await node.count()) === 0) unplaced.push(target.id);
     }
     reportFinding("search.unplaced", unplaced, {
@@ -366,7 +417,8 @@ test.describe("search", () => {
     ).toEqual([]);
   });
 
-  test("a query that matches nothing says so", async ({ crawlPage }) => {
+  test("a query that matches nothing says so", { tag: ["@desktop"] }, async ({ crawlPage }) => {
+      await requireLegacyContract(crawlPage);
     await gotoState(crawlPage, {});
     await crawlPage.keyboard.press("ControlOrMeta+k");
     const input = crawlPage.locator('[data-testid="search-input"]');
