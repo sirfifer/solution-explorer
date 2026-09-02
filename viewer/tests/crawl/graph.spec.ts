@@ -48,7 +48,7 @@ import {
   isFullyInView,
   describeViewport,
   describeObstruction,
-  describeOcclusion,
+  waitForUnoccluded,
   ensureTree,
   ensureDetailPanel,
 } from "./fixtures";
@@ -266,13 +266,15 @@ test.describe("graph", () => {
       );
       for (const id of renderedIds) {
         if (!id) continue;
-        const cover = await describeOcclusion(
+        const result = await waitForUnoccluded(
           crawlPage,
           `[data-testid="graph-node"][data-component-id="${cssEscape(id)}"]`,
+          SNAP_BUDGET_MS,
         );
-        if (cover) {
+        if (result.occluded) {
           occluded.push(
-            `node ${id}'s centre is covered by ${cover} (${await describeViewport(crawlPage)})`,
+            `node ${id}'s centre is still covered by ${result.lastCover} after ` +
+              `${result.coveredForMs}ms (${await describeViewport(crawlPage)})`,
           );
         }
       }

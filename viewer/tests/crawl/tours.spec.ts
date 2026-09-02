@@ -49,7 +49,7 @@ import {
   resetProbe,
   cssEscape,
   waitForInView,
-  describeOcclusion,
+  waitForUnoccluded,
 } from "./fixtures";
 import type { Contract, ExpectedTour } from "./contract";
 
@@ -182,10 +182,16 @@ async function checkStepTarget(
   // Geometry is only half of "the reader can see the stop". The step panel is
   // the obvious cover on a phone, but a bottom sheet or the drill hint will do
   // it too, so the question is asked of the browser rather than of a list of
-  // suspects.
-  const cover = await describeOcclusion(page, nodeSelector);
-  if (cover) {
-    occluded.push(`${where}: the node's centre is covered by ${cover}`);
+  // suspects. Polled rather than read once: the 400ms pan animation that
+  // follows a selection legitimately covers the node while it is still
+  // travelling, so a single read right after the in-view wait catches the
+  // animation, not a defect.
+  const result = await waitForUnoccluded(page, nodeSelector, SNAP_BUDGET_MS);
+  if (result.occluded) {
+    occluded.push(
+      `${where}: the node's centre is still covered by ${result.lastCover} after ` +
+        `${result.coveredForMs}ms`,
+    );
   }
   return { missed, notInView, drillWrong, occluded };
 }
