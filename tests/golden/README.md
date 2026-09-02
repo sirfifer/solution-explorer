@@ -130,10 +130,39 @@ understood:
    baseline stay in lock step (`pip freeze | grep -iE '^tree.sitter|^PyYAML' |
    sort`).
 5. Commit the new baseline and constraints with a message stating what engine
-   change they record.
+   change they record, and add an entry under "Baseline history" below. An
+   engine change that moves the diffed counts carries its re-baseline in the
+   same PR: that is the only moment the author can state the intent next to
+   the diff, and `main` stays green.
 
 To advance the frozen target itself (adopt a newer upstream release), update the
 `ref` and `commit` in `corpus.lock` to the new pinned SHA, then re-baseline.
+
+## Baseline history
+
+Each entry records an approved re-baseline: what engine change moved the
+numbers, and why that change was intended. A baseline is only ever regenerated
+by `scripts/golden-corpus.py baseline <name>` under the frozen toolchain, never
+edited by hand; a repository-wide text sweep must exclude these files.
+
+- **2026-09-02, both corpora.** CI workflow files (`.github/workflows/*.yml`)
+  are now first-class repository files: kept in the architecture, assigned to
+  the nearest component (the repository root here), and counted in statistics,
+  search and coverage. Before, the deriver skipped rows cached as `ci_config`,
+  so those files were credited to coverage but owned by nothing and invisible
+  to every viewer surface (UnaMentis comprehension review finding O8, fixed in
+  6e32b50). Effect on the frozen targets: fastapi gains its 24 workflow files
+  (+1,676 config lines), flask its 4 (+165); root's activity aggregates grow
+  with the files it now owns. Two smaller movements ride along from the same
+  range: extract tier p5-extract/10 routes Markdown away from the rule
+  extractor, so one fastapi rule sourced from `docs/en/docs/release-notes.md`
+  is gone, and four fastapi test rules changed id only because their summary
+  whitespace was normalized. The regeneration also restores a real path the
+  repository-wide product-rename sweep had rewritten inside the committed
+  fastapi baseline (`docs/en/docs/img/vscode-completion.png`), which is why
+  baselines must never be edited by hand. The engine change is confirmed
+  intended by the owner; the decision record is
+  `docs/testing/GOLDEN-DRIFT-2026-09-02.md`. Toolchain pins unchanged.
 
 ## CI
 
