@@ -52,6 +52,7 @@ import {
   ensureTree,
   ensureDetailPanel,
 } from "./fixtures";
+import { isAccountedFor, isContentBlob } from "./contract";
 
 /** How long a snap-into-view may take before it has not happened. */
 const SNAP_BUDGET_MS = 2_000;
@@ -221,6 +222,37 @@ test.describe("graph", () => {
 
       const invented = rendered.filter((id) => !allowed.has(id) && !aggregateIds.has(id));
 
+      // The other direction: what the projection names at the root level has
+      // to be on the canvas. Until 2026-09-02 this test checked only that the
+      // canvas invented nothing, so a canvas showing one legitimate child of
+      // the root and none of the other six passed cleanly, and the most
+      // serious defect of the VS Code crawl (571 components, one node) leaked
+      // out only sideways through the journey, overview and tour specs.
+      //
+      // A root is accounted for when it renders. A root that does not render
+      // is one the graph promoted (a single root shows its children), and
+      // then each child must be a node, a member of a rendered aggregate, or
+      // represented by a rendered descendant (the graph unwraps wrappers and
+      // promotes hero children). Content blobs are the one deliberate
+      // exclusion and are skipped by the same rule the store applies.
+      const renderedIds = new Set(rendered);
+      const aggregatedIds = new Set<string>();
+      for (const members of await crawlPage
+        .locator('[data-testid="aggregate-node"]')
+        .evaluateAll((els) => els.map((el) => el.getAttribute("data-members") ?? ""))) {
+        for (const id of members.split("|")) if (id) aggregatedIds.add(id);
+      }
+      const missing: string[] = [];
+      for (const rootId of contract.rootIds) {
+        if (renderedIds.has(rootId) || aggregatedIds.has(rootId)) continue;
+        for (const childId of contract.components.get(rootId)?.childIds ?? []) {
+          if (isContentBlob(contract, childId)) continue;
+          if (!isAccountedFor(contract, childId, renderedIds, aggregatedIds)) {
+            missing.push(childId);
+          }
+        }
+      }
+
       test.info().annotations.push({
         type: "coverage",
         description:
@@ -229,9 +261,17 @@ test.describe("graph", () => {
       reportFinding("graph.invented_node", invented, {
         title: "graph nodes the projection does not name",
       });
+      reportFinding("graph.missing_node", missing, {
+        title: "root-level components the projection names that the canvas does not account for",
+      });
       expect(
         invented,
         "graph nodes the projection does not name (the canvas inventing structure)",
+      ).toEqual([]);
+      expect(
+        missing,
+        "root-level components the projection names that the canvas neither renders, " +
+          "aggregates, nor represents by a descendant",
       ).toEqual([]);
     },
   );

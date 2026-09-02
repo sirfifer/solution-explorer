@@ -307,6 +307,7 @@ function attrSelectorValue(value: string): string {
 export function TreeNavigator() {
   const { architecture, darkMode } = useArchStore();
   const selectedComponentId = useArchStore((s) => s.selectedComponentId);
+  const drillLevel = useArchStore((s) => s.drillLevel);
 
   // Tree expansion state - starts collapsed (empty set), restored from session
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => getExpandedFromSession());
@@ -369,10 +370,20 @@ export function TreeNavigator() {
   // Deliberately one-directional: this opens ancestors on selection, and never
   // closes anything. Collapsing a parent by hand sticks, because expandedIds is
   // not a dependency here, so the reader's own tidying is not undone.
+  //
+  // The drill level is revealed the same way, and opened, so the tree shows
+  // the children the canvas is showing. A level whose row was still collapsed
+  // gave the reader a canvas of children beside a tree that named none of
+  // them, and left the crawl's drill journey with "neither a graph node nor a
+  // tree row" for a component that promotion had lifted off the canvas (VS
+  // Code, 2026-09-02, src/vs at the src level).
   useEffect(() => {
-    if (!architecture || !selectedComponentId) return;
+    if (!architecture || (!selectedComponentId && !drillLevel)) return;
 
-    const ancestors = ancestorPath(architecture.components, selectedComponentId);
+    const ancestors = [
+      ...(selectedComponentId ? ancestorPath(architecture.components, selectedComponentId) : []),
+      ...(drillLevel ? [...ancestorPath(architecture.components, drillLevel), drillLevel] : []),
+    ];
     if (ancestors.length > 0) {
       setExpandedIds((prev) => {
         const missing = ancestors.filter((id) => !prev.has(id));
@@ -393,7 +404,7 @@ export function TreeNavigator() {
     // only the selected id left every deep component under extensions/ with no
     // row at all, which is what the crawl caught on private large-repository validation corpus after this fix
     // looked correct on a smaller subject.
-    const chain = [...ancestors, selectedComponentId];
+    const chain = selectedComponentId ? [...ancestors, selectedComponentId] : ancestors;
     const group = otherGroups.find((g) =>
       g.components.some((c) => chain.includes(c.id)),
     );
@@ -402,7 +413,7 @@ export function TreeNavigator() {
         prev.has(group.parentName) ? prev : new Set(prev).add(group.parentName),
       );
     }
-  }, [architecture, selectedComponentId, otherGroups]);
+  }, [architecture, selectedComponentId, drillLevel, otherGroups]);
 
   // Bring the revealed row into view. Separate from the expansion effect so it
   // runs after the newly opened rows have rendered; `block: "nearest"` scrolls

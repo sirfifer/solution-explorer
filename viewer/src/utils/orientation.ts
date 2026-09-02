@@ -5,6 +5,7 @@ import type {
   SecurityProjection,
   SupportProjection,
 } from "../types";
+import { hasFlowData } from "./flowData";
 
 const GROUPS = [
   { id: "experience", label: "Experiences", role: "Client-facing products and user flows" },
@@ -162,7 +163,12 @@ export function buildOrientationFallback(architecture: Architecture): Orientatio
     },
     question_routes: [
       { id: "organization", label: "How is it organized?", target: { lens: "structure", semantic_level: "system" }, available: true },
-      { id: "flow", label: "How does the core experience work?", target: { lens: "flow", tour_id: architecture.tours?.[0]?.id }, available: Boolean(architecture.tours?.length || architecture.relationships.length) },
+      // The Flow lens exists only for subjects with UI navigation data; elsewhere
+      // the answer is the first guided tour on Structure. Naming a lens the
+      // viewer cannot offer lands the reader on Structure unexplained (GUI
+      // crawl 2026-09-02, overview.route_wrong_target). Same rule as
+      // build_orientation in analyzer/project/human_views.py.
+      { id: "flow", label: "How does the core experience work?", target: { lens: hasFlowData(architecture) ? "flow" : "structure", tour_id: architecture.tours?.[0]?.id }, available: Boolean(hasFlowData(architecture) || architecture.tours?.length) },
       { id: "capabilities", label: "What can this system do?", target: { lens: "capability" }, available: Boolean(architecture.capabilities?.length) },
       { id: "data", label: "Where does data live?", target: { lens: "data" }, available: Boolean(architecture.data_entities?.length) },
       { id: "attention", label: "Where should I look first?", target: { surface: "findings" }, available: Boolean(architecture.findings?.length || architecture.gaps?.length) },

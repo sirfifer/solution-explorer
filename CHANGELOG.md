@@ -45,6 +45,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Projection diff no longer reports an id-namespace change (e.g. a re-identification prefix) as mass component add/remove churn; it is now its own re-identification change kind (`analyzer/project/id_normalization.py`).
 - Symbol search now resolves to the symbol after its component detail finishes loading, instead of racing it.
 - Coverage surfaces no longer reference a coverage ledger that does not exist for datasets where one was never generated.
+- The Workbench top level now accounts for the subject. When the client/server anchors cover less than half of the mapped files (VS Code: one 4-file CLI, 0.6%), the root's own children are shown, ranked and aggregated like any drill level; a server with no client (flask, fastapi) no longer renders an empty canvas; what the anchors leave beside them is shown rather than dropped.
+- Hero promotion at a drill level is bounded to direct hero children that carry at least 30% of their wrapper's files, and never dissolves the component a tour step, search result or deep link named, so a narrated component is always on the canvas.
+- A content-typed component with code beneath it (VS Code's `extensions/`, 337 components) is no longer filtered as a content blob.
+- The "How does the core experience work?" route names the Flow lens only for subjects with UI navigation data; elsewhere it routes to the first tour on Structure instead of silently landing on Structure.
+- Search no longer stalls for 1.6 to 4.9 s per keystroke on large subjects: admission is a literal scan over a precomputed haystack and Fuse ranks only the admitted candidates.
+- A tour step and the start of a tour drop the mobile detail sheet back to its peek strip, so a sheet opened by an evidence link no longer keeps 266 of 469 px of the phone canvas through the next tour.
+- On a phone, every fit reserves the height of the chrome over the top of the canvas (the drill hint at the top level, the breadcrumb bar below it) so no node is parked under it.
+- Review-correction provenance records the corrections file's name and digest instead of an absolute path on the generating machine.
+- The GUI crawl now merges the support and security sidecars onto the manifest before judging lens availability (both lenses were reported unwarranted on every subject that ships them), asserts that every root-level component the projection names is rendered, aggregated or represented (`graph.missing_node`), and treats a single promoted root as the top level rather than a drill hop.
 
 ## [1.2.0] - 2026-07-11
 

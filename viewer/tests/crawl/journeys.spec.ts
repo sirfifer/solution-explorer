@@ -84,8 +84,32 @@ test.describe("journeys", () => {
         const node = crawlPage.locator(
           `[data-testid="graph-node"][data-component-id="${cssEscape(hop.id)}"]`,
         );
+        // The previous hop's drill has landed on the beacon before the new
+        // level's nodes have rendered, so the node is polled for briefly
+        // rather than read once; a level that never renders it falls back to
+        // the tree below. Node-enforced and bounded, like every other wait.
+        const nodeRendered = await expect
+          .poll(() => node.count(), { timeout: 2_000, intervals: [100] })
+          .toBeGreaterThan(0)
+          .then(() => true)
+          .catch(() => false);
+        // A single root whose children ARE the top level is not a hop. The
+        // graph promotes such a root (store.ts flattenTopLevel), so the level
+        // the reader starts on is already the root's and drilling into it
+        // would show the same nodes. It has no node and no tree row by design;
+        // the walk continues from its children. Decided after the poll above:
+        // read once, a root that simply had not rendered yet was skipped and
+        // its child then looked for at the wrong level (UnaMentis, 2026-09-02).
+        if (
+          contract.rootIds.length === 1
+          && hop.id === contract.rootIds[0]
+          && !nodeRendered
+          && (await readNavState(crawlPage)).drill === ""
+        ) {
+          continue;
+        }
         let via = "node";
-        if ((await node.count()) > 0) {
+        if (nodeRendered) {
           // Wait for the node to stop moving first. The previous hop's re-layout
           // is still animating, and a node that travels between the two presses
           // takes the second one somewhere else; see waitForStableBox.

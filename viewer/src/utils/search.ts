@@ -46,7 +46,27 @@ const FUSE_OPTIONS = {
   ignoreLocation: true,
 };
 
-let componentFuse: Fuse<SearchResult> | null = null;
+// The documents in index order, and each one's lowercase haystack (name,
+// path, kind, text). Admission is decided by literal containment over the
+// haystack (matchesLiterally); Fuse ranks only what was admitted.
+//
+// Load bearing on a large subject (GUI crawl 2026-09-02, search.slow_input).
+// One Fuse search over the whole index ran Bitap across every character of
+// every field of 167,479 documents (20 MB of indexed text) on each keystroke:
+// 1.6 to 4.9 s per query on VS Code, all of it inside React's input flush, so
+// the box would not accept the next character. The literal scan the relevance
+// gate already performs (S7) costs 12 ms over the same data when the haystack
+// is precomputed once at index time, and ranking a bounded candidate set
+// costs 1 ms. Measured in Node against the served shards; see
+// docs/testing/RUN-2026-09-02-vscode-demo-gate.md.
+let indexedDocs: SearchResult[] = [];
+let indexedHaystacks: string[] = [];
+let indexBuilt = false;
+// How many admitted documents are handed to Fuse for ranking. Beyond this a
+// query is too broad for ranking to matter, and Fuse over tens of thousands of
+// documents is the stall this replaces. Index order puts components first, so
+// the cap keeps the identities a reader most likely meant.
+const RANK_CANDIDATE_CAP = 2000;
 // Entries from the manifest (components, plus files/symbols in monolithic mode).
 // Rebuilt wholesale on every initializeSearch.
 let baseResults: SearchResult[] = [];
@@ -206,6 +226,29 @@ function sameEntries(a: SearchResult[], b: SearchResult[]): boolean {
   return a.length === b.length && a.every((entry, i) => sameEntry(entry, b[i]));
 }
 
+// Whether two entries read the same to search: the fields in the haystack and
+// the Fuse keys. `language` and `componentId` are neither, so an entry that
+// only fills those in (a shard file entry carries no language; the detail
+// entry for the same file does) can be patched in place instead of forcing a
+// full rebuild, which is what every first landing on VS Code paid for.
+function sameSearchable(a: SearchResult, b: SearchResult): boolean {
+  return (
+    a.type === b.type &&
+    a.id === b.id &&
+    a.name === b.name &&
+    a.path === b.path &&
+    a.kind === b.kind &&
+    a.text === b.text
+  );
+}
+
+function haystackOf(item: SearchResult): string {
+  return [item.name, item.path, item.kind, item.text]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
 function rebuildFuse() {
   const byKey = new Map<string, SearchResult>();
   const put = (r: SearchResult, mergeText: boolean) => {
@@ -225,7 +268,9 @@ function rebuildFuse() {
   for (const r of shardResults) put(r, true);
 
   entryByKey = byKey;
-  componentFuse = new Fuse([...byKey.values()], FUSE_OPTIONS);
+  indexedDocs = [...byKey.values()];
+  indexedHaystacks = indexedDocs.map(haystackOf);
+  indexBuilt = true;
   fullRebuildCount += 1;
   bumpIndexVersion();
 }
@@ -345,7 +390,7 @@ export function addToSearchIndex(
   const previous = detailResultsByComponent.get(key);
   detailResultsByComponent.set(key, entries);
 
-  if (!componentFuse) {
+  if (!indexBuilt) {
     rebuildFuse();
     return;
   }
@@ -368,14 +413,24 @@ export function addToSearchIndex(
       added.push(doc);
       continue;
     }
-    if (!sameEntry(existing, mergeEntry(existing, r, false))) {
+    const merged = mergeEntry(existing, r, false);
+    if (!sameSearchable(existing, merged)) {
       rebuildFuse();
       return;
     }
+    // Only the non-searchable fields changed (or nothing did): fill them in
+    // place. The document object is shared with indexedDocs, so the index
+    // sees the change without a rebuild, and the version is unaffected
+    // because nothing a query can match has changed.
+    existing.language = merged.language;
+    existing.componentId = merged.componentId;
   }
 
   if (added.length === 0) return;
-  for (const doc of added) componentFuse.add(doc);
+  for (const doc of added) {
+    indexedDocs.push(doc);
+    indexedHaystacks.push(haystackOf(doc));
+  }
   bumpIndexVersion();
 }
 
@@ -521,24 +576,27 @@ export async function loadSearchShards(baseUrl = "./architecture/search"): Promi
 // multi-word query must have every word present. "No results" is a correct,
 // honest answer, and substring matching is what someone typing an identifier
 // or a path already expects.
-function matchesLiterally(item: SearchResult, query: string): boolean {
-  const haystack = [item.name, item.path, item.kind, item.text]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  const needle = query.toLowerCase().trim();
+function matchesLiterally(haystack: string, needle: string, tokens: string[]): boolean {
   if (haystack.includes(needle)) return true;
-  const tokens = needle.split(/[^a-z0-9_./-]+/).filter(Boolean);
   return tokens.length > 1 && tokens.every((t) => haystack.includes(t));
 }
 
 export function search(query: string, limit: number = 50): SearchResult[] {
   const q = query.trim();
-  if (!componentFuse || !q) return [];
+  if (!indexBuilt || !q) return [];
 
-  return componentFuse
+  const needle = q.toLowerCase();
+  const tokens = needle.split(/[^a-z0-9_./-]+/).filter(Boolean);
+  const candidates: SearchResult[] = [];
+  for (let i = 0; i < indexedDocs.length; i++) {
+    if (!matchesLiterally(indexedHaystacks[i], needle, tokens)) continue;
+    candidates.push(indexedDocs[i]);
+    if (candidates.length >= RANK_CANDIDATE_CAP) break;
+  }
+  if (candidates.length === 0) return [];
+
+  return new Fuse(candidates, FUSE_OPTIONS)
     .search(q)
-    .filter((r) => matchesLiterally(r.item, q))
     .slice(0, limit)
     .map((r) => ({
       ...r.item,

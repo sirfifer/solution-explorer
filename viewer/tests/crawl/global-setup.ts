@@ -15,8 +15,11 @@
  *
  * What is fetched is deliberately the minimum the contract reads eagerly:
  * manifest.json (required), publication.json (optional, a 404 is normal and
- * already on the allowlist), and the search index's manifest plus its first
- * shard, which is all drawTargets reads. Detail shards are NOT mirrored: they
+ * already on the allowlist), the support and security sidecars (optional, the
+ * same allowlist; the contract merges them onto the manifest the way the app
+ * does, and without them both lenses were judged unwarranted on every remote
+ * run), and the search index's manifest plus its first shard, which is all
+ * drawTargets reads. Detail shards are NOT mirrored: they
  * are fetched on demand through the request context (contract.loadDetail), so a
  * 573-component subject does not become a 300 MB download before any test runs.
  *
@@ -124,6 +127,8 @@ export default async function globalSetup(): Promise<void> {
   })) as any;
 
   await download(baseUrl, "architecture/publication.json", dataDir, { required: false });
+  await download(baseUrl, "architecture/support.json", dataDir, { required: false });
+  await download(baseUrl, "architecture/security.json", dataDir, { required: false });
 
   const searchManifest = (await download(
     baseUrl,

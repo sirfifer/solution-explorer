@@ -131,8 +131,14 @@ async function checkStepTarget(
   if (state.selected !== target) {
     missed.push(`${where}: the beacon's selection is "${state.selected}"`);
   }
+  // A single root the graph promoted (its children ARE the top level) is not
+  // a level of its own, so a step onto one of its children lands on the top
+  // level with no drill (store.ts isPromotedRoot). Whether the child is then
+  // actually on the canvas is the node check below, which still has to pass.
+  const promotedRootParent =
+    contract.rootIds.length === 1 && component.parentId === contract.rootIds[0];
   const expectedDrill = component.parentId ?? "";
-  if (state.drill !== expectedDrill) {
+  if (state.drill !== expectedDrill && !(promotedRootParent && state.drill === "")) {
     drillWrong.push(
       `${where}: the drill is "${state.drill}", expected "${expectedDrill || "(top level)"}" ` +
         `(navigateToComponent drills to the parent and selects the child)`,

@@ -18,6 +18,13 @@ import {
   getViewportForBounds,
 } from "@xyflow/react";
 import { useArchStore, nodeBudgetForCanvas, READABLE_ZOOM } from "../store";
+import type { FitViewOptions } from "@xyflow/react";
+type Padding = NonNullable<FitViewOptions["padding"]>;
+
+// The height of the chrome that sits over the top of the canvas on a phone
+// (the drill hint at the top level, the breadcrumb bar below it) plus React
+// Flow's Panel margin, reserved at the top of every fit there (see fitPadding).
+const TOP_CHROME_RESERVE_PX = 72;
 import { useThemeTokens } from "../hooks/useThemeTokens";
 import { THEMES } from "../utils/themes";
 import { buildDegreeIndex } from "../utils/importance";
@@ -144,6 +151,24 @@ export function ArchitectureGraph() {
   // made selection centering use the wrong midpoint.
   const measuredNodeSizes = useRef(new Map<string, { width: number; height: number }>());
   const [measurementVersion, setMeasurementVersion] = useState(0);
+
+  // The padding every fit uses. Symmetric (FIT_PADDING) except on a phone,
+  // where chrome sits over the top of the canvas: the drill hint at the top
+  // level of the Structure lens, the breadcrumb bar at every level below it.
+  // Both are absolutely positioned Panels, so a fit that fills the canvas
+  // parks nodes under them. With six nodes at VS Code's top level the hint
+  // covered one ("node test's centre is still covered by [drill-hint]"), and
+  // at src/vs/sessions the breadcrumb bar covered the node the drill journey
+  // had to double-tap, so the tap timed out (GUI crawl 2026-09-02, mobile).
+  // Reserving the chrome's height at the top keeps every node clear of it,
+  // and the engine's fit does the geometry: fitView and getViewportForBounds
+  // both take per-side padding, so nothing here computes a viewport by hand.
+  const fitPadding = useCallback((): Padding => {
+    const width = containerRef.current?.getBoundingClientRect().width ?? Infinity;
+    const chromeOverCanvas = width < 640 && (breadcrumbs.length > 0 || lens === "structure");
+    if (!chromeOverCanvas) return FIT_PADDING;
+    return { top: `${TOP_CHROME_RESERVE_PX}px`, right: FIT_PADDING, bottom: FIT_PADDING, left: FIT_PADDING };
+  }, [lens, breadcrumbs.length]);
 
   // Bounded retries for the readability loop, reset per level/lens so a level
   // that needed a small budget does not permanently constrain the next one.
@@ -536,10 +561,10 @@ export function ArchitectureGraph() {
               { zoom: Math.max(READ_SNAP_ZOOM, getViewport().zoom), duration: SNAP_DURATION_MS },
             );
           } else {
-            fitView({ padding: FIT_PADDING, duration: SNAP_DURATION_MS });
+            fitView({ padding: fitPadding(), duration: SNAP_DURATION_MS });
           }
         } else {
-          fitView({ padding: FIT_PADDING, duration: SNAP_DURATION_MS });
+          fitView({ padding: fitPadding(), duration: SNAP_DURATION_MS });
         }
         // After the fit lands, check what the layout actually achieved. If the
         // level still had to render below a readable zoom, show fewer nodes
@@ -557,7 +582,7 @@ export function ArchitectureGraph() {
       if (layoutTimeout.current) clearTimeout(layoutTimeout.current);
       if (readabilityTimeout.current) clearTimeout(readabilityTimeout.current);
     };
-  }, [rawNodes, rawEdges, lens, canvasAspectRatio, canvasReady, selectedComponentId, setNodes, setEdges, fitView, getViewport, setCenter, shrinkNodeBudget]);
+  }, [rawNodes, rawEdges, lens, canvasAspectRatio, canvasReady, selectedComponentId, setNodes, setEdges, fitView, fitPadding, getViewport, setCenter, shrinkNodeBudget]);
 
   // Restore every node and edge to the style the graph build gave it. The one
   // exit path for both shading modes: composing from the baseStyle snapshot
@@ -651,7 +676,7 @@ export function ArchitectureGraph() {
       const { zoom } = getViewport();
       void fitView({
         nodes: [{ id: selectedComponentId }],
-        padding: FIT_PADDING,
+        padding: fitPadding(),
         minZoom: zoom,
         maxZoom: zoom,
         duration: 400,
@@ -873,7 +898,8 @@ export function ArchitectureGraph() {
   // ---------------------------------------------------------------------
 
   // The viewport the current level fits in, computed rather than guessed, so
-  // the toggle never depends on a magic zoom number.
+  // the toggle never depends on a magic zoom number. Same padding as every
+  // fitView below (fitPadding), so the computed Fit matches the real one.
   const fitZoomNow = useCallback(() => {
     const el = containerRef.current;
     if (!el) return null;
@@ -882,17 +908,17 @@ export function ArchitectureGraph() {
     if (all.length === 0 || !(width > 0) || !(height > 0)) return null;
     const bounds = getNodesBounds(all);
     const vp = getViewportForBounds(
-      bounds, width, height, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, FIT_PADDING,
+      bounds, width, height, GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, fitPadding(),
     );
     return { zoom: vp.zoom, bounds, canvas: { width, height } };
-  }, [getNodes]);
+  }, [getNodes, fitPadding]);
 
   const applySnap = useCallback((state: SnapState) => {
     const fit = fitZoomNow();
     if (!fit) return;
     if (state === "fit") {
       pendingSnapRef.current = null;
-      fitView({ padding: FIT_PADDING, duration: SNAP_DURATION_MS });
+      fitView({ padding: fitPadding(), duration: SNAP_DURATION_MS });
       return;
     }
     const all = getNodes();
@@ -906,7 +932,7 @@ export function ArchitectureGraph() {
     const target = pickSnapTarget(components, degree);
     const node = target ? all.find((n) => n.id === target.id) : undefined;
     if (!node) {
-      fitView({ padding: FIT_PADDING, duration: SNAP_DURATION_MS });
+      fitView({ padding: fitPadding(), duration: SNAP_DURATION_MS });
       return;
     }
     const rect = {
@@ -920,7 +946,7 @@ export function ArchitectureGraph() {
       readViewport(rect, fit.bounds, fit.canvas, readZoomForFit(fit.zoom)),
       { duration: SNAP_DURATION_MS },
     );
-  }, [architecture, fitView, fitZoomNow, getNodes, setViewport]);
+  }, [architecture, fitView, fitPadding, fitZoomNow, getNodes, setViewport]);
 
   useEffect(() => { applySnapRef.current = applySnap; }, [applySnap]);
 

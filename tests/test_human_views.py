@@ -321,3 +321,31 @@ def test_failed_human_sidecar_is_an_honest_gap(tmp_path, monkeypatch):
         if row["producer"] == "project.support-json"
     )
     assert gap["reason"] == "RuntimeError: injected support sidecar fault"
+
+
+def test_orientation_flow_route_names_a_lens_the_viewer_can_offer():
+    """The Flow lens exists only for subjects with UI navigation data. For any
+    other subject the flow question routes to the first tour on Structure,
+    because naming a lens the viewer cannot offer lands the reader on
+    Structure unexplained (GUI crawl 2026-09-02, overview.route_wrong_target)."""
+    arch = _architecture()
+    arch["tours"] = [{"id": "spine", "title": "The spine", "steps": []}]
+    arch["relationships"] = [{"source": "web", "target": "api", "type": "http"}]
+    orientation = build_orientation(arch)
+    flow = next(row for row in orientation["question_routes"] if row["id"] == "flow")
+    assert flow["target"] == {"lens": "structure", "tour_id": "spine"}
+    assert flow["available"] is True
+
+    no_tours = _architecture()
+    no_tours["tours"] = []
+    no_tours["relationships"] = [{"source": "web", "target": "api", "type": "http"}]
+    flow = next(row for row in build_orientation(no_tours)["question_routes"] if row["id"] == "flow")
+    assert flow["available"] is False
+
+    with_screens = _architecture()
+    with_screens["components"][0]["children"] = [{
+        "id": "web/home", "name": "Home", "type": "screen", "path": "apps/web/home", "children": [],
+    }]
+    flow = next(row for row in build_orientation(with_screens)["question_routes"] if row["id"] == "flow")
+    assert flow["target"]["lens"] == "flow"
+    assert flow["available"] is True

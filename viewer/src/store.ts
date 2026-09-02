@@ -382,6 +382,15 @@ interface ArchStore {
   // Set by those callers, consumed once by App's sheet effect. Direct node taps
   // go through selectComponent, which deliberately does not set it.
   revealDetail: boolean;
+  // The mirror image of revealDetail: a request for the mobile detail sheet to
+  // drop back to its peek strip. Set by a tour step and by starting a tour,
+  // because a step is a request for the diagram, and consumed by App. Without
+  // it the sheet a tour's evidence link opened at half height stayed there
+  // through the next tour: the canvas lost 266 of 469 px on a phone and the
+  // 231 px workbench node at the last stop of the layering-spine tour could
+  // never come into view (GUI crawl 2026-09-02, tour.step_not_in_view).
+  collapseDetail: boolean;
+  clearDetailCollapse: () => void;
   requestDetailReveal: () => void;
   clearRevealDetail: () => void;
 
@@ -868,6 +877,27 @@ function setMemberFromFinding(m: Finding["members"][number], finding: Finding): 
   };
 }
 
+// How many files a component's whole subtree holds. A component's own metrics
+// count only its own files (VS Code's src carries 19 while src/vs beneath it
+// holds 9,700), so any question about how much of the subject a node stands
+// for has to walk.
+export function countSubtreeFiles(c: Component): number {
+  let n = c.files?.length ?? 0;
+  for (const child of c.children ?? []) n += countSubtreeFiles(child);
+  return n;
+}
+
+// A content-typed component with no code anywhere beneath it: assets, docs,
+// data. The analyzer types a directory by its OWN files, so a folder whose own
+// files are a package.json and a README is typed content even when 5,000 code
+// files sit beneath it. VS Code's extensions/ (337 components) was typed
+// content that way and so never rendered (GUI crawl 2026-09-02, P1). Only a
+// true blob is treated as content.
+export function isContentBlob(c: Component): boolean {
+  if (c.type !== "content") return false;
+  return (c.children ?? []).every(isContentBlob);
+}
+
 // Split the promoted children at a drill level into the components shown as real
 // nodes and the small internal modules grouped into aggregate nodes (P6-4).
 //
@@ -892,7 +922,11 @@ function computeDrillLevelView(
   // (STT, LLM, Voice, Session, Context, ...), because Swift modules are small
   // by construction. Visibility is now decided by importance, and the number
   // of visible nodes by what the viewport can actually render readably.
-  const candidates = promoted.filter((c) => c.type !== "content");
+  //
+  // Content is excluded only when it is a true blob (isContentBlob), and the
+  // component the reader was sent to is never excluded: a tour step or a deep
+  // link that names it is a promise the canvas has to keep.
+  const candidates = promoted.filter((c) => !isContentBlob(c) || c.id === focusId);
 
   // Degree from the relationship set: how many other components this one is
   // wired to, counted once per partner so a chatty pair does not dominate.
@@ -946,15 +980,20 @@ function drillView(
   nodeBudget: number,
   focusId: string | null,
 ): { shown: Component[]; aggregates: AggregateNode[] } {
+  // The top level goes through the same promotion, ranking, budget and
+  // aggregation as a drill level. When the client/server model produced it,
+  // every anchor is a hero and is shown whatever the budget, as before; what
+  // the model left beside them, and a root's children when the model did not
+  // apply (flattenTopLevel), are ranked and aggregated rather than dropped.
+  let children: Component[];
   if (!drillLevel) {
-    const shown = flattenTopLevel(architecture.components, architecture.relationships)
-      .filter((c) => c.type !== "content");
-    return { shown, aggregates: [] };
+    children = flattenTopLevel(architecture.components, architecture.relationships);
+  } else {
+    const parent = findComponent(architecture.components, drillLevel);
+    if (!parent) return { shown: [], aggregates: [] };
+    children = parent.children.length > 0 ? parent.children : [parent];
   }
-  const parent = findComponent(architecture.components, drillLevel);
-  if (!parent) return { shown: [], aggregates: [] };
-  const children = parent.children.length > 0 ? parent.children : [parent];
-  const promoted = promoteDrillChildren(children);
+  const promoted = promoteDrillChildren(children, focusId);
   return computeDrillLevelView(
     promoted, drillLevel, nodeBudget, architecture.relationships,
     focusId,
@@ -1283,6 +1322,8 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   revealDetail: false,
   requestDetailReveal: () => set({ revealDetail: true }),
   clearRevealDetail: () => set({ revealDetail: false }),
+  collapseDetail: false,
+  clearDetailCollapse: () => set({ collapseDetail: false }),
 
   searchOpen: false,
   helpOpen: false,
@@ -1890,8 +1931,15 @@ export const useArchStore = create<ArchStore>((set, get) => ({
     const comp = findComponent(arch.components, componentId);
     if (!comp) return;
 
-    // Check if the component is top-level (no parent)
-    const parentId = findParentId(arch.components, componentId);
+    // Check if the component is top-level (no parent). A single root whose
+    // children ARE the top level (isPromotedRoot) is not a level of its own:
+    // sending the reader to one of its children lands on the top level, not
+    // on a drill into the root that would show the same nodes under a crumb.
+    const directParentId = findParentId(arch.components, componentId);
+    const parentId =
+      directParentId && isPromotedRoot(arch.components, arch.relationships, directParentId)
+        ? null
+        : directParentId;
 
     // Every caller of this action is the app placing the reader somewhere they
     // did not touch (a tour step, an evidence link, a search result, a lens
@@ -2598,6 +2646,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   startTour: (tourId) => {
     const tour = get().getTourById(tourId);
     if (!tour || tour.steps.length === 0) return;
+    // A tour is a request for the diagram: whatever the sheet was showing
+    // before, the walk starts with the canvas at full height.
+    set({ collapseDetail: true });
     // Close the list and land on the first step, selecting its target (I12).
     set({ activeTourId: tourId, tourStep: 0, toursOpen: false });
     get().navigateToTourTarget(tour.steps[0]);
@@ -2654,7 +2705,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       // breadcrumb and the drill hint. The step's own evidence link below still
       // reveals, through openFileDeepLink: "show me the code" is a request for
       // the detail panel, and a step is a request for the diagram.
-      set({ revealDetail: false });
+      set({ revealDetail: false, collapseDetail: true });
       return;
     }
     if (step.evidence?.file) {
@@ -2796,53 +2847,97 @@ function findClientFacingServerIds(
   return clientFacingServerIds;
 }
 
-// Recursively collect hero-type components for drill-down promotion.
-// Unlike collectTopLevelCandidates (which is strict about domains), this
-// surfaces all hero types within a drilled component's subtree.
-function collectDrillHeroes(components: Component[]): Component[] {
-  const result: Component[] = [];
-  for (const comp of components) {
-    if (isHeroType(comp.type)) {
-      result.push(comp);
-    } else {
-      result.push(...collectDrillHeroes(comp.children));
-    }
-  }
-  return result;
-}
+// The share of a wrapper's files its direct hero children must carry before
+// the wrapper dissolves into them. Below it the heroes are incidental (a
+// 4-file cli-tool inside a 100-component extension) and the wrapper stays.
+export const PROMOTION_MIN_SHARE = 0.3;
 
-// When drilled into a component, promote hero grandchildren from non-hero
-// wrappers so they appear at the current level instead of being hidden behind
-// generic "module" or "package" blocks.
-function promoteDrillChildren(children: Component[]): Component[] {
+// When drilled into a component, promote hero children of non-hero wrappers
+// so they appear at the current level instead of being hidden behind generic
+// "module" or "package" blocks. Three guards, each earned on a real subject
+// (GUI crawl 2026-09-02, VS Code):
+//   - Only DIRECT hero children promote. Walking the whole subtree let a test
+//     fixture typed web-client six levels under extensions/ dissolve
+//     extensions/ itself, and a service four levels under src/ dissolve src/,
+//     so neither was ever a node. Measured over every level of UnaMentis (19)
+//     and VS Code (133), the bound changes exactly the three VS Code levels
+//     that were wrong and none of UnaMentis's.
+//   - The heroes must carry the wrapper (PROMOTION_MIN_SHARE of its files).
+//   - The wrapper the reader was sent to, by a tour step, a search result or a
+//     deep link, is never dissolved: the narration names it, so the canvas
+//     shows it.
+function promoteDrillChildren(children: Component[], focusId: string | null = null): Component[] {
   const result: Component[] = [];
 
   for (const child of children) {
-    if (isHeroType(child.type)) {
-      // Already a hero: keep as-is
+    if (isHeroType(child.type) || child.id === focusId) {
       result.push(child);
-    } else {
-      // Non-hero wrapper: check if it contains hero children
-      const childHeroes = collectDrillHeroes(child.children);
-      if (childHeroes.length > 0) {
-        // Promote the hero grandchildren to this level
-        result.push(...childHeroes);
-        // Also keep non-hero siblings that are substantial
-        for (const grandchild of child.children) {
-          if (!isHeroType(grandchild.type)
-            && grandchild.type !== "content"
-            && !childHeroes.includes(grandchild)) {
-            result.push(grandchild);
-          }
-        }
-      } else {
-        // No hero children: keep the wrapper itself
-        result.push(child);
+      continue;
+    }
+    const childHeroes = child.children.filter((grandchild) => isHeroType(grandchild.type));
+    const wrapperFiles = countSubtreeFiles(child);
+    const heroFiles = childHeroes.reduce((sum, hero) => sum + countSubtreeFiles(hero), 0);
+    const heroesCarryWrapper =
+      childHeroes.length > 0
+      && (wrapperFiles === 0 || heroFiles / wrapperFiles >= PROMOTION_MIN_SHARE);
+    if (!heroesCarryWrapper) {
+      result.push(child);
+      continue;
+    }
+    result.push(...childHeroes);
+    for (const grandchild of child.children) {
+      if (!isHeroType(grandchild.type) && !isContentBlob(grandchild)) {
+        result.push(grandchild);
       }
     }
   }
 
   return result;
+}
+
+// The share of the subject's files the client/server anchors must account for
+// before they are the top level on their own. Below it the anchors are
+// incidental and the structural top level stands beside them. VS Code's only
+// client within the model's reach is a 4-file Rust CLI, 0.6% of the subject;
+// UnaMentis's client is the whole subject.
+export const TOP_LEVEL_MIN_COVERAGE = 0.5;
+
+// The structural top level: what a reader would see drilling into the roots.
+// A project root unwraps to its children (the long-standing rule) and a
+// repository root stays a drillable group (multi-repo). With `unwrapSingleRoot`
+// a lone root of any other type with children unwraps to them as well: that is
+// the top level when the client/server anchors exist but do not account for
+// the subject, so the reader sees the subject's own shape rather than one box
+// or one incidental anchor. Content blobs are filtered later, with the focus
+// exception, by computeDrillLevelView.
+function structuralTopLevel(components: Component[], unwrapSingleRoot: boolean): Component[] {
+  const result: Component[] = [];
+  for (const comp of components) {
+    if (comp.type === "repository") {
+      result.push(comp);
+    } else if (
+      comp.children.length > 0
+      && (comp.type === "project" || (unwrapSingleRoot && components.length === 1))
+    ) {
+      result.push(...comp.children);
+    } else {
+      result.push(comp);
+    }
+  }
+  return result;
+}
+
+function isAncestorOrSelf(ancestor: Component, id: string): boolean {
+  if (ancestor.id === id) return true;
+  return ancestor.children.some((child) => isAncestorOrSelf(child, id));
+}
+
+// Whether a root's children stand in for it at the top level (a single
+// non-hero root: VS Code's code-oss-dev package). Drilling into such a root
+// shows exactly what the top level shows, so it is not a level of its own.
+export function isPromotedRoot(components: Component[], relationships: Relationship[], id: string): boolean {
+  if (components.length !== 1 || components[0].id !== id) return false;
+  return !flattenTopLevel(components, relationships).some((c) => c.id === id);
 }
 
 export function flattenTopLevel(
@@ -2852,16 +2947,8 @@ export function flattenTopLevel(
   const candidates = collectTopLevelCandidates(components);
 
   if (candidates.length === 0) {
-    // Fallback: no clients or servers detected, use folder-based one-level unwrap
-    const result: Component[] = [];
-    for (const comp of components) {
-      if (comp.type === "project" && comp.children.length > 0) {
-        result.push(...comp.children);
-      } else {
-        result.push(comp);
-      }
-    }
-    return result;
+    // No clients or servers detected: the long-standing folder-based unwrap.
+    return structuralTopLevel(components, false);
   }
 
   // Separate clients from servers
@@ -2889,5 +2976,27 @@ export function flattenTopLevel(
     topLevel.push(...serverCandidates);
   }
 
-  return topLevel;
+  // The client/server model is the right top level when the clients and the
+  // servers they call ARE the subject: an app, a service. It is the wrong one
+  // when they are incidental. VS Code's only client within the model's reach
+  // is a 4-file Rust CLI, and the model rendered it alone, 0.6% of the
+  // subject, with src and extensions nowhere (GUI crawl 2026-09-02, P1);
+  // flask and fastapi have a server and no client, and the model rendered
+  // nothing at all. The anchors have to account for the subject, measured in
+  // files, and what they do not account for stands beside them: the structural
+  // top level minus anything that already contains or sits under an anchor,
+  // so nothing at the top is ever dropped without a visible trace (P6-4).
+  const totalFiles = components.reduce((sum, c) => sum + countSubtreeFiles(c), 0);
+  const coveredFiles = topLevel.reduce((sum, c) => sum + countSubtreeFiles(c), 0);
+  const representative =
+    topLevel.length > 0
+    && (totalFiles === 0 || coveredFiles / totalFiles >= TOP_LEVEL_MIN_COVERAGE);
+  const structural = structuralTopLevel(components, true);
+  if (!representative) return structural;
+  const anchorIds = new Set(topLevel.map((c) => c.id));
+  const beside = structural.filter(
+    (c) => !anchorIds.has(c.id)
+      && !topLevel.some((anchor) => isAncestorOrSelf(anchor, c.id) || isAncestorOrSelf(c, anchor.id)),
+  );
+  return [...topLevel, ...beside];
 }

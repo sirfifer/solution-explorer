@@ -692,6 +692,31 @@ def build_security_view(
     }
 
 
+_FLOW_EDGE_TYPES = frozenset({"navigation", "tab", "modal", "embed"})
+_FLOW_COMPONENT_TYPES = frozenset({"screen", "tab", "tab-container"})
+
+
+def _has_flow_data(arch: dict) -> bool:
+    """hasFlowData from viewer/src/lenses/flow.ts: is there a Flow lens to offer?"""
+    if any(
+        str(r.get("type") or "") in _FLOW_EDGE_TYPES
+        for r in arch.get("relationships") or []
+    ):
+        return True
+
+    def walk(components: list) -> bool:
+        for component in components or []:
+            if str(component.get("type") or "") in _FLOW_COMPONENT_TYPES:
+                return True
+            if any(a.get("target_view") for a in component.get("actions") or [] if isinstance(a, dict)):
+                return True
+            if walk(component.get("children") or []):
+                return True
+        return False
+
+    return walk(arch.get("components") or [])
+
+
 def build_orientation(
     arch: dict,
     *,
@@ -753,6 +778,14 @@ def build_orientation(
         for (source, target), count in sorted(edge_counts.items())
     ]
 
+    # The Flow lens exists only for subjects with UI navigation data: screens,
+    # tabs, navigation edges (viewer/src/lenses/flow.ts hasFlowData, mirrored
+    # here). For any other subject the honest answer to "how does the core
+    # experience work" is the first guided tour, walked on the Structure lens.
+    # Naming a lens the viewer cannot offer sent readers to Structure with no
+    # explanation (GUI crawl 2026-09-02, overview.route_wrong_target).
+    flow_lens = _has_flow_data(arch)
+    first_tour_id = (arch.get("tours") or [{}])[0].get("id")
     questions = [
         {
             "id": "organization",
@@ -763,11 +796,11 @@ def build_orientation(
         {
             "id": "flow",
             "label": "How does the core experience work?",
-            "target": {"lens": "flow", "tour_id": (arch.get("tours") or [{}])[0].get("id")},
-            "available": bool(arch.get("tours")) or any(
-                str(r.get("type") or "") in {"navigation", "tab", "modal"}
-                for r in arch.get("relationships") or []
-            ),
+            "target": {
+                "lens": "flow" if flow_lens else "structure",
+                "tour_id": first_tour_id,
+            },
+            "available": flow_lens or bool(arch.get("tours")),
         },
         {
             "id": "capabilities",

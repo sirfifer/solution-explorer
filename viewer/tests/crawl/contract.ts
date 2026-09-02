@@ -161,6 +161,20 @@ export function loadContract(): Contract {
     );
   }
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  // The app merges the human-view sidecars onto the architecture before any
+  // lens sees it (attachHumanViews in utils/orientation.ts), so by the time
+  // the switcher asks, `support` and `security` are ordinary fields. The
+  // contract has to ask the same merged question. Reading manifest.json alone
+  // judged both lenses unwarranted on every subject that ships the sidecars
+  // (VS Code, 2026-09-02: four false findings) and was silent on subjects that
+  // do not, which is how it went unnoticed. Both stay optional: a projection
+  // generated before the sidecars existed still crawls clean.
+  for (const key of ["support", "security"] as const) {
+    const sidecar = path.join(dataDir, `${key}.json`);
+    if (manifest[key] == null && fs.existsSync(sidecar)) {
+      manifest[key] = JSON.parse(fs.readFileSync(sidecar, "utf8"));
+    }
+  }
   const index: Record<string, { fileCount?: number; symbolCount?: number }> =
     manifest.component_detail_index ?? {};
 
@@ -637,6 +651,36 @@ export function heaviestComponent(contract: Contract): ExpectedComponent | null 
     (a, b) => b.symbolCount - a.symbolCount || b.fileCount - a.fileCount,
   );
   return ranked[0] ?? null;
+}
+
+/**
+ * isContentBlob from store.ts, over the expectation model: a content-typed
+ * component with no code anywhere beneath it. The canvas excludes exactly
+ * these and nothing else, so the accounting below skips exactly these.
+ */
+export function isContentBlob(contract: Contract, id: string): boolean {
+  const c = contract.components.get(id);
+  if (!c || c.type !== "content") return false;
+  return c.childIds.every((childId) => isContentBlob(contract, childId));
+}
+
+/**
+ * Whether the canvas accounts for a component at the level on screen: it is
+ * a node, it is a member of a rendered aggregate, or a descendant of it is
+ * (the graph promotes hero children and unwraps wrappers; a descendant on
+ * screen is the visible trace of the ancestor).
+ */
+export function isAccountedFor(
+  contract: Contract,
+  id: string,
+  renderedIds: Set<string>,
+  aggregatedIds: Set<string>,
+): boolean {
+  if (renderedIds.has(id) || aggregatedIds.has(id)) return true;
+  const c = contract.components.get(id);
+  return (c?.childIds ?? []).some((childId) =>
+    isAccountedFor(contract, childId, renderedIds, aggregatedIds),
+  );
 }
 
 /** Paths that are allowed to 404, mirroring datasets.yaml's probe inventory. */

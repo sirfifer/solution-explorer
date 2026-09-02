@@ -25,12 +25,11 @@ import type { Architecture, Component, Relationship } from "../types";
 import { registerLens, type LensDefinition, type LensQuestion } from "./registry";
 import { LENS_MATURITY } from "../utils/lensMaturity";
 
-// The component types that participate in a screen flow.
-export const FLOW_COMPONENT_TYPES = new Set(["screen", "tab", "tab-container"]);
-
-// The relationship types the analyzer emits for UI navigation. All are
-// structural edges (utils/layout getEdgeCategory), colored per kind.
-export const FLOW_EDGE_TYPES = new Set(["navigation", "tab", "modal", "embed"]);
+// The flow types and the availability rule live in utils/flowData.ts so the
+// Overview can ask "is there a Flow lens to offer" without importing this
+// module, whose import registers the lens. Re-exported here unchanged.
+import { FLOW_COMPONENT_TYPES, FLOW_EDGE_TYPES, hasFlowData } from "../utils/flowData";
+export { FLOW_COMPONENT_TYPES, FLOW_EDGE_TYPES, hasFlowData };
 
 // The synthetic edge type used for UIAction target_view links, so they render as
 // flow edges alongside the real navigation relationships.
@@ -59,29 +58,6 @@ export function collectFlowComponents(components: Component[]): Component[] {
   };
   walk(components);
   return out;
-}
-
-// True when the dataset carries anything the Flow lens can draw: a flow edge, a
-// flow-typed component, or a UIAction with a target_view. Absence hides the lens.
-export function hasFlowData(arch: Architecture): boolean {
-  if (arch.relationships.some((r) => FLOW_EDGE_TYPES.has(r.type))) return true;
-  let found = false;
-  const walk = (comps: Component[]) => {
-    for (const c of comps) {
-      if (found) return;
-      if (FLOW_COMPONENT_TYPES.has(c.type)) {
-        found = true;
-        return;
-      }
-      if (c.actions?.some((a) => a.target_view)) {
-        found = true;
-        return;
-      }
-      walk(c.children);
-    }
-  };
-  walk(arch.components);
-  return found;
 }
 
 // The word shown on a flow edge for each kind, answering "what opens this as

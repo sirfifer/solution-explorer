@@ -112,9 +112,16 @@ def apply_review_corrections(projection, corrections) -> dict:
             raise ValueError(f"review correction component not found: {component_id!r}")
         applied.append(_apply_exact_edit(component, edit, f"component:{component_id}"))
 
+    # Provenance names the corrections file, never the machine it sat on: the
+    # manifest is published, and an absolute path under a worktree exists on
+    # no other machine (projection audit 2026-09-02). The digest lets a reader
+    # check that the file in the repository is the one that was applied.
     manifest["review_corrections"] = {
         "schema": SCHEMA,
-        "source": str(corrections_path),
+        "source": corrections_path.name,
+        "source_sha256": hashlib.sha256(
+            corrections_path.read_bytes()
+        ).hexdigest(),
         "repository": subject.get("repository"),
         "commit": expected_commit,
         "applied": applied,

@@ -477,6 +477,8 @@ export function App() {
     detailItem,
     revealDetail,
     clearRevealDetail,
+    collapseDetail,
+    clearDetailCollapse,
   } = useArchStore();
 
   useLiveMonitor();
@@ -856,6 +858,15 @@ export function App() {
     bottomSheet.setSnap("half");
     clearRevealDetail();
   }, [revealDetail, bottomSheet.setSnap, clearRevealDetail]);
+
+  // The other direction. A tour step and the start of a tour ask for the
+  // diagram, so the sheet drops back to its peek strip and the canvas gets
+  // its height back; see collapseDetail in the store for the measured case.
+  useEffect(() => {
+    if (!collapseDetail) return;
+    bottomSheet.setSnap("peek");
+    clearDetailCollapse();
+  }, [collapseDetail, bottomSheet.setSnap, clearDetailCollapse]);
 
   // Apply the dress (data-theme) and the time of day (dark/light) to the root
   // element. Both are pure CSS switches: every themed value in the viewer is a

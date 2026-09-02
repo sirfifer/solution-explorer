@@ -34,6 +34,11 @@ export const AggregateNode = memo(function AggregateNode({ data }: NodeProps) {
       data-testid="aggregate-node"
       data-aggregate-id={aggregate.id}
       data-expanded={expanded}
+      // The member ids, "|"-separated (no id carries "|"), so a reader of the
+      // DOM can tell which components this group stands for. The crawl uses
+      // it to hold the canvas to "every child at a level is visible or
+      // visibly aggregated" (graph.missing_node).
+      data-members={aggregate.members.map((m) => m.id).join("|")}
       className={`
         relative rounded-xl border-2 border-dashed min-w-[220px] max-w-[300px] cursor-pointer
         transition-transform duration-150 hover:scale-[1.02]
