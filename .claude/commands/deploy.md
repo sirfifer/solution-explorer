@@ -54,3 +54,12 @@ Pushes the latest changes and redeploys to all tracked installations, including 
 3. Useful for refreshing live data without rebuilding the viewer
 
 ## To install in a new repo, use `/install` instead.
+
+## Demo sites are not installations
+
+The VS Code and UnaMentis iOS demos on Cloudflare Pages are NOT redeployed by
+the workflows above. They are reviewed, point-in-time bundles published by
+hand through the `publish-demo` skill (`.claude/skills/publish-demo/SKILL.md`),
+following `docs/publication/DEMO-DEPLOY-RUNBOOK.md`. A merge to `main` does
+redeploy the UnaMentis installations through `deploy-downstream.yml`; it never
+touches the demos.
