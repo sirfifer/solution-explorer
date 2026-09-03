@@ -979,6 +979,53 @@ export interface OrientationNode {
   stable_targets: string[];
   target_truncated: boolean;
   statement_kind: "deterministic_grouping";
+  // Added by the identity front door. Optional so a sidecar written before it
+  // still type-checks and still renders.
+  share?: number;
+  representative?: OrientationRepresentative;
+}
+
+export interface OrientationRepresentative {
+  id: string;
+  name: string;
+  description?: string;
+  description_kind: "interpreted" | "deterministic" | "unavailable";
+}
+
+/** One thing the subject is to a person, with the file that proves it. */
+export interface FormFactorEvidence {
+  file: string;
+  line?: number;
+  marker: string;
+}
+
+export interface FormFactor {
+  kind: string;
+  label: string;
+  platforms: string[];
+  platforms_assumed: boolean;
+  how_met: string;
+  component_id: string;
+  evidence: FormFactorEvidence[];
+  statement_kind: "observed_source_reference";
+  weight: number;
+  name?: string;
+}
+
+export interface OrientationIdentity {
+  statement: string | null;
+  statement_kind: "deterministic_composition" | null;
+  primary: string | null;
+  form_factors: FormFactor[];
+  authors_claim: {
+    text: string;
+    source: string;
+    line?: number;
+    statement_kind: "repository_claim";
+  } | null;
+  languages: Array<{ language: string; share: number }>;
+  external_services: Array<{ name: string; component_id: string }>;
+  truncated: boolean;
 }
 
 export interface OrientationEdge {
@@ -1006,8 +1053,9 @@ export interface OrientationProjection {
       status: "interpreted";
       provenance: { derived_from_commit?: string | null; stale: boolean };
     } | null;
-    default_path: { kind: "tour" | "question"; id: string };
+    default_path: { kind: "tour" | "question"; id: string; reason?: string };
   };
+  identity?: OrientationIdentity | null;
   deployment_posture?: {
     status: "evidence_tiered";
     method_caveat: string;

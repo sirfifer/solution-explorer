@@ -155,6 +155,10 @@ export function buildOrientationFallback(architecture: Architecture): Orientatio
         ? { kind: "tour", id: architecture.tours[0].id }
         : { kind: "question", id: "organization" },
     },
+    // Identity is a parser fact about the repository's own markers. The browser
+    // has no store to read them from, so the fallback says so rather than
+    // guessing, and the Overview keeps its older headline.
+    identity: null,
     portrait: {
       semantic_level: "system",
       method: "deterministic component-type and path grouping (viewer compatibility fallback)",
