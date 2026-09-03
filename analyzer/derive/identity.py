@@ -328,12 +328,26 @@ def _evidence(file: str, marker: str, line: Optional[int] = None) -> dict:
     return row
 
 
-def _marker_file_for(facts: _Facts, path: str, component, preferred: tuple[str, ...]) -> Optional[str]:
+def _marker_file_for(
+    facts: _Facts,
+    path: str,
+    component,
+    preferred: tuple[str, ...],
+    *,
+    require_marker: bool = False,
+) -> Optional[str]:
     """A real file under ``component`` that stands for its declared type.
 
     A component-type detector still owes the reader a file. Prefer a manifest
     the type was read from, then the component's own config files, then its
-    first mapped file, so the evidence always resolves to something on disk.
+    first mapped file.
+
+    ``require_marker`` refuses that last fallback. "This is a server, and here is
+    a shell-completion source file to prove it" is not evidence, it is a file
+    picked because one was needed, and the run that found VS Code's
+    terminal-suggest completions typed api-server on a port scraped out of a
+    string is exactly the case it produced. A claim about how software is run
+    has to point at something that declares how it is run.
     """
     prefix = f"{path}/" if path else ""
     for name in preferred:
@@ -344,6 +358,8 @@ def _marker_file_for(facts: _Facts, path: str, component, preferred: tuple[str, 
         config_path = config.get("path") if isinstance(config, dict) else None
         if config_path and facts.exists(config_path):
             return config_path
+    if require_marker:
+        return None
     files = sorted(getattr(component, "files", None) or [])
     return files[0] if files else None
 
@@ -471,15 +487,20 @@ def _detect_android_app(facts: _Facts) -> list[dict]:
     return records
 
 
-def _html_entry_rank(path: str, component_path: str, component_name: str) -> tuple:
-    """Rank HTML candidates so the browser entry document wins, not a fixture."""
+def _html_entry_rank(path: str) -> tuple:
+    """Rank HTML candidates so the browser entry document wins, not a fixture.
+
+    Two conventions decide it, in this order. An entry document is named
+    ``index.html`` or after the directory it opens (``workbench/workbench.html``),
+    and it sits nearer the top of the tree than the shims and fixtures beneath
+    it. On VS Code that picks ``src/vs/code/browser/workbench/workbench.html``
+    over a webview's ``pre/index.html`` two directories deeper.
+    """
+    directory = os.path.dirname(path)
     stem = os.path.splitext(os.path.basename(path))[0].lower()
-    prefix = f"{component_path}/" if component_path else ""
-    is_test = 1 if re.search(r"(?:^|/)tests?(?:/|$)", os.path.dirname(path)) else 0
-    at_component_root = 0 if path == f"{prefix}index.html" else 1
-    named_for_component = 0 if stem == component_name.lower() else 1
-    is_index = 0 if stem == "index" else 1
-    return (is_test, at_component_root, named_for_component, is_index, path)
+    is_test = 1 if re.search(r"(?:^|/)(?:tests?|fixtures?)(?:/|$)", directory) else 0
+    entry_convention = 0 if stem in ("index", os.path.basename(directory).lower()) else 1
+    return (is_test, entry_convention, path.count("/"), path)
 
 
 def _detect_web_app(facts: _Facts) -> list[dict]:
@@ -496,7 +517,7 @@ def _detect_web_app(facts: _Facts) -> list[dict]:
             if "/browser/" in f"/{html}" or html == f"{prefix}index.html"
         ]
         if candidates:
-            best = min(candidates, key=lambda html: _html_entry_rank(html, path, component.name))
+            best = min(candidates, key=_html_entry_rank)
             records.append(_record(
                 "web-app", component.id,
                 [_evidence(best, "html entry")],
@@ -529,11 +550,11 @@ def _detect_cli(facts: _Facts) -> list[dict]:
     for path, component in facts.components_typed("cli-tool"):
         marker = _marker_file_for(
             facts, path, component, ("Cargo.toml", "package.json", "pyproject.toml", "setup.py"),
+            require_marker=True,
         )
         if marker:
             records.append(_record(
                 "cli", component.id, [_evidence(marker, "component typed cli-tool")],
-                name=component.name,
             ))
 
     for manifest_path in facts.manifest_paths("package.json"):
@@ -601,7 +622,12 @@ def _detect_server(facts: _Facts) -> list[dict]:
     for path, component in facts.components_typed("api-server", "service", "server"):
         if not getattr(component, "port", None):
             continue
-        marker = _marker_file_for(facts, path, component, ("Dockerfile", "package.json"))
+        marker = _marker_file_for(
+            facts, path, component,
+            ("Dockerfile", "docker-compose.yml", "docker-compose.yaml", "Procfile",
+             "package.json", "pyproject.toml", "go.mod", "Cargo.toml"),
+            require_marker=True,
+        )
         if marker:
             records.append(_record(
                 "server", component.id,
@@ -781,8 +807,12 @@ def _merge(facts: _Facts, records: list[dict]) -> tuple[list[dict], bool]:
     rows = [row for index, row in enumerate(rows) if index not in absorbed]
 
     for row in rows:
+        # Shallowest file first. A merged record can hold a root manifest and a
+        # marker from a nested component, and the cap must not spend itself on
+        # the nested ones before it reaches product.json.
         row["evidence"] = sorted(
-            row["evidence"], key=lambda item: (item["file"], item.get("line") or 0)
+            row["evidence"],
+            key=lambda item: (item["file"].count("/"), item["file"], item.get("line") or 0),
         )[:_MAX_EVIDENCE]
         row["weight"] = facts.evidence_weight(row["component_id"], row["evidence"])
 

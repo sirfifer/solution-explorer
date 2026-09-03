@@ -383,3 +383,70 @@ def test_no_dash_characters_leak_into_reader_facing_strings():
     )
     assert "—" not in text
     assert "–" not in text
+
+
+# ---------------------------------------------------------------------------
+# a corrected component type must not leave a stale claim on the front door
+# ---------------------------------------------------------------------------
+
+def test_a_corrected_component_type_removes_the_claim_it_supported():
+    from analyzer.project.pipeline import prune_identity_against_corrections
+
+    prepared = {
+        "components": [{
+            "id": "root", "type": "package", "children": [
+                # The enrichment's identity verdict corrected this from
+                # api-server to module after derive.identity had read it.
+                {"id": "completions", "type": "module", "children": []},
+                {"id": "api", "type": "api-server", "children": []},
+            ],
+        }],
+        "identity": {
+            "primary": "server",
+            "form_factors": [
+                {"kind": "server", "component_id": "completions", "evidence": [
+                    {"file": "completions/azd.ts",
+                     "marker": "component typed api-server on port 2377"},
+                ]},
+                {"kind": "server", "component_id": "api", "evidence": [
+                    {"file": "api/package.json",
+                     "marker": "component typed api-server on port 8080"},
+                ]},
+                {"kind": "cli", "component_id": "root", "evidence": [
+                    {"file": "package.json", "marker": "bin"},
+                ]},
+            ],
+        },
+    }
+    prune_identity_against_corrections(prepared)
+    records = prepared["identity"]["form_factors"]
+    assert [(row["kind"], row["component_id"]) for row in records] == [
+        ("server", "api"), ("cli", "root"),
+    ]
+    assert prepared["identity"]["primary"] == "server"
+
+
+def test_pruning_is_a_no_op_when_no_type_was_corrected():
+    from analyzer.project.pipeline import prune_identity_against_corrections
+
+    prepared = {
+        "components": [{"id": "root", "type": "ios-client", "children": []}],
+        "identity": {
+            "primary": "ios-app",
+            "form_factors": [{
+                "kind": "ios-app", "component_id": "root",
+                "evidence": [{"file": "Info.plist", "marker": "component typed ios-client"}],
+            }],
+        },
+    }
+    before = json.dumps(prepared["identity"], sort_keys=True)
+    prune_identity_against_corrections(prepared)
+    assert json.dumps(prepared["identity"], sort_keys=True) == before
+
+
+def test_pruning_tolerates_a_projection_with_no_identity():
+    from analyzer.project.pipeline import prune_identity_against_corrections
+
+    for identity in (None, {}, {"form_factors": []}):
+        prepared = {"components": [], "identity": identity}
+        prune_identity_against_corrections(prepared)
