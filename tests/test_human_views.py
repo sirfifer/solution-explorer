@@ -122,6 +122,9 @@ def test_human_view_builders_are_deterministic_and_evidence_honest():
     assert stripe["protocol"] == "https" and stripe["port"] == 443
     assert stripe["authentication"] == "not_observable"
     assert orientation_a["trust"]["source_coverage"]["percent"] == 90.0
+    assert orientation_a["trust"]["findings"] == {
+        "total": 1, "unverified": 1, "refuted": 0,
+    }
     assert len(orientation_a["portrait"]["nodes"]) == 3
 
 
@@ -186,6 +189,70 @@ def test_security_view_prefers_source_symbol_evidence_over_documentation():
         "line": 101,
         "signal": "FileProtectionType / NSPersistentStoreFileProtectionKey symbol reference",
     }
+
+
+def test_refuted_relationships_do_not_become_security_facts_or_portrait_edges():
+    arch = deepcopy(_architecture())
+    arch["relationships"] = [{
+        "source": "web",
+        "target": "api",
+        "type": "http",
+        "protocol": "http",
+        "authentication": "jwt",
+        "verdict": {"status": "refuted", "reason": "test literal"},
+    }]
+
+    security = build_security_view(arch)
+    assert not any(row.get("mechanism") == "jwt" for row in security["mechanisms"])
+    assert not any(
+        row["source"] == "web" and row["target"] == "api"
+        for row in security["communication_boundaries"]
+    )
+    assert build_orientation(arch)["portrait"]["edges"] == []
+
+
+def test_portrait_groups_from_structural_identity_and_folds_singleton_service_at_scale():
+    arch = _architecture()
+    arch["components"] = [{
+        "id": f"core/{index}",
+        "name": f"Core {index}",
+        "path": f"src/core/{index}",
+        "description": "Models editor behavior without persisting data.",
+        "type": "module",
+        "children": [],
+    } for index in range(50)] + [{
+        "id": "agent-host",
+        "name": "Agent host",
+        "path": "src/agentHost",
+        "type": "service",
+        "children": [],
+    }]
+    arch["relationships"] = []
+
+    nodes = {row["id"]: row for row in build_orientation(arch)["portrait"]["nodes"]}
+    assert "orientation:data" not in nodes
+    assert "orientation:services" not in nodes
+    assert nodes["orientation:core"]["member_count"] == 51
+
+
+def test_deployment_provider_label_and_evidence_come_from_same_component():
+    arch = _architecture()
+    arch["components"][0]["external_services"] = [{
+        "name": "GitHub",
+        "evidence": {"component_id": "web", "file": "apps/web/github.ts"},
+    }]
+    arch["components"][1]["external_services"] = [{
+        "name": "OpenAI",
+        "evidence": {"component_id": "api", "file": "services/api/openai.py"},
+    }, {
+        "name": "Anthropic",
+        "evidence": {"component_id": "api", "file": "services/api/anthropic.py"},
+    }]
+
+    posture = build_orientation(arch)["deployment_posture"]
+    provider = next(row for row in posture["items"] if row["id"] == "direct-provider")
+    assert provider["detail"] == "Anthropic, OpenAI"
+    assert provider["evidence"]["component_id"] == "api"
 
 
 def test_orientation_exposes_interpreted_deployment_posture():

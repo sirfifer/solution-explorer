@@ -10,5 +10,41 @@
       "expected_sha256": "8bc36f48e2cedaa83c9c6b5a36f15a2f8156081bfa6823710605838ff7c50e7e",
       "replacement": "This snapshot contains the Visual Studio Code source code at the recorded Microsoft repository commit. The system follows a layered architecture of base utilities, platform services, editor, and workbench across Electron main, browser renderer, Node, and web-worker targets. It includes bundled extensions and AI-oriented subsystems such as Copilot, agenthost, and sessions; a Rust command-line interface supports tunneling, and the remote server supports headless and remote-development scenarios."
     }
+  ],
+  "tour_edits": [
+    {
+      "tour_id": "agent-host",
+      "field_path": "description",
+      "expected": "Shows the platform-level subsystem that connects Claude, Codex, and Copilot CLI agents into the editor — a large layer this fork adds on top of the familiar VS Code architecture.",
+      "replacement": "Shows the platform-level subsystem in this Visual Studio Code snapshot that connects Claude, Codex, and Copilot CLI agents into the editor."
+    },
+    {
+      "tour_id": "copilot-subsystem",
+      "step_title": "Evaluation harness, not runtime",
+      "field_path": "narration",
+      "expected": "Despite its 'api-server' label, this is an offline LLM evaluation harness: scripted .stest.ts scenarios run against fixture codebases with faked services. It ranks in the top band because of churn, not because it ships. Several enrichment claims about exactly which features it exercises were disputed in adjudication, so treat its fine-grained scope as partially open.",
+      "replacement": "This test-suite is an offline LLM evaluation harness: scripted .stest.ts scenarios run against fixture codebases with faked services. It ranks in the top band because of churn, not because it ships. Several enrichment claims about exactly which features it exercises were disputed in adjudication, so treat its fine-grained scope as partially open."
+    },
+    {
+      "tour_id": "layering-spine",
+      "step_title": "Editor layer, not a server",
+      "field_path": "narration",
+      "expected": "The editor layer defines the text model, cursor, and language contracts. The mechanical classifier tagged this 'api-server' — that label is wrong; it is an in-process API layer for a desktop editor, with no network server anywhere in it. It builds on base and platform, never the reverse.",
+      "replacement": "The editor layer defines the text model, cursor, and language contracts. It is an in-process API layer for a desktop editor, with no network server anywhere in it. It builds on base and platform, never the reverse."
+    },
+    {
+      "tour_id": "layering-spine",
+      "step_title": "Workbench: the top of the core",
+      "field_path": "narration",
+      "expected": "The workbench assembles the UI shell from parts and contributions and hosts the main-thread side of the extension API. Its heaviest coupling is via injected services rather than imports, which is why the mechanical map understates its connections. It sits inside the 119-component cycle noted in the findings — that cycle is the intended shape of a co-released monolithic core whose layering is enforced by lint rules, not package boundaries.",
+      "replacement": "The workbench assembles the UI shell from parts and contributions and hosts the main-thread side of the extension API. Its heaviest coupling is via injected services rather than imports, which is why the mechanical map can understate its connections. Its layering is enforced by lint rules rather than package boundaries."
+    },
+    {
+      "tour_id": "process-model",
+      "step_title": "The extension API contract",
+      "field_path": "narration",
+      "expected": "The single boundary every extension crosses. This is the extension-host side of the vscode namespace: ExtHost* classes wired to main-thread counterparts through the protocol declared in extHost.protocol.ts. It is labeled 'api-server' mechanically, but it is an in-process RPC surface, not an HTTP server. Understanding this file pair gates understanding of half the repository.",
+      "replacement": "The single boundary every extension crosses. This is the extension-host side of the vscode namespace: ExtHost* classes wired to main-thread counterparts through the protocol declared in extHost.protocol.ts. It is an in-process RPC surface, not an HTTP server. Understanding this file pair gates understanding of half the repository."
+    }
   ]
 }

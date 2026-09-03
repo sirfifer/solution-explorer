@@ -273,6 +273,9 @@ export interface ComponentAIEnhance {
   // Enhancement metadata
   ai_enhanced_at?: string;
   ai_enhance_version?: number;
+  // Set when the cited component digest no longer matches the current files.
+  // Consumers must disclose this rather than rendering old prose as current.
+  stale?: boolean;
 }
 
 export interface RelationshipAIEnhance {
@@ -623,6 +626,10 @@ export interface Relationship {
   queue_name?: string;
   connection_pattern?: string;
   ai_enhance?: RelationshipAIEnhance;
+  verdict?: {
+    status: "confirmed" | "refuted" | "uncertain";
+    reason?: string;
+  };
   // Present only on viewer-side aggregated edges (S1 roll-up): edges between
   // descendants of visible nodes drawn at the visible level. `count` is how
   // many deep edges were folded in; `pairs` lists up to twelve of their real
@@ -1039,7 +1046,7 @@ export interface OrientationProjection {
     interpretation: { status: "present" | "stale" | "absent"; component_count: number; total_components: number };
     producer_gaps: number;
     producer_gap_status?: Record<string, number>;
-    findings: { total: number; unverified: number };
+    findings: { total: number; unverified: number; refuted?: number };
     direct_dependencies: number;
   };
   launch_targets: Record<string, OrientationTarget & { mode: "overview" | "workbench" }>;
@@ -1325,7 +1332,7 @@ export interface TourStep {
   narration: string;
   evidence?: TourStepEvidence;
   statement_kind?: "authored_interpretation" | "verified_claim";
-  verification_status?: "unverified" | "verified";
+  verification_status?: "unverified" | "verified" | "refuted";
 }
 
 // Provenance for staleness detection (I5). `derived_from_commit` records the
@@ -1346,7 +1353,7 @@ export interface Tour {
   steps: TourStep[];
   provenance?: TourProvenance;
   statement_kind?: "authored_interpretation" | "verified_claim";
-  verification_status?: "unverified" | "verified";
+  verification_status?: "unverified" | "verified" | "refuted";
 }
 
 // Changelog types for architecture change notifications

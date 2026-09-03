@@ -16,6 +16,7 @@ import { useArchStore } from "../store";
 import { THEMES } from "../utils/themes";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, getPatternRef, TYPE_DESCRIPTIONS, METRIC_DESCRIPTIONS } from "../utils/techDocs";
+import { componentHelp, componentSummary } from "../utils/componentText";
 
 interface ComponentNodeData {
   component: Component;
@@ -547,12 +548,13 @@ function HoverCard({ component, darkMode, triggerRef }: {
   });
 
   const docs = component.docs;
+  const summary = componentSummary(component);
   if (!docs) return null;
 
   const hasDocs = docs.purpose || docs.readme || docs.patterns?.length || docs.tech_stack?.length
     || docs.api_endpoints?.length || docs.env_vars?.length || docs.architecture_notes;
 
-  if (!hasDocs && !component.description) return null;
+  if (!hasDocs && !summary) return null;
 
   const bounds = nodeId ? getNodesBounds([nodeId]) : null;
   if (!bounds || bounds.width <= 0 || bounds.height <= 0) return null;
@@ -587,9 +589,9 @@ function HoverCard({ component, darkMode, triggerRef }: {
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-3 space-y-2">
-        {(docs.purpose || component.description) && (
+        {summary && (
           <p className={`text-[11px] leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
-            {docs.purpose || component.description}
+            {summary}
           </p>
         )}
 
@@ -735,11 +737,9 @@ function HoverCard({ component, darkMode, triggerRef }: {
 // help_text when available, falls back to docs.purpose / description / README excerpt.
 
 function getHelpContent(component: Component): string | null {
-  if (component.ai_enhance?.help_text) return component.ai_enhance.help_text;
-  if (component.docs?.purpose) return component.docs.purpose;
-  if (component.description) return component.description;
-  if (component.docs?.readme) return component.docs.readme.slice(0, 200) + (component.docs.readme.length > 200 ? "..." : "");
-  return null;
+  const text = componentHelp(component);
+  if (!text) return null;
+  return text.length > 200 ? `${text.slice(0, 200)}...` : text;
 }
 
 function HelpPopover({ component, darkMode, triggerRef, onClose }: {
@@ -935,6 +935,7 @@ export const ComponentNode = memo(function ComponentNode({
   const closeHelp = useCallback(() => setShowHelp(false), []);
 
   const docs = component.docs;
+  const summary = componentSummary(component);
   const hasPatterns = docs?.patterns && docs.patterns.length > 0;
 
   return (
@@ -1137,17 +1138,17 @@ export const ComponentNode = memo(function ComponentNode({
           </div>
 
           {/* Purpose line */}
-          {docs?.purpose && (
+          {summary && (
             <ReviewTarget
               targetType="component-purpose"
               targetId={`${component.id}:purpose`}
               targetName="Purpose"
               componentId={component.id}
-              targetContext={{ purposeValue: docs.purpose, componentPath: component.path }}
+              targetContext={{ purposeValue: summary, componentPath: component.path }}
               className="block mt-1.5"
             >
               <p className={`text-[10px] leading-snug line-clamp-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
-                {docs.purpose}
+                {summary}
               </p>
             </ReviewTarget>
           )}
@@ -1188,6 +1189,11 @@ export const ComponentNode = memo(function ComponentNode({
               <span className={`w-2 h-2 rounded-full shrink-0 ${
                 component.ai_enhance.criticality === "critical" ? "bg-red-500" : "bg-amber-500"
               }`} />
+            </Tooltip>
+          )}
+          {component.ai_enhance?.stale && (
+            <Tooltip content="This interpretation predates the component's current file digest and may no longer be accurate.">
+              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">stale interpretation</span>
             </Tooltip>
           )}
           {component.live_status?.statuses && (() => {

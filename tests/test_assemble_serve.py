@@ -166,3 +166,46 @@ def test_assembly_applies_review_correction_only_to_derived_overlay(
         (overlay / "orientation.json").read_text()
     )["orientation"]["interpreted_statement"]["text"]
     assert _sha256(manifest_path) == canonical_hash
+
+
+def test_assembly_can_scrub_activity_and_ship_publication_obligations(tmp_path: Path) -> None:
+    assembler = _load_assembler()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("viewer", encoding="utf-8")
+    projection = tmp_path / "canonical" / "architecture"
+    projection.mkdir(parents=True)
+    (projection / "manifest.json").write_text(json.dumps({
+        "name": "subject", "components": [], "relationships": [],
+        "component_detail_index": {},
+    }))
+    activity = {
+        "files": {"a.py": {"authors": [{"author_key": "Person@Example.com", "author_name": "person@example.com"}]}},
+        "components": [{"authors": [{"author_key": "person@example.com", "author_name": "Person"}]}],
+    }
+    (projection / "activity.json").write_text(json.dumps(activity))
+    publication = tmp_path / "publication.json"
+    publication.write_text('{"publication_version":1}')
+    subject = tmp_path / "subject"
+    subject.mkdir()
+    (subject / "LICENSE.txt").write_text("license")
+    (subject / "ThirdPartyNotices.txt").write_text("notices")
+
+    assembler.DIST = dist
+    assembler.SERVE_ROOT = tmp_path / "serve"
+    assembler.DERIVED_ROOT = tmp_path / "derived"
+    serve = assembler.assemble(
+        "subject", projection, build=False, publication=publication,
+        upstream_source=subject, scrub_activity=True,
+    )
+    served = serve / "architecture"
+    scrubbed = json.loads((served / "activity.json").read_text())
+    file_key = scrubbed["files"]["a.py"]["authors"][0]["author_key"]
+    component_key = scrubbed["components"][0]["authors"][0]["author_key"]
+    assert file_key == component_key
+    assert file_key.startswith("contributor-") and "@" not in file_key
+    assert scrubbed["files"]["a.py"]["authors"][0]["author_name"] == file_key
+    assert scrubbed["components"][0]["authors"][0]["author_name"] == "Person"
+    assert (served / "publication.json").read_bytes() == publication.read_bytes()
+    assert (served / "UPSTREAM-LICENSE.txt").read_text() == "license"
+    assert (served / "ThirdPartyNotices.txt").read_text() == "notices"

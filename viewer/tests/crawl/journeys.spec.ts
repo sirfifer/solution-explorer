@@ -129,7 +129,17 @@ test.describe("journeys", () => {
           const row = crawlPage.locator(
             `[data-testid="tree-node"][data-component-id="${cssEscape(hop.id)}"]`,
           );
-          if ((await row.count()) === 0) {
+          // Opening the focused-density sidebar mounts TreeNavigator first;
+          // its reveal effect expands the current drill's ancestors on the
+          // following React commit. ELK used to block the main thread long
+          // enough to hide that ordering. With layout in a worker, poll the
+          // actual row contract instead of sampling between those commits.
+          const rowRendered = await expect
+            .poll(() => row.count(), { timeout: 2_000, intervals: [50] })
+            .toBeGreaterThan(0)
+            .then(() => true)
+            .catch(() => false);
+          if (!rowRendered) {
             wrong.push(`${hop.id}: neither a graph node nor a tree row to drill from`);
             break;
           }

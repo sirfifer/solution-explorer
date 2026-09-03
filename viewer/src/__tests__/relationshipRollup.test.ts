@@ -164,6 +164,30 @@ describe("rollUpRelationships", () => {
     );
     expect(rolled).toHaveLength(0);
   });
+
+  it("excludes refuted members and preserves an aggregate's strongest verdict", () => {
+    const rolled = rollUpRelationships(
+      [
+        rel("app/services/stt", "server/management", "websocket", { verdict: { status: "refuted" } }),
+        rel("app/services/tts", "server/management", "websocket", { verdict: { status: "uncertain" } }),
+      ],
+      TREE,
+      visible,
+    );
+    expect(rolled).toHaveLength(1);
+    expect(rolled[0].rolled_up?.count).toBe(1);
+    expect(rolled[0].verdict?.status).toBe("uncertain");
+
+    const confirmed = rollUpRelationships(
+      [
+        ...rolled,
+        rel("app/services/stt", "server/management/auth", "websocket", { verdict: { status: "confirmed" } }),
+      ],
+      TREE,
+      visible,
+    );
+    expect(confirmed[0].verdict?.status).toBe("confirmed");
+  });
 });
 
 describe("boundaryRelationships", () => {

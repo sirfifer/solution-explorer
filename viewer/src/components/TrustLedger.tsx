@@ -37,7 +37,7 @@ export function TrustLedger({ compact = false }: { compact?: boolean }) {
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <TrustMetric label="Source parsing" value={trust.source_coverage.analyzed != null && trust.source_coverage.inventory_total ? `${trust.source_coverage.analyzed}/${trust.source_coverage.inventory_total}` : trust.source_coverage.percent == null ? "Unavailable" : `${trust.source_coverage.percent}%`} note={trust.source_coverage.inventory_total ? `${trust.source_coverage.binary ?? 0} binary · ${trust.source_coverage.excluded ?? 0} excluded · ${trust.source_coverage.gaps ?? 0} parse gaps` : trust.source_coverage.status.replaceAll("_", " ")} darkMode={darkMode} />
       <TrustMetric label="Producer claims" value={String(trust.producer_gaps)} note={Object.entries(trust.producer_gap_status ?? {}).map(([status, count]) => `${count} ${status}`).join(" · ") || "no unresolved or failed claims"} darkMode={darkMode} />
-      <TrustMetric label="Findings" value={String(trust.findings.total)} note={`${trust.findings.unverified} remain unverified`} darkMode={darkMode} />
+      <TrustMetric label="Findings" value={String(trust.findings.total)} note={`${trust.findings.unverified} remain unverified${trust.findings.refuted ? ` · ${trust.findings.refuted} refuted` : ""}`} darkMode={darkMode} />
       <TrustMetric label="Direct dependencies" value={String(trust.direct_dependencies)} note="from the observed supply chain" darkMode={darkMode} />
     </div>
   );

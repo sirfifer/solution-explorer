@@ -469,8 +469,6 @@ export function App() {
     clearFileDeepLinkNotice,
     experienceMode,
     setExperienceMode,
-    semanticLevel,
-    setSemanticLevel,
     workbenchDensity,
     setPreferencesOpen,
     toggleReviewMode,
@@ -554,6 +552,7 @@ export function App() {
 
   // Tree sidebar swipe-to-close state
   const treeTouchStartX = useRef(0);
+  const treeCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [treeDragOffset, setTreeDragOffset] = useState(0);
   const [treeDragging, setTreeDragging] = useState(false);
 
@@ -573,6 +572,23 @@ export function App() {
     }
     setTreeDragOffset(0);
   }, [treeDragOffset]);
+
+  // A mobile tree selection otherwise leaves the drawer and its backdrop over
+  // the graph/detail it just opened. Delay closing through the native
+  // double-click window so a reader can still drill from the tree with a
+  // double-tap; a single tap then reveals its destination without another
+  // manual close gesture.
+  const closeTreeAfterSelection = useCallback(() => {
+    if (treeCloseTimer.current) clearTimeout(treeCloseTimer.current);
+    treeCloseTimer.current = setTimeout(() => {
+      setSidebarOpen(false);
+      treeCloseTimer.current = null;
+    }, 250);
+  }, []);
+
+  useEffect(() => () => {
+    if (treeCloseTimer.current) clearTimeout(treeCloseTimer.current);
+  }, []);
 
   // Mobile bottom sheet
   const bottomSheet = useBottomSheet({
@@ -1060,12 +1076,6 @@ export function App() {
               reachable on a phone (GUI run finding V8.4). */}
           <LensSwitcher />
 
-          <div className={`hidden rounded-lg p-0.5 xl:flex ${darkMode ? "bg-zinc-900" : "bg-zinc-100"}`} aria-label="Semantic level">
-            {(["system", "domain", "component"] as const).map((level) => (
-              <button data-testid="semantic-level" data-level={level} data-selected={semanticLevel === level} key={level} onClick={() => setSemanticLevel(level)} className={`rounded-md px-2 py-1 text-[9px] capitalize ${semanticLevel === level ? darkMode ? "bg-zinc-700 text-zinc-100" : "bg-white text-zinc-900 shadow" : "text-zinc-500"}`}>{level}</button>
-            ))}
-          </div>
-
           {/* Review mode: reachable on every viewport so the annotation
               workflow works on a phone (GUI run finding V8.8). The button is
               already responsive (icon-only under sm). */}
@@ -1492,7 +1502,7 @@ export function App() {
               onTouchMove={onTreeTouchMove}
               onTouchEnd={onTreeTouchEnd}
             >
-              <TreeNavigator />
+              <TreeNavigator onSelect={closeTreeAfterSelection} />
             </aside>
           </div>
         )}

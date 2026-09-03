@@ -45,7 +45,10 @@ _CLIENT_TYPES = {
 }
 _SERVICE_TYPES = {"api-server", "service", "worker", "server"}
 _TOOL_TYPES = {"cli-tool", "infrastructure"}
-_DATA_WORDS = re.compile(r"(?:data|database|model|schema|store|persist|migration)", re.I)
+_DATA_WORDS = re.compile(
+    r"(?:^|[/ _-])(?:data|database|models?|schemas?|stores?|persistence|migrations?)(?:$|[/ _-])",
+    re.I,
+)
 _CREDENTIAL_WORDS = re.compile(
     r"(?:secret|token|password|passwd|credential|api[_-]?key|private[_-]?key|client[_-]?secret)",
     re.I,
@@ -84,8 +87,11 @@ def _component_index(arch: dict) -> tuple[list[dict], dict[str, dict]]:
 
 def _group_for(component: dict) -> str:
     component_type = str(component.get("type") or "").lower()
+    # Group from structural identity only. Prose commonly says a module
+    # "models" behavior; treating that verb as a data-layer path put VS Code's
+    # editor core under persistence.
     searchable = " ".join(
-        str(component.get(key) or "") for key in ("name", "path", "description")
+        str(component.get(key) or "") for key in ("name", "path")
     )
     if component_type in _CLIENT_TYPES:
         return "experience"
@@ -210,9 +216,6 @@ def _deployment_posture(arch: dict) -> Optional[dict]:
             if value:
                 evidence.append((f"{component.get('id') or 'root'}.docs.{field}", str(value)))
     combined = "\n".join(value for _, value in evidence)
-    if not combined:
-        return None
-
     rows: list[dict] = []
     standalone = re.search(r"\bstandalone (?:mobile )?app\b", combined, re.I)
     if standalone:
@@ -287,14 +290,26 @@ def _deployment_posture(arch: dict) -> Optional[dict]:
                 "evidence": service.get("evidence") or {"component_id": component.get("id")},
             })
     if direct_services and not any(row["id"] == "direct-provider" for row in rows):
-        names = sorted({row["name"] for row in direct_services})
+        # Label and evidence must describe the same component. Combining every
+        # provider name but citing only the first component made the source link
+        # incapable of supporting the displayed statement.
+        by_component: dict[str, list[dict]] = defaultdict(list)
+        for service in direct_services:
+            evidence = service.get("evidence") or {}
+            component_id = str(evidence.get("component_id") or "")
+            by_component[component_id].append(service)
+        _, evidenced_services = sorted(
+            by_component.items(),
+            key=lambda item: (-len({row["name"] for row in item[1]}), item[0]),
+        )[0]
+        names = sorted({row["name"] for row in evidenced_services})
         rows.append({
             "id": "direct-provider",
             "label": "Direct provider references are present in the client",
             "posture": "direct_to_provider",
             "detail": ", ".join(names[:6]) + (" and others" if len(names) > 6 else ""),
             "statement_kind": "observed_source_reference",
-            "evidence": direct_services[0]["evidence"],
+            "evidence": evidenced_services[0]["evidence"],
         })
 
     if not rows:
@@ -471,6 +486,8 @@ def build_security_view(
         arch.get("relationships") or [],
         key=lambda r: (str(r.get("source", "")), str(r.get("target", "")), str(r.get("type", ""))),
     ):
+        if (relationship.get("verdict") or {}).get("status") == "refuted":
+            continue
         source = str(relationship.get("source") or "")
         target = str(relationship.get("target") or "")
         authentication = relationship.get("authentication")
@@ -734,6 +751,16 @@ def build_orientation(
         component_group[component_id] = group
         grouped[group].append(component)
 
+    # A lone service in a large codebase is an implementation detail, not a
+    # useful top-level area. Preserve small-repository behavior and genuine
+    # service groupings while avoiding a 1-vs-hundreds portrait split.
+    if len(components) >= 50 and len(grouped.get("services") or []) == 1:
+        lone_service = grouped.pop("services")[0]
+        grouped["core"].append(lone_service)
+        service_id = str(lone_service.get("id") or "")
+        if service_id:
+            component_group[service_id] = "core"
+
     portrait_nodes: list[dict] = []
     for group_id in _GROUP_META:
         members = grouped.get(group_id) or []
@@ -758,6 +785,8 @@ def build_orientation(
     edge_counts: dict[tuple[str, str], int] = defaultdict(int)
     edge_samples: dict[tuple[str, str], list[list[str]]] = defaultdict(list)
     for relationship in arch.get("relationships") or []:
+        if (relationship.get("verdict") or {}).get("status") == "refuted":
+            continue
         source = str(relationship.get("source") or "")
         target = str(relationship.get("target") or "")
         source_group = component_group.get(source)
@@ -844,7 +873,11 @@ def build_orientation(
     finding_rows = arch.get("findings") or []
     unverified = sum(
         1 for finding in finding_rows
-        if str(finding.get("verification_status") or "unverified") != "verified"
+        if str(finding.get("verification_status") or "unverified") == "unverified"
+    )
+    refuted = sum(
+        1 for finding in finding_rows
+        if str(finding.get("verification_status") or "unverified") == "refuted"
     )
     tours = arch.get("tours") or []
     first_tour = tours[0].get("id") if tours else None
@@ -901,7 +934,11 @@ def build_orientation(
             },
             "producer_gaps": len(arch.get("gaps") or []),
             "producer_gap_status": dict(sorted(producer_status.items())),
-            "findings": {"total": len(finding_rows), "unverified": unverified},
+            "findings": {
+                "total": len(finding_rows),
+                "unverified": unverified,
+                "refuted": refuted,
+            },
             "direct_dependencies": sum(
                 1
                 for dependency in (arch.get("supply_chain") or {}).get("dependencies") or []

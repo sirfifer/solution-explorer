@@ -52,7 +52,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..constants import LANGUAGE_MAP, SKIP_EXTENSIONS
-from ..parsers import PARSERS
+from ..parsers import get_parser
 from ..parsers.markdown import extract_markdown_text
 from ..store import LOCAL_REPO, ROOT_COMPONENT, FactStore, assign_symbol_ids
 from ..utils import (
@@ -209,7 +209,7 @@ def _parse_worker(task: tuple[str, str, str, str]) -> tuple[str, str, object]:
     """
     rel, language, content, pversion = task
     try:
-        parser = PARSERS.get(language)
+        parser = get_parser(language)
         symbols = parser.extract_nested_symbols(content, rel) if parser else []
         imports = sorted(set(parser.extract_imports(content))) if parser else []
         if parser:
@@ -452,7 +452,7 @@ def _enumerate(
                 continue
 
             content = raw.decode("utf-8", errors="replace")
-            parser = PARSERS.get(language)
+            parser = get_parser(language)
             pversion = parser_version(language, parser) if parser else EXTRACT_TIER
             candidates.append(_Candidate(
                 rel=rel, language=language, content=content,

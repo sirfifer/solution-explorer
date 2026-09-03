@@ -17,7 +17,8 @@ export function FindingsEntry() {
 
   const findings = architecture?.findings ?? [];
   const concerns = architecture?.concerns ?? [];
-  const unverified = findings.filter((f) => f.verification_status !== "verified").length;
+  const unverified = findings.filter((f) => !f.verification_status || f.verification_status === "unverified").length;
+  const refuted = findings.filter((f) => f.verification_status === "refuted").length;
 
   return (
     <div
@@ -48,6 +49,11 @@ export function FindingsEntry() {
               {unverified} unverified
             </span>
           </Tooltip>
+        )}
+        {refuted > 0 && (
+          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${darkMode ? "bg-zinc-700 text-zinc-300" : "bg-zinc-200 text-zinc-700"}`}>
+            {refuted} refuted
+          </span>
         )}
         <span className="flex-1" />
         <span className={`shrink-0 text-[10px] ${darkMode ? "text-amber-400/80" : "text-amber-600"}`}>

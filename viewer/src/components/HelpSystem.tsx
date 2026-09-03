@@ -47,7 +47,7 @@ const KEYBOARD_SHORTCUTS = [
 ];
 
 export function HelpSystem() {
-  const { darkMode, overviewHandoff } = useArchStore();
+  const { darkMode, overviewHandoff, publication } = useArchStore();
   // Open/closed lives in the store rather than here so App can publish which
   // overlays are open on its nav-state beacon. Every gesture that opens or
   // closes a help surface is still this component's, and the sequencing is
@@ -66,10 +66,10 @@ export function HelpSystem() {
     // Overview is now the first-run guide. Replacing it immediately with the
     // first-run five-step modal makes a deliberate handoff feel like a restart.
     // Keep the modal for people who enter Workbench directly.
-    if (!dismissed && !overviewHandoff) {
+    if (!dismissed && !overviewHandoff && !publication) {
       setShowWelcome(true);
     }
-  }, [overviewHandoff, setShowWelcome]);
+  }, [overviewHandoff, publication, setShowWelcome]);
 
   // ? key toggles help; Escape closes it. The help dialog lists its own
   // shortcuts, so Escape not closing it read as broken (comprehension-study

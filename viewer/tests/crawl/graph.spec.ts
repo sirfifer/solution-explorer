@@ -90,6 +90,12 @@ async function waitForGraph(page: import("@playwright/test").Page): Promise<void
   await expect
     .poll(async () => (await renderedNodeIds(page)).length, { timeout: 30_000 , intervals: [100] })
     .toBeGreaterThan(0);
+  await expect
+    .poll(async () => page.locator("[data-layout-pending]").getAttribute("data-layout-pending"), {
+      timeout: 30_000,
+      intervals: [100],
+    })
+    .toBe("false");
 }
 
 /**
@@ -125,7 +131,7 @@ async function panCanvasBy(
 }
 
 /** The header controls a reader needs whatever else is on screen. */
-const HEADER_CONTROLS = ["lens-select", "semantic-level", "search-button"];
+const HEADER_CONTROLS = ["lens-select", "search-button"];
 
 /**
  * Node previews drawn outside the canvas they belong to.

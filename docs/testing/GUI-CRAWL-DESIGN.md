@@ -427,7 +427,6 @@ to check, so the addendum folds it in.
 | `data-testid="portrait-card"` | each portrait node card | `data-node-id`, `data-target` (first stable target) |
 | `data-testid="open-workbench"` | "Open detailed workspace" and "Full map" | |
 | `data-testid="open-overview"` | the workbench's return-to-Overview control(s) | |
-| `data-testid="semantic-level"` | each level toggle button (both apertures) | `data-level`, `data-selected` |
 | `data-testid="trust-drawer"` | TrustDrawer root | |
 | `data-testid="preferences-drawer"` | ViewerPreferences root | |
 | `data-testid="trust-strip"` | WorkbenchTrustStrip root | |

@@ -38,7 +38,16 @@ export function PublicationBanner() {
         }
       `}
     >
-      <p className="break-words">
+      <details className="sm:hidden">
+        <summary className="min-h-8 cursor-pointer py-1 font-semibold">
+          {isPrivatePreview ? "Private evaluation" : "Publication notice"} · {publication.subject.name} snapshot
+        </summary>
+        <p className="pb-2 break-words">
+          {isPrivatePreview && <span className="font-semibold mr-1">Unpublished preview:</span>}
+          {banner}
+        </p>
+      </details>
+      <p className="hidden break-words sm:block">
         {isPrivatePreview && (
           <span className="font-semibold mr-1">Unpublished preview:</span>
         )}

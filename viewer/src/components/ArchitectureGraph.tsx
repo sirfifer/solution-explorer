@@ -151,6 +151,7 @@ export function ArchitectureGraph() {
   // made selection centering use the wrong midpoint.
   const measuredNodeSizes = useRef(new Map<string, { width: number; height: number }>());
   const [measurementVersion, setMeasurementVersion] = useState(0);
+  const [layoutPending, setLayoutPending] = useState(false);
 
   // The padding every fit uses. Symmetric (FIT_PADDING) except on a phone,
   // where chrome sits over the top of the canvas: the drill hint at the top
@@ -279,6 +280,17 @@ export function ArchitectureGraph() {
     [onNodesChangeBase, getNodes, setEdges],
   );
 
+  // Selection is presentation unless it names a component that is not on the
+  // current canvas. Keeping an already-rendered selection out of the graph
+  // memo prevents a click from launching ELK and moving the node before the
+  // second tap of a double-tap drill. A tree/search/deep-link selection that is
+  // not rendered still becomes a layout key so drillView/boundLensGraph can
+  // promote it out of an aggregate and place it on the canvas.
+  const layoutSelectionKey = selectedComponentId
+    && !getNodes().some((node) => node.id === selectedComponentId)
+    ? selectedComponentId
+    : null;
+
   // Build nodes and edges from visible components
   const { rawNodes, rawEdges } = useMemo(() => {
     if (!architecture) return { rawNodes: [], rawEdges: [] };
@@ -336,7 +348,10 @@ export function ArchitectureGraph() {
         type: "component",
         position: { x: (i % 4) * 320, y: Math.floor(i / 4) * 200 },
         data: { component: comp },
-        selected: comp.id === selectedComponentId,
+        // Selection is synchronized below without re-running layout. This
+        // initial value also keeps a newly-built raw graph independent of a
+        // purely visual selection change.
+        selected: false,
         measured: measuredNodeSizes.current.get(comp.id),
       };
       const heat = heatByComponent.get(comp.id);
@@ -390,6 +405,9 @@ export function ArchitectureGraph() {
     const newNodes = [...componentNodes, ...aggregateNodes];
     const nodeIds = new Set(newNodes.map((n) => n.id));
     const newEdges: Edge[] = relationships
+      // A refuted relationship is an investigated false lead, not an edge in
+      // the architecture. Keep it in Findings, but never draw it as real.
+      .filter((r: Relationship) => r.verdict?.status !== "refuted")
       .filter((r: Relationship) => nodeIds.has(r.source) && nodeIds.has(r.target))
       .map((r: Relationship, i: number) => {
         const style = getEdgeStyle(r.type);
@@ -477,6 +495,15 @@ export function ArchitectureGraph() {
           };
         }
 
+        if (r.verdict?.status === "uncertain") {
+          edge.style = {
+            ...edge.style,
+            strokeDasharray: "4 5",
+            opacity: 0.55,
+          };
+          edge.label = edgeLabel ? `Uncertain: ${edgeLabel}` : "Uncertain relationship";
+        }
+
         // Snapshot for the shading effects to restore, matching the nodes'
         // baseStyle. baseAnimated matters: restoring "opacity 1" alone left
         // every edge de-animated after blast-radius mode.
@@ -485,7 +512,7 @@ export function ArchitectureGraph() {
       });
 
     return { rawNodes: newNodes, rawEdges: newEdges };
-  }, [architecture, drillLevel, selectedComponentId, darkMode, nodeBudget, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, selectedDesignFindingId, getLensGraph, measurementVersion]);
+  }, [architecture, drillLevel, layoutSelectionKey, darkMode, nodeBudget, lens, flowEntryId, flowStep, getFlowPath, activityData, selectedCapabilityId, selectedEntityId, selectedRuleId, selectedDesignFindingId, getLensGraph, measurementVersion]);
 
   // Apply ELK layout
   useEffect(() => {
@@ -493,8 +520,11 @@ export function ArchitectureGraph() {
     if (rawNodes.length === 0) {
       setNodes([]);
       setEdges([]);
+      setLayoutPending(false);
       return;
     }
+
+    setLayoutPending(true);
 
     // Clear any pending layout
     if (layoutTimeout.current) {
@@ -503,6 +533,34 @@ export function ArchitectureGraph() {
 
     // Stamp this layout run so a stale resolution can be discarded below.
     const myGen = ++layoutGenRef.current;
+    const currentSelection = useArchStore.getState().selectedComponentId;
+
+    // When a route promotes a component that is not on the old canvas, render
+    // the new bounded graph immediately at deterministic provisional positions.
+    // ELK then refines it in the worker. This keeps a selected/tour target
+    // visible and interactive instead of showing the previous level for the
+    // several seconds a dense layout may require.
+    const currentById = new Map(getNodes().map((node) => [node.id, node]));
+    if (currentSelection && !currentById.has(currentSelection)) {
+      const provisional = rawNodes.map((node) => {
+        const previous = currentById.get(node.id);
+        return {
+          ...node,
+          position: previous?.position ?? node.position,
+          selected: node.id === currentSelection,
+        };
+      });
+      setNodes(provisional);
+      setEdges(rawEdges);
+      const selected = provisional.find((node) => node.id === currentSelection);
+      if (selected) {
+        requestAnimationFrame(() => setCenter(
+          selected.position.x + (selected.measured?.width ?? 280) / 2,
+          selected.position.y + (selected.measured?.height ?? 140) / 2,
+          { zoom: Math.max(READ_SNAP_ZOOM, getViewport().zoom), duration: 0 },
+        ));
+      }
+    }
 
     // The active lens chooses the layout direction: Structure lays out top-down,
     // the Flow lens left-to-right for a walkable diagram (P6-2). Default "DOWN".
@@ -532,8 +590,13 @@ export function ArchitectureGraph() {
         return edge;
       });
 
-      setNodes(ln);
+      const currentSelection = useArchStore.getState().selectedComponentId;
+      setNodes(ln.map((node) => ({
+        ...node,
+        selected: node.id === currentSelection,
+      })));
       setEdges(edgesWithHandles);
+      setLayoutPending(false);
       // Signal that a fresh layout landed so the selection-centering effect can
       // re-run against real positions.
       setLayoutVersion((v) => v + 1);
@@ -547,10 +610,10 @@ export function ArchitectureGraph() {
         pendingSnapRef.current = null;
         if (pending && pending.state === "read" && Date.now() - pending.at < 1200) {
           applySnapRef.current("read");
-        } else if (selectedComponentId) {
-          const selected = ln.find((node) => node.id === selectedComponentId);
+        } else if (currentSelection) {
+          const selected = ln.find((node) => node.id === currentSelection);
           const graphClick = lastNodeClickRef.current;
-          const wasDirectGraphClick = graphClick?.id === selectedComponentId
+          const wasDirectGraphClick = graphClick?.id === currentSelection
             && Date.now() - graphClick.t < 700;
           if (selected && !wasDirectGraphClick) {
             const width = selected.measured?.width ?? 280;
@@ -582,7 +645,16 @@ export function ArchitectureGraph() {
       if (layoutTimeout.current) clearTimeout(layoutTimeout.current);
       if (readabilityTimeout.current) clearTimeout(readabilityTimeout.current);
     };
-  }, [rawNodes, rawEdges, lens, canvasAspectRatio, canvasReady, selectedComponentId, setNodes, setEdges, fitView, fitPadding, getViewport, setCenter, shrinkNodeBudget]);
+  }, [rawNodes, rawEdges, lens, canvasAspectRatio, canvasReady, setNodes, setEdges, fitView, fitPadding, getNodes, getViewport, setCenter, shrinkNodeBudget]);
+
+  // React Flow's selected flag is visual state, not layout input. Synchronize
+  // it in place so clicking an existing node cannot create a fresh ELK pass.
+  useEffect(() => {
+    setNodes((current) => current.map((node) => {
+      const selected = node.id === selectedComponentId;
+      return node.selected === selected ? node : { ...node, selected };
+    }));
+  }, [selectedComponentId, setNodes]);
 
   // Restore every node and edge to the style the graph build gave it. The one
   // exit path for both shading modes: composing from the baseStyle snapshot
@@ -1021,7 +1093,7 @@ export function ArchitectureGraph() {
   }, [toggleSnap]);
 
   return (
-    <div ref={containerRef} className="w-full h-full relative">
+    <div ref={containerRef} data-layout-pending={layoutPending ? "true" : "false"} className="w-full h-full relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}

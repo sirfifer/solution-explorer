@@ -21,6 +21,7 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 import { getTechRef, getPatternRef, getProtocolRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
+import { componentSummary } from "../utils/componentText";
 
 function SourceLink({ filePath, line, endLine }: { filePath: string; line?: number; endLine?: number }) {
   const { architecture, darkMode } = useArchStore();
@@ -260,6 +261,7 @@ function ComponentDetail({
   }, [architecture, component.id]);
 
   const docs = component.docs;
+  const summary = componentSummary(component);
   // The Docs tab presence predicate must match EXACTLY what DocsTab renders
   // (readme / claude_md / architecture_notes / api_docs / changelog sections,
   // plus key_decisions), so the tab never appears only to say "No
@@ -392,9 +394,14 @@ function ComponentDetail({
           </div>
         )}
 
-        {(docs?.purpose || component.description) && (
+        {summary && (
           <p className={`text-sm mt-2 ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
-            {docs?.purpose || component.description}
+            {summary}
+          </p>
+        )}
+        {component.ai_enhance?.stale && (
+          <p className="mt-2 text-xs font-medium text-amber-500" role="status">
+            This interpretation may be stale; verify it against the linked source.
           </p>
         )}
 
@@ -1815,6 +1822,11 @@ function AIInsightsTab({
 
   return (
     <div className="p-4 space-y-4">
+      {ai.stale && (
+        <div className={`rounded-lg border px-3 py-2 text-xs ${darkMode ? "border-amber-700/50 bg-amber-950/30 text-amber-300" : "border-amber-300 bg-amber-50 text-amber-800"}`}>
+          This interpretation predates the current component files. Treat it as context to verify, not current fact.
+        </div>
+      )}
       {/* Role and criticality */}
       {(roleMeta || ai.criticality) && (
         <div className="flex items-center gap-2 flex-wrap">
@@ -2677,9 +2689,9 @@ function AggregateDetail({ aggregate }: { aggregate: AggregateNodeData }) {
                 {c.files.length} file{c.files.length !== 1 ? "s" : ""}
               </span>
             </div>
-            {(c.ai_enhance?.description || c.docs?.purpose) && (
+            {componentSummary(c) && (
               <div className={`text-[11px] mt-0.5 line-clamp-2 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
-                {c.ai_enhance?.description || c.docs?.purpose}
+                {componentSummary(c)}
               </div>
             )}
           </button>

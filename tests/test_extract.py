@@ -182,6 +182,24 @@ def test_no_grammar_stops_the_run_rather_than_dropping_a_tier(tmp_path):
         p._ts_available = orig
 
 
+def test_runner_uses_the_guarded_parser_lookup(tmp_path):
+    """Both candidate enumeration and worker parsing must honor the hard stop."""
+    from analyzer.parsers import DEGRADED_LANGUAGES, DegradedParserError
+
+    (tmp_path / "app.py").write_text("print('hello')\n")
+    store = FactStore(":memory:")
+    previous = DEGRADED_LANGUAGES.get("python")
+    DEGRADED_LANGUAGES["python"] = "injected missing grammar"
+    try:
+        with pytest.raises(DegradedParserError, match="injected missing grammar"):
+            extract_repo(tmp_path, store)
+    finally:
+        if previous is None:
+            DEGRADED_LANGUAGES.pop("python", None)
+        else:
+            DEGRADED_LANGUAGES["python"] = previous
+
+
 # ---------------------------------------------------------------------------
 # Coverage ledger (invariant I2)
 # ---------------------------------------------------------------------------

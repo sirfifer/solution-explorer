@@ -34,9 +34,10 @@ interface TreeNodeProps {
   depth: number;
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
+  onSelect?: () => void;
 }
 
-const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggleExpand }: TreeNodeProps) {
+const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggleExpand, onSelect }: TreeNodeProps) {
   const { selectedComponentId, selectComponent, drillInto, darkMode, annotations, requestDetailReveal } = useArchStore();
   const hasAnnotation = annotations.some((a) => a.componentId === component.id);
   const expanded = expandedIds.has(component.id);
@@ -91,7 +92,11 @@ const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggl
         // the canvas, so the reader never sees the node this selects and a
         // peek-height sheet shows them a name they just tapped. Ask for the
         // detail to be revealed; a direct tap on a graph node does not.
-        onClick={() => { selectComponent(component.id); requestDetailReveal(); }}
+        onClick={() => {
+          selectComponent(component.id);
+          requestDetailReveal();
+          onSelect?.();
+        }}
         onDoubleClick={() => hasChildren && drillInto(component)}
       >
         {/* Expand/collapse */}
@@ -153,6 +158,7 @@ const TreeNode = memo(function TreeNode({ component, depth, expandedIds, onToggl
               depth={depth + 1}
               expandedIds={expandedIds}
               onToggleExpand={onToggleExpand}
+              onSelect={onSelect}
             />
           ))}
         </div>
@@ -226,6 +232,7 @@ interface FolderNodeProps {
   folderExpandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
   onToggleFolderExpand: (name: string) => void;
+  onSelect?: () => void;
 }
 
 const FolderNode = memo(function FolderNode({
@@ -236,6 +243,7 @@ const FolderNode = memo(function FolderNode({
   folderExpandedIds,
   onToggleExpand,
   onToggleFolderExpand,
+  onSelect,
 }: FolderNodeProps) {
   const expanded = folderExpandedIds.has(name);
 
@@ -268,6 +276,7 @@ const FolderNode = memo(function FolderNode({
               depth={1}
               expandedIds={expandedIds}
               onToggleExpand={onToggleExpand}
+              onSelect={onSelect}
             />
           ))}
         </div>
@@ -304,7 +313,7 @@ function attrSelectorValue(value: string): string {
   return value.replace(/["\\]/g, "\\$&");
 }
 
-export function TreeNavigator() {
+export function TreeNavigator({ onSelect }: { onSelect?: () => void } = {}) {
   const { architecture, darkMode } = useArchStore();
   const selectedComponentId = useArchStore((s) => s.selectedComponentId);
   const drillLevel = useArchStore((s) => s.drillLevel);
@@ -450,6 +459,7 @@ export function TreeNavigator() {
             depth={0}
             expandedIds={expandedIds}
             onToggleExpand={onToggleExpand}
+            onSelect={onSelect}
           />
         ))}
 
@@ -471,6 +481,7 @@ export function TreeNavigator() {
                 folderExpandedIds={folderExpandedIds}
                 onToggleExpand={onToggleExpand}
                 onToggleFolderExpand={onToggleFolderExpand}
+                onSelect={onSelect}
               />
             ))}
           </>

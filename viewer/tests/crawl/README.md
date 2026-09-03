@@ -244,7 +244,6 @@ already found in the other direction (see what it has found, below).
 | `data-testid="trust-ledger-entry"` | the compact trust ledger button | coverage and producer gaps live here now |
 | `data-testid="trust-drawer"` | TrustDrawer root | |
 | `data-testid="preferences-drawer"` | ViewerPreferences root | |
-| `data-testid="semantic-level"` | each level toggle, in both apertures | `data-level`, `data-selected` |
 
 ### The Overview front door
 

@@ -1,15 +1,28 @@
 import type { ELK as ELKInstance } from "elkjs/lib/elk-api";
 import type { Node, Edge } from "@xyflow/react";
 
-// Lazy-load elkjs so the ~1.5 MB layout engine lands in its own async chunk and
-// is fetched only when the graph first needs a layout, instead of bloating the
-// main bundle on initial page load (F-VW-8). The instance is memoized after the
-// first import.
+// Lazy-load ELK and execute it in its worker build. Large bounded lens graphs
+// can still take seconds to arrange, but that work must not freeze search,
+// navigation, or the browser's paint loop while it runs.
 let elkPromise: Promise<ELKInstance> | null = null;
 function getElk(): Promise<ELKInstance> {
   if (!elkPromise) {
-    elkPromise = import("elkjs/lib/elk.bundled.js").then(
-      (mod) => new mod.default(),
+    // Vitest does not instantiate Vite `?worker` modules. Keep the real ELK
+    // routing algorithm under test through its bundled in-process build; Vite
+    // replaces MODE at build time and removes this branch from production.
+    if (import.meta.env.MODE === "test") {
+      elkPromise = import("elkjs/lib/elk.bundled.js").then((bundled) => new bundled.default());
+      return elkPromise;
+    }
+    elkPromise = Promise.all([
+      import("elkjs/lib/elk-api"),
+      import("elkjs/lib/elk-worker.min.js?worker"),
+    ]).then(
+      ([api, worker]) => {
+        // Vite's production build exposes the worker constructor here.
+        const WorkerConstructor = worker.default;
+        return new api.default({ workerFactory: () => new WorkerConstructor() });
+      },
       (err) => {
         // A failed chunk load (flaky network, stale cache) must not be
         // memoized, or every later layout attempt fails until a full page
@@ -265,6 +278,12 @@ export const TYPE_META: Record<string, { icon: string; label: string }> = {
   "desktop-app": { icon: "\u{1F5A5}\uFE0F", label: "Desktop App" },
   "cli-tool": { icon: ">_", label: "CLI Tool" },
   content: { icon: "\u{1F4C4}", label: "Content" },
+  fixture: { icon: "\u{1F9EA}", label: "Fixture" },
+  "test-suite": { icon: "\u{1F9EA}", label: "Test Suite" },
+  "test-fixtures": { icon: "\u{1F9EA}", label: "Test Fixtures" },
+  tooling: { icon: "\u{1F6E0}\uFE0F", label: "Tooling" },
+  "vscode-extension": { icon: "\u{1F9E9}", label: "VS Code Extension" },
+  "ui-module": { icon: "\u{1F5BC}\uFE0F", label: "UI Module" },
   screen: { icon: "\u{1F4F1}", label: "Screen" },
   "tab-container": { icon: "\u{1F5C2}\uFE0F", label: "Tab Bar" },
   tab: { icon: "\u{1F4CB}", label: "Tab" },

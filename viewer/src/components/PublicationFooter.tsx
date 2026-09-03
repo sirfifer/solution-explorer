@@ -32,7 +32,13 @@ export function PublicationFooter() {
           : "bg-white/95 border-zinc-200 text-zinc-400"}
       `}
     >
-      <div className="flex flex-col gap-0.5">
+      <details className="sm:hidden">
+        <summary className="min-h-8 cursor-pointer py-1 font-medium">About this {publication.access.visibility === "private-preview" ? "private " : ""}map</summary>
+        <div className="flex flex-col gap-0.5 pb-2">
+          {lines.map((line, i) => <p key={i} className="break-words">{line}</p>)}
+        </div>
+      </details>
+      <div className="hidden flex-col gap-0.5 sm:flex">
         {lines.map((line, i) => (
           <p key={i} className="break-words">
             {line}

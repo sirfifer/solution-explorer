@@ -529,6 +529,13 @@ test.describe("overview", () => {
           // The same in-view rule the graph spec uses: a selection the reader
           // cannot see is not a landing.
           const nodeSelector = `.react-flow__node[data-id="${cssEscape(card.target)}"]`;
+          await expect
+            .poll(async () => crawlPage.locator(nodeSelector).count(), {
+              timeout: 20_000,
+              intervals: [100],
+            })
+            .toBeGreaterThan(0)
+            .catch(() => {});
           if ((await crawlPage.locator(nodeSelector).count()) === 0) {
             dead.push(
               `portrait area "${card.id}" selected ${card.target} and the canvas renders no ` +
