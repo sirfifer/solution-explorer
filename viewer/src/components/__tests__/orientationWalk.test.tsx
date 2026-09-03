@@ -79,7 +79,6 @@ beforeEach(() => {
     orientationStep: 0,
     orientationSkipped: [],
     helpOpen: false,
-    welcomeOpen: false,
     activeTourId: null,
   });
 });

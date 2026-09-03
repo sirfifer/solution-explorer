@@ -14,7 +14,6 @@ export function OrientationInvite() {
   const toursOpen = useArchStore((state) => state.toursOpen);
   const activeTourId = useArchStore((state) => state.activeTourId);
   const helpOpen = useArchStore((state) => state.helpOpen);
-  const welcomeOpen = useArchStore((state) => state.welcomeOpen);
   const adminOpen = useArchStore((state) => state.adminOpen);
   const activePanel = useArchStore((state) => state.activePanel);
   const trustOpen = useArchStore((state) => state.trustOpen);
@@ -27,7 +26,6 @@ export function OrientationInvite() {
     || toursOpen
     || Boolean(activeTourId)
     || helpOpen
-    || welcomeOpen
     || adminOpen
     || activePanel === "review"
     || trustOpen

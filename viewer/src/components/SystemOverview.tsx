@@ -15,6 +15,7 @@ import { PublicationBanner } from "./PublicationBanner";
 import { PublicationFooter } from "./PublicationFooter";
 import { OrientationInvite } from "./OrientationInvite";
 import { OrientationWalk } from "./OrientationWalk";
+import { HelpSystem } from "./HelpSystem";
 
 export function SystemOverview({ displayName }: { displayName: string }) {
   const architecture = useArchStore((state) => state.architecture)!;
@@ -93,6 +94,7 @@ export function SystemOverview({ displayName }: { displayName: string }) {
       <SearchOverlay />
       <FindingsSurface />
       <TourPlayer />
+      <HelpSystem mobileFloatingButton />
       <OrientationInvite />
       <OrientationWalk />
     </div>

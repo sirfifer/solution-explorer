@@ -318,7 +318,6 @@ interface OverlayFlags {
   inventoryOpen: boolean;
   toursOpen: boolean;
   helpOpen: boolean;
-  welcomeOpen: boolean;
   orientationOpen: boolean;
   adminOpen: boolean;
   activePanel: string | null;
@@ -343,7 +342,7 @@ function openOverlays(f: OverlayFlags): string[] {
     f.supplyChainOpen && "supply-chain",
     f.inventoryOpen && "inventory",
     f.toursOpen && "tours",
-    (f.helpOpen || f.welcomeOpen) && "help",
+    f.helpOpen && "help",
     f.orientationOpen && "orientation",
     f.adminOpen && "admin",
     f.activePanel === "review" && "review",
@@ -387,7 +386,6 @@ export function NavStateBeacon() {
   const inventoryOpen = useArchStore((s) => s.inventoryOpen);
   const toursOpen = useArchStore((s) => s.toursOpen);
   const helpOpen = useArchStore((s) => s.helpOpen);
-  const welcomeOpen = useArchStore((s) => s.welcomeOpen);
   const orientationOpen = useArchStore((s) => s.orientationOpen);
   const orientationStep = useArchStore((s) => s.orientationStep);
   const orientationInvite = useArchStore((s) => s.orientationInvite);
@@ -412,7 +410,7 @@ export function NavStateBeacon() {
 
   const overlays = openOverlays({
     searchOpen, findingsOpen, supplyChainOpen, inventoryOpen, toursOpen,
-    helpOpen, welcomeOpen, orientationOpen, adminOpen, activePanel, trustOpen, preferencesOpen,
+    helpOpen, orientationOpen, adminOpen, activePanel, trustOpen, preferencesOpen,
   });
   const orientationStops = applicableStops(
     WALK_STOPS,
@@ -847,7 +845,6 @@ export function App() {
         inventoryOpen: s.inventoryOpen,
         toursOpen: s.toursOpen,
         helpOpen: s.helpOpen,
-        welcomeOpen: s.welcomeOpen,
         orientationOpen: s.orientationOpen,
         adminOpen: s.adminOpen,
         activePanel: s.activePanel,

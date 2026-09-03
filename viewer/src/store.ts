@@ -422,14 +422,11 @@ interface ArchStore {
   // Reading them from anywhere else was impossible while they were local, and a
   // beacon that cannot see an overlay would quietly under-report it.
   //   helpOpen      the Help dialog (the ? button, the ? key)
-  //   welcomeOpen   the first-run welcome walkthrough
   //   inventoryOpen the non-source inventory dialog, opened from the coverage
   //                 drill-in's "Explore inventory" affordance
   helpOpen: boolean;
-  welcomeOpen: boolean;
   inventoryOpen: boolean;
   setHelpOpen: (open: boolean) => void;
-  setWelcomeOpen: (open: boolean) => void;
   setInventoryOpen: (open: boolean) => void;
 
   // Theme
@@ -1335,7 +1332,6 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       inventoryOpen: false,
       toursOpen: false,
       helpOpen: false,
-      welcomeOpen: false,
       trustOpen: false,
       preferencesOpen: false,
       adminOpen: false,
@@ -1390,7 +1386,6 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   searchOpen: false,
   helpOpen: false,
-  welcomeOpen: false,
   inventoryOpen: false,
   searchQuery: "",
 
@@ -1849,7 +1844,6 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   setSearchOpen: (open) => set({ searchOpen: open, searchQuery: open ? get().searchQuery : "" }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setHelpOpen: (open) => set({ helpOpen: open }),
-  setWelcomeOpen: (open) => set({ welcomeOpen: open }),
   setInventoryOpen: (open) => set({ inventoryOpen: open }),
 
   toggleDarkMode: () => set((s) => {
