@@ -87,11 +87,13 @@ export function highlightRect(
   card: Rect | null = null,
   padding = 6,
 ): Rect {
+  const expandedWidth = Math.max(44, anchor.width + padding * 2);
+  const expandedHeight = Math.max(44, anchor.height + padding * 2);
   const expanded = rect(
-    anchor.top - padding,
-    anchor.left - padding,
-    anchor.width + padding * 2,
-    anchor.height + padding * 2,
+    anchor.top + anchor.height / 2 - expandedHeight / 2,
+    anchor.left + anchor.width / 2 - expandedWidth / 2,
+    expandedWidth,
+    expandedHeight,
   );
   const clipped = intersect(expanded, rect(0, 0, viewport.width, viewport.height))
     ?? rect(Math.max(0, anchor.top), Math.max(0, anchor.left), 1, 1);
@@ -131,12 +133,15 @@ export function placeCard(
   const ordered = requested === "auto"
     ? choices
     : [...choices.filter((choice) => choice.placement === requested), ...choices.filter((choice) => choice.placement !== requested)];
-  const chosen = ordered.find((choice) => fits(choice.top, choice.left, card, viewport, margin)) ?? ordered[0];
-  return {
-    placement: chosen.placement,
-    top: Math.min(Math.max(chosen.top, margin), Math.max(margin, viewport.height - card.height - margin)),
-    left: Math.min(Math.max(chosen.left, margin), Math.max(margin, viewport.width - card.width - margin)),
-  };
+  const clamped = ordered.map((choice) => ({
+    placement: choice.placement,
+    top: Math.min(Math.max(choice.top, margin), Math.max(margin, viewport.height - card.height - margin)),
+    left: Math.min(Math.max(choice.left, margin), Math.max(margin, viewport.width - card.width - margin)),
+  }));
+  const chosen = ordered.find((choice) => fits(choice.top, choice.left, card, viewport, margin));
+  if (chosen) return chosen;
+  return clamped.find((choice) => !intersect(anchor, rect(choice.top, choice.left, card.width, card.height)))
+    ?? clamped[0];
 }
 
 export function domRect(value: DOMRect): Rect {

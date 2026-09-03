@@ -11,6 +11,12 @@ import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
 const DEFAULT_CARD_SIZE: Size = { width: 320, height: 220 };
 
+interface AnchorMeasurement {
+  stopId: string;
+  anchorId: string;
+  rect: Rect;
+}
+
 function viewportSize(): Size {
   if (typeof window === "undefined") return { width: 1024, height: 768 };
   return { width: window.innerWidth, height: window.innerHeight };
@@ -84,11 +90,12 @@ export function OrientationWalk() {
   const markOrientationSkipped = useArchStore((state) => state.markOrientationSkipped);
   const setExperienceMode = useArchStore((state) => state.setExperienceMode);
   const [viewport, setViewport] = useState(viewportSize);
-  const [anchorRect, setAnchorRect] = useState<Rect | null>(null);
-  const [anchorId, setAnchorId] = useState("");
+  const [anchor, setAnchor] = useState<AnchorMeasurement | null>(null);
   const [cardSize, setCardSize] = useState(DEFAULT_CARD_SIZE);
+  const [measuredCardRect, setMeasuredCardRect] = useState<Rect | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const resizeFrame = useRef<number | null>(null);
+  const measurementFrame = useRef<number | null>(null);
   const previousStops = useRef(applicableStops(WALK_STOPS, viewport.width));
   const previousFocus = useRef<HTMLElement | null>(null);
 
@@ -134,27 +141,40 @@ export function OrientationWalk() {
     if (stop.surface === "overview") {
       element.scrollIntoView({ behavior: "auto", block: context?.isMobile ? "start" : "center", inline: "nearest" });
     }
-    requestAnimationFrame(() => {
-      setAnchorId(primary ? stop.anchor : stop.fallbackAnchor ?? stop.anchor);
-      setAnchorRect(domRect(element.getBoundingClientRect()));
+    if (measurementFrame.current !== null) cancelAnimationFrame(measurementFrame.current);
+    measurementFrame.current = requestAnimationFrame(() => {
+      measurementFrame.current = null;
+      const settledPrimary = visibleAnchor(stop.anchor);
+      const settledFallback = stop.fallbackAnchor ? visibleAnchor(stop.fallbackAnchor) : null;
+      const settledElement = settledPrimary ?? settledFallback ?? element;
+      setAnchor({
+        stopId: stop.id,
+        anchorId: settledPrimary ? stop.anchor : stop.fallbackAnchor ?? stop.anchor,
+        rect: domRect(settledElement.getBoundingClientRect()),
+      });
       setViewport(viewportSize());
     });
   }, [context?.isMobile, experienceMode, exitOrientation, markOrientationSkipped, orientationNext, orientationOpen, orientationStep, stop, stops.length]);
 
   useEffect(() => {
     if (!orientationOpen || !stop) {
-      setAnchorRect(null);
-      setAnchorId("");
+      setAnchor(null);
+      setMeasuredCardRect(null);
       return;
     }
     if (stop.surface !== experienceMode) {
-      setAnchorRect(null);
+      setAnchor(null);
+      setMeasuredCardRect(null);
       setExperienceMode(stop.surface);
       return;
     }
-    setAnchorRect(null);
+    setAnchor(null);
+    setMeasuredCardRect(null);
     const frame = requestAnimationFrame(measureAnchor);
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      if (measurementFrame.current !== null) cancelAnimationFrame(measurementFrame.current);
+    };
   }, [experienceMode, measureAnchor, orientationOpen, setExperienceMode, stop]);
 
   useEffect(() => {
@@ -164,8 +184,12 @@ export function OrientationWalk() {
       if (frame !== null) return;
       frame = requestAnimationFrame(() => {
         frame = null;
-        const element = anchorId ? visibleAnchor(anchorId) : null;
-        if (element) setAnchorRect(domRect(element.getBoundingClientRect()));
+        const element = anchor?.anchorId ? visibleAnchor(anchor.anchorId) : null;
+        if (element) {
+          setAnchor((current) => current && current.stopId === stop?.id
+            ? { ...current, rect: domRect(element.getBoundingClientRect()) }
+            : current);
+        }
       });
     };
     window.addEventListener("scroll", handleScroll, true);
@@ -173,32 +197,59 @@ export function OrientationWalk() {
       window.removeEventListener("scroll", handleScroll, true);
       if (frame !== null) cancelAnimationFrame(frame);
     };
-  }, [anchorId, orientationOpen]);
+  }, [anchor?.anchorId, orientationOpen, stop?.id]);
+
+  useLayoutEffect(() => {
+    if (!orientationOpen || !anchor || anchor.stopId !== stop?.id) return;
+    const element = visibleAnchor(anchor.anchorId);
+    if (!element) return;
+    const update = () => {
+      setAnchor((current) => current && current.stopId === stop.id
+        ? { ...current, rect: domRect(element.getBoundingClientRect()) }
+        : current);
+    };
+    const frame = requestAnimationFrame(update);
+    if (typeof ResizeObserver === "undefined") return () => cancelAnimationFrame(frame);
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [anchor?.anchorId, anchor?.stopId, orientationOpen, stop?.id]);
 
   useLayoutEffect(() => {
     if (!cardRef.current || !orientationOpen) return;
     const update = () => {
       const bounds = cardRef.current?.getBoundingClientRect();
       if (!bounds?.width || !bounds.height) return;
+      const nextRect = domRect(bounds);
       setCardSize((current) => Math.abs(current.width - bounds.width) < 1 && Math.abs(current.height - bounds.height) < 1
         ? current
         : { width: bounds.width, height: bounds.height });
+      setMeasuredCardRect((current) => current
+        && Math.abs(current.top - nextRect.top) < 1
+        && Math.abs(current.left - nextRect.left) < 1
+        && Math.abs(current.width - nextRect.width) < 1
+        && Math.abs(current.height - nextRect.height) < 1
+        ? current
+        : nextRect);
     };
     update();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(update);
     observer.observe(cardRef.current);
     return () => observer.disconnect();
-  }, [orientationOpen, orientationStep]);
+  }, [anchor?.rect, orientationOpen, orientationStep]);
 
   useEffect(() => {
-    if (!orientationOpen || !anchorRect) return;
+    if (!orientationOpen || !anchor) return;
     const frame = requestAnimationFrame(() => {
       const primary = cardRef.current?.querySelector<HTMLElement>("[data-orientation-primary]");
       primary?.focus();
     });
     return () => cancelAnimationFrame(frame);
-  }, [anchorRect, orientationOpen, orientationStep]);
+  }, [anchor, orientationOpen, orientationStep]);
 
   useEffect(() => {
     if (!orientationOpen) return;
@@ -229,20 +280,20 @@ export function OrientationWalk() {
     };
   }, [exitOrientation, orientationOpen]);
 
-  if (!orientationOpen || !architecture || !context || !stop || !anchorRect) return null;
+  if (!orientationOpen || !architecture || !context || !stop || !anchor || anchor.stopId !== stop.id) return null;
 
   const isLast = orientationStep >= stops.length - 1;
-  const position = placeCard(anchorRect, cardSize, viewport, stop.placement);
+  const position = placeCard(anchor.rect, cardSize, viewport, stop.placement);
   const computedCardRect = context.isMobile
     ? rectFromPosition(viewport.height - cardSize.height, 0, { width: viewport.width, height: cardSize.height })
     : rectFromPosition(position.top, position.left, cardSize);
-  const highlight = highlightRect(anchorRect, viewport, computedCardRect);
+  const highlight = highlightRect(anchor.rect, viewport, measuredCardRect ?? computedCardRect);
 
   return (
     <div
       data-testid="orientation-walk"
       data-stop={stop.id}
-      data-anchor={anchorId}
+      data-anchor={anchor.anchorId}
       className="fixed inset-0 z-[60] overflow-hidden"
       onClick={() => exitOrientation("dismissed")}
     >

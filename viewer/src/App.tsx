@@ -482,6 +482,7 @@ export function App() {
     liveConfig,
     liveMonitorStatus,
     mobileChromeHidden,
+    orientationOpen,
     fileDeepLinkNotice,
     clearFileDeepLinkNotice,
     experienceMode,
@@ -998,7 +999,7 @@ export function App() {
         `}
         style={{
           paddingTop: `max(0.5rem, env(safe-area-inset-top))`,
-          transform: mobileChromeHidden ? "translateY(-100%)" : "none",
+          transform: mobileChromeHidden && !orientationOpen ? "translateY(-100%)" : "none",
         }}
       >
         <div className="flex items-center gap-3">
@@ -1633,10 +1634,11 @@ export function App() {
         `}
         style={{
           paddingBottom: `max(0.5rem, env(safe-area-inset-bottom))`,
-          transform: mobileChromeHidden ? "translateY(100%)" : "none",
+          transform: mobileChromeHidden && !orientationOpen ? "translateY(100%)" : "none",
         }}
       >
         <button
+          data-testid="open-overview"
           onClick={() => setExperienceMode("overview")}
           className={`flex min-h-11 min-w-14 flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
         >

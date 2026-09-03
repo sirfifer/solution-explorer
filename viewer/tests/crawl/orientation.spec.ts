@@ -214,10 +214,13 @@ test.describe("orientation walk", () => {
     { tag: ["@desktop", "@mobile"] },
     async ({ crawlPage }) => {
       await crawlPage.goto("/?mode=workbench");
-      await expect(crawlPage.locator('[data-testid="graph-frame"]')).toBeVisible({ timeout: 30_000 });
+      await expect
+        .poll(async () => (await readNavState(crawlPage)).mode, { timeout: 30_000 })
+        .toBe("workbench");
       if ((crawlPage.viewportSize()?.width ?? 1024) < 640) {
         await crawlPage.locator('[data-testid="more-menu"]').click();
       }
+      await expect(crawlPage.locator('[data-testid="help-button"]:visible')).toBeVisible({ timeout: 15_000 });
       await crawlPage.locator('[data-testid="help-button"]:visible').click();
       await expect(crawlPage.locator('[data-testid="help-overlay"]')).toBeVisible();
       await crawlPage.locator('[data-testid="orientation-replay"]').click();

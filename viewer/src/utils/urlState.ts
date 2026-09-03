@@ -108,7 +108,7 @@ function buildUrl(state: UrlState): string {
   const existing = new URLSearchParams(window.location.search);
   const managed = new Set([
     "mode", "level", "component", "tab", "drill", "lens", "flow", "step",
-    "capability", "entity", "rule", "finding", "file", "line",
+    "capability", "entity", "rule", "finding", "file", "line", "orientation",
   ]);
   for (const [key, value] of existing) {
     if (key === "data" || !managed.has(key)) params.append(key, value);

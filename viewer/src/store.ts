@@ -1342,6 +1342,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
       orientationStep: 0,
       orientationInvite: false,
       orientationSkipped: [],
+      mobileChromeHidden: false,
     });
     if (get().experienceMode !== "overview") get().setExperienceMode("overview");
   },
@@ -1350,7 +1351,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   setOrientationStep: (orientationStep) => set({ orientationStep: Math.max(0, orientationStep) }),
   exitOrientation: (reason) => {
     persistOrientation(reason);
-    set({ orientationOpen: false, orientationStep: 0, orientationInvite: false });
+    set({ orientationOpen: false, orientationStep: 0, orientationInvite: false, mobileChromeHidden: false });
   },
   dismissOrientationInvite: () => {
     persistOrientation("dismissed");
