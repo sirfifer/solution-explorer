@@ -27,6 +27,7 @@ from .coverage import coverage_families, format_source_percent
 
 __all__ = [
     "ORIENTATION_FILENAME",
+    "compose_identity_statement",
     "SUPPORT_FILENAME",
     "SECURITY_FILENAME",
     "build_orientation",
@@ -105,12 +106,69 @@ def _group_for(component: dict) -> str:
 
 
 _GROUP_META = {
-    "experience": ("Experiences", "Client-facing products and user flows"),
-    "core": ("Core system", "Application and domain implementation"),
-    "services": ("Services & interfaces", "Runtime services and API boundaries"),
-    "data": ("Data & persistence", "Models, schemas, stores and migrations"),
-    "operations": ("Operations & tools", "Infrastructure and operational tooling"),
+    "experience": ("User interface", "What people see and use"),
+    "core": ("Inner workings", "Application and domain logic"),
+    "services": ("Services and APIs", "Runtime services and network boundaries"),
+    "data": ("Data", "Models, schemas, stores and migrations"),
+    "operations": ("Tools and operations", "Build, deploy and operate"),
 }
+
+# Types that say nothing about what a component is FOR. A directory called
+# "module" inside a user interface is still user interface, and counting it as
+# "core" is how VS Code put 558 of its 571 components in one box while its
+# 4,281-file workbench tree hid inside it.
+_NEUTRAL_TYPES = {
+    "module", "content", "package", "library", "fixture", "tooling",
+    "test-suite", "test-fixtures", "module (test suite)",
+}
+
+
+def _own_group(component: dict) -> tuple[Optional[str], Optional[str]]:
+    """What this component establishes for itself, and what it passes down.
+
+    The second value is the group descendants inherit. A path matching the data
+    words claims the component itself but never its children: "models" in a
+    directory name is a hint about that directory, not about everything under
+    it. A neutral type claims nothing at all and takes what its ancestors say.
+    """
+    component_type = str(component.get("type") or "").lower()
+    searchable = " ".join(
+        str(component.get(key) or "") for key in ("name", "path")
+    )
+    if component_type in _CLIENT_TYPES:
+        return "experience", "experience"
+    if _DATA_WORDS.search(searchable):
+        return "data", None
+    if component_type in _SERVICE_TYPES:
+        return "services", "services"
+    if component_type in _TOOL_TYPES:
+        return "operations", "operations"
+    if component_type in _NEUTRAL_TYPES:
+        return None, None
+    return "core", "core"
+
+
+def _groups_by_inheritance(tree: Iterable[dict]) -> dict[str, str]:
+    """Group every component, letting a typed parent speak for its subtree.
+
+    The repository root is deliberately not allowed to speak for the tree: an
+    iOS repository whose root is typed ios-client would otherwise collapse the
+    whole portrait into one area.
+    """
+    assigned: dict[str, str] = {}
+
+    def walk(nodes: Iterable[dict], inherited: Optional[str], at_root: bool) -> None:
+        for component in nodes or []:
+            component_id = str(component.get("id") or "")
+            own, passes_down = _own_group(component)
+            group = own or inherited or "core"
+            if component_id and component_id not in assigned:
+                assigned[component_id] = group
+            next_inherited = inherited if at_root else (passes_down or inherited)
+            walk(component.get("children") or [], next_inherited, False)
+
+    walk(tree, None, True)
+    return assigned
 
 
 def _representative_rank(group_id: str, component: dict) -> tuple:
@@ -734,6 +792,310 @@ def _has_flow_data(arch: dict) -> bool:
     return walk(arch.get("components") or [])
 
 
+# ---------------------------------------------------------------------------
+# the identity statement
+# ---------------------------------------------------------------------------
+#
+# Composed here, not in the viewer, so the browser fallback can never phrase the
+# same facts differently from the sidecar. Every clause below is a rewrite of a
+# form-factor record the derive pass proved with a file; nothing is added.
+
+# The detector order in analyzer/derive/identity.py. The sentence reads its
+# secondary clauses in this order however the file counts rank the records, so
+# a subject describes itself the same way run after run. Kept in step by
+# test_form_factor_order_matches_the_derive_pass.
+_FORM_FACTOR_ORDER = (
+    "desktop-app", "ios-app", "watch-app", "android-app", "web-app",
+    "cli", "server", "plugin-host", "infrastructure", "library",
+)
+
+# The noun the headline uses. It is not always the chip label: "Extensible by
+# plug-ins" reads as a property on a chip and as nonsense after "is a".
+_PRIMARY_NOUN = {
+    "desktop-app": "desktop application",
+    "ios-app": "iOS app",
+    "watch-app": "watch app",
+    "android-app": "Android app",
+    "web-app": "web application",
+    "cli": "command-line tool",
+    "server": "server",
+    "plugin-host": "system extended by plug-ins",
+    "infrastructure": "infrastructure project",
+    "library": "library",
+}
+
+# Kinds whose noun already names the platform, so they never take the "for
+# macOS, Windows and Linux" clause.
+_PLATFORM_NAMED_BY_NOUN = {"ios-app", "watch-app", "android-app", "web-app"}
+
+_ALSO_PHRASE = {
+    "web-app": "runs in a web browser",
+    "server": "runs as a server",
+    "cli": "is driven from a terminal by a command-line tool",
+    "plugin-host": "is extended by plug-ins",
+    "infrastructure": "is deployed as infrastructure",
+    "library": "is used by other programs",
+}
+
+_PLATFORM_NAMES = {
+    "macos": "macOS",
+    "windows": "Windows",
+    "linux": "Linux",
+    "ios": "iOS",
+    "watchos": "watchOS",
+    "android": "Android",
+    "browser": "the browser",
+}
+
+_LANGUAGE_NAMES = {
+    "typescript": "TypeScript",
+    "javascript": "JavaScript",
+    "python": "Python",
+    "swift": "Swift",
+    "rust": "Rust",
+    "go": "Go",
+    "java": "Java",
+    "kotlin": "Kotlin",
+    "ruby": "Ruby",
+    "csharp": "C#",
+    "cpp": "C++",
+    "c": "C",
+    "dart": "Dart",
+    "shell": "Shell",
+    "vue": "Vue",
+    "svelte": "Svelte",
+}
+
+_SECOND_LANGUAGE_SHARE = 0.10
+
+
+def _article(word: str) -> str:
+    return "an" if word[:1].lower() in "aeiou" else "a"
+
+
+def _join(items: list[str], *, oxford: bool) -> str:
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    head = ", ".join(items[:-1])
+    return f"{head}, and {items[-1]}" if oxford else f"{head} and {items[-1]}"
+
+
+def _platform_names(platforms: Iterable[str]) -> list[str]:
+    return [_PLATFORM_NAMES.get(str(p), str(p)) for p in platforms or []]
+
+
+def _also_phrase(record: dict) -> Optional[str]:
+    kind = str(record.get("kind") or "")
+    phrase = _ALSO_PHRASE.get(kind)
+    if phrase:
+        return phrase
+    if kind == "desktop-app":
+        return "has a desktop app"
+    names = _platform_names(record.get("platforms") or [])
+    if not names:
+        return None
+    name = names[0]
+    return f"has {_article(name)} {name} app"
+
+
+def compose_identity_statement(identity: Optional[dict], name: str) -> Optional[str]:
+    """One plain sentence about what the system is, or None when nothing fired.
+
+    Never invents: with no form factor the caller keeps today's headline rather
+    than guessing at a shape the repository did not declare.
+    """
+    records = list((identity or {}).get("form_factors") or [])
+    if not records:
+        return None
+    primary_kind = str((identity or {}).get("primary") or records[0].get("kind") or "")
+    primary = next(
+        (row for row in records if str(row.get("kind")) == primary_kind), records[0]
+    )
+    noun = _PRIMARY_NOUN.get(str(primary.get("kind")), str(primary.get("label") or "")).strip()
+    if not noun:
+        return None
+
+    opening = f"{name} is {_article(noun)} {noun}"
+    platforms = _platform_names(primary.get("platforms") or [])
+    if platforms and str(primary.get("kind")) not in _PLATFORM_NAMED_BY_NOUN:
+        opening += f" for {_join(platforms, oxford=False)}"
+
+    seen: set[str] = {str(primary.get("kind"))}
+    phrases: list[str] = []
+    for kind in _FORM_FACTOR_ORDER:
+        if kind in seen:
+            continue
+        record = next((row for row in records if str(row.get("kind")) == kind), None)
+        if record is None:
+            continue
+        seen.add(kind)
+        phrase = _also_phrase(record)
+        if phrase:
+            phrases.append(phrase)
+    if phrases:
+        opening += f", that also {_join(phrases, oxford=True)}"
+    sentences = [f"{opening}."]
+
+    languages = list((identity or {}).get("languages") or [])
+    if languages:
+        first = languages[0].get("language") or ""
+        written = f"It is written mostly in {_LANGUAGE_NAMES.get(first, first.capitalize())}"
+        if len(languages) > 1 and float(languages[1].get("share") or 0) >= _SECOND_LANGUAGE_SHARE:
+            second = languages[1].get("language") or ""
+            written += f", with {_LANGUAGE_NAMES.get(second, second.capitalize())}"
+        sentences.append(f"{written}.")
+
+    services = [str(row.get("name")) for row in (identity or {}).get("external_services") or []]
+    if services:
+        sentences.append(f"It calls {_join(services, oxford=False)}.")
+
+    return " ".join(sentences)
+
+
+def _identity_block(arch: dict) -> Optional[dict]:
+    """The identity facts plus the composed statement, or None when absent."""
+    identity = arch.get("identity")
+    if not isinstance(identity, dict):
+        return None
+    statement = compose_identity_statement(identity, str(arch.get("name") or "This system"))
+    return {
+        "statement": statement,
+        "statement_kind": "deterministic_composition" if statement else None,
+        "primary": identity.get("primary"),
+        "form_factors": list(identity.get("form_factors") or []),
+        "authors_claim": identity.get("authors_claim"),
+        "languages": list(identity.get("languages") or []),
+        "external_services": list(identity.get("external_services") or []),
+        "truncated": bool(identity.get("truncated")),
+    }
+
+
+# ---------------------------------------------------------------------------
+# the portrait
+# ---------------------------------------------------------------------------
+
+_DESCRIPTION_LIMIT = 140
+
+
+def _first_sentence(text: str, limit: int = _DESCRIPTION_LIMIT) -> str:
+    normalized = re.sub(r"\s+", " ", str(text)).strip()
+    match = re.match(r"^.*?[.!?](?:\s|$)", normalized)
+    candidate = (match.group(0).strip() if match else normalized)
+    if len(candidate) <= limit:
+        return candidate
+    bounded = candidate[:limit]
+    space = bounded.rfind(" ")
+    return (bounded[:space] if space > limit * 0.6 else bounded).rstrip(",;: ")
+
+
+def _representative(component: Optional[dict]) -> Optional[dict]:
+    """The one component a card promises, with its description and provenance.
+
+    An area card is a promise about where a click lands, so the reader is shown
+    which component it opens and where that component's sentence came from: the
+    enrichment wrote it, the parser did, or nobody did.
+    """
+    if not component:
+        return None
+    description = str(component.get("description") or "").strip()
+    enriched = component.get("ai_enhance") or {}
+    row = {
+        "id": str(component.get("id") or ""),
+        "name": str(component.get("name") or component.get("id") or ""),
+    }
+    if not description:
+        row["description_kind"] = "unavailable"
+        return row
+    row["description"] = _first_sentence(description)
+    interpreted = str(enriched.get("description") or "").strip() == description
+    row["description_kind"] = "interpreted" if interpreted else "deterministic"
+    return row
+
+
+def _portrait_nodes(
+    grouped: dict[str, list[dict]],
+    index: dict[str, dict],
+    total_files: int,
+) -> list[dict]:
+    nodes: list[dict] = []
+    for group_id in _GROUP_META:
+        members = grouped.get(group_id) or []
+        if not members:
+            continue
+        label, role = _GROUP_META[group_id]
+        ranked = sorted(members, key=lambda row: _representative_rank(group_id, row))
+        member_ids = [str(component.get("id")) for component in ranked if component.get("id")]
+        group_files = sum(len(component.get("files") or []) for component in members)
+        node = {
+            "id": f"orientation:{group_id}",
+            "label": label,
+            "role": role,
+            "member_count": len(member_ids),
+            "share": round(group_files / total_files, 2) if total_files else 0.0,
+            "stable_targets": member_ids[:12],
+            "target_truncated": len(member_ids) > 12,
+            "statement_kind": "deterministic_grouping",
+        }
+        representative = _representative(index.get(member_ids[0]) if member_ids else None)
+        if representative:
+            node["representative"] = representative
+        nodes.append(node)
+    return nodes
+
+
+# ---------------------------------------------------------------------------
+# which guided path a first reader is offered
+# ---------------------------------------------------------------------------
+
+def _rank_tours(arch: dict, components: list[dict]) -> tuple[Optional[str], Optional[str]]:
+    """Pick the tour that touches the most of the system, and say why.
+
+    The first authored tour used to win by accident of order, which sent a VS
+    Code newcomer into the agent host and let them conclude the editor is a host
+    for coding agents. Breadth is the honest proxy for "start here": how much of
+    the mapped repository the tour's own evidence reaches.
+    """
+    tours = arch.get("tours") or []
+    if not tours:
+        return None, None
+    owner_of_file: dict[str, str] = {}
+    files_of_component: dict[str, int] = {}
+    for component in components:
+        component_id = str(component.get("id") or "")
+        files = component.get("files") or []
+        files_of_component[component_id] = len(files)
+        for path in files:
+            owner_of_file.setdefault(str(path), component_id)
+    total_files = sum(files_of_component.values())
+
+    best_index = 0
+    best_reach = -1.0
+    best_owners = 0
+    for index, tour in enumerate(tours):
+        owners: set[str] = set()
+        for step in tour.get("steps") or []:
+            evidence_file = ((step or {}).get("evidence") or {}).get("file")
+            owner = owner_of_file.get(str(evidence_file)) if evidence_file else None
+            if owner:
+                owners.add(owner)
+        reach = sum(files_of_component.get(owner, 0) for owner in owners)
+        share = (reach / total_files) if total_files else 0.0
+        if share > best_reach:
+            best_reach = share
+            best_index = index
+            best_owners = len(owners)
+    chosen = tours[best_index]
+    reason = (
+        f"broadest guided path: touches {best_owners} components holding "
+        f"{round(max(best_reach, 0.0) * 100)}% of mapped files"
+    )
+    return chosen.get("id"), reason
+
+
 def build_orientation(
     arch: dict,
     *,
@@ -742,12 +1104,13 @@ def build_orientation(
     security: Optional[dict] = None,
 ) -> dict:
     """Build the bounded human orientation contract."""
-    components, _ = _component_index(arch)
+    components, index = _component_index(arch)
+    inherited = _groups_by_inheritance(arch.get("components") or [])
     component_group: dict[str, str] = {}
     grouped: dict[str, list[dict]] = defaultdict(list)
     for component in components:
         component_id = str(component.get("id") or "")
-        group = _group_for(component)
+        group = inherited.get(component_id) or _group_for(component)
         component_group[component_id] = group
         grouped[group].append(component)
 
@@ -761,26 +1124,8 @@ def build_orientation(
         if service_id:
             component_group[service_id] = "core"
 
-    portrait_nodes: list[dict] = []
-    for group_id in _GROUP_META:
-        members = grouped.get(group_id) or []
-        if not members:
-            continue
-        label, role = _GROUP_META[group_id]
-        member_ids = [
-            str(component.get("id"))
-            for component in sorted(members, key=lambda row: _representative_rank(group_id, row))
-            if component.get("id")
-        ]
-        portrait_nodes.append({
-            "id": f"orientation:{group_id}",
-            "label": label,
-            "role": role,
-            "member_count": len(member_ids),
-            "stable_targets": member_ids[:12],
-            "target_truncated": len(member_ids) > 12,
-            "statement_kind": "deterministic_grouping",
-        })
+    total_mapped_files = sum(len(component.get("files") or []) for component in components)
+    portrait_nodes = _portrait_nodes(grouped, index, total_mapped_files)
 
     edge_counts: dict[tuple[str, str], int] = defaultdict(int)
     edge_samples: dict[tuple[str, str], list[list[str]]] = defaultdict(list)
@@ -814,7 +1159,7 @@ def build_orientation(
     # Naming a lens the viewer cannot offer sent readers to Structure with no
     # explanation (GUI crawl 2026-09-02, overview.route_wrong_target).
     flow_lens = _has_flow_data(arch)
-    first_tour_id = (arch.get("tours") or [{}])[0].get("id")
+    ranked_tour_id, ranked_tour_reason = _rank_tours(arch, components)
     questions = [
         {
             "id": "organization",
@@ -824,10 +1169,16 @@ def build_orientation(
         },
         {
             "id": "flow",
-            "label": "How does the core experience work?",
+            # Without a Flow lens the honest question is not about "the core
+            # experience": there is no experience graph to walk, only the
+            # broadest guided path over the structure.
+            "label": (
+                "How does the core experience work?" if flow_lens
+                else "How does the code fit together?"
+            ),
             "target": {
                 "lens": "flow" if flow_lens else "structure",
-                "tour_id": first_tour_id,
+                "tour_id": ranked_tour_id,
             },
             "available": flow_lens or bool(arch.get("tours")),
         },
@@ -879,8 +1230,6 @@ def build_orientation(
         1 for finding in finding_rows
         if str(finding.get("verification_status") or "unverified") == "refuted"
     )
-    tours = arch.get("tours") or []
-    first_tour = tours[0].get("id") if tours else None
     producer_status: dict[str, int] = defaultdict(int)
     for gap in arch.get("gaps") or []:
         producer_status[str(gap.get("status") or "unknown")] += 1
@@ -911,12 +1260,19 @@ def build_orientation(
                     "stale": bool(ai.get("stale", False)),
                 },
             } if interpreted else None),
-            "default_path": ({"kind": "tour", "id": first_tour} if first_tour else {"kind": "question", "id": "organization"}),
+            "default_path": (
+                {"kind": "tour", "id": ranked_tour_id, "reason": ranked_tour_reason}
+                if ranked_tour_id else {"kind": "question", "id": "organization"}
+            ),
         },
+        # Sibling of "orientation", not nested inside it: the viewer types it
+        # as OrientationProjection.identity and an older sidecar simply has no
+        # such key. Null, never absent, when the derive pass produced nothing.
+        "identity": _identity_block(arch),
         "deployment_posture": _deployment_posture(arch),
         "portrait": {
             "semantic_level": "system",
-            "method": "deterministic component-type and path grouping",
+            "method": "component type and path grouping, with nested components counted under their nearest typed parent",
             "nodes": portrait_nodes,
             "edges": portrait_edges,
         },
