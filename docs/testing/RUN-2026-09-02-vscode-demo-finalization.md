@@ -86,6 +86,10 @@ python3 scripts/assemble-serve.py vscode \
 - The separate architecture-generation job and opt-in live monitor now install
   that same parser tier as well; each runs on a fresh runner and therefore
   cannot inherit dependencies installed by an earlier job.
+- The reusable action now installs the checked-out product with its full parser
+  tier, and the `live` package profile includes parser/rules dependencies. This
+  closes the same guard failure in existing downstream action and live-monitor
+  consumers without weakening the parser check.
 - Focused analyzer/assembly/human-view tests: 38 passed before the complete
   suite.
 - Complete Python suite: 2,407 passed, five skipped, one expected failure.

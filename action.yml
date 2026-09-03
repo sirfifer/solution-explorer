@@ -87,6 +87,10 @@ runs:
         ref: ${{ steps.resolve.outputs.ref }}
         path: '.solution-explorer'
 
+    - name: Install SysCorpus
+      shell: bash
+      run: python3 -m pip install --quiet -e ".solution-explorer[all]"
+
     - name: Run Analyzer
       shell: bash
       env:
@@ -94,13 +98,6 @@ runs:
         CONFIG: ${{ inputs.config }}
         TARGET_PATH: ${{ inputs.path }}
       run: |
-        # Project rules (.solution-explorer/rules/inventory.yml, P6-12) are
-        # YAML. PyYAML is intentionally NOT a core dependency (invariant I7,
-        # zero-dependency analyzer), so the action installs it best-effort for
-        # the analysis step; if the install fails the rules loader warns loudly
-        # and skips project rules rather than failing the run.
-        python3 -m pip install --quiet pyyaml 2>/dev/null || true
-
         OUTPUT_DIR=".solution-explorer/viewer/public/architecture"
         SINGLE_FILE=".solution-explorer/viewer/public/architecture.json"
 

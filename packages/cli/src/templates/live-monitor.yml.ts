@@ -146,7 +146,9 @@ jobs:
       - name: Install Dependencies
         run: |
           if [ -f ".solution-explorer/pyproject.toml" ]; then
-            pip install -e ".solution-explorer[live]" 2>/dev/null || echo "Optional deps unavailable, using stdlib only"
+            # Live projection generation requires the shipping parser tier.
+            # Do not hide installation failures and publish degraded output.
+            pip install -e ".solution-explorer[all]"
           fi
 
       - name: Determine Commit SHA
