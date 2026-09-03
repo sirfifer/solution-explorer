@@ -100,6 +100,8 @@ surfaces:
     file: ViewerPreferences.tsx
   - component: ThemeSwitcher
     file: ThemeSwitcher.tsx
+  - component: IdentityCard
+    file: IdentityCard.tsx
   - component: TrustLedger
     file: TrustLedger.tsx
   - component: WorkbenchTrustStrip
