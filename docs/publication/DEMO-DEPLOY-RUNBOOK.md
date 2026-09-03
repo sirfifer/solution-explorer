@@ -178,10 +178,15 @@ binary supports.
 
 ## 4. Open items after 2026-09-03
 
-- The previous VS Code deployment (`ac1bb93f`, from `90775a0`) still serves
-  its data ungated at `https://ac1bb93f.syscorpus-vscode.pages.dev/`. Owner
-  decision: delete that deployment from the project, or leave it until the
-  project is rebuilt.
+- Old deployments keep answering at their own preview URLs until deleted.
+  `wrangler pages deployment delete <id> --project-name <project>` removes
+  one (no confirmation flag; it just deletes). After every deploy, delete
+  the deployments that are no longer wanted so exactly one is live. The two
+  pre-gate VS Code deployments were deleted on 2026-09-03.
+- Enable the Pages Access policy on the project (dashboard, Settings, Access
+  policy) so `*.<project>.pages.dev` sits behind Cloudflare Access as the
+  custom hostname does. It is a dashboard toggle; there is no wrangler
+  command and the API needs an Access-scoped token.
 - The custom hostname now has two gates in series: Cloudflare Access, then
   the passcode. If the owner wants Access alone on the hostname, the Worker
   can skip its gate for requests carrying a valid `Cf-Access-Jwt-Assertion`,
