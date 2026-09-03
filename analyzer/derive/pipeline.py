@@ -22,6 +22,7 @@ from . import correlations as correlations_pass
 from . import docs as docs_pass
 from . import entities as entities_pass
 from . import flow as flow_pass
+from . import identity as identity_pass
 from . import relationships as rel_pass
 from . import roles as roles_pass
 from . import rules as rules_pass
@@ -223,6 +224,13 @@ def derive_all(
         default=description,
     )
     iso.run("derive.docs", docs_pass.extract_component_docs, d)
+    # Identity reads the repository's own markers (manifests, platform ids,
+    # extension directories) after docs so the root README is already on the
+    # root component, and before capabilities because nothing downstream of it
+    # depends on capability records.
+    identity = iso.run(
+        "derive.identity", identity_pass.derive_identity, d, iso=iso, default=None,
+    )
     iso.run("derive.capabilities", capabilities_pass.derive_capabilities, d)
     iso.run("derive.entities", entities_pass.derive_entities, d)
     iso.run("derive.rules", rules_pass.derive_rules, d)
@@ -241,6 +249,11 @@ def derive_all(
     )
     # Self-validating output: the assembled result must be shape-and-complete at
     # handoff. A violation is an honest gap, not a crash.
+    # Identity is a top-level arch key so it rides into manifest.json (split)
+    # and architecture.json (monolith) untouched. It is null, never absent,
+    # when the pass degraded, so a consumer can tell "no identity was derived"
+    # from "this projection predates the identity pass".
+    arch["identity"] = identity
     iso.run("derive.output-contract", _check_output_contract, arch)
     # Flushing derived facts to the store is itself a producer: a store-write
     # failure degrades to a gap, and the arch dict (which the projection reads for

@@ -22,7 +22,49 @@
         "tour:voice-learning-loop"
       ]
     },
-    "default_path": "journey:voice-learning-loop"
+    "default_path": {
+      "kind": "tour",
+      "id": "voice-learning-loop",
+      "reason": "broadest guided path: touches 8 components holding 41% of mapped files"
+    }
+  },
+  "identity": {
+    "statement": "UnaMentis is an iOS app, that also has a watchOS app. It is written mostly in Swift.",
+    "statement_kind": "deterministic_composition",
+    "primary": "ios-app",
+    "form_factors": [
+      {
+        "kind": "ios-app",
+        "label": "iOS app",
+        "platforms": ["ios"],
+        "platforms_assumed": false,
+        "how_met": "installed from the App Store on a phone or tablet",
+        "component_id": "unamentis",
+        "evidence": [{"file": "UnaMentis/Info.plist", "marker": "component typed ios-client"}],
+        "statement_kind": "observed_source_reference",
+        "weight": 900
+      },
+      {
+        "kind": "watch-app",
+        "label": "Watch app",
+        "platforms": ["watchos"],
+        "platforms_assumed": false,
+        "how_met": "installed on a watch",
+        "component_id": "unamentis-watch-app",
+        "evidence": [{"file": "UnaMentis Watch App/Info.plist", "marker": "component typed watch-app"}],
+        "statement_kind": "observed_source_reference",
+        "weight": 40
+      }
+    ],
+    "authors_claim": {
+      "text": "UnaMentis is a voice-first learning companion that keeps every session on the device.",
+      "source": "README.md",
+      "line": 3,
+      "statement_kind": "repository_claim"
+    },
+    "languages": [{"language": "swift", "share": 0.95}],
+    "external_services": [],
+    "truncated": false
   },
   "portrait": {
     "semantic_level": "system",
@@ -32,6 +74,8 @@
         "label": "Learning experiences",
         "role": "client-facing products",
         "stable_targets": ["component:unamentis", "component:watch-app", "component:web-client"],
+        "share": 0.47,
+        "representative": {"id": "unamentis", "name": "UnaMentis", "description": "Root iOS app target wiring AppState, Core Data, and all feature surfaces.", "description_kind": "interpreted"},
         "evidence_refs": ["component:unamentis"]
       },
       {
@@ -39,6 +83,8 @@
         "label": "Learning core",
         "role": "curriculum, sessions, and rules",
         "stable_targets": ["concern:curriculum", "concern:sessions"],
+        "share": 0.29,
+        "representative": {"id": "unamentis/core/curriculum", "name": "curriculum", "description": "Curriculum plans, lesson graphs and the session rules that walk them.", "description_kind": "interpreted"},
         "evidence_refs": ["capability:learning-session"]
       },
       {
@@ -46,6 +92,8 @@
         "label": "Voice & intelligence",
         "role": "replaceable provider boundaries",
         "stable_targets": ["concern:voice", "concern:model-providers"],
+        "share": 0.12,
+        "representative": {"id": "unamentis/core/voice", "name": "voice", "description": "Speech capture, synthesis and the model-provider boundary.", "description_kind": "interpreted"},
         "evidence_refs": ["relationship-set:voice-learning-loop"]
       },
       {
@@ -53,6 +101,8 @@
         "label": "Data & operations",
         "role": "persistence and service foundation",
         "stable_targets": ["entity-set:persistence", "component:management-server"],
+        "share": 0.12,
+        "representative": {"id": "unamentis/core/persistence/managedobjects", "name": "managedobjects", "description": "Core Data managed object classes for curriculum, session, and progress records.", "description_kind": "interpreted"},
         "evidence_refs": ["entity-set:persistence"]
       }
     ],

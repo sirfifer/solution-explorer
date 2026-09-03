@@ -25,6 +25,16 @@ type Padding = NonNullable<FitViewOptions["padding"]>;
 // (the drill hint at the top level, the breadcrumb bar below it) plus React
 // Flow's Panel margin, reserved at the top of every fit there (see fitPadding).
 const TOP_CHROME_RESERVE_PX = 72;
+
+// The width of the zoom controls React Flow docks at the bottom left of the
+// canvas (44px of buttons plus the Panel's 15px margin), reserved on the left
+// of every phone fit. With six nodes at VS Code's top level the leftmost one
+// sat at x=25, under the controls, and whether its centre cleared the buttons
+// came down to one or two pixels of node width or banner height: the same
+// data passed without the publication banner and failed with it (GUI crawl
+// 2026-09-03, mobile, publication bundle). A node nobody can tap is not in
+// view, so the fit keeps the whole column clear of the buttons.
+const LEFT_CHROME_RESERVE_PX = 72;
 import { useThemeTokens } from "../hooks/useThemeTokens";
 import { THEMES } from "../utils/themes";
 import { buildDegreeIndex } from "../utils/importance";
@@ -166,9 +176,16 @@ export function ArchitectureGraph() {
   // both take per-side padding, so nothing here computes a viewport by hand.
   const fitPadding = useCallback((): Padding => {
     const width = containerRef.current?.getBoundingClientRect().width ?? Infinity;
-    const chromeOverCanvas = width < 640 && (breadcrumbs.length > 0 || lens === "structure");
-    if (!chromeOverCanvas) return FIT_PADDING;
-    return { top: `${TOP_CHROME_RESERVE_PX}px`, right: FIT_PADDING, bottom: FIT_PADDING, left: FIT_PADDING };
+    if (width >= 640) return FIT_PADDING;
+    // The zoom controls sit over the canvas on every lens and at every level;
+    // the top chrome only at the Structure top level and below it.
+    const chromeOverCanvas = breadcrumbs.length > 0 || lens === "structure";
+    return {
+      top: chromeOverCanvas ? `${TOP_CHROME_RESERVE_PX}px` : FIT_PADDING,
+      right: FIT_PADDING,
+      bottom: FIT_PADDING,
+      left: `${LEFT_CHROME_RESERVE_PX}px`,
+    };
   }, [lens, breadcrumbs.length]);
 
   // Bounded retries for the readability loop, reset per level/lens so a level

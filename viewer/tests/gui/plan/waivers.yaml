@@ -153,6 +153,13 @@
     deterministic crawl with the header; no AI-plan case exercises a theme
     change yet. Retire with the Overview vector, which is where the theme and
     variant controls live.
+- token: component:IdentityCard
+  reason: >
+    The identity front door in the Overview: the statement, the form-factor
+    chips and the maintainers' claim. Exercised by the deterministic crawl
+    (overview.spec.ts O9 holds the headline and the chips to the orientation
+    sidecar and opens one chip to reach its evidence). No AI-plan case yet;
+    retire with the Overview vector.
 - token: component:TrustLedger
   reason: >
     Exercised by the deterministic crawl (overview.spec.ts opens the trust

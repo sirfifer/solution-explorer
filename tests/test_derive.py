@@ -145,6 +145,9 @@ def test_http_edge_evidence_points_at_the_real_call_site():
 #      are NEW stats keys (owner line-count policy 2026-08-17) that did not exist
 #      when the snapshot was frozen, masked like D6. The taxonomy itself is
 #      asserted directly in test_lines_by_class_taxonomy below.
+#   D12 identity: the form-factor facts the front door opens on are a NEW
+#      top-level optional key (UG-1, identity front door), masked like D6;
+#      they are asserted directly in tests/test_identity.py.
 
 _JUSTIFIED_COMPONENT_KEYS = {"testing"}          # D4
 _JUSTIFIED_REL_KEYS = {"evidence", "confidence", "origin"}  # D3
@@ -210,6 +213,7 @@ def _mask(arch: dict) -> dict:
     a.get("stats", {}).pop("lines_by_class", None)          # D10
     a.get("stats", {}).pop("total_path_components", None)   # D10
     a.get("stats", {}).pop("total_components", None)        # D11 compose services
+    a.pop("identity", None)                                 # D12
     return a
 
 

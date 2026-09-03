@@ -1,0 +1,122 @@
+{
+  "identity": {
+    "statement": "Visual Studio Code is a desktop application for macOS, Windows and Linux, that also runs in a web browser, is driven from a terminal by a command-line tool, and is extended by plug-ins. It is written mostly in TypeScript, with Rust.",
+    "statement_kind": "deterministic_composition",
+    "primary": "desktop-app",
+    "form_factors": [
+      {
+        "kind": "desktop-app",
+        "label": "Desktop application",
+        "platforms": [
+          "macos",
+          "windows",
+          "linux"
+        ],
+        "platforms_assumed": false,
+        "how_met": "installed and opened on a computer",
+        "component_id": "root",
+        "evidence": [
+          {
+            "file": "product.json",
+            "line": 30,
+            "marker": "darwinBundleIdentifier"
+          },
+          {
+            "file": "package.json",
+            "line": 188,
+            "marker": "devDependencies.electron"
+          }
+        ],
+        "statement_kind": "observed_source_reference",
+        "weight": 15204
+      },
+      {
+        "kind": "web-app",
+        "label": "Web application",
+        "platforms": [
+          "browser"
+        ],
+        "platforms_assumed": false,
+        "how_met": "opened in a web browser",
+        "component_id": "src/vs/workbench",
+        "evidence": [
+          {
+            "file": "src/vs/code/browser/workbench/workbench.html",
+            "marker": "html entry"
+          }
+        ],
+        "statement_kind": "observed_source_reference",
+        "weight": 4281
+      },
+      {
+        "kind": "cli",
+        "label": "Command-line tool",
+        "platforms": [],
+        "platforms_assumed": false,
+        "how_met": "run from a terminal",
+        "component_id": "cli",
+        "evidence": [
+          {
+            "file": "cli/Cargo.toml",
+            "line": 12,
+            "marker": "[[bin]]"
+          }
+        ],
+        "statement_kind": "observed_source_reference",
+        "weight": 87
+      },
+      {
+        "kind": "plugin-host",
+        "label": "Extensible by plug-ins",
+        "platforms": [],
+        "platforms_assumed": false,
+        "how_met": "extended by plug-ins",
+        "component_id": "extensions",
+        "evidence": [
+          {
+            "file": "extensions/git/package.json",
+            "marker": "contributes"
+          }
+        ],
+        "statement_kind": "observed_source_reference",
+        "weight": 5145
+      }
+    ],
+    "authors_claim": {
+      "text": "This repository (\"Code - OSS\") is where we (Microsoft) develop the Visual Studio Code product together with the community. Not only do we work on code and issues here, but we also publish our roadmap, monthly iteration plans, and our endgame plans.",
+      "source": "README.md",
+      "line": 5,
+      "statement_kind": "repository_claim"
+    },
+    "languages": [
+      {
+        "language": "typescript",
+        "share": 0.86
+      },
+      {
+        "language": "rust",
+        "share": 0.11
+      }
+    ],
+    "external_services": [
+      {
+        "name": "GitHub",
+        "component_id": "extensions/copilot/src/extension"
+      }
+    ],
+    "truncated": false,
+    "summary": "A desktop application for macOS, Windows and Linux, that also runs in a web browser, is driven from a terminal by a command-line tool, and is extended by plug-ins. It is written mostly in TypeScript, with Rust."
+  },
+  "portrait_node_additions": {
+    "share": 0.28,
+    "representative": {
+      "id": "src/vs/workbench",
+      "name": "Workbench",
+      "description": "Workbench: the desktop-editor UI shell and extension host bridge",
+      "description_kind": "interpreted"
+    }
+  },
+  "default_path_addition": {
+    "reason": "broadest guided path: touches 41 components holding 63% of mapped files"
+  }
+}

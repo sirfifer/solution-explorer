@@ -909,4 +909,143 @@ test.describe("overview", () => {
       expect(dead, "search from the front door that does not land in the workbench").toEqual([]);
     },
   );
+  test(
+    "O9: the front door says what the system is, with evidence",
+    { tag: ["@desktop", "@mobile"] },
+    async ({ crawlPage, request }) => {
+      await requireContract(crawlPage);
+      const orientation = await loadOrientation(request);
+      await gotoOverview(crawlPage);
+
+      const identity = orientation?.identity ?? null;
+      if (!identity || !identity.statement) {
+        // The honest-empty case: a projection written before the identity pass
+        // has nothing to say about what the subject is, and the Overview keeps
+        // its older headline. There is no defect to find, only nothing to
+        // check, and the rule says which.
+        test.info().annotations.push({
+          type: "coverage",
+          description:
+            "O9: identity absent in sidecar, so the front door is running its " +
+            "pre-identity headline and the statement cannot be checked",
+        });
+        expect(
+          await crawlPage.locator('[data-testid="system-overview"]').count(),
+          "the Overview still renders without an identity block",
+        ).toBeGreaterThan(0);
+        return;
+      }
+
+      const wrong: string[] = [];
+      const headline = crawlPage.locator('[data-testid="identity-statement"]');
+      if ((await headline.count()) === 0) {
+        wrong.push("the sidecar states what the system is and the page shows no statement");
+      } else {
+        // The page prints the summary, which is the statement without the
+        // subject clause, because it shows the subject's name as its title.
+        // An older sidecar carries only the statement.
+        const shown = (await headline.first().innerText()).replace(/\s+/g, " ").trim();
+        const authored = (identity.summary ?? identity.statement).replace(/\s+/g, " ").trim();
+        if (shown !== authored) {
+          wrong.push(
+            `the headline reads "${shown}" and the sidecar authored "${authored}"`,
+          );
+        }
+      }
+
+      const chips = crawlPage.locator('[data-testid="form-factor"]');
+      const chipCount = await chips.count();
+      if (chipCount !== identity.formFactors.length) {
+        wrong.push(
+          `the sidecar records ${identity.formFactors.length} form factor(s) and the ` +
+            `page offers ${chipCount} chip(s)`,
+        );
+      }
+
+      // One chip is opened, because the promise is not that evidence exists in
+      // a JSON file but that a reader can reach it.
+      const first = identity.formFactors[0];
+      const firstEvidence = first?.evidence[0]?.file;
+      if (chipCount > 0 && firstEvidence) {
+        await chips.first().click({ timeout: 5_000 });
+        const panel = crawlPage.locator('[data-testid="form-factor-evidence"]');
+        try {
+          await expect(panel.first()).toBeVisible({ timeout: 10_000 });
+          const text = await panel.first().innerText();
+          if (!text.includes(firstEvidence)) {
+            wrong.push(
+              `opening the ${first.kind} chip did not show its evidence file ${firstEvidence}`,
+            );
+          }
+        } catch {
+          wrong.push(`the ${first.kind} chip does not reveal its evidence when clicked`);
+        }
+      }
+
+      test.info().annotations.push({
+        type: "coverage",
+        description:
+          `O9 checked the statement and ${chipCount} form-factor chip(s) against the sidecar`,
+      });
+      reportDiscovery("identity", {
+        statement: identity.statement,
+        kinds: identity.formFactors.map((row) => row.kind),
+      });
+      reportFinding("overview.identity_unstated", wrong, {
+        title: "a front door that does not say what the system is, with its evidence",
+      });
+      expect(
+        wrong,
+        "the front door must say what the system is and show the file that proves it",
+      ).toEqual([]);
+    },
+  );
+
+  test(
+    "O10: counts stay out of the first viewport",
+    { tag: ["@desktop", "@mobile"] },
+    async ({ crawlPage }) => {
+      await requireContract(crawlPage);
+      await gotoOverview(crawlPage);
+      await crawlPage
+        .locator('[data-testid="overview-direction"][data-direction="portrait"]')
+        .first()
+        .click({ timeout: 5_000 });
+
+      const wrong: string[] = [];
+      const viewport = crawlPage.viewportSize();
+      const tiles = crawlPage.locator('[data-se="stat"]');
+      const tileCount = await tiles.count();
+      for (let index = 0; index < tileCount; index++) {
+        const box = await tiles.nth(index).boundingBox();
+        if (!box || !viewport) continue;
+        const inside = box.y < viewport.height && box.y + box.height > 0;
+        if (inside) {
+          const key = await tiles.nth(index).locator('[data-se="stat-key"]').innerText()
+            .catch(() => "a count");
+          wrong.push(`a "${key}" tile is in the first viewport of the Portrait posture`);
+        }
+      }
+
+      // The counts are not deleted, only demoted: the trust route must still be
+      // on the page, or the reader has lost the ledger instead of gaining a
+      // front door.
+      const summary = crawlPage.locator('[data-testid="scale-summary"]');
+      const trustChip = crawlPage.locator('[data-testid="trust-ledger-entry"]');
+      if ((await summary.count()) === 0 && (await trustChip.count()) === 0) {
+        wrong.push("the Portrait posture offers no route to the counts at all");
+      }
+
+      test.info().annotations.push({
+        type: "coverage",
+        description:
+          `O10 measured ${tileCount} count tile(s) at ` +
+          `${viewport ? `${viewport.width}x${viewport.height}` : "an unknown viewport"}`,
+      });
+      reportFinding("overview.counts_lead", wrong, {
+        title: "raw counts occupying the first thing a newcomer reads",
+      });
+      expect(wrong, "raw counts must not lead the front door").toEqual([]);
+    },
+  );
 });

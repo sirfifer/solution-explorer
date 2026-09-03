@@ -275,6 +275,53 @@ def _empty_arch_doc(prepared: dict) -> dict:
     }
 
 
+_TYPED_MARKER_PREFIX = "component typed "
+
+
+def prune_identity_against_corrections(prepared: dict) -> None:
+    """Drop form-factor claims the verified map no longer supports.
+
+    ``derive.identity`` reads component types at tier 3. The enrichment's
+    identity verdicts correct those types at tier 4, after it has run, so a
+    record whose only proof is "component typed api-server" can outlive the
+    correction that says the component is a module. On VS Code that put "runs as
+    a server" in the front door's opening sentence on the strength of a
+    shell-completion directory. Evidence naming a type the projected component
+    no longer has is dropped, and a record left with no evidence goes with it.
+
+    Deterministic, reads only the projected components, and a no-op on every
+    projection whose types were never corrected.
+    """
+    identity = prepared.get("identity")
+    if not isinstance(identity, dict) or not identity.get("form_factors"):
+        return
+    types: dict[str, str] = {}
+
+    def index(components: list) -> None:
+        for component in components or []:
+            component_id = str(component.get("id") or "")
+            if component_id:
+                types[component_id] = str(component.get("type") or "").lower()
+            index(component.get("children") or [])
+
+    index(prepared.get("components") or [])
+
+    kept: list[dict] = []
+    for record in identity["form_factors"]:
+        current = types.get(str(record.get("component_id") or ""))
+        evidence = [
+            item for item in record.get("evidence") or []
+            if not str(item.get("marker") or "").startswith(_TYPED_MARKER_PREFIX)
+            or current is None
+            or str(item["marker"])[len(_TYPED_MARKER_PREFIX):].split(" ")[0] == current
+        ]
+        if evidence:
+            record["evidence"] = evidence
+            kept.append(record)
+    identity["form_factors"] = kept
+    identity["primary"] = kept[0]["kind"] if kept else None
+
+
 def _write_skeleton_manifest(
     output_dir: Path,
     prepared: dict,
@@ -508,6 +555,9 @@ def project_split(
     # finding verification statuses, plus AI intent-violation findings. No-op when
     # the store carries none of these enrichment kinds (parity-safe).
     iso.run("project.verdict-overlay", apply_verdict_overlay, prepared, store)
+    # The front door's form-factor claims were derived before those corrections
+    # landed, so they are re-checked against the corrected component types here.
+    iso.run("project.identity-prune", prune_identity_against_corrections, prepared)
     coverage = iso.run("project.coverage", build_coverage, store, root=root, default=None)
     activity = iso.run("project.activity", build_activity, store, default=None)
     # SBOM and supply chain (P10-1): parse the repo's manifests deterministically,
@@ -681,6 +731,9 @@ def project_monolith(
     # no enrichment, so non-enriched projections are unchanged.
     iso.run("project.enrichment-overlay", apply_enrichment_overlay, prepared, store)
     iso.run("project.verdict-overlay", apply_verdict_overlay, prepared, store)
+    # The front door's form-factor claims were derived before those corrections
+    # landed, so they are re-checked against the corrected component types here.
+    iso.run("project.identity-prune", prune_identity_against_corrections, prepared)
     coverage = iso.run("project.coverage", build_coverage, store, root=root, default=None)
     activity = iso.run("project.activity", build_activity, store, default=None)
     # SBOM and supply chain (P10-1): sbom.json lands beside the single
