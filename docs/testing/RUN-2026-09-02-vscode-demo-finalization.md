@@ -80,6 +80,9 @@ python3 scripts/assemble-serve.py vscode \
 - Viewer lint: passed.
 - Viewer production build: passed; the ELK worker is emitted as a separate
   production asset.
+- CI's generic build fixture now installs the shipping analyzer dependencies
+  before generating architecture data. The parser guard exposed that this job
+  previously depended on the runner image's accidental parser state.
 - Focused analyzer/assembly/human-view tests: 38 passed before the complete
   suite.
 - Complete Python suite: 2,407 passed, five skipped, one expected failure.

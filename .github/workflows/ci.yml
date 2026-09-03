@@ -176,6 +176,13 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install analyzer dependencies
+        # The parser guard deliberately stops when a discovered tree-sitter
+        # grammar cannot load. Build the fixture with the same shipping parser
+        # tier as the test and architecture-visualization jobs instead of
+        # relying on whatever happens to exist in the runner image.
+        run: pip install -e ".[all]"
+
       - name: Cache npm
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
