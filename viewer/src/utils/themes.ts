@@ -114,6 +114,15 @@ export function isThemeName(value: unknown): value is ThemeName {
   return typeof value === "string" && (THEME_NAMES as readonly string[]).includes(value);
 }
 
+// A publication can choose its first-visit dress at build time without
+// changing the viewer-wide default. A visitor's saved choice still wins in the
+// store; this value is used only when no preference exists yet.
+export function resolveDefaultTheme(value: unknown): ThemeName {
+  return isThemeName(value) ? value : "signal";
+}
+
+export const DEFAULT_THEME = resolveDefaultTheme(import.meta.env.VITE_DEFAULT_THEME);
+
 /**
  * Write the dress and the time of day onto the document element.
  *

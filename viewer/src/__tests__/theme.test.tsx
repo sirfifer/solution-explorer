@@ -15,7 +15,13 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useArchStore } from "../store";
 import { ThemeSwitcher } from "../components/ThemeSwitcher";
-import { THEME_LIST, THEME_NAMES, THEMES, isThemeName } from "../utils/themes";
+import {
+  THEME_LIST,
+  THEME_NAMES,
+  THEMES,
+  isThemeName,
+  resolveDefaultTheme,
+} from "../utils/themes";
 
 const THEME_KEY = "arch-theme";
 
@@ -52,6 +58,12 @@ describe("theme registry", () => {
     expect(isThemeName("ledger")).toBe(true);
     expect(isThemeName("brassworks")).toBe(false);
     expect(isThemeName(null)).toBe(false);
+  });
+
+  it("supports a per-build default without changing the Signal fallback", () => {
+    expect(resolveDefaultTheme("atlas")).toBe("atlas");
+    expect(resolveDefaultTheme("unknown")).toBe("signal");
+    expect(resolveDefaultTheme(undefined)).toBe("signal");
   });
 });
 

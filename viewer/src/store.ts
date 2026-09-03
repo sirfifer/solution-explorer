@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { THEME_NAMES, THEMES, applyThemeToDocument, type ThemeName } from "./utils/themes";
+import { DEFAULT_THEME, THEME_NAMES, THEMES, applyThemeToDocument, type ThemeName } from "./utils/themes";
 import type {
   Architecture,
   Annotation,
@@ -187,8 +187,9 @@ function getStoredDarkMode(): boolean {
   } catch {
     // Ignore parse errors
   }
-  // Default to dark mode
-  return true;
+  // Start in the variant the publication's default dress was designed for.
+  // The normal Signal build remains dark; Atlas publications start light.
+  return THEMES[DEFAULT_THEME].defaultDark;
 }
 
 function saveStoredDarkMode(value: boolean): void {
@@ -211,8 +212,7 @@ function getStoredTheme(): ThemeName {
   } catch {
     // Ignore storage errors
   }
-  // Signal is the original dress and stays the developer default.
-  return "signal";
+  return DEFAULT_THEME;
 }
 
 function saveStoredTheme(value: ThemeName): void {
