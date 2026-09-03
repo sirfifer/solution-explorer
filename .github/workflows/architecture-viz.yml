@@ -85,6 +85,11 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install analyzer dependencies
+        # This is a separate job from Test & Lint, so it has a fresh runner.
+        # Install the shipping parser tier before generating the projection.
+        run: pip install -e ".[all]"
+
       - name: Run Architecture Analyzer
         run: |
           if [ -f "solution-explorer.json" ]; then

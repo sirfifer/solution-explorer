@@ -83,6 +83,9 @@ python3 scripts/assemble-serve.py vscode \
 - CI's generic build fixture now installs the shipping analyzer dependencies
   before generating architecture data. The parser guard exposed that this job
   previously depended on the runner image's accidental parser state.
+- The separate architecture-generation job and opt-in live monitor now install
+  that same parser tier as well; each runs on a fresh runner and therefore
+  cannot inherit dependencies installed by an earlier job.
 - Focused analyzer/assembly/human-view tests: 38 passed before the complete
   suite.
 - Complete Python suite: 2,407 passed, five skipped, one expected failure.

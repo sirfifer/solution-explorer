@@ -46,7 +46,10 @@ jobs:
       - name: Install Dependencies
         run: |
           if [ -f "pyproject.toml" ]; then
-            pip install -e ".[live]" 2>/dev/null || echo "Optional deps unavailable, using stdlib only"
+            # Live projection generation must use the same shipping parser tier
+            # as CI; silently falling back can publish plausible but incomplete
+            # architecture data.
+            pip install -e ".[all]"
           fi
 
       - name: Determine Commit SHA
