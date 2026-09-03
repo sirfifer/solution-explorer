@@ -747,3 +747,52 @@ def test_identity_and_portrait_additions_are_deterministic():
     first = build_orientation(arch)
     second = build_orientation(arch)
     assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+
+
+def test_the_summary_is_the_statement_without_the_subject_clause():
+    """The front door titles the page with the name, so the subtitle must not
+    say it again. Both forms are composed here, from the same records, so they
+    can never drift apart about the facts."""
+    arch = _architecture()
+    arch["name"] = "Visual Studio Code"
+    arch["identity"] = _vscode_identity()
+    identity = build_orientation(arch)["identity"]
+    assert identity["summary"] == (
+        "A desktop application for macOS, Windows and Linux, that also runs in a "
+        "web browser, is driven from a terminal by a command-line tool, and is "
+        "extended by plug-ins. It is written mostly in TypeScript, with Rust."
+    )
+    assert not identity["summary"].startswith("Visual Studio Code")
+    # Everything after the opening clause is identical in both forms.
+    assert identity["statement"].split(". ", 1)[1] == identity["summary"].split(". ", 1)[1]
+
+
+def test_the_summary_takes_the_article_the_noun_needs():
+    arch = _architecture()
+    arch["name"] = "UnaMentis"
+    arch["identity"] = {
+        "primary": "ios-app",
+        "form_factors": [
+            {"kind": "ios-app", "label": "iOS app", "platforms": ["ios"],
+             "platforms_assumed": False, "how_met": "installed from the App Store",
+             "component_id": "unamentis",
+             "evidence": [{"file": "UnaMentis/Info.plist", "marker": "component typed ios-client"}],
+             "statement_kind": "observed_source_reference", "weight": 900},
+        ],
+        "authors_claim": None,
+        "languages": [{"language": "swift", "share": 0.95}],
+        "external_services": [],
+        "truncated": False,
+    }
+    assert build_orientation(arch)["identity"]["summary"] == (
+        "An iOS app. It is written mostly in Swift."
+    )
+
+
+def test_there_is_no_summary_when_there_is_no_statement():
+    arch = _architecture()
+    arch["identity"] = {"form_factors": [], "primary": None, "authors_claim": None,
+                        "languages": [], "external_services": [], "truncated": False}
+    identity = build_orientation(arch)["identity"]
+    assert identity["statement"] is None
+    assert identity["summary"] is None

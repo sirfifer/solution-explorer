@@ -941,8 +941,11 @@ test.describe("overview", () => {
       if ((await headline.count()) === 0) {
         wrong.push("the sidecar states what the system is and the page shows no statement");
       } else {
+        // The page prints the summary, which is the statement without the
+        // subject clause, because it shows the subject's name as its title.
+        // An older sidecar carries only the statement.
         const shown = (await headline.first().innerText()).replace(/\s+/g, " ").trim();
-        const authored = identity.statement.replace(/\s+/g, " ").trim();
+        const authored = (identity.summary ?? identity.statement).replace(/\s+/g, " ").trim();
         if (shown !== authored) {
           wrong.push(
             `the headline reads "${shown}" and the sidecar authored "${authored}"`,

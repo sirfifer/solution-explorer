@@ -74,7 +74,22 @@ def resolve_projection(slug: str, explicit: str | None) -> Path:
     return (_corpus_dir() / "_out" / slug / "architecture").resolve()
 
 
-def build_viewer() -> None:
+def build_viewer(slug: str) -> None:
+    """Build the viewer, in this subject's own mode when it has one.
+
+    A demo can pin build-time defaults (its theme, for one) in
+    ``viewer/.env.<slug>-demo``, and Vite loads that file only when built with
+    the matching ``--mode``. A plain ``npm run build`` silently ignores it, so
+    the bundle served for review is not the bundle the demo is meant to be: the
+    VS Code demo lost its Atlas default exactly that way.
+    """
+    mode = f"{slug}-demo"
+    if (VIEWER / f".env.{mode}").is_file():
+        print(f"[assemble] building the viewer in {mode} mode")
+        subprocess.run(
+            ["npx", "vite", "build", "--mode", mode], cwd=str(VIEWER), check=True,
+        )
+        return
     print("[assemble] building the viewer")
     subprocess.run(["npm", "run", "build"], cwd=str(VIEWER), check=True)
 
@@ -222,7 +237,7 @@ def assemble(
             f"projection. The crawl only covers split mode."
         )
     if build:
-        build_viewer()
+        build_viewer(slug)
     if not (DIST / "index.html").is_file():
         sys.exit(f"error: no built viewer at {DIST}. Run: cd viewer && npm run build")
 

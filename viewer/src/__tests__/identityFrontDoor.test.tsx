@@ -100,15 +100,22 @@ beforeEach(() => {
 });
 
 describe("the identity front door", () => {
-  it("opens on what the system is, not on what the snapshot contains", () => {
-    renderOverview(orientationWithIdentity());
+  it("titles the page with the subject and says what it is underneath", () => {
+    const { container } = renderOverview(orientationWithIdentity());
+    // The title names the system once. The subtitle does not say it again.
+    expect(container.querySelector("h2")?.textContent).toBe("Visual Studio Code");
     const headline = screen.getByTestId("identity-statement");
     expect(headline.textContent).toBe(
-      "Visual Studio Code is a desktop application for macOS, Windows and Linux, " +
-        "that also runs in a web browser, is driven from a terminal by a " +
-        "command-line tool, and is extended by plug-ins. It is written mostly in " +
-        "TypeScript, with Rust.",
+      "A desktop application for macOS, Windows and Linux, that also runs in a " +
+        "web browser, is driven from a terminal by a command-line tool, and is " +
+        "extended by plug-ins. It is written mostly in TypeScript, with Rust.",
     );
+    expect(headline.tagName).toBe("P");
+  });
+
+  it("does not repeat the counts sentence once the identity leads", () => {
+    const { container } = renderOverview(orientationWithIdentity());
+    expect(container.textContent).not.toContain("mapped components across");
   });
 
   it("offers one chip per form factor, each marked as observed", () => {

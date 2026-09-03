@@ -28,6 +28,7 @@ from .coverage import coverage_families, format_source_percent
 __all__ = [
     "ORIENTATION_FILENAME",
     "compose_identity_statement",
+    "compose_identity_summary",
     "SUPPORT_FILENAME",
     "SECURITY_FILENAME",
     "build_orientation",
@@ -908,6 +909,24 @@ def compose_identity_statement(identity: Optional[dict], name: str) -> Optional[
     Never invents: with no form factor the caller keeps today's headline rather
     than guessing at a shape the repository did not declare.
     """
+    return _compose_identity(identity, name, subject_led=True)
+
+
+def compose_identity_summary(identity: Optional[dict], name: str) -> Optional[str]:
+    """The same facts as a standalone phrase, for a page that names the subject.
+
+    The front door shows the subject's name as its title, so a subtitle that
+    starts "Visual Studio Code is ..." says the name twice and turns one plain
+    sentence into a wall of text. This drops the subject clause and nothing
+    else, here rather than in the browser, so the two forms can never drift
+    apart or disagree about the facts.
+    """
+    return _compose_identity(identity, name, subject_led=False)
+
+
+def _compose_identity(
+    identity: Optional[dict], name: str, *, subject_led: bool,
+) -> Optional[str]:
     records = list((identity or {}).get("form_factors") or [])
     if not records:
         return None
@@ -919,7 +938,11 @@ def compose_identity_statement(identity: Optional[dict], name: str) -> Optional[
     if not noun:
         return None
 
-    opening = f"{name} is {_article(noun)} {noun}"
+    article = _article(noun)
+    opening = (
+        f"{name} is {article} {noun}" if subject_led
+        else f"{article.capitalize()} {noun}"
+    )
     platforms = _platform_names(primary.get("platforms") or [])
     if platforms and str(primary.get("kind")) not in _PLATFORM_NAMED_BY_NOUN:
         opening += f" for {_join(platforms, oxford=False)}"
@@ -961,9 +984,11 @@ def _identity_block(arch: dict) -> Optional[dict]:
     identity = arch.get("identity")
     if not isinstance(identity, dict):
         return None
-    statement = compose_identity_statement(identity, str(arch.get("name") or "This system"))
+    name = str(arch.get("name") or "This system")
+    statement = compose_identity_statement(identity, name)
     return {
         "statement": statement,
+        "summary": compose_identity_summary(identity, name),
         "statement_kind": "deterministic_composition" if statement else None,
         "primary": identity.get("primary"),
         "form_factors": list(identity.get("form_factors") or []),

@@ -146,6 +146,7 @@ function FormFactorEvidence({
 
 export function IdentityCard({
   identity,
+  subjectName,
   headline,
   interpreted,
   staleWithheld,
@@ -155,6 +156,7 @@ export function IdentityCard({
   onTrust,
 }: {
   identity: OrientationIdentity | null | undefined;
+  subjectName: string;
   headline: string;
   interpreted?: string;
   staleWithheld: boolean;
@@ -177,7 +179,9 @@ export function IdentityCard({
     return () => document.removeEventListener("keydown", close);
   }, [openKind]);
 
-  const statement = identity?.statement ?? null;
+  // The title says WHICH system; the subtitle says WHAT it is. The analyzer
+  // composes both, so the subtitle never repeats the name back at the reader.
+  const statement = identity?.summary ?? identity?.statement ?? null;
   const formFactors = identity?.form_factors ?? [];
   const openRecord = formFactors.find((record) => chipKey(record) === openKind) ?? null;
   const claim = identity?.authors_claim ?? null;
@@ -188,14 +192,23 @@ export function IdentityCard({
   return (
     <>
       {statement ? (
-        <h2
-          data-testid="identity-statement"
-          className={`mt-4 max-w-3xl text-2xl font-black leading-[1.15] sm:text-3xl xl:text-[2.5rem] ${
-            darkMode ? "text-zinc-100" : "text-zinc-900"
-          }`}
-        >
-          {statement}
-        </h2>
+        <>
+          <h2
+            className={`mt-2 text-3xl font-black leading-[1.1] sm:text-4xl ${
+              darkMode ? "text-zinc-100" : "text-zinc-900"
+            }`}
+          >
+            {subjectName}
+          </h2>
+          <p
+            data-testid="identity-statement"
+            className={`mt-3 max-w-2xl text-base leading-7 sm:text-lg sm:leading-8 ${
+              darkMode ? "text-zinc-300" : "text-zinc-700"
+            }`}
+          >
+            {statement}
+          </p>
+        </>
       ) : (
         <h2
           className={`mt-4 max-w-3xl text-3xl font-black leading-[1.08] sm:text-4xl xl:text-[3.25rem] ${

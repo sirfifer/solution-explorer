@@ -1014,6 +1014,10 @@ export interface FormFactor {
 
 export interface OrientationIdentity {
   statement: string | null;
+  // The same facts without the leading subject clause, for a page that shows
+  // the subject's name as its title. Optional: a sidecar written before it
+  // falls back to the full statement.
+  summary?: string | null;
   statement_kind: "deterministic_composition" | null;
   primary: string | null;
   form_factors: FormFactor[];

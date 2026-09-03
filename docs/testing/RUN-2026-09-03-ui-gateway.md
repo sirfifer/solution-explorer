@@ -129,6 +129,45 @@ VS Code reprojection.
    "0 percent", which is a different statement from "small". It now reads
    "under 1%".
 
+## Owner review, same day: two corrections
+
+The bundle was served for owner review and two things came back.
+
+**The demo lost its Atlas theme.** `viewer/.env.vscode-demo` pins
+`VITE_DEFAULT_THEME=atlas`, and Vite loads that file only for a build run with
+`--mode vscode-demo`. `scripts/assemble-serve.py` ran a plain `npm run build`,
+which is production mode, so the file was ignored and the served bundle fell
+back to Signal. Every bundle this script has assembled had the same problem; it
+became visible now because the front door was being looked at closely.
+`build_viewer` now builds in `<slug>-demo` mode whenever
+`viewer/.env.<slug>-demo` exists. The two subjects share one build, so the
+UnaMentis bundle assembled beside VS Code inherits the VS Code demo's theme
+default; per-subject themes would need a build each.
+
+**The headline was informationally right and visually wrong.** The whole
+composed statement was the H2, in black bold at up to 3.25rem, which on VS Code
+is eight lines occupying the entire left column above the fold, under a tiny
+eyebrow that repeated the subject's name. It is now a title and a subtitle: the
+subject's name as the H2 at `text-3xl sm:text-4xl`, and the statement under it
+as body text at `text-base sm:text-lg`.
+
+The subtitle is not the statement with a prefix chopped off in the browser.
+`compose_identity_summary` in `human_views.py` composes the same facts from the
+same records without the subject clause, beside `compose_identity_statement`, so
+`identity.summary` reads "A desktop application for macOS, Windows and Linux,
+that also runs in a web browser, ..." and the two forms cannot drift apart. The
+sidecar carries both; O9 checks the rendered subtitle against `summary` when the
+sidecar has one and against `statement` when it does not.
+
+The counts sentence ("Visual Studio Code contains 571 mapped components across 5
+system areas ...") no longer renders when an identity statement leads: it is the
+same numbers the demoted count line already carries, which was the point of
+demoting them. A bundle with no identity keeps it.
+
+The Portrait posture remains the opening posture. `overviewDirection` defaults
+to `portrait` in `store.ts`, this branch does not touch that file, and "Atlas"
+in the owner's report meant the theme, not the posture.
+
 ## The review correction, stated plainly
 
 `demos/review-corrections/vscode.json` gains one `manifest_edits` entry setting
@@ -326,13 +365,14 @@ corpus, not a clean bill of health for the identity pass; see the open items.
 | 1 | "Inner workings" holds 94% of VS Code's components (58% of its files). The spec's 70% acceptance is not met | B | Ancestor inheritance is all spec 3.2 specifies and it does not get there. Reaching 70% needs a second rule, for example promoting `src/vs/editor` and `src/vs/platform` out of the default, which is a design decision, not an implementation gap |
 | 2 | The identity pass reads component types one tier below the enrichment corrections that overrule them | A/C | `project.identity-prune` removes the wrong claims after the fact, but a record can still be ATTRIBUTED to a component whose type has since changed: VS Code's web-app record names `src/vs`, which was typed `web-client` at derive time and `module` after correction. Its evidence (an html entry) is independent of the type, so the claim holds and the attribution is stale |
 | 3 | The golden corpus cannot see the identity key or the orientation sidecar | B | A regression in either would not drift flask or fastapi. Adding an `identity` section to `projection-diff.py` is the fix |
-| 4 | The VS Code headline is five lines at 1440px and eleven at 390px | A | Spec section 4 makes the whole composed statement the H2, and the statement carries the external-services sentence. Splitting sentence 3 out of the headline is a one-line change if the owner wants it |
+| 4 | CLOSED at owner review: the VS Code headline was five lines at 1440px and eleven at 390px | A | The name is now the title and the statement is a subtitle. Spec section 4's "the H2 carries identity.statement" is deliberately not followed to the letter: the H2 carries the subject, the statement sits under it as body text, and the analyzer composes the subject-free form so the browser does no string surgery |
 | 5 | Two "Command-line tool" chips on VS Code | B | Both are evidenced (`cli/Cargo.toml [[bin]]` and a `bin` field in a language-server package). Honest, and arguably more than a reader needs |
 | 6 | UnaMentis reads "unamentis-ios", not "UnaMentis" | B | Same cause as the VS Code name. No review correction was added, because the served demo's header already reads `unamentis-ios` and changing it was not asked for |
 | 7 | UnaMentis reprojects to 559 files against the canonical 751 | C | Attributed to the generated-projection exclusion, not to this branch, and not proven against main's code in a separate checkout |
 | 8 | `identity.languages` can carry a language whose share rounds to 0.00 | B | UnaMentis lists python at 0.0. Harmless today: the statement only reads the first two entries |
 | 9 | UG-5, the README hero image | A/C | Not started, and deliberately so. It is optional and gated on UG-7. Neither canonical subject would show an image: VS Code's only non-badge README image is a remote github.com/user-attachments URL, which UG-5 specifies must render as a link and never be fetched, and UnaMentis's README carries no image at all. Building it now would re-open a green gate and make this record stale for no visible gain on either demo |
 | 10 | The `.testboard/derived` collision | A | `scripts/assemble-serve.py` silently deletes whatever is at its overlay path. It should refuse to delete a directory holding a `manifest.json` it did not write |
+| 11 | Two subjects assembled together share one viewer build, so they share one default theme | A | Only matters when two demos want different themes. Assembling each with its own build is the fix, at the cost of a build per subject |
 
 ## Cumulative token spend
 

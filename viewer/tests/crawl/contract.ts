@@ -800,6 +800,8 @@ export interface ExpectedFormFactor {
 
 export interface ExpectedIdentity {
   statement: string | null;
+  /** What the page actually prints: the statement without the subject clause. */
+  summary: string | null;
   formFactors: ExpectedFormFactor[];
 }
 
@@ -855,6 +857,7 @@ function identityOf(body: unknown): ExpectedIdentity | null {
   const records: any[] = Array.isArray(identity.form_factors) ? identity.form_factors : [];
   return {
     statement: typeof identity.statement === "string" ? identity.statement : null,
+    summary: typeof identity.summary === "string" ? identity.summary : null,
     formFactors: records
       .filter((row) => row && typeof row.kind === "string")
       .map((row) => ({
