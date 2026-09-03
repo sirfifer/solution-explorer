@@ -9,7 +9,7 @@ Tracks where solution-explorer is installed and how to redeploy after changes.
 | UnaMentis iOS (SysCorpus demo) | `UnaMentis/unamentis-ios` @ `a5717bf` | `unamentis-ios-demo` | [unamentis-ios-demo.pages.dev](https://unamentis-ios-demo.pages.dev) | reviewed snapshot | [canonical split manifest](https://unamentis-ios-demo.pages.dev/architecture/manifest.json) |
 | UnaMentis (static) | `UnaMentis/unamentis` | `um-solution-explorer` | [um-arch.unamentis.org](https://um-arch.unamentis.org) | - | - |
 | UnaMentis (full) | `UnaMentis/unamentis` | `solution-explorer-unamentis` | [solution-explorer.unamentis.org](https://solution-explorer.unamentis.org) | github | [unamentis.github.io/unamentis](https://unamentis.github.io/unamentis) |
-| VS Code (SysCorpus demo, private preview) | `microsoft/vscode` @ `474a349a` | `syscorpus-vscode` | [vscode-demo.syscorpus.com](https://vscode-demo.syscorpus.com) (Cloudflare Access, then passcode) | reviewed snapshot | gated |
+| VS Code (SysCorpus demo, private preview) | `microsoft/vscode` @ `474a349a` | `syscorpus-vscode` | [vscode-demo.syscorpus.com](https://vscode-demo.syscorpus.com) (Cloudflare Access) | reviewed snapshot | gated |
 
 **Workflows per installation:**
 - `architecture.yml`: Static build and Cloudflare Pages deploy (all installations)
@@ -26,8 +26,10 @@ from solution-explorer commit `ade4f4c25903e1cc29d3c8f7cfe81d6f4b6aea0f`.
 Its production branch is `main`. The bundle is packaged by
 `scripts/publish-demo-bundle.py`: `manifest.json` and the largest detail
 shard exceed the 25 MiB Pages cap and are served gzip by the committed
-`_worker.js`, which also runs the passcode gate on every hostname of the
-deployment. Procedure and traps: `docs/publication/DEMO-DEPLOY-RUNBOOK.md`.
+`_worker.js`, which does nothing else. Access control is the owner's,
+through Cloudflare Access on the hostname; nothing in the bundle
+authenticates anyone. Procedure and traps:
+`docs/publication/DEMO-DEPLOY-RUNBOOK.md`.
 Run record: `docs/testing/RUN-2026-09-03-vscode-demo-ship.md`.
 
 **Redeploy:** the `publish-demo` skill (`.claude/skills/publish-demo/`).
