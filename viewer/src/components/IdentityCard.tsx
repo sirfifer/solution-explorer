@@ -26,10 +26,19 @@ function platformLabel(platforms: string[]): string {
   return platforms.map((platform) => PLATFORM_NAMES[platform] ?? platform).join(", ");
 }
 
-/** The small text under a chip: where it runs, or which one of several it is. */
+/** The small text under a chip: where it runs, or which one of several it is.
+ *
+ * A subject can have two command-line tools, and two chips reading only
+ * "Command-line tool" tell a reader there are two of something without saying
+ * what either one is. The last part of the component path is what the reader
+ * would recognise, and the evidence panel carries the whole of it.
+ */
 function chipDetail(record: FormFactor): string | null {
   if (record.platforms.length) return platformLabel(record.platforms);
-  return record.name ?? null;
+  if (record.name) return record.name;
+  const id = record.component_id;
+  if (!id || id === "root") return null;
+  return id.split("/").slice(-2).join("/");
 }
 
 function evidenceLabel(file: string, line?: number): string {
