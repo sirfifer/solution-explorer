@@ -792,11 +792,28 @@ export function firstRow(contract: Contract, lens: string): string | null {
  * there is no authored data to check against. The caller says so in a coverage
  * annotation rather than asserting on a document nobody wrote.
  */
+export interface ExpectedFormFactor {
+  kind: string;
+  label: string;
+  evidence: { file: string; line?: number; marker: string }[];
+}
+
+export interface ExpectedIdentity {
+  statement: string | null;
+  formFactors: ExpectedFormFactor[];
+}
+
 export interface ExpectedOrientation {
   questionRoutes: { id: string; available: boolean; target: any }[];
   portraitNodes: { id: string; label: string; stableTargets: string[] }[];
   launchTargets: any[];
   trust: any;
+  /**
+   * What the sidecar says the subject IS. Null on a projection written before
+   * the identity derive pass, and O9 then records that rather than asserting
+   * against a document nobody wrote.
+   */
+  identity: ExpectedIdentity | null;
 }
 
 export async function loadOrientation(
@@ -827,6 +844,30 @@ export async function loadOrientation(
       })),
     launchTargets: Array.isArray((body as any).launch_targets) ? (body as any).launch_targets : [],
     trust: (body as any).trust ?? null,
+    identity: identityOf(body),
+  };
+}
+
+/** The identity block, reduced to what a crawl rule can check on screen. */
+function identityOf(body: unknown): ExpectedIdentity | null {
+  const identity = (body as any)?.identity;
+  if (!identity || typeof identity !== "object") return null;
+  const records: any[] = Array.isArray(identity.form_factors) ? identity.form_factors : [];
+  return {
+    statement: typeof identity.statement === "string" ? identity.statement : null,
+    formFactors: records
+      .filter((row) => row && typeof row.kind === "string")
+      .map((row) => ({
+        kind: String(row.kind),
+        label: String(row.label ?? row.kind),
+        evidence: (Array.isArray(row.evidence) ? row.evidence : [])
+          .filter((item: any) => item && typeof item.file === "string")
+          .map((item: any) => ({
+            file: String(item.file),
+            line: typeof item.line === "number" ? item.line : undefined,
+            marker: String(item.marker ?? ""),
+          })),
+      })),
   };
 }
 

@@ -168,6 +168,11 @@ So the crawl drives the tree through `data-*` attributes alone.
 | `data-testid="detail-tab"` | each tab | `data-tab`, `data-active` |
 | `data-testid="detail-tabpanel"` | the tab body | `data-tab` currently shown |
 | `data-testid="lens-select"` | the lens switcher | `data-lens` |
+| `data-testid="identity-statement"` | the Overview headline | the composed statement, when the sidecar has one |
+| `data-testid="form-factor"` | each form-factor chip | `data-kind` |
+| `data-testid="form-factor-evidence"` | the opened chip's evidence panel | one `file:line marker` row per evidence entry |
+| `data-testid="authors-claim"` | the maintainers' quoted paragraph | the README claim, captioned with its source |
+| `data-testid="scale-summary"` | the demoted count line | the three headline counts, opening the trust drawer |
 
 The suite also drives the shell, the canvas, the overlays and the tour player.
 Same rule: every one is a contract, and removing one must break the crawl
@@ -327,7 +332,13 @@ leaving to Overview and coming back, and browser history must restore the
 aperture it left. O7 opens and closes the trust and preferences drawers and
 checks that changing the start view actually changes what a bare URL does. O8
 searches from the front door and follows the first component result into the
-workbench.
+workbench. O9 checks that the front door says what the system is: the headline
+matches `identity.statement` in the sidecar character for character, there is
+one form-factor chip per record, and opening the first chip reveals the file its
+evidence names; when the sidecar carries no identity the rule records that and
+checks nothing it cannot check. O10 measures that no `data-se="stat"` count tile
+is inside the first viewport of the Portrait posture, at both sizes, and that
+the demoted counts are still one click away.
 
 **`tours.spec.ts`** plays every tour end to end with no sampling, because tours
 are few by nature and a tour is what somebody is shown when they are being
