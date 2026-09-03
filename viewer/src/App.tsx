@@ -51,6 +51,10 @@ import { attachHumanViews } from "./utils/orientation";
 import { SolutionIndex } from "./components/SolutionIndex";
 import { Tooltip } from "./components/Tooltip";
 import { TOOLTIP_COPY } from "./utils/tooltipCopy";
+import { OrientationInvite } from "./components/OrientationInvite";
+import { OrientationWalk } from "./components/OrientationWalk";
+import { applicableStops } from "./orientation/model";
+import { WALK_STOPS } from "./orientation/stops";
 import type {
   Architecture,
   Component,
@@ -315,6 +319,7 @@ interface OverlayFlags {
   toursOpen: boolean;
   helpOpen: boolean;
   welcomeOpen: boolean;
+  orientationOpen: boolean;
   adminOpen: boolean;
   activePanel: string | null;
   trustOpen: boolean;
@@ -339,6 +344,7 @@ function openOverlays(f: OverlayFlags): string[] {
     f.inventoryOpen && "inventory",
     f.toursOpen && "tours",
     (f.helpOpen || f.welcomeOpen) && "help",
+    f.orientationOpen && "orientation",
     f.adminOpen && "admin",
     f.activePanel === "review" && "review",
     f.trustOpen && "trust",
@@ -360,7 +366,7 @@ function openOverlays(f: OverlayFlags): string[] {
 // between them is the finding.
 //
 // aria-hidden because it is not content: a screen reader has the real UI.
-function NavStateBeacon() {
+export function NavStateBeacon() {
   const drillLevel = useArchStore((s) => s.drillLevel);
   const selectedComponentId = useArchStore((s) => s.selectedComponentId);
   const lens = useArchStore((s) => s.lens);
@@ -382,6 +388,10 @@ function NavStateBeacon() {
   const toursOpen = useArchStore((s) => s.toursOpen);
   const helpOpen = useArchStore((s) => s.helpOpen);
   const welcomeOpen = useArchStore((s) => s.welcomeOpen);
+  const orientationOpen = useArchStore((s) => s.orientationOpen);
+  const orientationStep = useArchStore((s) => s.orientationStep);
+  const orientationInvite = useArchStore((s) => s.orientationInvite);
+  const orientationSkipped = useArchStore((s) => s.orientationSkipped);
   const adminOpen = useArchStore((s) => s.adminOpen);
   // The front door (main, 2026-09-01). The mode is the single most important
   // thing a test can ask, because every other field means something different
@@ -402,8 +412,13 @@ function NavStateBeacon() {
 
   const overlays = openOverlays({
     searchOpen, findingsOpen, supplyChainOpen, inventoryOpen, toursOpen,
-    helpOpen, welcomeOpen, adminOpen, activePanel, trustOpen, preferencesOpen,
+    helpOpen, welcomeOpen, orientationOpen, adminOpen, activePanel, trustOpen, preferencesOpen,
   });
+  const orientationStops = applicableStops(
+    WALK_STOPS,
+    typeof window === "undefined" ? 1024 : window.innerWidth,
+  );
+  const orientationStop = orientationOpen ? orientationStops[orientationStep] : undefined;
 
   return (
     <div
@@ -423,6 +438,10 @@ function NavStateBeacon() {
       data-finding={selectedDesignFindingId ?? ""}
       data-tour={activeTourId ?? ""}
       data-tour-step={activeTourId ? String(tourStep) : ""}
+      data-orientation={orientationStop?.id ?? ""}
+      data-orientation-step={orientationStop ? String(orientationStep + 1) : ""}
+      data-orientation-invite={orientationInvite ? "true" : "false"}
+      data-orientation-skipped={orientationSkipped.join(",")}
       data-panel={activePanel ?? ""}
       // "aggregate" is a fourth detail kind the store carries; it is published
       // as itself rather than folded into "" so the beacon never claims nothing
@@ -829,6 +848,7 @@ export function App() {
         toursOpen: s.toursOpen,
         helpOpen: s.helpOpen,
         welcomeOpen: s.welcomeOpen,
+        orientationOpen: s.orientationOpen,
         adminOpen: s.adminOpen,
         activePanel: s.activePanel,
         trustOpen: s.trustOpen,
@@ -1029,7 +1049,7 @@ export function App() {
           </div>
         </div>
 
-        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+        <div data-testid="header-tools" className="flex min-w-0 items-center gap-1 sm:gap-2">
           <ExperienceSwitcher className="hidden sm:flex" />
           {/* Home button - visible when drilled into a component */}
           {drillLevel && (
@@ -1087,7 +1107,7 @@ export function App() {
               audience asks to see changed. */}
           <ThemeSwitcher />
 
-          <button onClick={() => setPreferencesOpen(true)} className={`hidden rounded-lg p-2 sm:block ${darkMode ? "text-zinc-400 hover:bg-zinc-800" : "text-zinc-600 hover:bg-zinc-100"}`} aria-label="Viewer preferences">◒</button>
+          <button data-testid="preferences-button" onClick={() => setPreferencesOpen(true)} className={`hidden rounded-lg p-2 sm:block ${darkMode ? "text-zinc-400 hover:bg-zinc-800" : "text-zinc-600 hover:bg-zinc-100"}`} aria-label="Viewer preferences">◒</button>
 
           {/* Desktop: remaining secondary buttons inline */}
           <div className="hidden sm:flex items-center gap-2">
@@ -1522,7 +1542,7 @@ export function App() {
           {isPanelViewport && lens === "design" && <DesignPanel />}
           {isPanelViewport && lens === "support" && <SupportPanel />}
           {isPanelViewport && lens === "security" && <SecurityPanel />}
-          <div data-se="graph-frame" className="flex-1 relative" style={{ paddingBottom: mobileGraphBottomReserve }}>
+          <div data-se="graph-frame" data-testid="graph-frame" className="flex-1 relative" style={{ paddingBottom: mobileGraphBottomReserve }}>
             <ReactFlowProvider>
               <ArchitectureGraph />
             </ReactFlowProvider>
@@ -1695,6 +1715,9 @@ export function App() {
 
       {/* Help system */}
       <HelpSystem />
+
+      <OrientationInvite />
+      <OrientationWalk />
 
     </div>
   );

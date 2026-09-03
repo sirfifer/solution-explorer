@@ -129,6 +129,7 @@ describe("tooltip copy quality", () => {
       "evidence.link": [TOOLTIP_COPY.evidence.link],
       "inventoryLens.externalDependencies": [TOOLTIP_COPY.inventoryLens.externalDependencies],
       "tours.stale": [TOOLTIP_COPY.tours.stale],
+      "orientation.controls": leaves(TOOLTIP_COPY.orientation),
       "directive.export": [TOOLTIP_COPY.directive.export],
       "directive.exemption": [TOOLTIP_COPY.directive.exemption],
       "rationale.fields": leaves(TOOLTIP_COPY.rationale),

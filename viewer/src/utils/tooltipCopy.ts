@@ -178,6 +178,12 @@ export const TOOLTIP_COPY = {
       "This walkthrough's anchored code has drifted since it was generated. Read it with care.",
   },
 
+  orientation: {
+    start: "Start a short guided introduction to this map.",
+    dismiss: "Dismiss the introduction. You can replay it later from Help.",
+    replay: "Replay the short guided introduction from the beginning.",
+  },
+
   // Directive export and exemption controls.
   directive: {
     export:
@@ -239,6 +245,7 @@ export const SWEPT_SURFACES = [
   "evidence.link",
   "inventoryLens.externalDependencies",
   "tours.stale",
+  "orientation.controls",
   "directive.export",
   "directive.exemption",
   "rationale.fields",

@@ -63,6 +63,7 @@ export function ThemeSwitcher() {
   return (
     <div ref={ref} className="relative">
       <button
+        data-testid="theme-switcher"
         onClick={() => setOpen(!open)}
         aria-haspopup="menu"
         aria-expanded={open}

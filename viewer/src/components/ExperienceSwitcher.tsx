@@ -5,7 +5,7 @@ export function ExperienceSwitcher({ className = "" }: { className?: string }) {
   const setMode = useArchStore((state) => state.setExperienceMode);
   const darkMode = useArchStore((state) => state.darkMode);
   return (
-    <div className={`flex rounded-lg border p-0.5 ${darkMode ? "border-zinc-800 bg-zinc-900" : "border-zinc-200 bg-zinc-100"} ${className}`} aria-label="Experience mode">
+    <div data-testid="experience-switcher" className={`flex rounded-lg border p-0.5 ${darkMode ? "border-zinc-800 bg-zinc-900" : "border-zinc-200 bg-zinc-100"} ${className}`} aria-label="Experience mode">
       {(["overview", "workbench"] as const).map((item) => (
         <button
           key={item}
