@@ -82,7 +82,7 @@ async function returnToOverview(
     '[data-testid="findings-surface"], [data-testid="supply-chain-surface"], ' +
     '[data-testid="tours-list-overlay"], [data-testid="search-overlay"], ' +
     '[data-testid="trust-drawer"], [data-testid="preferences-drawer"], ' +
-    '[data-testid="help-overlay"]';
+    '[data-testid="help-overlay"], [data-testid="orientation-walk"]';
   for (let attempt = 0; attempt < 3; attempt++) {
     if ((await page.locator(dialogRoots).count()) === 0) break;
     await page.keyboard.press("Escape").catch(() => {});

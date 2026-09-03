@@ -536,3 +536,23 @@ bounded specs use a short action timeout because there a timeout is the
 finding; every wait polls with a tight ceiling and stays Node-enforced. Each
 run reports its slowest cases and the reason, and the quick profile's target
 on a 170-component subject is single-digit minutes.
+
+## Addendum 2026-09-03: the orientation walk
+
+`orientation.spec.ts` owns the fixed product orientation contract on desktop
+and mobile. The shared `crawlPage` fixture now seeds
+`arch-viz-orientation-v1=dismissed`, which keeps the first-visit invite out of
+every unrelated crawl. W1 deliberately uses a fresh unseeded page to prove the
+invite appears, can be dismissed, and stays dismissed after reload.
+
+The remaining rules use `orientation=start`, which bypasses storage without
+changing it. W2 checks every viewport-specific stop against the beacon, its
+visible anchor, a nonempty highlight at least 44 pixels tall, card occlusion,
+and the skipped-anchor ledger. W3 checks the Overview to Workbench crossing and
+a clean Done state. W4 checks Escape and its dismissed value. W5 starts from
+Help in the Workbench and proves replay returns to the first Overview stop.
+
+`orientation-walk` and `orientation-invite` are dialog roots for the reset
+probe. The beacon adds `data-orientation`, `data-orientation-step`,
+`data-orientation-invite`, and `data-orientation-skipped` so the crawl compares
+the store's account with the visible layer.

@@ -84,7 +84,7 @@ Two Playwright projects, both reported under their own name in the run record:
 - `desktop` (Desktop Chrome) runs every test.
 - `mobile` (`devices["iPhone 13"]`, 390x844, touch, WebKit) runs the tests
   tagged `@mobile`: the boot check, all of surfaces and tours, journeys J1, J5
-  and J6, and the graph's click and drill cases. The detail panel lives in a
+  and J6, every orientation rule, and the graph's click and drill cases. The detail panel lives in a
   bottom sheet at this size and the lens panels in a second one, but the
   selector contract is identical on both, so no spec branches on viewport. A
   mobile failure is a real failure. `npx playwright install webkit` once, or
