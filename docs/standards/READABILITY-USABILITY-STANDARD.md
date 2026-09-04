@@ -101,6 +101,56 @@ test matrix; truncation requires a discoverable full-text state.
   spacing without content or control loss.
 - Browser text zoom to 200% must not clip, hide, or make a control unavailable.
 
+## Information structure
+
+Hover-triggered reading surfaces must remain open while the pointer moves from
+the trigger into the surface, including across the visual gap, and while the
+reader scrolls or uses links within it. Scrolling a popup must not scroll or
+zoom the underlying canvas. Dismiss only after leaving both trigger and popup,
+or through an explicit dismissal such as Escape. Clicking a persistent help
+panel replaces the transient preview; the two may not overlap. Every reading
+surface stays inside its available boundary at supported window sizes.
+
+Use the installed viewer/library primitives first. Graph-attached reading
+surfaces retain React Flow's `NodeToolbar` anchoring, `position`, `offset`, and
+`align`; scrolling and dragging use its `nowheel` and `nopan` controls plus
+native CSS overflow and overscroll containment. Do not replace those mechanisms
+with custom canvas transforms or wheel interception. The installed NodeToolbar
+does not implement boundary collision handling or trigger-to-popup dismissal;
+shared application code supplies only those missing responsibilities.
+
+The routine graph crawl exercises pointer transfer, scrolling, return to the
+trigger, departure, containment, and help-panel keyboard dismissal at both
+1440 × 1000 and 1024 × 768. Shared-tooltip lifecycle checks run in the normal
+viewer unit suite. New popup implementations must reuse these behaviors or
+demonstrate the same regression coverage.
+
+The data contract preserves semantic structure all the way to the reader. A
+list does not become comma-separated prose, a set of named claims does not
+become one paragraph, and a fact already carried by a typed field is not
+repeated as an opaque AI sentence. Flattened text may be emitted as a secondary
+compatibility or search representation, but it is never preferred over the
+structured source.
+
+- Lead with identity and a concise summary, then reveal labeled sections,
+  lists, facts, evidence, and narrative in that order when they exist.
+- Use headings for distinct claims such as purpose, mechanism, place in the
+  system, why it matters, and where to go next.
+- Render typed arrays as lists, chips, tables, or other appropriate collections;
+  never join them into prose merely to simplify a component API.
+- Reserve uninterrupted prose for genuine narrative. Narrative still uses
+  paragraphs and headings wherever its meaning permits.
+- Never truncate explanatory prose at an arbitrary character boundary. Author
+  a concise field or use progressive disclosure while preserving a route to the
+  complete text.
+- Preserve uncertainty, provenance, and honest gaps as structured, visible
+  information. They are part of the answer, not implementation metadata.
+
+The executable counterparts to this rule are the typed projection contract,
+the shared structured-information components, and the semantic `--se-*` visual
+tokens in the viewer stylesheet. Theme styles may dress those roles but may not
+weaken their size, contrast, hierarchy, or interaction guarantees.
+
 ## Contrast and emphasis
 
 - Normal text: at least 4.5:1 against its actual background.

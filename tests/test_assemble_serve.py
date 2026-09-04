@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
 import json
+import sqlite3
 from pathlib import Path
+
+import pytest
+
+from analyzer.enrich import DigestIndex, stamp_enrichment
+from analyzer.store import FactStore
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -168,6 +175,75 @@ def test_assembly_applies_review_correction_only_to_derived_overlay(
     assert _sha256(manifest_path) == canonical_hash
 
 
+def test_assembly_can_refresh_structured_enrichment_from_store_without_mutating_projection(
+    tmp_path: Path,
+) -> None:
+    assembler = _load_assembler()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("viewer", encoding="utf-8")
+    projection = tmp_path / "canonical" / "architecture"
+    projection.mkdir(parents=True)
+    manifest_path = projection / "manifest.json"
+    manifest_path.write_text(json.dumps({
+        "name": "subject",
+        "components": [{"id": "app", "name": "App", "children": []}],
+        "relationships": [],
+        "component_detail_index": {},
+        "stats": {"total_relationships": 0},
+    }, sort_keys=True), encoding="utf-8")
+    canonical_hash = _sha256(manifest_path)
+
+    store_path = tmp_path / "index.db"
+    store = FactStore(str(store_path))
+    store.add_component("app", "App", type="application", path="app")
+    index = DigestIndex.from_store(store)
+    stamp_enrichment(
+        store, "component", "app", {"help_text": "One legacy paragraph."},
+        digest_index=index,
+    )
+    store.add_enrichment("contract-state", "component:app", {
+        "answers": {
+            "purpose": {
+                "claim": "Runs the application.",
+                "status": "answered",
+                "evidence": [{"component": "app", "field": "type", "kind": "fact"}],
+            },
+        },
+    })
+    store.commit()
+    store.close()
+    store_hash = _sha256(store_path)
+
+    assembler.DIST = dist
+    assembler.SERVE_ROOT = tmp_path / "serve"
+    assembler.DERIVED_ROOT = tmp_path / "derived"
+    serve = assembler.assemble(
+        "subject", projection, build=False, enrichment_store=store_path,
+    )
+
+    served_manifest = json.loads((serve / "architecture" / "manifest.json").read_text())
+    ai = served_manifest["components"][0]["ai_enhance"]
+    assert ai["help_text"] == "One legacy paragraph."
+    assert ai["explanation"]["purpose"]["text"] == "Runs the application."
+    assert _sha256(manifest_path) == canonical_hash
+    assert _sha256(store_path) == store_hash
+
+
+def test_read_only_store_cannot_modify_or_migrate_canonical_enrichment(tmp_path: Path) -> None:
+    path = tmp_path / "canonical.db"
+    with FactStore(path) as store:
+        store.set_meta("schema_version", "1")
+        store.add_enrichment("component", "app", {"help_text": "Keep this paid interpretation."})
+    original = _sha256(path)
+    with FactStore(path, read_only=True) as reader:
+        assert reader.get_meta("schema_version") == "1"
+        assert reader.enrichment()[0]["payload"]["help_text"] == "Keep this paid interpretation."
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            reader.set_meta("schema_version", "999")
+    assert _sha256(path) == original
+
+
 def test_assembly_can_scrub_activity_and_ship_publication_obligations(tmp_path: Path) -> None:
     assembler = _load_assembler()
     dist = tmp_path / "dist"
@@ -209,3 +285,70 @@ def test_assembly_can_scrub_activity_and_ship_publication_obligations(tmp_path: 
     assert (served / "publication.json").read_bytes() == publication.read_bytes()
     assert (served / "UPSTREAM-LICENSE.txt").read_text() == "license"
     assert (served / "ThirdPartyNotices.txt").read_text() == "notices"
+
+
+def test_assembly_attaches_verified_ui_capture_only_to_derived_overlay(tmp_path: Path) -> None:
+    assembler = _load_assembler()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("viewer", encoding="utf-8")
+    projection = tmp_path / "canonical" / "architecture"
+    projection.mkdir(parents=True)
+    manifest = {
+        "name": "subject", "repository": "https://example.test/repo",
+        "components": [{"id": "workbench", "files": ["src/editor.ts"], "children": []}],
+        "relationships": [], "component_detail_index": {},
+        "stats": {"total_relationships": 0},
+    }
+    (projection / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    canonical_hash = _sha256(projection / "manifest.json")
+
+    package = tmp_path / "capture"
+    assets = package / "ui-surfaces"
+    assets.mkdir(parents=True)
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+    (assets / "main.png").write_bytes(png)
+    capture = {
+        "schema": "syscorpus.ui-surfaces/v1",
+        "subject": {"repository": "https://example.test/repo", "commit": "abc123"},
+        "clients": [{"id": "desktop", "label": "Desktop", "kind": "desktop-app", "platforms": ["macos"], "primary": True, "coverage": "captured"}],
+        "screens": [{
+            "id": "desktop:main", "client_id": "desktop", "label": "Main", "role": "primary",
+            "image": {"path": "ui-surfaces/main.png", "sha256": hashlib.sha256(png).hexdigest(), "width": 1, "height": 1},
+            "capture": {"captured_at": "2026-09-04T00:00:00Z", "method": "test", "runtime_name": "Fixture", "runtime_version": "1", "runtime_commit": "abc123", "source_match": "exact", "sanitized": True},
+            "hotspots": [{"id": "editor", "label": "Editor", "kind": "region", "rect": {"x": 0, "y": 0, "width": 1, "height": 1}, "evidence": {"component_id": "workbench", "file": "src/editor.ts", "line": 1}, "action": {"kind": "open_source"}}],
+        }],
+    }
+    (package / "ui-surfaces.json").write_text(json.dumps(capture), encoding="utf-8")
+    publication = tmp_path / "publication.json"
+    publication.write_text(json.dumps({"subject": {"repo_url": "https://example.test/repo", "commit": "abc123"}}), encoding="utf-8")
+
+    assembler.DIST = dist
+    assembler.SERVE_ROOT = tmp_path / "serve"
+    assembler.DERIVED_ROOT = tmp_path / "derived"
+    serve = assembler.assemble("subject", projection, build=False, publication=publication, ui_surfaces=package)
+    served = serve / "architecture"
+    assert (served / "ui-surfaces.json").read_bytes() == (package / "ui-surfaces.json").read_bytes()
+    assert (served / "ui-surfaces" / "main.png").read_bytes() == png
+    assert not (projection / "ui-surfaces.json").exists()
+    assert _sha256(projection / "manifest.json") == canonical_hash
+
+
+def test_assembly_refuses_to_delete_an_unowned_derived_directory(tmp_path: Path) -> None:
+    assembler = _load_assembler()
+    projection = tmp_path / "canonical" / "architecture"
+    projection.mkdir(parents=True)
+    (projection / "manifest.json").write_text(json.dumps({
+        "name": "subject", "components": [], "relationships": [],
+        "component_detail_index": {}, "stats": {"total_relationships": 0},
+    }), encoding="utf-8")
+    assembler.DERIVED_ROOT = tmp_path / "derived"
+    occupied = assembler.DERIVED_ROOT / "subject" / "architecture"
+    occupied.mkdir(parents=True)
+    (occupied / "keep-me.txt").write_text("not assembly output", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="refusing to replace unowned"):
+        assembler._projection_with_human_views("subject", projection)
+    assert (occupied / "keep-me.txt").read_text() == "not assembly output"

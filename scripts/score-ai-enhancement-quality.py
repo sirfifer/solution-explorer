@@ -80,7 +80,11 @@ OPTIONAL_COMPONENT_FIELDS = frozenset({
 # REQUIRED | OPTIONAL, so anything listed here is accepted if it turns up but is
 # still stripped before it can reach the product. "contract" is the completeness
 # contract's answer scaffolding, which belongs in the store and the Run Report.
-TOLERATED_COMPONENT_FIELDS = frozenset({"contract"})
+# ``explanation`` is a projection-only view built from the separately stored
+# contract-state row.  Like ``contract`` it is not scored and is not accepted
+# into the model-written product payload; final projected manifests may carry
+# it so structured clients do not have to reverse-engineer ``help_text``.
+TOLERATED_COMPONENT_FIELDS = frozenset({"contract", "explanation"})
 
 TOLERATED_RELATIONSHIP_FIELDS = frozenset({"contract"})
 

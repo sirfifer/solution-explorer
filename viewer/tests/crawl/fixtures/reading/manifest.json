@@ -1,0 +1,43 @@
+{
+  "name": "Reading surface regression fixture",
+  "description": "Synthetic long-form documentation for pointer, scrolling and keyboard regression tests.",
+  "repository": null,
+  "root_path": "/reading-fixture",
+  "generated_at": "2026-09-04T00:00:00Z",
+  "analyzer_version": "1.2.0",
+  "components": [{
+    "id": "reader",
+    "name": "Reader",
+    "type": "module",
+    "path": "reader",
+    "description": "A documented component with enough content to require scrolling.",
+    "language": "typescript",
+    "framework": null,
+    "port": null,
+    "children": [],
+    "files": [],
+    "entry_points": [],
+    "config_files": [],
+    "external_services": [],
+    "metrics": {"files": 0, "lines": 0, "size_bytes": 0, "symbols": 0, "languages": {}},
+    "docs": {
+      "purpose": "A documented component with enough content to require scrolling.",
+      "readme": null, "claude_md": null, "changelog": null,
+      "api_docs": null, "architecture_notes": null,
+      "key_decisions": [], "patterns": [], "tech_stack": [], "env_vars": [], "api_endpoints": []
+    },
+    "ai_enhance": {
+      "help_text": "This synthetic example exercises the complete reading interaction. Its explanation is deliberately long enough to scroll in both normal and smaller desktop windows. The reader must be able to cross from the component into the preview, scroll to the remaining sections, and return to the component without losing the preview.",
+      "explanation": {
+        "purpose": {"text": "Presents a complete explanation that readers can enter and scroll. This fixture represents a documented module and keeps enough text on screen to exercise real overflow rather than only testing whether a short label appears.", "status": "answered"},
+        "mechanism": {"text": "Opening the preview starts a reading session shared between the component and the popup. Moving across their separation must not destroy that session. Once the pointer reaches the popup, the reader can pause, select text, and scroll through all of the remaining explanation.", "status": "answered"},
+        "place": {"text": "The popup is drawn alongside its component within the graph canvas. It uses the available space above or below the component, keeps its edges inside the canvas, and scrolls its own content without changing the graph position or zoom.", "status": "answered"},
+        "why_matters": {"text": "The final sections are just as important as the first paragraph. A preview that disappears when entered prevents readers from reaching that information. The regression must move an actual browser pointer, remain longer than the close delay, and scroll real overflowing content.", "status": "answered"},
+        "data_handled": {"text": "The fixture contains only synthetic text. It uses no private repository, external model request, credentials, stored user profile, or remote service. The same interactions are also exercised against real subject projections by the regular crawl.", "status": "answered"},
+        "next_step": {"text": "Return to the component, open its persistent information panel, verify that there is only one reading surface, then dismiss it with Escape or its close button. The keyboard focus should return to the control that opened it.", "status": "answered"}
+      }
+    }
+  }],
+  "relationships": [], "symbols": [], "files": [], "component_detail_index": {},
+  "stats": {"total_files": 0, "total_lines": 0, "total_size_bytes": 0, "total_symbols": 0, "total_components": 1, "total_relationships": 0, "languages": {}}
+}

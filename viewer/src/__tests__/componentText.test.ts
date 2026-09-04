@@ -13,6 +13,13 @@ function component(overrides: Partial<Component> = {}): Component {
 }
 
 describe("component text fallbacks", () => {
+  it("preserves authored paragraphs and the complete README fallback", () => {
+    const text = "An introduction.\n\n" + "Detailed source documentation. ".repeat(20);
+    expect(componentHelp(component({ ai_enhance: { help_text: text } }))).toBe(text.trim());
+    const value = component();
+    value.docs!.readme = text;
+    expect(componentHelp(value)).toBe(text.trim());
+  });
   it("rejects blank and package-localization placeholders", () => {
     expect(usableComponentText("  ")).toBeNull();
     expect(usableComponentText("%description%")).toBeNull();

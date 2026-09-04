@@ -1,9 +1,10 @@
 name: GUI Plan Check
 
 # Static completeness check for the GUI regression plan (design authority:
-# docs/testing/GUI-REGRESSION-STRATEGY.md). This is the ONLY part of the GUI
-# test system that runs in CI; the plan itself is executed by the AI runner
+# docs/testing/GUI-REGRESSION-STRATEGY.md). The attended plan itself is executed by the AI runner
 # via the /gui-test-cycle skill, an attended activity, never a per-PR job.
+# Bounded reading-surface browser regressions also run in ci.yml using a
+# synthetic fixture; they do not require the attended plan or private datasets.
 
 on:
   push:

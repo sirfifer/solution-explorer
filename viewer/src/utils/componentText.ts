@@ -21,8 +21,9 @@ export function componentSummary(component: Component): string | null {
 }
 
 export function componentHelp(component: Component): string | null {
-  return usableComponentText(component.ai_enhance?.help_text)
+  const help = component.ai_enhance?.help_text;
+  return (usableComponentText(help) ? help!.trim() : null)
     ?? componentSummary(component)
-    ?? usableComponentText(component.docs?.readme)?.slice(0, 200)
+    ?? component.docs?.readme?.trim()
     ?? null;
 }

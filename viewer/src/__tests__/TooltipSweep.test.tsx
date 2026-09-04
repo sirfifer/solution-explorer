@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, within, act } from "@testing-library/react";
 import { Tooltip } from "../components/Tooltip";
-import { previewPlacement } from "../components/ComponentNode";
+import { readingSurfacePlacement } from "../utils/readingSurfacePlacement";
 import { LensSwitcher } from "../components/LensSwitcher";
 import { CoverageBadge } from "../components/CoverageBadge";
 import { FindingsEntry } from "../components/FindingsEntry";
@@ -143,6 +143,28 @@ describe("tooltip copy quality", () => {
 });
 
 describe("Tooltip keyboard focus accessibility", () => {
+  it("keeps ordinary help open across the gap and during reading, then dismisses on departure or Escape", () => {
+    vi.useFakeTimers();
+    render(<Tooltip content="Long help content." focusable><span>read help</span></Tooltip>);
+    const trigger = screen.getByLabelText("Long help content.");
+    fireEvent.mouseEnter(trigger);
+    act(() => vi.advanceTimersByTime(400));
+    const surface = screen.getByRole("tooltip");
+    fireEvent.mouseLeave(trigger);
+    act(() => vi.advanceTimersByTime(150));
+    fireEvent.mouseEnter(surface);
+    act(() => vi.advanceTimersByTime(1000));
+    fireEvent.wheel(surface, { deltaY: 200 });
+    expect(screen.getByRole("tooltip")).toBe(surface);
+    fireEvent.mouseLeave(surface);
+    act(() => vi.advanceTimersByTime(400));
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.focus(trigger);
+    act(() => vi.advanceTimersByTime(400));
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
   it("shows on keyboard focus, not only mouse hover, and exposes an accessible label", () => {
     vi.useFakeTimers();
     render(
@@ -297,42 +319,47 @@ describe("dispositionTooltip fallback semantics", () => {
 // the canvas edges, so the flip and the sideways clamp stay here. Both are
 // pure, so they are checked here rather than through a browser.
 describe("node hover preview placement", () => {
-  const canvas = { left: 0, right: 1000, top: 100 };
+  const canvas = { left: 0, right: 1000, top: 100, bottom: 800 };
   const card = { width: 360, height: 200 };
 
   it("stays above the node when there is room above it", () => {
     const node = { left: 480, right: 620, top: 500, bottom: 560 };
-    const { flipBelow, shiftX } = previewPlacement(node, canvas, card);
-    expect(flipBelow).toBe(false);
+    const { side, left } = readingSurfacePlacement(node, canvas, card);
+    expect(side).toBe("top");
     // Centred on the node is where NodeToolbar puts it, so nothing to correct.
-    expect(shiftX).toBe(0);
+    expect(left).toBe(370);
   });
 
   it("flips below the node rather than over the header", () => {
     // A node 40px below the canvas top has no room for a 200px card above it.
     const node = { left: 480, right: 620, top: 140, bottom: 200 };
-    expect(previewPlacement(node, canvas, card).flipBelow).toBe(true);
+    expect(readingSurfacePlacement(node, canvas, card).side).toBe("bottom");
   });
 
   it("shifts inside the canvas rather than off either edge", () => {
     // Centred on a node at the left edge the card would start at -150.
     const nearLeft = { left: 0, right: 60, top: 500, bottom: 560 };
-    expect(previewPlacement(nearLeft, canvas, card).shiftX).toBe(8 - -150);
+    expect(readingSurfacePlacement(nearLeft, canvas, card).left).toBe(8);
 
     const nearRight = { left: 960, right: 1000, top: 500, bottom: 560 };
-    expect(previewPlacement(nearRight, canvas, card).shiftX).toBe(1000 - 360 - 8 - 800);
+    expect(readingSurfacePlacement(nearRight, canvas, card).left).toBe(1000 - 360 - 8);
   });
 
   it("pins the card's start on screen when the canvas is narrower than it is", () => {
-    const phone = { left: 0, right: 360, top: 100 };
+    const phone = { left: 0, right: 360, top: 100, bottom: 700 };
     const node = { left: 100, right: 290, top: 500, bottom: 560 };
-    const { shiftX } = previewPlacement(node, phone, card);
+    const { left, width } = readingSurfacePlacement(node, phone, card);
     // Centred would start at 15; the only satisfiable edge is the left one.
-    expect(shiftX).toBe(8 - 15);
+    expect(left).toBe(8);
+    expect(width).toBe(344);
   });
 
-  it("leaves NodeToolbar's own placement alone when there is no canvas to clamp against", () => {
-    const node = { left: 480, right: 620, top: 40, bottom: 100 };
-    expect(previewPlacement(node, null, card)).toEqual({ flipBelow: false, shiftX: 0 });
+  it("limits a long popup to the available vertical space", () => {
+    const node = { left: 480, right: 620, top: 350, bottom: 420 };
+    const boundary = { ...canvas, bottom: 600 };
+    const result = readingSurfacePlacement(node, boundary, { width: 400, height: 420 });
+    expect(result.maxHeight).toBeLessThan(420);
+    expect(result.top).toBeGreaterThanOrEqual(boundary.top + 8);
+    expect(result.top + result.maxHeight).toBeLessThanOrEqual(boundary.bottom - 8);
   });
 });

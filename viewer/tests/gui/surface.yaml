@@ -108,6 +108,8 @@ surfaces:
     file: ThemeSwitcher.tsx
   - component: IdentityCard
     file: IdentityCard.tsx
+  - component: InterfacePreview
+    file: InterfacePreview.tsx
   - component: TrustLedger
     file: TrustLedger.tsx
   - component: WorkbenchTrustStrip
@@ -132,6 +134,12 @@ ignore:
     reason: >
       Presentational renderer; exercised implicitly wherever docs, help, and AI
       content render (V3, V10). No standalone user flow.
+  - file: StructuredExplanation.tsx
+    reason: >
+      Shared explanation renderer within ComponentNode and DetailPanel, not a
+      standalone surface. StructuredExplanation.test.tsx covers sections,
+      evidence disclosures, rejected references, and legacy text; graph.spec.ts
+      exercises its scrollable host and keyboard dismissal in CI.
   - file: Tooltip.tsx
     reason: >
       Presentational wrapper; exercised implicitly by every labeled control the

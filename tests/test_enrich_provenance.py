@@ -252,6 +252,55 @@ def test_overlay_store_wins_over_inline_ai_enhance():
     store.close()
 
 
+def test_overlay_projects_audited_component_claims_without_flattening_help_text():
+    store, _ = _mini_store()
+    idx = DigestIndex.from_store(store)
+    stamp_enrichment(
+        store, "component", "a", {"help_text": "Purpose. Mechanism. Place."},
+        digest_index=idx, clock=FIXED_CLOCK,
+    )
+    store.add_enrichment(
+        "contract-state",
+        "component:a",
+        {
+            "answers": {
+                "purpose": {
+                    "claim": "Receives requests and coordinates the response.",
+                    "status": "answered",
+                    "evidence": [{"kind": "symbol", "path": "a/x.py", "symbol": "foo"}],
+                },
+                "mechanism": {
+                    "claim": "Delegates work through the service boundary.",
+                    "status": "answered",
+                    "evidence": [],
+                },
+            },
+            "self_state": "grounded",
+        },
+    )
+    store.commit()
+    arch = {"components": [{"id": "a", "children": []}], "relationships": []}
+
+    apply_enrichment_overlay(arch, store)
+
+    ai = arch["components"][0]["ai_enhance"]
+    assert ai["help_text"] == "Purpose. Mechanism. Place."
+    assert ai["explanation"] == {
+        "purpose": {
+            "text": "Receives requests and coordinates the response.",
+            "status": "answered",
+            "evidence": [{"kind": "symbol", "path": "a/x.py", "symbol": "foo"}],
+        },
+        "mechanism": {
+            "text": "Delegates work through the service boundary.",
+            "status": "answered",
+            "evidence": [],
+        },
+    }
+    assert "answers" not in ai and "contract" not in ai
+    store.close()
+
+
 def test_overlay_prunes_dangling_architecture_group_members():
     store, _ = _mini_store()
     idx = DigestIndex.from_store(store)

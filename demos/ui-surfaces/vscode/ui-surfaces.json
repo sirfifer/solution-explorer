@@ -1,0 +1,130 @@
+{
+  "schema": "syscorpus.ui-surfaces/v1",
+  "subject": {
+    "repository": "https://github.com/microsoft/vscode",
+    "commit": "474a349ad5b745e512ef86b864d1c74f7264dd7a"
+  },
+  "clients": [
+    {
+      "id": "desktop",
+      "label": "Desktop",
+      "kind": "desktop-app",
+      "platforms": ["macos", "windows", "linux"],
+      "primary": true,
+      "coverage": "captured"
+    },
+    {
+      "id": "web",
+      "label": "Web",
+      "kind": "web-app",
+      "platforms": ["browser"],
+      "primary": false,
+      "coverage": "missing",
+      "note": "The web workbench is structurally related, but no separately verified web capture is attached to this snapshot."
+    }
+  ],
+  "screens": [
+    {
+      "id": "desktop:main-workbench",
+      "client_id": "desktop",
+      "label": "Main workbench",
+      "role": "primary",
+      "image": {
+        "path": "ui-surfaces/vscode-workbench-d0c6ee319944.png",
+        "sha256": "d0c6ee319944b1faabc1d17db45febcd530b0382b66c43707c191d174a9eca40",
+        "width": 1440,
+        "height": 900
+      },
+      "capture": {
+        "captured_at": "2026-09-04T19:17:29Z",
+        "method": "playwright-electron",
+        "runtime_name": "Visual Studio Code",
+        "runtime_version": "1.132.0",
+        "runtime_commit": "df53daabb18cd157bdb08c7f01c34df936cf12f4",
+        "source_match": "representative",
+        "sanitized": true,
+        "notes": "Captured from an isolated macOS profile against the pinned source workspace. The installed runtime predates the analyzed source commit, so this is explicitly representative rather than exact."
+      },
+      "hotspots": [
+        {
+          "id": "activity-bar",
+          "label": "Activity bar",
+          "kind": "region",
+          "rect": {"x": 0, "y": 0.038889, "width": 0.033333, "height": 0.936667},
+          "evidence": {
+            "component_id": "src/vs/workbench/browser/parts",
+            "file": "src/vs/workbench/browser/parts/activitybar/activitybarPart.ts",
+            "line": 44,
+            "symbol": "ActivitybarPart"
+          },
+          "action": {"kind": "open_source"}
+        },
+        {
+          "id": "side-bar",
+          "label": "Explorer side bar",
+          "kind": "region",
+          "rect": {"x": 0.033333, "y": 0.038889, "width": 0.208333, "height": 0.936667},
+          "evidence": {
+            "component_id": "src/vs/workbench/browser/parts",
+            "file": "src/vs/workbench/browser/parts/sidebar/sidebarPart.ts",
+            "line": 42,
+            "symbol": "SidebarPart"
+          },
+          "action": {"kind": "open_source"}
+        },
+        {
+          "id": "editor",
+          "label": "Editor area",
+          "kind": "region",
+          "rect": {"x": 0.241667, "y": 0.038889, "width": 0.55, "height": 0.936667},
+          "evidence": {
+            "component_id": "src/vs/workbench/browser/parts",
+            "file": "src/vs/workbench/browser/parts/editor/editorPart.ts",
+            "line": 100,
+            "symbol": "EditorPart"
+          },
+          "action": {"kind": "open_source"}
+        },
+        {
+          "id": "auxiliary-bar",
+          "label": "Auxiliary side bar",
+          "kind": "region",
+          "rect": {"x": 0.791667, "y": 0.038889, "width": 0.208333, "height": 0.936667},
+          "evidence": {
+            "component_id": "src/vs/workbench/browser/parts",
+            "file": "src/vs/workbench/browser/parts/auxiliarybar/auxiliaryBarPart.ts",
+            "line": 45,
+            "symbol": "AuxiliaryBarPart"
+          },
+          "action": {"kind": "open_source"}
+        },
+        {
+          "id": "title-bar",
+          "label": "Title bar and command center",
+          "kind": "region",
+          "rect": {"x": 0, "y": 0, "width": 1, "height": 0.038889},
+          "evidence": {
+            "component_id": "src/vs/workbench/browser/parts",
+            "file": "src/vs/workbench/browser/parts/titlebar/titlebarPart.ts",
+            "line": 227,
+            "symbol": "BrowserTitlebarPart"
+          },
+          "action": {"kind": "open_source"}
+        },
+        {
+          "id": "status-bar",
+          "label": "Status bar",
+          "kind": "region",
+          "rect": {"x": 0, "y": 0.975556, "width": 1, "height": 0.024444},
+          "evidence": {
+            "component_id": "src/vs/workbench/browser/parts",
+            "file": "src/vs/workbench/browser/parts/statusbar/statusbarPart.ts",
+            "line": 781,
+            "symbol": "MainStatusbarPart"
+          },
+          "action": {"kind": "open_source"}
+        }
+      ]
+    }
+  ]
+}

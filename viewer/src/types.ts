@@ -248,6 +248,10 @@ export interface Rule {
 export interface ComponentAIEnhance {
   // Core fields
   help_text?: string;
+  // Audited semantic atoms projected from the enrichment contract-state row.
+  // `help_text` remains the backward-compatible/search representation; readers
+  // should prefer this structure when present rather than splitting prose.
+  explanation?: ComponentExplanation;
   // One-line summary the tree renders. The projection also copies this up to the
   // top-level Component.description when the mechanical description is empty (D7),
   // so existing description surfaces render it without change.
@@ -276,6 +280,31 @@ export interface ComponentAIEnhance {
   // Set when the cited component digest no longer matches the current files.
   // Consumers must disclose this rather than rendering old prose as current.
   stale?: boolean;
+  honest_gaps?: HonestGap[];
+}
+
+export type ComponentExplanationKey =
+  | "purpose"
+  | "mechanism"
+  | "place"
+  | "why_matters"
+  | "data_handled"
+  | "next_step";
+
+export interface ExplanationClaim {
+  text: string;
+  status?: string;
+  reason?: string;
+  evidence?: Record<string, unknown>[];
+}
+
+export type ComponentExplanation = Partial<
+  Record<ComponentExplanationKey, ExplanationClaim>
+>;
+
+export interface HonestGap {
+  question: string;
+  why: string;
 }
 
 export interface RelationshipAIEnhance {
@@ -1200,6 +1229,56 @@ export interface SecurityProjection {
   counts: Record<string, number>;
 }
 
+export interface UISurfaceHotspot {
+  id: string;
+  label: string;
+  kind: string;
+  rect: { x: number; y: number; width: number; height: number };
+  evidence: {
+    component_id: string;
+    file: string;
+    line: number;
+    symbol?: string | null;
+    symbol_id?: string | null;
+  };
+  action: { kind: "open_source" };
+}
+
+export interface UISurfaceScreen {
+  id: string;
+  client_id: string;
+  label: string;
+  role: "primary" | "secondary";
+  image: { path: string; sha256: string; width: number; height: number };
+  capture: {
+    captured_at: string;
+    method: string;
+    runtime_name: string;
+    runtime_version: string;
+    runtime_commit: string;
+    source_match: "exact" | "representative";
+    sanitized: true;
+    notes?: string;
+  };
+  hotspots: UISurfaceHotspot[];
+}
+
+export interface UISurfacesProjection {
+  schema: "syscorpus.ui-surfaces/v1";
+  subject: { repository: string; commit: string };
+  clients: Array<{
+    id: string;
+    label: string;
+    kind: string;
+    platforms: string[];
+    primary: boolean;
+    coverage: "captured" | "shared" | "missing" | "unavailable";
+    shares_interface_with?: string;
+    note?: string;
+  }>;
+  screens: UISurfaceScreen[];
+}
+
 export interface Architecture {
   name: string;
   description: string;
@@ -1260,6 +1339,9 @@ export interface Architecture {
   orientation?: OrientationProjection;
   support?: SupportProjection;
   security?: SecurityProjection;
+  // Real, provenance-stamped interface captures are attached at demo assembly
+  // time. They are never analyzer or enhancement output.
+  ui_surfaces?: UISurfacesProjection;
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
   live_status?: {
     statuses?: Record<string, ArchitectureStatus>;

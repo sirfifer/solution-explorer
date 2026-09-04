@@ -100,6 +100,13 @@ afterEach(() => {
 });
 
 describe("P5-3 backward compatibility", () => {
+  it("shows structured user flows even when no narrative summary was supplied", () => {
+    const component = makeComponent({ ai_enhance: { key_user_flows: ["Choose a workspace", "Inspect its components"] } });
+    mount(component, makeArchitecture([component]));
+    fireEvent.click(screen.getByRole("button", { name: "AI Insights" }));
+    expect(screen.getByText("Choose a workspace")).toBeDefined();
+    expect(screen.getByText("Inspect its components")).toBeDefined();
+  });
   it("shows no Capabilities or Data tab when the dataset carries neither key", () => {
     const component = makeComponent();
     const arch = makeArchitecture([component]);
