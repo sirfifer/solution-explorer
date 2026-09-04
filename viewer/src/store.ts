@@ -67,6 +67,7 @@ import {
 } from "./utils/annotationStorage";
 import { loadSelectionSets, saveSelectionSets } from "./utils/setStorage";
 import { generateDirective, type DirectiveModel } from "./utils/directiveGenerator";
+import { persistOrientation, readFirstVisitDecision } from "./orientation/model";
 
 // Storage key for dark mode preference (localStorage for persistence across sessions)
 const DARK_MODE_KEY = "arch-dark-mode";
@@ -277,6 +278,21 @@ interface ArchStore {
   setTrustOpen: (open: boolean) => void;
   setPreferencesOpen: (open: boolean) => void;
 
+  // The short product orientation is separate from dataset walkthroughs.
+  // Its index is interpreted against the viewport-specific stop list by the
+  // presentation component, while skipped ids are exposed to the crawl.
+  orientationOpen: boolean;
+  orientationStep: number;
+  orientationInvite: boolean;
+  orientationSkipped: string[];
+  startOrientation: () => void;
+  orientationNext: () => void;
+  orientationPrev: () => void;
+  setOrientationStep: (step: number) => void;
+  exitOrientation: (reason: "done" | "dismissed") => void;
+  dismissOrientationInvite: () => void;
+  markOrientationSkipped: (id: string) => void;
+
   // Navigation
   selectedComponentId: string | null;
   breadcrumbs: BreadcrumbItem[];
@@ -406,14 +422,11 @@ interface ArchStore {
   // Reading them from anywhere else was impossible while they were local, and a
   // beacon that cannot see an overlay would quietly under-report it.
   //   helpOpen      the Help dialog (the ? button, the ? key)
-  //   welcomeOpen   the first-run welcome walkthrough
   //   inventoryOpen the non-source inventory dialog, opened from the coverage
   //                 drill-in's "Explore inventory" affordance
   helpOpen: boolean;
-  welcomeOpen: boolean;
   inventoryOpen: boolean;
   setHelpOpen: (open: boolean) => void;
-  setWelcomeOpen: (open: boolean) => void;
   setInventoryOpen: (open: boolean) => void;
 
   // Theme
@@ -1217,6 +1230,7 @@ function clearedSelection(state: { reviewMode: boolean; activePanel: Panel }): {
 }
 
 const initialExperiencePreferences = getExperiencePreferences();
+const initialOrientationEntry = readFirstVisitDecision();
 
 export const useArchStore = create<ArchStore>((set, get) => ({
   architecture: null,
@@ -1225,7 +1239,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   publication: null,
   setPublication: (publication) => set({ publication }),
 
-  experienceMode: initialExperienceMode(initialExperiencePreferences),
+  experienceMode: initialOrientationEntry === "start"
+    ? "overview"
+    : initialExperienceMode(initialExperiencePreferences),
   overviewDirection: initialExperiencePreferences.overviewDirection,
   startView: initialExperiencePreferences.startView,
   workbenchDensity: initialExperiencePreferences.workbenchDensity,
@@ -1303,6 +1319,53 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   setTrustOpen: (trustOpen) => set({ trustOpen }),
   setPreferencesOpen: (preferencesOpen) => set({ preferencesOpen }),
 
+  orientationOpen: initialOrientationEntry === "start",
+  orientationStep: 0,
+  // Retained in the state shape for beacon and URL compatibility. New visits
+  // enter the centered walk directly, so no live path initializes the old card.
+  orientationInvite: false,
+  orientationSkipped: [],
+  startOrientation: () => {
+    const state = get();
+    set({
+      searchOpen: false,
+      findingsSurface: { ...state.findingsSurface, open: false },
+      supplyChainOpen: false,
+      inventoryOpen: false,
+      toursOpen: false,
+      helpOpen: false,
+      trustOpen: false,
+      preferencesOpen: false,
+      adminOpen: false,
+      activeTourId: null,
+      tourStep: 0,
+      activePanel: state.activePanel === "review" ? null : state.activePanel,
+      orientationOpen: true,
+      orientationStep: 0,
+      orientationInvite: false,
+      orientationSkipped: [],
+      mobileChromeHidden: false,
+    });
+    if (get().experienceMode !== "overview") get().setExperienceMode("overview");
+  },
+  orientationNext: () => set((state) => ({ orientationStep: state.orientationStep + 1 })),
+  orientationPrev: () => set((state) => ({ orientationStep: Math.max(0, state.orientationStep - 1) })),
+  setOrientationStep: (orientationStep) => set({ orientationStep: Math.max(0, orientationStep) }),
+  exitOrientation: (reason) => {
+    persistOrientation(reason);
+    set({ orientationOpen: false, orientationStep: 0, orientationInvite: false, mobileChromeHidden: false });
+    if (get().experienceMode !== "overview") get().setExperienceMode("overview");
+  },
+  dismissOrientationInvite: () => {
+    persistOrientation("dismissed");
+    set({ orientationInvite: false });
+  },
+  markOrientationSkipped: (id) => set((state) => ({
+    orientationSkipped: state.orientationSkipped.includes(id)
+      ? state.orientationSkipped
+      : [...state.orientationSkipped, id],
+  })),
+
   selectedComponentId: null,
   breadcrumbs: [],
   drillLevel: null,
@@ -1327,7 +1390,6 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   searchOpen: false,
   helpOpen: false,
-  welcomeOpen: false,
   inventoryOpen: false,
   searchQuery: "",
 
@@ -1786,7 +1848,6 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   setSearchOpen: (open) => set({ searchOpen: open, searchQuery: open ? get().searchQuery : "" }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setHelpOpen: (open) => set({ helpOpen: open }),
-  setWelcomeOpen: (open) => set({ welcomeOpen: open }),
   setInventoryOpen: (open) => set({ inventoryOpen: open }),
 
   toggleDarkMode: () => set((s) => {

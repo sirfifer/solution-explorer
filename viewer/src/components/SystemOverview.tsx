@@ -3,6 +3,8 @@ import { useArchStore } from "../store";
 import type { Architecture, OrientationProjection, OrientationTarget } from "../types";
 import { buildOrientationFallback } from "../utils/orientation";
 import { formatNumber } from "../utils/layout";
+import { SYSCORPUS } from "../utils/product";
+import { publicationSubjectUrl } from "../utils/publication";
 import { IdentityCard } from "./IdentityCard";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { ExperienceSwitcher } from "./ExperienceSwitcher";
@@ -13,16 +15,41 @@ import { FindingsSurface } from "./FindingsSurface";
 import { TourPlayer } from "./TourPlayer";
 import { PublicationBanner } from "./PublicationBanner";
 import { PublicationFooter } from "./PublicationFooter";
+import { OrientationInvite } from "./OrientationInvite";
+import { OrientationWalk } from "./OrientationWalk";
+import { HelpSystem } from "./HelpSystem";
+import { HeaderHelpButton } from "./HeaderHelpButton";
+import { applicableStops } from "../orientation/model";
+import { WALK_STOPS } from "../orientation/stops";
+
+const OVERVIEW_CAPABILITIES = [
+  {
+    title: "Understand the system",
+    detail: "Purpose, architecture, behavior, responsibilities, and relationships.",
+  },
+  {
+    title: "Trace it into the code",
+    detail: "Move from system areas to components, files, symbols, and source.",
+  },
+  {
+    title: "Investigate from different angles",
+    detail: "Use questions and lenses, with guided paths, findings, and trust context when available.",
+  },
+] as const;
 
 export function SystemOverview({ displayName }: { displayName: string }) {
   const architecture = useArchStore((state) => state.architecture)!;
+  const publication = useArchStore((state) => state.publication);
   const direction = useArchStore((state) => state.overviewDirection);
   const setDirection = useArchStore((state) => state.setOverviewDirection);
   const darkMode = useArchStore((state) => state.darkMode);
   const setSearchOpen = useArchStore((state) => state.setSearchOpen);
   const setTrustOpen = useArchStore((state) => state.setTrustOpen);
   const setPreferencesOpen = useArchStore((state) => state.setPreferencesOpen);
+  const orientationOpen = useArchStore((state) => state.orientationOpen);
+  const orientationStep = useArchStore((state) => state.orientationStep);
   const orientation = architecture.orientation ?? buildOrientationFallback(architecture);
+  const subjectUrl = publicationSubjectUrl(publication, architecture.repository);
   const initialQuestion = orientation.question_routes.find((row) => row.available)?.id ?? "organization";
   const [questionId, setQuestionId] = useState(initialQuestion);
 
@@ -58,18 +85,63 @@ export function SystemOverview({ displayName }: { displayName: string }) {
       className="flex min-h-screen flex-col bg-[var(--se-page)]"
     >
       <PublicationBanner />
-      <header className={`sticky top-0 z-40 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b px-3 py-2 backdrop-blur-xl sm:flex sm:justify-between sm:gap-3 sm:px-5 ${darkMode ? "border-zinc-800 bg-zinc-950/90" : "border-zinc-200 bg-white/90"}`}>
-        <div className="min-w-0"><p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-cyan-500">System under study</p><h1 className={`truncate text-sm font-bold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{displayName}</h1></div>
-        <ExperienceSwitcher className="order-3 col-span-2 w-full sm:order-none sm:w-auto" />
-        <div className="flex items-center gap-0.5 sm:gap-1.5">
-          <button data-testid="search-button" aria-label="Search everything" onClick={() => setSearchOpen(true)} className={`min-h-11 min-w-11 rounded-lg px-2.5 py-2 text-xs sm:min-h-0 sm:min-w-0 ${darkMode ? "bg-zinc-900 text-zinc-300 hover:bg-zinc-800" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"}`}><span aria-hidden>⌕</span><span className="hidden sm:inline"> Search everything</span></button>
-          <button onClick={() => setTrustOpen(true)} className={`hidden rounded-lg px-2.5 py-2 text-xs md:block ${darkMode ? "bg-zinc-900 text-zinc-300" : "bg-zinc-100 text-zinc-700"}`}>{orientation.trust.source_coverage.analyzed != null && orientation.trust.source_coverage.inventory_total ? `${orientation.trust.source_coverage.analyzed}/${orientation.trust.source_coverage.inventory_total} mapped` : orientation.trust.source_coverage.percent == null ? "Scope" : `${orientation.trust.source_coverage.percent}% parsed`}</button>
-          <ThemeSwitcher />
-          <button onClick={() => setPreferencesOpen(true)} className={`min-h-11 min-w-11 rounded-lg p-2 text-sm sm:min-h-0 sm:min-w-0 ${darkMode ? "text-zinc-400 hover:bg-zinc-900" : "text-zinc-600 hover:bg-zinc-100"}`} aria-label="Viewer preferences">◒</button>
+      <header className={`sticky top-0 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b px-3 py-2 backdrop-blur-xl sm:flex sm:justify-between sm:gap-3 sm:px-5 ${orientationOpen && applicableStops(WALK_STOPS, typeof window === "undefined" ? 1024 : window.innerWidth)[orientationStep]?.id === "your-tools" ? "z-[70]" : "z-40"} ${darkMode ? "border-zinc-800 bg-zinc-950/90" : "border-zinc-200 bg-white/90"}`}>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <a
+            data-testid="syscorpus-brand"
+            href={SYSCORPUS.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`shrink-0 text-sm font-black tracking-tight transition hover:text-cyan-500 ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}
+            aria-label="SysCorpus website"
+          >
+            {SYSCORPUS.name}
+          </a>
+          <span aria-hidden className={darkMode ? "text-zinc-700" : "text-zinc-300"}>/</span>
+          <div className="min-w-0"><p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-cyan-500">View of</p>{subjectUrl ? <a href={subjectUrl} target="_blank" rel="noopener noreferrer" aria-label={`Visit the official ${displayName} website (opens in a new tab)`} className="group flex min-w-0 items-center gap-1"><h1 data-testid="overview-title" className={`truncate text-sm font-bold transition group-hover:text-cyan-500 ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{displayName}</h1><span aria-hidden="true" className="shrink-0 text-cyan-500">↗</span></a> : <h1 data-testid="overview-title" className={`truncate text-sm font-bold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{displayName}</h1>}</div>
         </div>
+        <ExperienceSwitcher className="col-start-1 row-start-2 w-full sm:col-auto sm:row-auto sm:w-auto" />
+        <div data-testid="header-tools" className="col-start-2 row-start-2 flex items-center gap-0.5 sm:col-auto sm:row-auto sm:gap-1.5">
+          <button data-testid="search-button" aria-label="Search everything" onClick={() => setSearchOpen(true)} className={`min-h-11 min-w-11 rounded-lg px-2.5 py-2 text-xs sm:min-h-0 sm:min-w-0 ${darkMode ? "bg-zinc-900 text-zinc-300 hover:bg-zinc-800" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"}`}><span aria-hidden>⌕</span><span className="hidden sm:inline"> Search everything</span></button>
+          <button data-testid="overview-trust-button" onClick={() => setTrustOpen(true)} className={`hidden rounded-lg px-2.5 py-2 text-xs md:block ${darkMode ? "bg-zinc-900 text-zinc-300" : "bg-zinc-100 text-zinc-700"}`}>{orientation.trust.source_coverage.analyzed != null && orientation.trust.source_coverage.inventory_total ? `${orientation.trust.source_coverage.analyzed}/${orientation.trust.source_coverage.inventory_total} mapped` : orientation.trust.source_coverage.percent == null ? "Scope" : `${orientation.trust.source_coverage.percent}% parsed`}</button>
+          <ThemeSwitcher />
+          <button data-testid="preferences-button" onClick={() => setPreferencesOpen(true)} className={`min-h-11 min-w-11 rounded-lg p-2 text-sm sm:min-h-0 sm:min-w-0 ${darkMode ? "text-zinc-400 hover:bg-zinc-900" : "text-zinc-600 hover:bg-zinc-100"}`} aria-label="Viewer preferences">◒</button>
+        </div>
+        <HeaderHelpButton className="col-start-2 row-start-1 justify-self-end sm:col-auto sm:row-auto" />
       </header>
 
       <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-5 sm:px-6 lg:px-10">
+        <section
+          data-testid="syscorpus-overview-context"
+          className={`mb-5 rounded-2xl border px-4 py-4 sm:px-5 ${darkMode ? "border-cyan-500/20 bg-cyan-500/5" : "border-cyan-200 bg-cyan-50/70"}`}
+          aria-label="About this SysCorpus view"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="max-w-4xl">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-500">{SYSCORPUS.descriptor}</p>
+              <p data-testid="overview-context-title" className={`mt-1 text-xl font-black leading-tight sm:text-2xl ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
+                An explorable, evidence-linked model of {displayName}
+              </p>
+              <p className={`mt-1.5 text-xs leading-5 sm:text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+                Generated and presented by SysCorpus from the project&apos;s source at one recorded commit.
+              </p>
+            </div>
+            <a href={SYSCORPUS.url} target="_blank" rel="noopener noreferrer" className="min-h-11 shrink-0 self-start rounded-lg px-2 py-3 text-xs font-bold text-cyan-500 hover:underline sm:min-h-0 sm:py-2">
+              About SysCorpus ↗
+            </a>
+          </div>
+          <ul data-testid="overview-capabilities" className="mt-4 grid gap-2 sm:grid-cols-3">
+            {OVERVIEW_CAPABILITIES.map((capability) => (
+              <li data-testid="overview-capability" key={capability.title} className={`rounded-xl border px-3 py-2.5 ${darkMode ? "border-zinc-800/80 bg-zinc-950/40" : "border-cyan-100 bg-white/70"}`}>
+                <strong className={`block text-xs ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}><span aria-hidden className="mr-1.5 text-cyan-500">●</span>{capability.title}</strong>
+                <span className={`mt-1 block text-xs leading-5 ${darkMode ? "text-zinc-500" : "text-zinc-600"}`}>{capability.detail}</span>
+              </li>
+            ))}
+          </ul>
+          <button type="button" data-testid="overview-interface-guide" onClick={() => window.dispatchEvent(new Event("arch-viz-open-interface-guide"))} className={`mt-3 min-h-11 text-xs font-semibold hover:underline sm:min-h-0 ${darkMode ? "text-zinc-400 hover:text-cyan-400" : "text-zinc-600 hover:text-cyan-600"}`}>
+            Open the interface guide →
+          </button>
+        </section>
         {/* The posture chooser asked a first-time reader to pick a posture before
             they knew what one was. It stays, and keeps every hook the crawl
             reads, but it is now a quiet control at the end of the row rather
@@ -81,7 +153,7 @@ export function SystemOverview({ displayName }: { displayName: string }) {
           </div>
         </div>
 
-        {direction === "portrait" && <Portrait orientation={orientation} darkMode={darkMode} onTarget={openTarget} onComponent={openComponent} onTrust={() => setTrustOpen(true)} />}
+        {direction === "portrait" && <Portrait orientation={orientation} subjectUrl={subjectUrl} darkMode={darkMode} onTarget={openTarget} onComponent={openComponent} onTrust={() => setTrustOpen(true)} />}
         {direction === "questions" && <Questions orientation={orientation} questionId={questionId} setQuestionId={setQuestionId} darkMode={darkMode} onTarget={openTarget} />}
         {direction === "atlas" && <Atlas orientation={orientation} darkMode={darkMode} onTarget={openTarget} onComponent={openComponent} />}
       </main>
@@ -91,11 +163,14 @@ export function SystemOverview({ displayName }: { displayName: string }) {
       <SearchOverlay />
       <FindingsSurface />
       <TourPlayer />
+      <HelpSystem />
+      <OrientationInvite />
+      <OrientationWalk />
     </div>
   );
 }
 
-function Portrait({ orientation, darkMode, onTarget, onComponent, onTrust }: { orientation: OrientationProjection; darkMode: boolean; onTarget: (target: OrientationTarget, question?: string) => void; onComponent: (id?: string) => void; onTrust: () => void }) {
+function Portrait({ orientation, subjectUrl, darkMode, onTarget, onComponent, onTrust }: { orientation: OrientationProjection; subjectUrl: string | null; darkMode: boolean; onTarget: (target: OrientationTarget, question?: string) => void; onComponent: (id?: string) => void; onTrust: () => void }) {
   const architecture = useArchStore((state) => state.architecture)!;
   const primary = orientation.question_routes.filter((route) => route.available).slice(0, 3);
   const interpretedStatement = orientation.orientation.interpreted_statement;
@@ -111,6 +186,7 @@ function Portrait({ orientation, darkMode, onTarget, onComponent, onTrust }: { o
       <IdentityCard
         identity={identity}
         subjectName={orientation.subject.name}
+        subjectUrl={subjectUrl}
         headline={openingStatement}
         interpreted={identity?.statement ? interpreted : (hasLongerDescription ? interpreted : undefined)}
         staleWithheld={staleInterpretationWithheld}
@@ -128,7 +204,7 @@ function Portrait({ orientation, darkMode, onTarget, onComponent, onTrust }: { o
         <div className="mt-3 grid gap-2 sm:grid-cols-2">{orientation.deployment_posture.items.map((item) => <div key={item.id} className={`rounded-xl border p-3 ${darkMode ? "border-zinc-800 bg-zinc-950/50" : "border-violet-100 bg-white/80"}`}><strong className={`block text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>{item.label}</strong><span className="mt-1 block text-[11px] font-semibold uppercase tracking-wide text-violet-500">{item.posture.replaceAll("_", " ")}</span>{item.detail && <small className="mt-1 block text-xs leading-5 text-zinc-500">{item.detail}</small>}<span className="mt-2 block text-[11px] text-zinc-500">{item.statement_kind === "repository_claim" ? "Repository claim" : "Observed source reference"}</span></div>)}</div>
         <p className="mt-3 text-xs leading-5 text-zinc-500">{orientation.deployment_posture.method_caveat}</p>
       </section> : null}
-      <div className="mt-7 grid gap-2 sm:grid-cols-3">{primary.map((route, index) => <button data-se="card" key={route.id} onClick={() => onTarget(route.target, route.id)} className={`group rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 ${index === 0 ? darkMode ? "border-cyan-400/40 bg-cyan-400/10" : "border-cyan-300 bg-cyan-50" : darkMode ? "border-zinc-800 bg-zinc-900/70" : "border-zinc-200 bg-white"}`}><span className="text-[9px] font-semibold uppercase tracking-wider text-cyan-500">{index === 0 ? "Best first step" : "Explore"}</span><strong className={`mt-2 block text-sm ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{route.label}</strong><span className="mt-4 block text-cyan-500 transition group-hover:translate-x-1">→</span></button>)}</div>
+      <div data-testid="question-routes" className="mt-7 grid gap-2 sm:grid-cols-3">{primary.map((route, index) => <button data-se="card" key={route.id} onClick={() => onTarget(route.target, route.id)} className={`group rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 ${index === 0 ? darkMode ? "border-cyan-400/40 bg-cyan-400/10" : "border-cyan-300 bg-cyan-50" : darkMode ? "border-zinc-800 bg-zinc-900/70" : "border-zinc-200 bg-white"}`}><span className="text-[9px] font-semibold uppercase tracking-wider text-cyan-500">{index === 0 ? "Best first step" : "Explore"}</span><strong className={`mt-2 block text-sm ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{route.label}</strong><span className="mt-4 block text-cyan-500 transition group-hover:translate-x-1">→</span></button>)}</div>
       {/* The counts are the trust ledger's business, not the first thing a
           newcomer should read. One line, and the full ledger is one click. */}
       <button data-testid="scale-summary" onClick={onTrust} className={`mt-7 min-h-11 text-left text-xs sm:min-h-0 ${darkMode ? "text-zinc-500 hover:text-zinc-300" : "text-zinc-500 hover:text-zinc-700"}`}>{formatNumber(architecture.stats.total_components)} components · {formatNumber(architecture.stats.total_files)} files · {formatNumber(architecture.stats.total_relationships)} relationships · full ledger →</button>
@@ -155,7 +231,7 @@ function Questions({ orientation, questionId, setQuestionId, darkMode, onTarget 
     window.requestAnimationFrame(() => answerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
   return <div className="grid gap-6 py-8 lg:grid-cols-[0.72fr_1.28fr]">
-    <section><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-500">Start from intent</p><h2 className={`mt-3 text-4xl font-black ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>What are you trying to understand?</h2><p className={`mt-3 max-w-xl text-sm leading-7 ${darkMode ? "text-zinc-500" : "text-zinc-600"}`}>You do not need to know a component name, language, or which lens contains the answer.</p><div className="mt-6 space-y-2">{orientation.question_routes.map((item) => <button data-se="row" data-testid="question-route" data-route-id={item.id} data-available={item.available} key={item.id} disabled={!item.available} onClick={() => chooseQuestion(item.id)} className={`min-h-11 w-full rounded-xl border p-3 text-left transition ${item.id === route.id ? darkMode ? "border-cyan-400/40 bg-cyan-400/10" : "border-cyan-300 bg-cyan-50" : darkMode ? "border-zinc-800 bg-zinc-900/60" : "border-zinc-200 bg-white"} ${!item.available ? "opacity-40" : ""}`}><strong className={`text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>{item.label}</strong><small className="ml-2 text-zinc-500">{item.available ? "→" : "not observed"}</small></button>)}</div></section>
+    <section data-testid="question-routes"><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-500">Start from intent</p><h2 className={`mt-3 text-4xl font-black ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>What are you trying to understand?</h2><p className={`mt-3 max-w-xl text-sm leading-7 ${darkMode ? "text-zinc-500" : "text-zinc-600"}`}>You do not need to know a component name, language, or which lens contains the answer.</p><div className="mt-6 space-y-2">{orientation.question_routes.map((item) => <button data-se="row" data-testid="question-route" data-route-id={item.id} data-available={item.available} key={item.id} disabled={!item.available} onClick={() => chooseQuestion(item.id)} className={`min-h-11 w-full rounded-xl border p-3 text-left transition ${item.id === route.id ? darkMode ? "border-cyan-400/40 bg-cyan-400/10" : "border-cyan-300 bg-cyan-50" : darkMode ? "border-zinc-800 bg-zinc-900/60" : "border-zinc-200 bg-white"} ${!item.available ? "opacity-40" : ""}`}><strong className={`text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>{item.label}</strong><small className="ml-2 text-zinc-500">{item.available ? "→" : "not observed"}</small></button>)}</div></section>
     <article ref={answerRef} data-se="panel" className={`scroll-mt-32 rounded-[2rem] border p-6 sm:p-10 ${darkMode ? "border-zinc-800 bg-zinc-950/75" : "border-zinc-200 bg-white"}`}><p className="text-[10px] font-semibold uppercase tracking-wider text-cyan-500">Answer assembled from mapped evidence</p><h3 className={`mt-5 text-3xl font-black ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{answer.title}</h3><p className={`mt-4 text-base leading-8 ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{answer.body}</p><div className="mt-7 grid gap-3 sm:grid-cols-3">{answer.facts.map(([value, label]) => <Scale key={label} value={value} label={label} dark={darkMode} />)}</div><div className={`mt-8 rounded-2xl border p-5 ${darkMode ? "border-zinc-800 bg-zinc-900/70" : "border-zinc-200 bg-zinc-50"}`}><p className="text-[10px] uppercase tracking-wider text-zinc-500">Open the detailed workspace</p><p className={`mt-2 text-sm ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>{route.target.lens ? `${route.target.lens} lens` : route.target.surface ?? "Detailed workspace"}{route.target.tour_id ? " · guided path available" : ""}</p></div><button data-testid="question-route-continue" data-route-id={route.id} onClick={() => onTarget(route.target, route.id)} className="mt-8 min-h-11 rounded-xl bg-cyan-500 px-5 py-3 text-sm font-bold text-zinc-950 hover:bg-cyan-400">Continue with this question →</button></article>
   </div>;
 }

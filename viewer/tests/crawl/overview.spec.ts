@@ -82,7 +82,7 @@ async function returnToOverview(
     '[data-testid="findings-surface"], [data-testid="supply-chain-surface"], ' +
     '[data-testid="tours-list-overlay"], [data-testid="search-overlay"], ' +
     '[data-testid="trust-drawer"], [data-testid="preferences-drawer"], ' +
-    '[data-testid="help-overlay"]';
+    '[data-testid="help-overlay"], [data-testid="orientation-walk"]';
   for (let attempt = 0; attempt < 3; attempt++) {
     if ((await page.locator(dialogRoots).count()) === 0) break;
     await page.keyboard.press("Escape").catch(() => {});
@@ -1046,6 +1046,72 @@ test.describe("overview", () => {
         title: "raw counts occupying the first thing a newcomer reads",
       });
       expect(wrong, "raw counts must not lead the front door").toEqual([]);
+    },
+  );
+
+  test(
+    "O11: SysCorpus frames every Overview direction without displacing the subject",
+    { tag: ["@desktop", "@mobile"] },
+    async ({ crawlPage }) => {
+      await requireContract(crawlPage);
+      await gotoOverview(crawlPage);
+
+      const wrong: string[] = [];
+      const subjectName = (await crawlPage.locator('[data-testid="overview-title"]').innerText()).trim();
+      const brand = crawlPage.locator('[data-testid="syscorpus-brand"]');
+      const context = crawlPage.locator('[data-testid="syscorpus-overview-context"]');
+      const footer = crawlPage.locator('[data-testid="publication-footer"]');
+
+      if (!(await context.isVisible())) {
+        wrong.push("the first page does not visibly explain what this SysCorpus view contains");
+      }
+      if ((await brand.getAttribute("href")) !== "https://syscorpus.com/") {
+        wrong.push("the primary SysCorpus mark does not link to syscorpus.com");
+      }
+      const contextText = (await context.innerText()).replace(/\s+/g, " ");
+      if (!contextText.includes("SysCorpus") || !contextText.includes(subjectName)) {
+        wrong.push(`the product frame does not identify both SysCorpus and ${subjectName}`);
+      }
+      if (!contextText.includes(`An explorable, evidence-linked model of ${subjectName}`)) {
+        wrong.push("the first-page description reduces the subject to a generic map");
+      }
+      if ((await context.locator('[data-testid="overview-capability"]').count()) !== 3) {
+        wrong.push("the first-page explanation is not broken into three scannable capabilities");
+      }
+      for (const phrase of ["Understand the system", "Trace it into the code", "Investigate from different angles"]) {
+        if (!contextText.includes(phrase)) wrong.push(`the first-page explanation omits "${phrase}"`);
+      }
+      const interfaceGuide = context.locator('[data-testid="overview-interface-guide"]');
+      if (!(await interfaceGuide.isVisible())) {
+        wrong.push("the first page offers no visible route to the fuller interface guide");
+      } else {
+        await interfaceGuide.click();
+        const help = crawlPage.locator('[data-testid="help-overlay"]');
+        if (!(await help.isVisible()) || !(await help.innerText()).includes(`Meet ${subjectName} through the lens of SysCorpus`)) {
+          wrong.push("the first-page interface link does not open the in-product Guide");
+        }
+        await crawlPage.getByRole("button", { name: "Close help" }).click();
+      }
+      const footerText = (await footer.innerText()).replace(/\s+/g, " ");
+      if (!footerText.includes("SysCorpus") || !footerText.includes("© 2025-2026 Richard Amerman")) {
+        wrong.push("the footer does not carry the SysCorpus identity and specific software copyright");
+      }
+      if ((await footer.locator('a[href="https://syscorpus.com/"]').count()) === 0) {
+        wrong.push("the footer offers no link to the SysCorpus website");
+      }
+
+      for (const direction of ["portrait", "questions", "atlas"] as const) {
+        await crawlPage.locator(`[data-testid="overview-direction"][data-direction="${direction}"]`).click();
+        if ((await context.count()) === 0) wrong.push(`${direction} removes the SysCorpus product frame`);
+        if ((await crawlPage.locator('[data-testid="overview-title"]').innerText()).trim() !== subjectName) {
+          wrong.push(`${direction} displaces the project name from the header`);
+        }
+      }
+
+      reportFinding("overview.product_unframed", wrong, {
+        title: "an Overview direction that loses the product or subject identity",
+      });
+      expect(wrong, "SysCorpus and the viewed project must remain first-class together").toEqual([]);
     },
   );
 });

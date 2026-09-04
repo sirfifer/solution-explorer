@@ -57,6 +57,7 @@ infrastructure/cloudflare/worker/.wrangler/
 # here as it executes so the dashboard can show it live. Regenerable by
 # rerunning the harness, and one record per run adds up, so never tracked.
 .testboard/
+viewer/.ow-screens/
 
 # Usage calibration (scripts/usage-budget.py). Written from an observation on
 # one machine and one subscription, so it is local truth rather than repo truth.

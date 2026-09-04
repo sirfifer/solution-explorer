@@ -12,9 +12,10 @@
  *     reload is not shipped.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { useArchStore } from "../store";
 import { ThemeSwitcher } from "../components/ThemeSwitcher";
+import { ORIENTATION_SHOWCASE_EVENT } from "../orientation/showcase";
 import {
   THEME_LIST,
   THEME_NAMES,
@@ -157,6 +158,14 @@ describe("ThemeSwitcher", () => {
     useArchStore.setState({ theme: "atlas", darkMode: false });
     render(<ThemeSwitcher />);
     expect(screen.getByRole("button", { name: "Theme: Atlas, light" })).toBeTruthy();
+  });
+
+  it("expands the theme choices for their orientation stop and restores them afterward", () => {
+    render(<ThemeSwitcher />);
+    act(() => window.dispatchEvent(new CustomEvent(ORIENTATION_SHOWCASE_EVENT, { detail: { stopId: "your-tools" } })));
+    expect(screen.getByTestId("theme-menu")).toBeTruthy();
+    act(() => window.dispatchEvent(new CustomEvent(ORIENTATION_SHOWCASE_EVENT, { detail: { stopId: "the-map" } })));
+    expect(screen.queryByTestId("theme-menu")).toBeNull();
   });
 });
 

@@ -81,6 +81,17 @@ export function parsePublication(raw: unknown): Publication | null {
   return raw as unknown as Publication;
 }
 
+/** Prefer the subject's public home over its source repository. */
+export function publicationSubjectUrl(
+  publication: Publication | null,
+  repository?: string | null,
+): string | null {
+  const candidate = publication?.subject.homepage_url
+    ?? publication?.subject.repo_url
+    ?? repository;
+  return typeof candidate === "string" && /^https?:/i.test(candidate) ? candidate : null;
+}
+
 /**
  * Resolve a dotted path (e.g. "subject.name") against the publication object.
  * Returns the resolved scalar as a string, or undefined when any segment is

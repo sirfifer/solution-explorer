@@ -34,6 +34,7 @@
       "required": ["name", "commit", "snapshot_date", "affiliation"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
+        "homepage_url": { "type": "string" },
         "repo_url": { "type": "string" },
         "license": { "type": "string" },
         "commit": { "type": "string", "minLength": 7 },

@@ -180,6 +180,7 @@ def test_a_filled_template_validates():
         "publisher.name": "Example Co", "publisher.contact": "team@example.com",
         "publisher.url": "https://example.com",
         "subject.name": "Example", "subject.commit": "abc1234def",
+        "subject.homepage_url": "https://example.com/product",
         "subject.license": "MIT", "subject.repo_url": "https://github.com/example/example",
         "generated_by.version": "1.2.0",
     }

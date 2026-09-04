@@ -8,6 +8,7 @@ import { SearchOverlay } from "./components/SearchOverlay";
 import { HelpSystem } from "./components/HelpSystem";
 import { ReviewModeButton } from "./components/ReviewModeButton";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { HeaderHelpButton } from "./components/HeaderHelpButton";
 import { applyThemeToDocument } from "./utils/themes";
 import { AnnotationInput } from "./components/AnnotationInput";
 import { ReviewSummary } from "./components/ReviewSummary";
@@ -46,11 +47,16 @@ import { initializeSearch } from "./utils/search";
 import { collectCriticalComponents, collectExternalDependencies } from "./lenses";
 import { formatNumber, formatRelativeTime, getTypeColors } from "./utils/layout";
 import { dataUrl, getDataBase } from "./utils/dataSource";
-import { parsePublication, publicationDisplayName } from "./utils/publication";
+import { parsePublication, publicationDisplayName, publicationSubjectUrl } from "./utils/publication";
+import { SYSCORPUS } from "./utils/product";
 import { attachHumanViews } from "./utils/orientation";
 import { SolutionIndex } from "./components/SolutionIndex";
 import { Tooltip } from "./components/Tooltip";
 import { TOOLTIP_COPY } from "./utils/tooltipCopy";
+import { OrientationInvite } from "./components/OrientationInvite";
+import { OrientationWalk } from "./components/OrientationWalk";
+import { applicableStops } from "./orientation/model";
+import { WALK_STOPS } from "./orientation/stops";
 import type {
   Architecture,
   Component,
@@ -314,7 +320,7 @@ interface OverlayFlags {
   inventoryOpen: boolean;
   toursOpen: boolean;
   helpOpen: boolean;
-  welcomeOpen: boolean;
+  orientationOpen: boolean;
   adminOpen: boolean;
   activePanel: string | null;
   trustOpen: boolean;
@@ -338,7 +344,8 @@ function openOverlays(f: OverlayFlags): string[] {
     f.supplyChainOpen && "supply-chain",
     f.inventoryOpen && "inventory",
     f.toursOpen && "tours",
-    (f.helpOpen || f.welcomeOpen) && "help",
+    f.helpOpen && "help",
+    f.orientationOpen && "orientation",
     f.adminOpen && "admin",
     f.activePanel === "review" && "review",
     f.trustOpen && "trust",
@@ -360,7 +367,7 @@ function openOverlays(f: OverlayFlags): string[] {
 // between them is the finding.
 //
 // aria-hidden because it is not content: a screen reader has the real UI.
-function NavStateBeacon() {
+export function NavStateBeacon() {
   const drillLevel = useArchStore((s) => s.drillLevel);
   const selectedComponentId = useArchStore((s) => s.selectedComponentId);
   const lens = useArchStore((s) => s.lens);
@@ -381,7 +388,10 @@ function NavStateBeacon() {
   const inventoryOpen = useArchStore((s) => s.inventoryOpen);
   const toursOpen = useArchStore((s) => s.toursOpen);
   const helpOpen = useArchStore((s) => s.helpOpen);
-  const welcomeOpen = useArchStore((s) => s.welcomeOpen);
+  const orientationOpen = useArchStore((s) => s.orientationOpen);
+  const orientationStep = useArchStore((s) => s.orientationStep);
+  const orientationInvite = useArchStore((s) => s.orientationInvite);
+  const orientationSkipped = useArchStore((s) => s.orientationSkipped);
   const adminOpen = useArchStore((s) => s.adminOpen);
   // The front door (main, 2026-09-01). The mode is the single most important
   // thing a test can ask, because every other field means something different
@@ -402,8 +412,13 @@ function NavStateBeacon() {
 
   const overlays = openOverlays({
     searchOpen, findingsOpen, supplyChainOpen, inventoryOpen, toursOpen,
-    helpOpen, welcomeOpen, adminOpen, activePanel, trustOpen, preferencesOpen,
+    helpOpen, orientationOpen, adminOpen, activePanel, trustOpen, preferencesOpen,
   });
+  const orientationStops = applicableStops(
+    WALK_STOPS,
+    typeof window === "undefined" ? 1024 : window.innerWidth,
+  );
+  const orientationStop = orientationOpen ? orientationStops[orientationStep] : undefined;
 
   return (
     <div
@@ -423,6 +438,10 @@ function NavStateBeacon() {
       data-finding={selectedDesignFindingId ?? ""}
       data-tour={activeTourId ?? ""}
       data-tour-step={activeTourId ? String(tourStep) : ""}
+      data-orientation={orientationStop?.id ?? ""}
+      data-orientation-step={orientationStop ? String(orientationStep + 1) : ""}
+      data-orientation-invite={orientationInvite ? "true" : "false"}
+      data-orientation-skipped={orientationSkipped.join(",")}
       data-panel={activePanel ?? ""}
       // "aggregate" is a fourth detail kind the store carries; it is published
       // as itself rather than folded into "" so the beacon never claims nothing
@@ -465,6 +484,8 @@ export function App() {
     liveConfig,
     liveMonitorStatus,
     mobileChromeHidden,
+    orientationOpen,
+    orientationStep,
     fileDeepLinkNotice,
     clearFileDeepLinkNotice,
     experienceMode,
@@ -828,7 +849,7 @@ export function App() {
         inventoryOpen: s.inventoryOpen,
         toursOpen: s.toursOpen,
         helpOpen: s.helpOpen,
-        welcomeOpen: s.welcomeOpen,
+        orientationOpen: s.orientationOpen,
         adminOpen: s.adminOpen,
         activePanel: s.activePanel,
         trustOpen: s.trustOpen,
@@ -950,6 +971,7 @@ export function App() {
   // else the folder-derived architecture.name (the contextual default). This is
   // display only; the annotation identity key stays on architecture.name.
   const displayName = publicationDisplayName(publication, architecture.name);
+  const subjectUrl = publicationSubjectUrl(publication, architecture.repository);
   const showLegacyOpeningBands = false;
 
   if (experienceMode === "overview") {
@@ -975,13 +997,14 @@ export function App() {
       {/* Header */}
       <header
         className={`
-          flex items-center justify-between gap-1 px-2 py-2 border-b shrink-0 z-30 sm:gap-3 sm:px-4
+          flex items-center justify-between gap-1 px-2 py-2 border-b shrink-0 sm:gap-3 sm:px-4
+          ${orientationOpen && applicableStops(WALK_STOPS, typeof window === "undefined" ? 1024 : window.innerWidth)[orientationStep]?.id === "lenses" ? "z-[70]" : "z-30"}
           ${darkMode ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"}
           backdrop-blur-sm transition-transform duration-300
         `}
         style={{
           paddingTop: `max(0.5rem, env(safe-area-inset-top))`,
-          transform: mobileChromeHidden ? "translateY(-100%)" : "none",
+          transform: mobileChromeHidden && !orientationOpen ? "translateY(-100%)" : "none",
         }}
       >
         <div className="flex items-center gap-3">
@@ -998,9 +1021,13 @@ export function App() {
           </button>
 
           <div className="hidden min-w-0 items-center gap-2 sm:flex">
-            <h1 className={`max-w-40 truncate font-bold text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
-              {displayName}
-            </h1>
+            {subjectUrl ? (
+              <a href={subjectUrl} target="_blank" rel="noopener noreferrer" aria-label={`Visit the official ${displayName} website (opens in a new tab)`} className="group max-w-40 truncate">
+                <span className="flex min-w-0 items-center gap-1"><h1 className={`truncate text-sm font-bold transition group-hover:text-cyan-500 ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>{displayName}</h1><span aria-hidden="true" className="shrink-0 text-cyan-500">↗</span></span>
+              </a>
+            ) : (
+              <h1 className={`max-w-40 truncate font-bold text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>{displayName}</h1>
+            )}
             <span className={`hidden sm:inline text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
               Architecture
             </span>
@@ -1029,7 +1056,7 @@ export function App() {
           </div>
         </div>
 
-        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+        <div data-testid="header-tools" className="flex min-w-0 items-center gap-1 sm:gap-2">
           <ExperienceSwitcher className="hidden sm:flex" />
           {/* Home button - visible when drilled into a component */}
           {drillLevel && (
@@ -1087,7 +1114,7 @@ export function App() {
               audience asks to see changed. */}
           <ThemeSwitcher />
 
-          <button onClick={() => setPreferencesOpen(true)} className={`hidden rounded-lg p-2 sm:block ${darkMode ? "text-zinc-400 hover:bg-zinc-800" : "text-zinc-600 hover:bg-zinc-100"}`} aria-label="Viewer preferences">◒</button>
+          <button data-testid="preferences-button" onClick={() => setPreferencesOpen(true)} className={`hidden rounded-lg p-2 sm:block ${darkMode ? "text-zinc-400 hover:bg-zinc-800" : "text-zinc-600 hover:bg-zinc-100"}`} aria-label="Viewer preferences">◒</button>
 
           {/* Desktop: remaining secondary buttons inline */}
           <div className="hidden sm:flex items-center gap-2">
@@ -1154,14 +1181,6 @@ export function App() {
                     <span>✍️</span>
                     <span>{reviewMode ? "Exit review mode" : "Review mode"}</span>
                   </button>
-                  <button
-                    data-testid="help-button"
-                    onClick={() => { window.dispatchEvent(new Event("arch-viz-open-help")); setMoreMenuOpen(false); }}
-                    className={`min-h-11 w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
-                  >
-                    <span>?</span>
-                    <span>Help</span>
-                  </button>
                   {liveConfig && (
                     <button
                       onClick={() => { setAdminOpen(!adminOpen); setMoreMenuOpen(false); }}
@@ -1177,7 +1196,7 @@ export function App() {
           </div>
 
           {/* Stats */}
-          <div className={`hidden md:flex items-center gap-3 text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+          <div className={`hidden 2xl:flex items-center gap-3 text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
             <span>{formatNumber(architecture.stats.total_components)} components</span>
             <span>{formatNumber(architecture.stats.total_files)} files</span>
             {architecture.stats.lines_by_class ? (
@@ -1219,7 +1238,7 @@ export function App() {
 
           {/* SysCorpus project link */}
           <a
-            href="https://github.com/sirfifer/solution-explorer"
+            href={SYSCORPUS.url}
             target="_blank"
             rel="noopener noreferrer"
             className={`
@@ -1229,11 +1248,13 @@ export function App() {
                 : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
               }
             `}
-            title="Built with SysCorpus"
+            title="About SysCorpus"
           >
             <span>&#x2699;&#xFE0F;</span>
             <span>SysCorpus</span>
           </a>
+
+          <HeaderHelpButton />
         </div>
       </header>
 
@@ -1522,7 +1543,7 @@ export function App() {
           {isPanelViewport && lens === "design" && <DesignPanel />}
           {isPanelViewport && lens === "support" && <SupportPanel />}
           {isPanelViewport && lens === "security" && <SecurityPanel />}
-          <div data-se="graph-frame" className="flex-1 relative" style={{ paddingBottom: mobileGraphBottomReserve }}>
+          <div data-se="graph-frame" data-testid="graph-frame" className="flex-1 relative" style={{ paddingBottom: mobileGraphBottomReserve }}>
             <ReactFlowProvider>
               <ArchitectureGraph />
             </ReactFlowProvider>
@@ -1616,10 +1637,11 @@ export function App() {
         `}
         style={{
           paddingBottom: `max(0.5rem, env(safe-area-inset-bottom))`,
-          transform: mobileChromeHidden ? "translateY(100%)" : "none",
+          transform: mobileChromeHidden && !orientationOpen ? "translateY(100%)" : "none",
         }}
       >
         <button
+          data-testid="open-overview"
           onClick={() => setExperienceMode("overview")}
           className={`flex min-h-11 min-w-14 flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}
         >
@@ -1695,6 +1717,9 @@ export function App() {
 
       {/* Help system */}
       <HelpSystem />
+
+      <OrientationInvite />
+      <OrientationWalk />
 
     </div>
   );

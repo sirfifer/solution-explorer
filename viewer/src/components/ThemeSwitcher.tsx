@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useArchStore } from "../store";
 import { THEME_LIST, THEMES } from "../utils/themes";
+import { ORIENTATION_SHOWCASE_EVENT, type OrientationShowcaseDetail } from "../orientation/showcase";
 
 /**
  * The dress control in the header.
@@ -40,10 +41,21 @@ export function ThemeSwitcher() {
   const setTheme = useArchStore((s) => s.setTheme);
 
   const [open, setOpen] = useState(false);
+  const [showcaseOpen, setShowcaseOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    const handleShowcase = (event: Event) => {
+      setShowcaseOpen((event as CustomEvent<OrientationShowcaseDetail>).detail.stopId === "your-tools");
+    };
+    window.addEventListener(ORIENTATION_SHOWCASE_EVENT, handleShowcase);
+    return () => window.removeEventListener(ORIENTATION_SHOWCASE_EVENT, handleShowcase);
+  }, []);
+
+  const expanded = open || showcaseOpen;
+
+  useEffect(() => {
+    if (!expanded) return;
     const handleClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
@@ -56,16 +68,17 @@ export function ThemeSwitcher() {
       document.removeEventListener("click", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [open]);
+  }, [expanded]);
 
   const current = THEMES[theme];
 
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen(!open)}
+        data-testid="theme-switcher"
+        onClick={() => setOpen(!expanded)}
         aria-haspopup="menu"
-        aria-expanded={open}
+        aria-expanded={expanded}
         aria-label={`Theme: ${current.label}, ${darkMode ? "dark" : "light"}`}
         title={`Theme: ${current.label} (${darkMode ? "dark" : "light"})`}
         className={`
@@ -78,11 +91,12 @@ export function ThemeSwitcher() {
         <span className="text-[9px] opacity-60" aria-hidden="true">{"▾"}</span>
       </button>
 
-      {open && (
+      {expanded && (
         <div
+          data-testid="theme-menu"
           role="menu"
           className={`
-            absolute right-0 top-full mt-1 w-60 rounded-xl shadow-xl border z-50 overflow-hidden
+            absolute right-0 top-full mt-1 max-h-[40vh] w-60 overflow-y-auto rounded-xl shadow-xl border z-50
             ${darkMode ? "bg-zinc-900 border-zinc-700" : "bg-white border-zinc-200"}
           `}
         >
@@ -96,7 +110,7 @@ export function ThemeSwitcher() {
                 key={t.name}
                 role="menuitemradio"
                 aria-checked={active}
-                onClick={() => { setTheme(t.name); setOpen(false); }}
+                onClick={() => { setTheme(t.name); setOpen(false); setShowcaseOpen(false); }}
                 className={`
                   min-h-11 w-full flex items-center gap-2.5 px-3 py-2 text-left
                   ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"}

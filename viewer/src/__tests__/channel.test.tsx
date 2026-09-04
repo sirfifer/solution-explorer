@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { act, render, screen, cleanup } from "@testing-library/react";
 import {
   resolveChannel,
   isMaturityActive,
@@ -18,6 +18,7 @@ import {
 import { LensSwitcher } from "../components/LensSwitcher";
 import { useArchStore } from "../store";
 import type { Architecture, Component } from "../types";
+import { ORIENTATION_SHOWCASE_EVENT } from "../orientation/showcase";
 
 // Maturity-channel gating on the client (card R3): channel resolution, the
 // registry's maturity filter, and the explicit "experimental" label in the UI.
@@ -187,5 +188,14 @@ describe("LensSwitcher labeling and URL-param override", () => {
     const option = screen.getByText(/Experimental Test \(experimental\)/);
     expect(option).not.toBeNull();
     expect((option as HTMLOptionElement).value).toBe("test-exp-lens");
+  });
+
+  it("expands the available lenses for their orientation stop and restores them afterward", () => {
+    render(<LensSwitcher />);
+    act(() => window.dispatchEvent(new CustomEvent(ORIENTATION_SHOWCASE_EVENT, { detail: { stopId: "lenses" } })));
+    expect(screen.getByRole("menu", { name: "Available lenses" })).toBeTruthy();
+    expect(screen.getByRole("menuitemradio", { name: /Structure/ })).toBeTruthy();
+    act(() => window.dispatchEvent(new CustomEvent(ORIENTATION_SHOWCASE_EVENT, { detail: { stopId: "if-you-get-lost" } })));
+    expect(screen.queryByRole("menu", { name: "Available lenses" })).toBeNull();
   });
 });

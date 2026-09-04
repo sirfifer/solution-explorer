@@ -12,7 +12,7 @@
 import { test as base, expect, type Page, type ConsoleMessage } from "@playwright/test";
 import { allowedErrorPaths, loadContract, type Contract } from "./contract";
 
-const HELP_DISMISSED_KEY = "arch-viz-help-dismissed";
+const ORIENTATION_DISMISSED_KEY = "arch-viz-orientation-v1";
 
 export interface Recorder {
   consoleErrors: string[];
@@ -133,7 +133,7 @@ export const test = base.extend<{
   ],
 
   crawlPage: async ({ page }, use) => {
-    // The first-run help overlay covers the tree. Dismissed before any script
+    // The first-visit orientation covers the page. Dismissed before any script
     // runs rather than clicked away per test, so no case depends on being the
     // first one in its shard (a rule the AI plan had to state in prose).
     await page.addInitScript(
@@ -144,7 +144,7 @@ export const test = base.extend<{
           /* storage unavailable; the overlay is then handled per case */
         }
       },
-      [HELP_DISMISSED_KEY],
+      [ORIENTATION_DISMISSED_KEY],
     );
     await use(page);
   },
@@ -492,6 +492,10 @@ export interface NavState {
   finding: string;
   tour: string;
   tourStep: string;
+  orientation: string;
+  orientationStep: string;
+  orientationInvite: string;
+  orientationSkipped: string;
   panel: string;
   detail: string;
   overlays: string[];
@@ -532,6 +536,10 @@ export async function readNavState(page: Page): Promise<NavState> {
     finding: el.getAttribute("data-finding") ?? "",
     tour: el.getAttribute("data-tour") ?? "",
     tourStep: el.getAttribute("data-tour-step") ?? "",
+    orientation: el.getAttribute("data-orientation") ?? "",
+    orientationStep: el.getAttribute("data-orientation-step") ?? "",
+    orientationInvite: el.getAttribute("data-orientation-invite") ?? "",
+    orientationSkipped: el.getAttribute("data-orientation-skipped") ?? "",
     panel: el.getAttribute("data-panel") ?? "",
     detail: el.getAttribute("data-detail") ?? "",
     overlays: el.getAttribute("data-overlays") ?? "",
@@ -580,6 +588,8 @@ const DIALOG_ROOTS = [
   "tour-step-panel",
   "trust-drawer",
   "preferences-drawer",
+  "orientation-walk",
+  "orientation-invite",
 ];
 
 /**

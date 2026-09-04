@@ -3,6 +3,7 @@ import {
   parsePublication,
   resolvePublicationText,
   publicationDisplayName,
+  publicationSubjectUrl,
 } from "../utils/publication";
 import type { Publication } from "../types";
 
@@ -38,6 +39,16 @@ describe("parsePublication validation", () => {
     expect(pub).not.toBeNull();
     expect(pub?.subject.name).toBe("Demo Publication Subject");
     expect(pub?.access.visibility).toBe("public");
+  });
+
+  it("prefers the public subject homepage and falls back to the repository", () => {
+    const raw = validRaw();
+    (raw.subject as Record<string, unknown>).homepage_url = "https://example.com/product";
+    const pub = parsePublication(raw);
+    expect(publicationSubjectUrl(pub, "https://fallback.example")).toBe("https://example.com/product");
+    delete (raw.subject as Record<string, unknown>).homepage_url;
+    expect(publicationSubjectUrl(parsePublication(raw), "https://fallback.example")).toBe("https://example.com/repo");
+    expect(publicationSubjectUrl(null, "not-a-url")).toBeNull();
   });
 
   it("returns null for a non-object", () => {

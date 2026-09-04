@@ -7,6 +7,7 @@
   },
   "subject": {
     "name": "EDIT: upstream project name",
+    "homepage_url": "EDIT: official public project website URL",
     "repo_url": "EDIT: upstream repository URL",
     "license": "EDIT: upstream license identifier",
     "commit": "EDIT: stamped at deploy",
