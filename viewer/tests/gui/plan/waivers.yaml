@@ -153,6 +153,24 @@
     deterministic crawl with the header; no AI-plan case exercises a theme
     change yet. Retire with the Overview vector, which is where the theme and
     variant controls live.
+- token: component:HeaderHelpButton
+  reason: >
+    The persistent Help entry point in the Overview and Workbench headers.
+    Exercised by the deterministic crawl (overview.spec.ts and
+    orientation.spec.ts open Help and replay the guided tour). No AI-plan case
+    exercises the Overview header yet; retire with the Overview vector.
+- token: component:OrientationInvite
+  reason: >
+    The first-visit invitation into the guided orientation. Exercised by the
+    deterministic orientation crawl at desktop and phone sizes, including
+    dismissal and persistence. No AI-plan case covers first-visit browser
+    state yet; retire with an Overview orientation vector.
+- token: component:OrientationWalk
+  reason: >
+    The guided orientation overlay across Overview and Workbench. Exercised
+    end to end by orientation.spec.ts at desktop and phone sizes, including
+    skip, replay, expanded controls, map readiness and return to Overview. No
+    AI-plan case covers the multi-step tour yet; retire by authoring one.
 - token: component:IdentityCard
   reason: >
     The identity front door in the Overview: the statement, the form-factor

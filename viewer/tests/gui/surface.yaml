@@ -44,6 +44,12 @@ surfaces:
     file: SearchOverlay.tsx
   - component: HelpSystem
     file: HelpSystem.tsx
+  - component: HeaderHelpButton
+    file: HeaderHelpButton.tsx
+  - component: OrientationInvite
+    file: OrientationInvite.tsx
+  - component: OrientationWalk
+    file: OrientationWalk.tsx
   - component: ToursEntry
     file: ToursEntry.tsx
   - component: TourPlayer
@@ -112,6 +118,16 @@ surfaces:
     file: SecurityPanel.tsx
 
 ignore:
+  - file: __tests__/helpSystem.test.tsx
+    reason: >
+      Component unit test; executable coverage rather than a production UI
+      surface. The HelpSystem and HeaderHelpButton surfaces are inventoried
+      separately above.
+  - file: __tests__/orientationWalk.test.tsx
+    reason: >
+      Component unit test; executable coverage rather than a production UI
+      surface. The OrientationInvite and OrientationWalk surfaces are
+      inventoried separately above.
   - file: MarkdownRenderer.tsx
     reason: >
       Presentational renderer; exercised implicitly wherever docs, help, and AI
