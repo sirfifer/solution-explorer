@@ -3,6 +3,8 @@ import { useArchStore } from "../store";
 import type { Architecture, OrientationProjection, OrientationTarget } from "../types";
 import { buildOrientationFallback } from "../utils/orientation";
 import { formatNumber } from "../utils/layout";
+import { SYSCORPUS } from "../utils/product";
+import { publicationSubjectUrl } from "../utils/publication";
 import { IdentityCard } from "./IdentityCard";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { ExperienceSwitcher } from "./ExperienceSwitcher";
@@ -16,16 +18,38 @@ import { PublicationFooter } from "./PublicationFooter";
 import { OrientationInvite } from "./OrientationInvite";
 import { OrientationWalk } from "./OrientationWalk";
 import { HelpSystem } from "./HelpSystem";
+import { HeaderHelpButton } from "./HeaderHelpButton";
+import { applicableStops } from "../orientation/model";
+import { WALK_STOPS } from "../orientation/stops";
+
+const OVERVIEW_CAPABILITIES = [
+  {
+    title: "Understand the system",
+    detail: "Purpose, architecture, behavior, responsibilities, and relationships.",
+  },
+  {
+    title: "Trace it into the code",
+    detail: "Move from system areas to components, files, symbols, and source.",
+  },
+  {
+    title: "Investigate from different angles",
+    detail: "Use questions and lenses, with guided paths, findings, and trust context when available.",
+  },
+] as const;
 
 export function SystemOverview({ displayName }: { displayName: string }) {
   const architecture = useArchStore((state) => state.architecture)!;
+  const publication = useArchStore((state) => state.publication);
   const direction = useArchStore((state) => state.overviewDirection);
   const setDirection = useArchStore((state) => state.setOverviewDirection);
   const darkMode = useArchStore((state) => state.darkMode);
   const setSearchOpen = useArchStore((state) => state.setSearchOpen);
   const setTrustOpen = useArchStore((state) => state.setTrustOpen);
   const setPreferencesOpen = useArchStore((state) => state.setPreferencesOpen);
+  const orientationOpen = useArchStore((state) => state.orientationOpen);
+  const orientationStep = useArchStore((state) => state.orientationStep);
   const orientation = architecture.orientation ?? buildOrientationFallback(architecture);
+  const subjectUrl = publicationSubjectUrl(publication, architecture.repository);
   const initialQuestion = orientation.question_routes.find((row) => row.available)?.id ?? "organization";
   const [questionId, setQuestionId] = useState(initialQuestion);
 
@@ -61,18 +85,63 @@ export function SystemOverview({ displayName }: { displayName: string }) {
       className="flex min-h-screen flex-col bg-[var(--se-page)]"
     >
       <PublicationBanner />
-      <header className={`sticky top-0 z-40 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b px-3 py-2 backdrop-blur-xl sm:flex sm:justify-between sm:gap-3 sm:px-5 ${darkMode ? "border-zinc-800 bg-zinc-950/90" : "border-zinc-200 bg-white/90"}`}>
-        <div className="min-w-0"><p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-cyan-500">System under study</p><h1 data-testid="overview-title" className={`truncate text-sm font-bold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{displayName}</h1></div>
-        <ExperienceSwitcher className="order-3 col-span-2 w-full sm:order-none sm:w-auto" />
-        <div data-testid="header-tools" className="flex items-center gap-0.5 sm:gap-1.5">
+      <header className={`sticky top-0 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b px-3 py-2 backdrop-blur-xl sm:flex sm:justify-between sm:gap-3 sm:px-5 ${orientationOpen && applicableStops(WALK_STOPS, typeof window === "undefined" ? 1024 : window.innerWidth)[orientationStep]?.id === "your-tools" ? "z-[70]" : "z-40"} ${darkMode ? "border-zinc-800 bg-zinc-950/90" : "border-zinc-200 bg-white/90"}`}>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <a
+            data-testid="syscorpus-brand"
+            href={SYSCORPUS.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`shrink-0 text-sm font-black tracking-tight transition hover:text-cyan-500 ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}
+            aria-label="SysCorpus website"
+          >
+            {SYSCORPUS.name}
+          </a>
+          <span aria-hidden className={darkMode ? "text-zinc-700" : "text-zinc-300"}>/</span>
+          <div className="min-w-0"><p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-cyan-500">View of</p>{subjectUrl ? <a href={subjectUrl} target="_blank" rel="noopener noreferrer" aria-label={`Visit the official ${displayName} website (opens in a new tab)`} className="group flex min-w-0 items-center gap-1"><h1 data-testid="overview-title" className={`truncate text-sm font-bold transition group-hover:text-cyan-500 ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{displayName}</h1><span aria-hidden="true" className="shrink-0 text-cyan-500">↗</span></a> : <h1 data-testid="overview-title" className={`truncate text-sm font-bold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{displayName}</h1>}</div>
+        </div>
+        <ExperienceSwitcher className="col-start-1 row-start-2 w-full sm:col-auto sm:row-auto sm:w-auto" />
+        <div data-testid="header-tools" className="col-start-2 row-start-2 flex items-center gap-0.5 sm:col-auto sm:row-auto sm:gap-1.5">
           <button data-testid="search-button" aria-label="Search everything" onClick={() => setSearchOpen(true)} className={`min-h-11 min-w-11 rounded-lg px-2.5 py-2 text-xs sm:min-h-0 sm:min-w-0 ${darkMode ? "bg-zinc-900 text-zinc-300 hover:bg-zinc-800" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"}`}><span aria-hidden>⌕</span><span className="hidden sm:inline"> Search everything</span></button>
           <button data-testid="overview-trust-button" onClick={() => setTrustOpen(true)} className={`hidden rounded-lg px-2.5 py-2 text-xs md:block ${darkMode ? "bg-zinc-900 text-zinc-300" : "bg-zinc-100 text-zinc-700"}`}>{orientation.trust.source_coverage.analyzed != null && orientation.trust.source_coverage.inventory_total ? `${orientation.trust.source_coverage.analyzed}/${orientation.trust.source_coverage.inventory_total} mapped` : orientation.trust.source_coverage.percent == null ? "Scope" : `${orientation.trust.source_coverage.percent}% parsed`}</button>
           <ThemeSwitcher />
           <button data-testid="preferences-button" onClick={() => setPreferencesOpen(true)} className={`min-h-11 min-w-11 rounded-lg p-2 text-sm sm:min-h-0 sm:min-w-0 ${darkMode ? "text-zinc-400 hover:bg-zinc-900" : "text-zinc-600 hover:bg-zinc-100"}`} aria-label="Viewer preferences">◒</button>
         </div>
+        <HeaderHelpButton className="col-start-2 row-start-1 justify-self-end sm:col-auto sm:row-auto" />
       </header>
 
       <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-5 sm:px-6 lg:px-10">
+        <section
+          data-testid="syscorpus-overview-context"
+          className={`mb-5 rounded-2xl border px-4 py-4 sm:px-5 ${darkMode ? "border-cyan-500/20 bg-cyan-500/5" : "border-cyan-200 bg-cyan-50/70"}`}
+          aria-label="About this SysCorpus view"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="max-w-4xl">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-500">{SYSCORPUS.descriptor}</p>
+              <p data-testid="overview-context-title" className={`mt-1 text-xl font-black leading-tight sm:text-2xl ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
+                An explorable, evidence-linked model of {displayName}
+              </p>
+              <p className={`mt-1.5 text-xs leading-5 sm:text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+                Generated and presented by SysCorpus from the project&apos;s source at one recorded commit.
+              </p>
+            </div>
+            <a href={SYSCORPUS.url} target="_blank" rel="noopener noreferrer" className="min-h-11 shrink-0 self-start rounded-lg px-2 py-3 text-xs font-bold text-cyan-500 hover:underline sm:min-h-0 sm:py-2">
+              About SysCorpus ↗
+            </a>
+          </div>
+          <ul data-testid="overview-capabilities" className="mt-4 grid gap-2 sm:grid-cols-3">
+            {OVERVIEW_CAPABILITIES.map((capability) => (
+              <li data-testid="overview-capability" key={capability.title} className={`rounded-xl border px-3 py-2.5 ${darkMode ? "border-zinc-800/80 bg-zinc-950/40" : "border-cyan-100 bg-white/70"}`}>
+                <strong className={`block text-xs ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}><span aria-hidden className="mr-1.5 text-cyan-500">●</span>{capability.title}</strong>
+                <span className={`mt-1 block text-xs leading-5 ${darkMode ? "text-zinc-500" : "text-zinc-600"}`}>{capability.detail}</span>
+              </li>
+            ))}
+          </ul>
+          <button type="button" data-testid="overview-interface-guide" onClick={() => window.dispatchEvent(new Event("arch-viz-open-interface-guide"))} className={`mt-3 min-h-11 text-xs font-semibold hover:underline sm:min-h-0 ${darkMode ? "text-zinc-400 hover:text-cyan-400" : "text-zinc-600 hover:text-cyan-600"}`}>
+            Open the interface guide →
+          </button>
+        </section>
         {/* The posture chooser asked a first-time reader to pick a posture before
             they knew what one was. It stays, and keeps every hook the crawl
             reads, but it is now a quiet control at the end of the row rather
@@ -84,7 +153,7 @@ export function SystemOverview({ displayName }: { displayName: string }) {
           </div>
         </div>
 
-        {direction === "portrait" && <Portrait orientation={orientation} darkMode={darkMode} onTarget={openTarget} onComponent={openComponent} onTrust={() => setTrustOpen(true)} />}
+        {direction === "portrait" && <Portrait orientation={orientation} subjectUrl={subjectUrl} darkMode={darkMode} onTarget={openTarget} onComponent={openComponent} onTrust={() => setTrustOpen(true)} />}
         {direction === "questions" && <Questions orientation={orientation} questionId={questionId} setQuestionId={setQuestionId} darkMode={darkMode} onTarget={openTarget} />}
         {direction === "atlas" && <Atlas orientation={orientation} darkMode={darkMode} onTarget={openTarget} onComponent={openComponent} />}
       </main>
@@ -94,14 +163,14 @@ export function SystemOverview({ displayName }: { displayName: string }) {
       <SearchOverlay />
       <FindingsSurface />
       <TourPlayer />
-      <HelpSystem mobileFloatingButton />
+      <HelpSystem />
       <OrientationInvite />
       <OrientationWalk />
     </div>
   );
 }
 
-function Portrait({ orientation, darkMode, onTarget, onComponent, onTrust }: { orientation: OrientationProjection; darkMode: boolean; onTarget: (target: OrientationTarget, question?: string) => void; onComponent: (id?: string) => void; onTrust: () => void }) {
+function Portrait({ orientation, subjectUrl, darkMode, onTarget, onComponent, onTrust }: { orientation: OrientationProjection; subjectUrl: string | null; darkMode: boolean; onTarget: (target: OrientationTarget, question?: string) => void; onComponent: (id?: string) => void; onTrust: () => void }) {
   const architecture = useArchStore((state) => state.architecture)!;
   const primary = orientation.question_routes.filter((route) => route.available).slice(0, 3);
   const interpretedStatement = orientation.orientation.interpreted_statement;
@@ -117,6 +186,7 @@ function Portrait({ orientation, darkMode, onTarget, onComponent, onTrust }: { o
       <IdentityCard
         identity={identity}
         subjectName={orientation.subject.name}
+        subjectUrl={subjectUrl}
         headline={openingStatement}
         interpreted={identity?.statement ? interpreted : (hasLongerDescription ? interpreted : undefined)}
         staleWithheld={staleInterpretationWithheld}

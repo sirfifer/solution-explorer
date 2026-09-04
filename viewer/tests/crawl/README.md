@@ -224,7 +224,7 @@ already found in the other direction (see what it has found, below).
 | `data-testid="entry-bar"` | wrapper around the entry strip (coverage, gaps, findings, supply chain, tours) | `display: contents`, so it draws no box |
 | `data-testid="drill-home"` | the header Home button | present only when drilled |
 | `data-testid="search-button"` | the header search button | |
-| `data-testid="help-button"` | the fixed ? button | |
+| `data-testid="help-button"` | the labeled Help button in the upper-right header | |
 | `data-testid="help-overlay"` | the welcome or help dialog root | `data-kind`: welcome or help |
 | `data-testid="findings-surface"` | FindingsSurface dialog root | |
 | `data-testid="supply-chain-surface"` | SupplyChainSurface dialog root | |

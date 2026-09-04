@@ -130,7 +130,7 @@ debugging the app in devtools; it renders nothing visible.
 | `data-testid="tour-step-item"` | each row in the step panel's jump list | `data-step`, `data-current` |
 | `data-testid="tour-exit"` | the exit button in the step panel | |
 | `data-testid="tours-list-overlay"` | the tour list dialog root | |
-| `data-testid="help-button"` | the fixed ? button | |
+| `data-testid="help-button"` | the labeled Help button in the upper-right header | |
 | `data-testid="help-overlay"` | the welcome or help dialog root | `data-kind`: welcome or help |
 | `data-testid="search-button"` | the header search button | |
 | `data-testid="findings-surface"` | FindingsSurface dialog root | |

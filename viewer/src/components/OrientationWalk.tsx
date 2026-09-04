@@ -2,11 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { listAvailableLenses } from "../lenses";
 import { applicableStops, domRect, highlightRect, placeCard, type Rect, type Size } from "../orientation/model";
 import { WALK_STOPS, type WalkContext, type WalkStop } from "../orientation/stops";
+import { announceOrientationShowcase } from "../orientation/showcase";
 import { useArchStore } from "../store";
 import type { Architecture, Publication } from "../types";
 import { resolveChannel } from "../utils/channel";
 import { buildOrientationFallback } from "../utils/orientation";
-import { publicationDisplayName } from "../utils/publication";
+import { publicationDisplayName, publicationSubjectUrl } from "../utils/publication";
+import { SYSCORPUS } from "../utils/product";
 import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 
 const DEFAULT_CARD_SIZE: Size = { width: 320, height: 220 };
@@ -15,6 +17,8 @@ interface AnchorMeasurement {
   stopId: string;
   anchorId: string;
   rect: Rect;
+  originRect: Rect | null;
+  originLabel: string | null;
 }
 
 function viewportSize(): Size {
@@ -30,6 +34,7 @@ export function buildWalkContext(
   const orientation = architecture.orientation ?? buildOrientationFallback(architecture);
   return {
     displayName: publicationDisplayName(publication, architecture.name),
+    subjectUrl: publicationSubjectUrl(publication, architecture.repository),
     identitySummary: orientation.identity?.summary ?? orientation.identity?.statement ?? null,
     lensLabels: listAvailableLenses(architecture, resolveChannel()).map((lens) => lens.label),
     hasGuidedPaths: orientation.question_routes.some((route) => Boolean(route.target.tour_id)),
@@ -49,6 +54,22 @@ function visibleAnchor(testId: string): HTMLElement | null {
     && style.visibility !== "hidden"
     ? element
     : null;
+}
+
+function measuredAnchorRects(stop: WalkStop, element: HTMLElement): Pick<AnchorMeasurement, "rect" | "originRect" | "originLabel"> {
+  const base = domRect(element.getBoundingClientRect());
+  const showcaseId = stop.id === "your-tools"
+    ? "theme-menu"
+    : stop.id === "lenses"
+      ? "lens-menu"
+      : null;
+  const showcase = showcaseId ? visibleAnchor(showcaseId) : null;
+  if (!showcase) return { rect: base, originRect: null, originLabel: null };
+  return {
+    rect: domRect(showcase.getBoundingClientRect()),
+    originRect: base,
+    originLabel: stop.id === "your-tools" ? "Theme control" : "Lens control",
+  };
 }
 
 function rectFromPosition(top: number, left: number, size: Size): Rect {
@@ -96,6 +117,7 @@ export function OrientationWalk() {
   const cardRef = useRef<HTMLDivElement>(null);
   const resizeFrame = useRef<number | null>(null);
   const measurementFrame = useRef<number | null>(null);
+  const mapReadyTimer = useRef<number | null>(null);
   const previousStops = useRef(applicableStops(WALK_STOPS, viewport.width));
   const previousFocus = useRef<HTMLElement | null>(null);
 
@@ -126,8 +148,17 @@ export function OrientationWalk() {
     };
   }, [setOrientationStep]);
 
-  const measureAnchor = useCallback(() => {
+  const measureAnchor: () => void = useCallback(() => {
     if (!orientationOpen || !stop || stop.surface !== experienceMode) return;
+    if (stop.id === "the-map") {
+      const graph = document.querySelector<HTMLElement>('[data-layout-pending="false"]');
+      const renderedNode = graph?.querySelector<HTMLElement>(".react-flow__node");
+      if (!renderedNode) {
+        if (mapReadyTimer.current !== null) window.clearTimeout(mapReadyTimer.current);
+        mapReadyTimer.current = window.setTimeout(measureAnchor, 100);
+        return;
+      }
+    }
     const primary = visibleAnchor(stop.anchor);
     const fallback = stop.fallbackAnchor ? visibleAnchor(stop.fallbackAnchor) : null;
     const element = primary ?? fallback;
@@ -150,11 +181,16 @@ export function OrientationWalk() {
       setAnchor({
         stopId: stop.id,
         anchorId: settledPrimary ? stop.anchor : stop.fallbackAnchor ?? stop.anchor,
-        rect: domRect(settledElement.getBoundingClientRect()),
+        ...measuredAnchorRects(stop, settledElement),
       });
       setViewport(viewportSize());
     });
   }, [context?.isMobile, experienceMode, exitOrientation, markOrientationSkipped, orientationNext, orientationOpen, orientationStep, stop, stops.length]);
+
+  useEffect(() => {
+    announceOrientationShowcase(orientationOpen ? stop?.id ?? null : null);
+    return () => announceOrientationShowcase(null);
+  }, [experienceMode, orientationOpen, stop?.id]);
 
   useEffect(() => {
     if (!orientationOpen || !stop) {
@@ -174,6 +210,10 @@ export function OrientationWalk() {
     return () => {
       cancelAnimationFrame(frame);
       if (measurementFrame.current !== null) cancelAnimationFrame(measurementFrame.current);
+      if (mapReadyTimer.current !== null) {
+        window.clearTimeout(mapReadyTimer.current);
+        mapReadyTimer.current = null;
+      }
     };
   }, [experienceMode, measureAnchor, orientationOpen, setExperienceMode, stop]);
 
@@ -187,7 +227,7 @@ export function OrientationWalk() {
         const element = anchor?.anchorId ? visibleAnchor(anchor.anchorId) : null;
         if (element) {
           setAnchor((current) => current && current.stopId === stop?.id
-            ? { ...current, rect: domRect(element.getBoundingClientRect()) }
+            ? { ...current, ...(stop ? measuredAnchorRects(stop, element) : {}) }
             : current);
         }
       });
@@ -205,13 +245,19 @@ export function OrientationWalk() {
     if (!element) return;
     const update = () => {
       setAnchor((current) => current && current.stopId === stop.id
-        ? { ...current, rect: domRect(element.getBoundingClientRect()) }
+        ? { ...current, ...measuredAnchorRects(stop, element) }
         : current);
     };
     const frame = requestAnimationFrame(update);
     if (typeof ResizeObserver === "undefined") return () => cancelAnimationFrame(frame);
     const observer = new ResizeObserver(update);
     observer.observe(element);
+    const showcase = stop.id === "your-tools"
+      ? visibleAnchor("theme-menu")
+      : stop.id === "lenses"
+        ? visibleAnchor("lens-menu")
+        : null;
+    if (showcase) observer.observe(showcase);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
@@ -283,11 +329,22 @@ export function OrientationWalk() {
   if (!orientationOpen || !architecture || !context || !stop || !anchor || anchor.stopId !== stop.id) return null;
 
   const isLast = orientationStep >= stops.length - 1;
-  const position = placeCard(anchor.rect, cardSize, viewport, stop.placement);
-  const computedCardRect = context.isMobile
-    ? rectFromPosition(viewport.height - cardSize.height, 0, { width: viewport.width, height: cardSize.height })
-    : rectFromPosition(position.top, position.left, cardSize);
-  const highlight = highlightRect(anchor.rect, viewport, measuredCardRect ?? computedCardRect);
+  const isWelcome = stop.presentation === "welcome";
+  const position = isWelcome
+    ? {
+        top: Math.max(12, (viewport.height - cardSize.height) / 2),
+        left: Math.max(12, (viewport.width - cardSize.width) / 2),
+      }
+    : placeCard(anchor.rect, cardSize, viewport, stop.placement);
+  const computedCardRect = isWelcome
+    ? rectFromPosition(position.top, position.left, cardSize)
+    : context.isMobile
+      ? rectFromPosition(viewport.height - cardSize.height, 0, { width: viewport.width, height: cardSize.height })
+      : rectFromPosition(position.top, position.left, cardSize);
+  const highlight = isWelcome ? null : highlightRect(anchor.rect, viewport, measuredCardRect ?? computedCardRect);
+  const originHighlight = isWelcome || !anchor.originRect
+    ? null
+    : highlightRect(anchor.originRect, viewport, measuredCardRect ?? computedCardRect, 3);
 
   return (
     <div
@@ -297,18 +354,39 @@ export function OrientationWalk() {
       className="fixed inset-0 z-[60] overflow-hidden"
       onClick={() => exitOrientation("dismissed")}
     >
-      <div
-        data-testid="orientation-highlight"
-        aria-hidden="true"
-        className="pointer-events-none fixed rounded-[10px] border-2 border-cyan-400 transition-opacity duration-150 motion-reduce:transition-none"
-        style={{
-          top: highlight.top,
-          left: highlight.left,
-          width: highlight.width,
-          height: highlight.height,
-          boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.55)",
-        }}
-      />
+      {isWelcome ? (
+        <div data-testid="orientation-welcome-backdrop" aria-hidden="true" className="pointer-events-none fixed inset-0 bg-black/60 backdrop-blur-[2px]" />
+      ) : highlight && (
+        <div
+          data-testid="orientation-highlight"
+          aria-hidden="true"
+          className="pointer-events-none fixed rounded-[10px] border-2 border-cyan-400 transition-opacity duration-150 motion-reduce:transition-none"
+          style={{
+            top: highlight.top,
+            left: highlight.left,
+            width: highlight.width,
+            height: highlight.height,
+            boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.55)",
+          }}
+        />
+      )}
+      {originHighlight && anchor.originLabel && (
+        <div
+          data-testid="orientation-origin-highlight"
+          aria-hidden="true"
+          className="pointer-events-none fixed rounded-lg border-2 border-cyan-300 bg-cyan-400/15 shadow-[0_0_0_2px_rgba(34,211,238,0.3)]"
+          style={{
+            top: originHighlight.top,
+            left: originHighlight.left,
+            width: originHighlight.width,
+            height: originHighlight.height,
+          }}
+        >
+          <span data-testid="orientation-origin-label" className="absolute -top-6 right-0 whitespace-nowrap rounded bg-cyan-400 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-zinc-950 shadow">
+            {anchor.originLabel}
+          </span>
+        </div>
+      )}
       <div
         ref={cardRef}
         data-testid="orientation-card"
@@ -316,29 +394,63 @@ export function OrientationWalk() {
         aria-modal="true"
         aria-labelledby="orientation-card-label"
         onClick={(event) => event.stopPropagation()}
-        className={`fixed flex max-h-[45vh] w-full flex-col overflow-y-auto rounded-t-2xl border p-4 shadow-2xl transition-opacity duration-150 motion-reduce:transition-none sm:max-h-[calc(100vh-1.5rem)] sm:w-80 sm:max-w-[calc(100vw-2rem)] sm:rounded-2xl ${darkMode ? "border-zinc-700 bg-zinc-950 text-zinc-100" : "border-zinc-200 bg-white text-zinc-900"}`}
-        style={context.isMobile ? { bottom: 0, left: 0 } : { top: position.top, left: position.left }}
+        className={`fixed flex flex-col overflow-y-auto border shadow-2xl transition-opacity duration-150 motion-reduce:transition-none ${isWelcome ? "max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-lg rounded-2xl p-5 sm:p-6" : "max-h-[45vh] w-full rounded-t-2xl p-4 sm:max-h-[calc(100vh-1.5rem)] sm:w-80 sm:max-w-[calc(100vw-2rem)] sm:rounded-2xl"} ${darkMode ? "border-zinc-700 bg-zinc-950 text-zinc-100" : "border-zinc-200 bg-white text-zinc-900"}`}
+        style={isWelcome ? { top: "50%", left: "50%", transform: "translate(-50%, -50%)" } : context.isMobile ? { bottom: 0, left: 0 } : { top: position.top, left: position.left }}
       >
         <div id="orientation-card-label">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-500">Show me around</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-500">{isWelcome ? "Project orientation" : "Show me around"}</span>
             <span data-testid="orientation-progress" className={`text-[11px] tabular-nums ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
               Step {orientationStep + 1} of {stops.length}
             </span>
           </div>
-          <h2 className="mt-2 text-base font-bold">{stop.heading}</h2>
+          <h2 className={`mt-2 font-bold ${isWelcome ? "text-xl leading-tight sm:text-2xl" : "text-base"}`}>{stop.heading(context)}</h2>
         </div>
-        <p className={`mt-2 text-sm leading-6 ${darkMode ? "text-zinc-300" : "text-zinc-600"}`}>{stop.body(context)}</p>
+        {isWelcome && (
+          <div data-testid="orientation-welcome-pair" className="mt-4 grid grid-cols-2 gap-2">
+            {context.subjectUrl ? (
+              <a
+                data-testid="orientation-subject-link"
+                href={context.subjectUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Visit the official ${context.displayName} website (opens in a new tab)`}
+                className={`group rounded-xl border p-3 transition hover:border-cyan-400 hover:text-cyan-500 ${darkMode ? "border-zinc-800 bg-zinc-900/70" : "border-zinc-200 bg-zinc-50"}`}
+              >
+                <span className="block text-[9px] font-semibold uppercase tracking-wider text-zinc-500">Project</span>
+                <strong className="mt-1 flex items-center justify-between gap-2 text-sm"><span>{context.displayName}</span><span aria-hidden="true" className="text-cyan-500">↗</span></strong>
+              </a>
+            ) : (
+              <div data-testid="orientation-subject" className={`rounded-xl border p-3 ${darkMode ? "border-zinc-800 bg-zinc-900/70" : "border-zinc-200 bg-zinc-50"}`}>
+                <span className="block text-[9px] font-semibold uppercase tracking-wider text-zinc-500">Project</span>
+                <strong className="mt-1 block text-sm">{context.displayName}</strong>
+              </div>
+            )}
+            <a
+              data-testid="orientation-syscorpus-link"
+              href={SYSCORPUS.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Visit the SysCorpus website (opens in a new tab)"
+              className={`group rounded-xl border p-3 transition hover:border-cyan-400 ${darkMode ? "border-cyan-500/20 bg-cyan-500/5" : "border-cyan-200 bg-cyan-50"}`}
+            >
+              <span className="block text-[9px] font-semibold uppercase tracking-wider text-zinc-500">Presented by</span>
+              <strong className="mt-1 flex items-center justify-between gap-2 text-sm text-cyan-500"><span>SysCorpus</span><span aria-hidden="true">↗</span></strong>
+            </a>
+          </div>
+        )}
+        <p className={`mt-3 ${isWelcome ? "text-[15px] leading-7" : "text-sm leading-6"} ${darkMode ? "text-zinc-300" : "text-zinc-600"}`}>{stop.body(context)}</p>
         <div className="mt-4 flex items-center gap-2">
-          <button
-            type="button"
-            data-testid="orientation-back"
-            onClick={orientationPrev}
-            disabled={orientationStep === 0}
-            className={`min-h-11 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-40 sm:min-h-0 ${darkMode ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"}`}
-          >
-            Back
-          </button>
+          {orientationStep > 0 && (
+            <button
+              type="button"
+              data-testid="orientation-back"
+              onClick={orientationPrev}
+              className={`min-h-11 rounded-lg px-3 py-2 text-xs font-medium sm:min-h-0 ${darkMode ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700" : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"}`}
+            >
+              Back
+            </button>
+          )}
           <span className="flex-1" />
           {isLast ? (
             <button

@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { useArchStore } from "../store";
 import { listAvailableLenses } from "../lenses";
 import { maturitySuffix, resolveChannel } from "../utils/channel";
 import { Tooltip } from "./Tooltip";
 import { TOOLTIP_COPY } from "../utils/tooltipCopy";
+import { ORIENTATION_SHOWCASE_EVENT, type OrientationShowcaseDetail } from "../orientation/showcase";
 
 // The lens switcher (P6-1). Lets the reader change perspective without losing
 // their place (invariant I12: selection, breadcrumbs, and URL survive). It lists
@@ -14,6 +16,15 @@ export function LensSwitcher() {
   const architecture = useArchStore((s) => s.architecture);
   const lens = useArchStore((s) => s.lens);
   const setLens = useArchStore((s) => s.setLens);
+  const [showcaseOpen, setShowcaseOpen] = useState(false);
+
+  useEffect(() => {
+    const handleShowcase = (event: Event) => {
+      setShowcaseOpen((event as CustomEvent<OrientationShowcaseDetail>).detail.stopId === "lenses");
+    };
+    window.addEventListener(ORIENTATION_SHOWCASE_EVENT, handleShowcase);
+    return () => window.removeEventListener(ORIENTATION_SHOWCASE_EVENT, handleShowcase);
+  }, []);
 
   // Resolve the maturity channel (card R3). Default "stable" shows only stable
   // lenses (the current behavior, unchanged); a `?channel=` override surfaces the
@@ -31,7 +42,8 @@ export function LensSwitcher() {
     available.find((l) => l.id === lens)?.description ?? TOOLTIP_COPY.lens.switcher;
 
   return (
-    <Tooltip content={activeDescription} position="bottom">
+    <div data-testid="lens-switcher" className="relative">
+      <Tooltip content={activeDescription} position="bottom">
       <label
         className={`
           flex items-center gap-1.5 px-2 py-2 sm:py-1 rounded-lg text-xs
@@ -59,6 +71,39 @@ export function LensSwitcher() {
           ))}
         </select>
       </label>
-    </Tooltip>
+      </Tooltip>
+      {showcaseOpen && (
+        <div
+          data-testid="lens-menu"
+          role="menu"
+          aria-label="Available lenses"
+          className={`absolute right-0 top-full z-50 mt-1 max-h-[40vh] w-60 overflow-y-auto rounded-xl border shadow-xl ${darkMode ? "border-zinc-700 bg-zinc-900" : "border-zinc-200 bg-white"}`}
+        >
+          <div className={`px-3 pb-1 pt-2.5 text-[10px] uppercase tracking-wider ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            Explore through a lens
+          </div>
+          {available.map((item) => {
+            const active = item.id === lens;
+            return (
+              <button
+                type="button"
+                key={item.id}
+                role="menuitemradio"
+                aria-checked={active}
+                onClick={() => setLens(item.id)}
+                className={`min-h-11 w-full px-3 py-2 text-left ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"} ${active ? darkMode ? "bg-zinc-800/60" : "bg-zinc-100/70" : ""}`}
+              >
+                <span className={`block text-sm font-medium ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
+                  {item.label}{maturitySuffix(item.maturity)}
+                </span>
+                <span className={`block text-[11px] leading-4 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
+                  {item.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

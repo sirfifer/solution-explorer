@@ -3,6 +3,7 @@ import { applicableStops } from "../orientation/model";
 import { WALK_STOPS } from "../orientation/stops";
 import { useArchStore } from "../store";
 import { TOOLTIP_COPY } from "../utils/tooltipCopy";
+import { SYSCORPUS } from "../utils/product";
 import { buildWalkContext } from "./OrientationWalk";
 
 const KEYBOARD_SHORTCUTS = [
@@ -14,7 +15,7 @@ const KEYBOARD_SHORTCUTS = [
   { keys: ["?"], description: "Toggle help" },
 ];
 
-export function HelpSystem({ mobileFloatingButton = false }: { mobileFloatingButton?: boolean }) {
+export function HelpSystem() {
   const architecture = useArchStore((state) => state.architecture);
   const publication = useArchStore((state) => state.publication);
   const darkMode = useArchStore((state) => state.darkMode);
@@ -41,11 +42,17 @@ export function HelpSystem({ mobileFloatingButton = false }: { mobileFloatingBut
       if (event.key === "Escape" && showHelp) setShowHelp(false);
     };
     const openFromMobileMenu = () => setShowHelp(true);
+    const openInterfaceGuide = () => {
+      setActiveHelpTab("guide");
+      setShowHelp(true);
+    };
     window.addEventListener("keydown", handler);
     window.addEventListener("arch-viz-open-help", openFromMobileMenu);
+    window.addEventListener("arch-viz-open-interface-guide", openInterfaceGuide);
     return () => {
       window.removeEventListener("keydown", handler);
       window.removeEventListener("arch-viz-open-help", openFromMobileMenu);
+      window.removeEventListener("arch-viz-open-interface-guide", openInterfaceGuide);
     };
   }, [setShowHelp, showHelp]);
 
@@ -57,16 +64,6 @@ export function HelpSystem({ mobileFloatingButton = false }: { mobileFloatingBut
 
   return (
     <>
-      <button
-        data-testid="help-button"
-        onClick={() => setShowHelp(true)}
-        className={`fixed bottom-4 right-4 z-20 h-11 w-11 items-center justify-center rounded-full text-sm font-bold shadow-lg transition-all hover:scale-110 sm:h-8 sm:w-8 ${mobileFloatingButton ? "flex" : "hidden sm:flex"} ${darkMode ? "border border-zinc-700 bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200" : "border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800"}`}
-        title="Help (?)"
-        aria-label="Help"
-      >
-        ?
-      </button>
-
       {showHelp && (
         <div
           data-testid="help-overlay"
@@ -116,7 +113,7 @@ export function HelpSystem({ mobileFloatingButton = false }: { mobileFloatingBut
                           {index + 1}
                         </span>
                         <div>
-                          <h3 className={`text-sm font-semibold ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>{stop.heading}</h3>
+                          <h3 className={`text-sm font-semibold ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>{stop.heading(context)}</h3>
                           <p className={`mt-0.5 text-sm leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{stop.body(context)}</p>
                         </div>
                       </li>
@@ -145,19 +142,22 @@ export function HelpSystem({ mobileFloatingButton = false }: { mobileFloatingBut
               {activeHelpTab === "about" && (
                 <div className={`space-y-4 text-sm leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                   <p>
-                    SysCorpus maps a software system from its source code at one recorded commit. Every statement on this site links to the files it came from, and any statement a model helped phrase says so where it appears.
+                    SysCorpus builds an explorable model of a software system from its source at one recorded commit. It connects architectural understanding to the files, symbols, and source evidence behind it, and labels model-assisted phrasing where it appears.
                   </p>
                   <p>
-                    The Overview tells the story of the system. The Workbench is the full interactive map: components, files, symbols, relationships, and the lenses that redraw the map for a purpose.
+                    Overview presents the system story and question-led entry points. Workbench provides the full technical model: components, files, symbols, relationships, findings, guided paths, and lenses that reorganize the same evidence for a purpose.
                   </p>
                   <p>
-                    Built with <a className="text-cyan-500 hover:underline" href="https://github.com/sirfifer/solution-explorer" target="_blank" rel="noopener noreferrer">SysCorpus</a>.
+                    Built with <a className="text-cyan-500 hover:underline" href={SYSCORPUS.url} target="_blank" rel="noopener noreferrer">SysCorpus</a>. Learn more at syscorpus.com.
                   </p>
                 </div>
               )}
             </div>
 
-            <div className={`border-t px-6 py-3 text-center ${darkMode ? "border-zinc-800" : "border-zinc-100"}`}>
+            <div className={`border-t px-6 py-4 ${darkMode ? "border-zinc-800" : "border-zinc-100"}`}>
+              <p className={`mb-2 text-center text-xs ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+                Want to revisit the guided walkthrough?
+              </p>
               <button
                 data-testid="orientation-replay"
                 onClick={() => {
@@ -165,9 +165,9 @@ export function HelpSystem({ mobileFloatingButton = false }: { mobileFloatingBut
                   startOrientation();
                 }}
                 title={TOOLTIP_COPY.orientation.replay}
-                className={`min-h-11 text-xs font-medium ${darkMode ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-600 hover:text-zinc-800"}`}
+                className="min-h-11 w-full rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-bold text-zinc-950 shadow-sm hover:bg-cyan-400"
               >
-                Show me around
+                Replay guided tour
               </button>
             </div>
           </div>

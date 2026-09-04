@@ -34,17 +34,22 @@ function Harness() {
       <NavStateBeacon />
       {mode === "overview" ? (
         <div>
+          <div data-testid="syscorpus-brand" />
+          <div data-testid="syscorpus-overview-context" />
           <div data-testid="overview-title" />
           <div data-testid="identity-statement" />
           <div data-testid="question-routes" />
           <div data-testid="experience-switcher" />
           <div data-testid="overview-trust-button" />
           <div data-testid="header-tools" />
+          <div data-testid="theme-switcher" />
         </div>
       ) : (
-        <div>
+        <div data-layout-pending="false">
           <div data-testid="graph-frame" />
+          <div className="react-flow__node" />
           <div data-testid="lens-select" />
+          <div data-testid="lens-switcher" />
           <div data-testid="help-button" />
           <div data-testid="more-menu" />
         </div>
@@ -99,7 +104,7 @@ describe("OrientationWalk", () => {
     for (const expected of [
       "start-with-a-question",
       "two-views",
-      "how-much-was-read",
+      "how-much-was-analyzed",
       "your-tools",
       "the-map",
     ]) {
@@ -115,5 +120,6 @@ describe("OrientationWalk", () => {
     expect(localStorage.getItem("arch-viz-orientation-v1")).toBe("done");
     expect(screen.getByTestId("nav-state").getAttribute("data-orientation")).toBe("");
     expect(screen.getByTestId("nav-state").getAttribute("data-orientation-invite")).toBe("false");
+    expect(useArchStore.getState().experienceMode).toBe("overview");
   });
 });

@@ -4,6 +4,7 @@ export type CardPlacement = "auto" | "top" | "bottom" | "left" | "right";
 
 export interface WalkContext {
   displayName: string;
+  subjectUrl: string | null;
   identitySummary: string | null;
   lensLabels: string[];
   hasGuidedPaths: boolean;
@@ -19,7 +20,8 @@ export interface WalkStop {
   viewport: WalkViewport;
   minWidth?: number;
   placement: CardPlacement;
-  heading: string;
+  presentation?: "spotlight" | "welcome";
+  heading: (ctx: WalkContext) => string;
   body: (ctx: WalkContext) => string;
 }
 
@@ -33,12 +35,13 @@ export const WALK_STOPS: readonly WalkStop[] = [
   {
     id: "what-this-is",
     surface: "overview",
-    anchor: "identity-statement",
-    fallbackAnchor: "overview-title",
+    anchor: "syscorpus-overview-context",
+    fallbackAnchor: "syscorpus-brand",
     viewport: "all",
     placement: "auto",
-    heading: "What this is",
-    body: (ctx) => `A map of ${ctx.displayName}, drawn from its source code at one recorded commit. Every statement here links to the code it came from.`,
+    presentation: "welcome",
+    heading: (ctx) => `Meet ${ctx.displayName} through the lens of SysCorpus`,
+    body: (ctx) => `Start with ${ctx.displayName}: what it is, how it is built, and the source evidence behind it. SysCorpus connects those layers from one recorded commit.`,
   },
   {
     id: "start-with-a-question",
@@ -46,8 +49,8 @@ export const WALK_STOPS: readonly WalkStop[] = [
     anchor: "question-routes",
     viewport: "all",
     placement: "auto",
-    heading: "Start with a question",
-    body: (ctx) => `Pick what you want to understand. The site assembles an answer from the evidence.${ctx.hasGuidedPaths ? " Some answers come with a guided walk through the code." : ""}`,
+    heading: (ctx) => `Ask about ${ctx.displayName}`,
+    body: (ctx) => `Choose what you want to understand about ${ctx.displayName}. SysCorpus assembles an answer from mapped evidence${ctx.hasGuidedPaths ? " and can guide you through the code" : ""}.`,
   },
   {
     id: "two-views",
@@ -55,27 +58,27 @@ export const WALK_STOPS: readonly WalkStop[] = [
     anchor: "experience-switcher",
     viewport: "all",
     placement: "auto",
-    heading: "Two views of one map",
-    body: () => "Overview tells the story. Workbench is the full interactive map with the code behind it. Switch any time without losing your place.",
+    heading: (ctx) => `Two views of ${ctx.displayName}`,
+    body: (ctx) => `Overview tells the ${ctx.displayName} story. Workbench opens the full SysCorpus technical model and its code. Switch views without losing your place.`,
   },
   {
-    id: "how-much-was-read",
+    id: "how-much-was-analyzed",
     surface: "overview",
     anchor: "overview-trust-button",
     viewport: "desktop",
     minWidth: 768,
     placement: "auto",
-    heading: "How much was read",
-    body: () => "The share of the code the analysis actually read, what it skipped, and why. Honesty is always one click away.",
+    heading: (ctx) => `How much of ${ctx.displayName} was analyzed?`,
+    body: (ctx) => `See how much source SysCorpus analyzed for ${ctx.displayName}, what it skipped, and why. The limits stay one click away.`,
   },
   {
     id: "your-tools",
     surface: "overview",
-    anchor: "header-tools",
+    anchor: "theme-switcher",
     viewport: "all",
-    placement: "auto",
-    heading: "Search, theme, preferences",
-    body: (ctx) => `Search everything with ${ctx.isMac ? "Cmd+K" : "Ctrl+K"}. Change the theme, light or dark, and viewer preferences here.`,
+    placement: "left",
+    heading: () => "Your exploration tools",
+    body: (ctx) => `Search across ${ctx.displayName} with ${ctx.isMac ? "Cmd+K" : "Ctrl+K"}. Change the theme and viewer preferences here; SysCorpus keeps the underlying project view unchanged.`,
   },
   {
     id: "the-map",
@@ -83,19 +86,19 @@ export const WALK_STOPS: readonly WalkStop[] = [
     anchor: "graph-frame",
     viewport: "all",
     placement: "auto",
-    heading: "The map",
+    heading: (ctx) => `Explore ${ctx.displayName}`,
     body: (ctx) => ctx.isMobile
-      ? "Tap a box to read about it. Double-tap to open it. Home returns to the top."
-      : "Click a box to read about it. Double-click to open it. Home returns to the top. The tree on the left lists the same things.",
+      ? `Tap an area of ${ctx.displayName} to inspect it. Open it to go deeper; the SysCorpus model keeps the same structure.`
+      : `Select an area of ${ctx.displayName} to inspect it. Open it to go deeper; the tree and SysCorpus model keep the same structure.`,
   },
   {
     id: "lenses",
     surface: "workbench",
-    anchor: "lens-select",
+    anchor: "lens-switcher",
     viewport: "all",
-    placement: "auto",
-    heading: "Lenses",
-    body: (ctx) => `Each lens redraws the map for a purpose: ${lensList(ctx.lensLabels)}${ctx.lensLabels.length > 3 ? " and more" : ""}. Your place is kept when you switch.`,
+    placement: "left",
+    heading: (ctx) => `${ctx.displayName} through lenses`,
+    body: (ctx) => `SysCorpus lenses reorganize ${ctx.displayName} for a purpose: ${lensList(ctx.lensLabels)}${ctx.lensLabels.length > 3 ? " and more" : ""}. Your place is kept when you switch.`,
   },
   {
     id: "if-you-get-lost",
@@ -103,16 +106,16 @@ export const WALK_STOPS: readonly WalkStop[] = [
     anchor: "help-button",
     viewport: "desktop",
     placement: "auto",
-    heading: "If you get lost",
-    body: () => "The ? button replays this walk and lists the keyboard shortcuts. Overview is one click away in the header.",
+    heading: () => "Come back anytime",
+    body: (ctx) => `Help replays this ${ctx.displayName} tour and lists shortcuts. Overview returns to the project story; Workbench returns to the SysCorpus technical model.`,
   },
   {
     id: "if-you-get-lost-mobile",
     surface: "workbench",
-    anchor: "more-menu",
+    anchor: "help-button",
     viewport: "mobile",
     placement: "auto",
-    heading: "If you get lost",
-    body: () => "Help, preferences and review mode live under this menu. Help replays this walk. Overview is one tap away.",
+    heading: () => "Come back anytime",
+    body: (ctx) => `Help replays the ${ctx.displayName} tour and explains the interface. Overview returns to the project story.`,
   },
 ] as const;

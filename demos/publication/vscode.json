@@ -3,10 +3,11 @@
   "publisher": {
     "name": "SysCorpus",
     "contact": "https://github.com/sirfifer/solution-explorer/issues",
-    "url": "https://github.com/sirfifer/solution-explorer"
+    "url": "https://syscorpus.com/"
   },
   "subject": {
     "name": "Visual Studio Code",
+    "homepage_url": "https://code.visualstudio.com/",
     "repo_url": "https://github.com/microsoft/vscode",
     "license": "MIT",
     "commit": "474a349ad5b745e512ef86b864d1c74f7264dd7a",

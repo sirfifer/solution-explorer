@@ -1,7 +1,7 @@
 # The orientation walk: spec, plan and handoff
 
-Status: PLAN, written 2026-09-03 for owner approval and handoff to an
-executing session. Nothing implemented. Evidence taken from the viewer on
+Status: IMPLEMENTED, written 2026-09-03 for owner approval and handoff, then
+executed and amended after owner review. Evidence taken from the viewer on
 `wt/ui-gateway-option1` (commit f02ab67, the option 1 front door), the crawl
 harness under `viewer/tests/crawl`, and the demo gate run records under
 `docs/testing/`.
@@ -10,6 +10,39 @@ This one document is the assessment (section 2), the contract (sections 4
 and 5), the task plan (section 6) and the handoff (section 7). Where a
 task's text and section 4 disagree, section 4 wins; report the
 disagreement rather than resolving it silently.
+
+## Product-framing amendment, 2026-09-03
+
+Owner smoke review established a stronger first lesson than the original
+plan: the reader must meet SysCorpus before learning its controls. The subject
+remains first-class, but it is explicitly framed as a project view generated
+and presented by the SysCorpus product.
+
+The implemented amendment is:
+
+- A new browser starts directly in a centered, skippable orientation instead
+  of receiving a small optional invitation.
+- A plainly labeled `Help` control remains visible at the upper-right of the
+  Overview and Workbench headers. Its prominent `Replay guided tour` action is
+  the single replay route.
+- Stop 1 gives equal visual weight to the generated subject and SysCorpus,
+  naming them as "Project" and "Presented by". Its heading is generated as
+  "Meet {name} through the lens of SysCorpus".
+- Every later stop uses the current subject name where it improves the lesson,
+  and explains SysCorpus as the way to inspect that subject rather than as a
+  separate topic.
+- Every Overview direction retains a SysCorpus product mark, the subject name,
+  and a direct link to `https://syscorpus.com/`.
+- The first-page product context names the subject as an explorable,
+  evidence-linked model rather than merely a map. Three compact statements
+  summarize system understanding, source-level traceability, and the available
+  investigative angles, with a direct route to the in-product interface guide.
+- The footer always carries the SysCorpus product identity, website, and the
+  specific software copyright notice from the repository license. Upstream
+  ownership, license, and non-affiliation remain separate publication text.
+- The current identity lives in one small product-default module so a future
+  generation parameter can replace it without editing presentation copy in
+  several components.
 
 ## 1. The question
 
@@ -72,11 +105,11 @@ disclosure on published bundles only, and the About tab is stale.
 These are defaults the executor does not re-litigate. The owner may
 override any of them before dispatch (section 9).
 
-1. **Name.** "Orientation walk" in code and documents. "Show me around" in
-   the UI. Never "tour": the product, the crawl contract and the dataset
-   schema all use "tour" for code-anchored walkthroughs.
-2. **Invitation, never interruption.** A dismissible corner card on first
-   visit. Only a click starts the walk. The walk never auto-starts.
+1. **Name.** "Orientation walk" in code and documents. The persistent UI calls
+   it a guided tour so a returning reader immediately understands the action.
+2. **Automatic once, optional afterward.** A fresh browser starts on the
+   centered first step with Skip visible. Completion or dismissal is remembered
+   in local storage; Help offers the tour again at any time.
 3. **Eight stops, two legs, under sixty seconds.** Five on the Overview,
    three in the Workbench. The walk crosses into the Workbench itself and
    ends there with the way back in view.
@@ -107,12 +140,13 @@ override any of them before dispatch (section 9).
 | `viewer/src/orientation/model.ts` | Pure helpers: applicable stops for a viewport, first-visit decision from storage and URL, highlight rect geometry, card placement. Unit-tested without a DOM where possible. |
 | `viewer/src/components/OrientationWalk.tsx` | The spotlight layer and card. |
 | `viewer/src/components/OrientationInvite.tsx` | The first-visit card. |
+| `viewer/src/components/HeaderHelpButton.tsx` | Persistent, labeled Help action at the upper-right of both primary headers. |
 | `viewer/src/store.ts` | State and actions (section 4.7). |
 | `viewer/src/App.tsx` | Mounts both components, extends the nav-state beacon, adds two test ids. |
-| `viewer/src/components/HelpSystem.tsx` | Modal deleted, Guide and About rewritten, "Show me around" added (section 4.9). |
+| `viewer/src/components/HelpSystem.tsx` | Modal deleted, Guide and About rewritten, prominent "Replay guided tour" action added (section 4.9). |
 | `viewer/src/components/SystemOverview.tsx`, `ExperienceSwitcher.tsx`, `ThemeSwitcher.tsx` | Test ids only (section 4.8). |
 | `viewer/src/utils/tooltipCopy.ts` | One new group, `orientation` (section 4.11). |
-| `viewer/tests/crawl/orientation.spec.ts` | New spec, rules W1 to W5 (section 5.2). |
+| `viewer/tests/crawl/orientation.spec.ts` | New spec, rules W1 to W6 (section 5.2). |
 | `viewer/tests/crawl/fixtures.ts`, `overview.spec.ts` | Storage seed and dialog roots (section 5.3). |
 | `docs/testing/GUI-CRAWL-DESIGN.md` | Addendum for the new spec. |
 
@@ -144,7 +178,7 @@ export interface WalkStop {
   fallbackAnchor?: string;           // used when anchor is absent (identity null, control hidden)
   viewport: WalkViewport;
   placement: CardPlacement;
-  heading: string;
+  heading: (ctx: WalkContext) => string;
   body: (ctx: WalkContext) => string;
 }
 
@@ -157,15 +191,21 @@ body is under twenty-five words, plain language, no dashes. `{name}` is
 
 | # | id | surface | anchor (fallback) | viewport | heading | body |
 |---|---|---|---|---|---|---|
-| 1 | `what-this-is` | overview | `identity-statement` (`overview-title`) | all | What this is | "A map of {name}, drawn from its source code at one recorded commit. Every statement here links to the code it came from." |
-| 2 | `start-with-a-question` | overview | `question-routes` | all | Start with a question | "Pick what you want to understand. The site assembles an answer from the evidence." Append when `hasGuidedPaths`: " Some answers come with a guided walk through the code." |
-| 3 | `two-views` | overview | `experience-switcher` | all | Two views of one map | "Overview tells the story. Workbench is the full interactive map with the code behind it. Switch any time without losing your place." |
-| 4 | `how-much-was-read` | overview | `overview-trust-button` | desktop | How much was read | "The share of the code the analysis actually read, what it skipped, and why. Honesty is always one click away." |
-| 5 | `your-tools` | overview | `header-tools` | all | Search, theme, preferences | "Search everything with {Cmd+K or Ctrl+K}. Change the theme, light or dark, and viewer preferences here." |
-| 6 | `the-map` | workbench | `graph-frame` | all | The map | Desktop: "Click a box to read about it. Double-click to open it. Home returns to the top. The tree on the left lists the same things." Mobile: "Tap a box to read about it. Double-tap to open it. Home returns to the top." |
-| 7 | `lenses` | workbench | `lens-select` | all | Lenses | "Each lens redraws the map for a purpose: {first three lens labels, lower case, joined with commas} and more. Your place is kept when you switch." With fewer than three labels, name what there is and drop "and more". |
-| 8a | `if-you-get-lost` | workbench | `help-button` | desktop | If you get lost | "The ? button replays this walk and lists the keyboard shortcuts. Overview is one click away in the header." |
-| 8b | `if-you-get-lost-mobile` | workbench | `more-menu` | mobile | If you get lost | "Help, preferences and review mode live under this menu. Help replays this walk. Overview is one tap away." |
+| 1 | `what-this-is` | overview | `syscorpus-overview-context` (`syscorpus-brand`) | all | Meet {name} through the lens of SysCorpus | "Start with {name}: what it is, how it is built, and the source evidence behind it. SysCorpus connects those layers from one recorded commit." |
+| 2 | `start-with-a-question` | overview | `question-routes` | all | Ask about {name} | "Choose what you want to understand about {name}. SysCorpus assembles an answer from mapped evidence" and, when available, "and can guide you through the code." |
+| 3 | `two-views` | overview | `experience-switcher` | all | Two views of {name} | "Overview tells the {name} story. Workbench opens the full SysCorpus technical model and its code. Switch views without losing your place." |
+| 4 | `how-much-was-analyzed` | overview | `overview-trust-button` | desktop | How much of {name} was analyzed? | "See how much source SysCorpus analyzed for {name}, what it skipped, and why. The limits stay one click away." |
+| 5 | `your-tools` | overview | `theme-switcher` | all | Your exploration tools | "Search across {name} with {Cmd+K or Ctrl+K}. Change the theme and viewer preferences here; SysCorpus keeps the underlying project view unchanged." |
+| 6 | `the-map` | workbench | `graph-frame` | all | Explore {name} | Select or tap an area of {name}, then open it to go deeper; the tree and SysCorpus model retain the same structure. |
+| 7 | `lenses` | workbench | `lens-switcher` | all | {name} through lenses | "SysCorpus lenses reorganize {name} for a purpose: {first three lens labels} and more. Your place is kept when you switch." |
+| 8a | `if-you-get-lost` | workbench | `help-button` | desktop | Come back anytime | "Help replays this {name} tour and lists shortcuts. Overview returns to the project story; Workbench returns to the SysCorpus technical model." |
+| 8b | `if-you-get-lost-mobile` | workbench | `help-button` | mobile | Come back anytime | "Help replays the {name} tour and explains the interface. Overview returns to the project story." |
+
+On stop 1, the entire Project block links to
+`publication.subject.homepage_url` in a new tab, falling back to the subject
+repository for older sidecars. The entire Presented by block links to the
+SysCorpus website in a new tab. Visible external-link marks and accessible
+labels make both destinations explicit.
 
 Stop 4 is desktop only because the Overview header's trust button is hidden
 below the `md` breakpoint (768px); the desktop rule for this stop is
@@ -182,7 +222,7 @@ The step counter counts applicable stops only, so a phone shows "Step 3 of
 render:
 
 - `displayName`: the same value `App` passes to `SystemOverview`.
-- `identitySummary`: `orientation.identity?.summary ?? orientation.identity?.statement ?? null`. Reserved for the Guide tab's first line; stop 1 does not repeat the statement it is pointing at.
+- `identitySummary`: `orientation.identity?.summary ?? orientation.identity?.statement ?? null`. Reserved for the Guide tab's first line; stop 1 introduces the product and subject together.
 - `lensLabels`: the labels of the lenses the switcher currently offers, from the same source `LensSwitcher` reads, so the copy never names a lens the reader cannot see.
 - `hasGuidedPaths`: `orientation.question_routes.some((r) => r.target.tour_id)`.
 - `isMobile`: `window.matchMedia("(max-width: 639px)")`, re-evaluated on resize, the way `tourPanelStartsExpanded` does it.
@@ -190,35 +230,31 @@ render:
 
 ### 4.5 Behaviour
 
-**First visit.** On mount, the viewer decides whether to show the invite:
+**First visit.** On mount, the viewer decides whether to start the walk:
 
-1. If the URL carries `orientation=start`, the walk starts immediately, no invite. Used by the crawl and by a presenter who wants the talk track.
-2. Else if the URL carries `orientation=invite`, the invite shows regardless of storage.
-3. Else if storage holds `arch-viz-orientation-v1` with any value, or the legacy `arch-viz-help-dismissed` key (a returning browser that dismissed the old guide is not nagged), nothing shows.
-4. Else the invite shows.
+1. If the URL carries `orientation=start`, the walk starts immediately. Used by the crawl and by a presenter who wants the talk track.
+2. The former `orientation=invite` override is retained as a compatibility alias for `orientation=start`.
+3. Else if storage holds `arch-viz-orientation-v1` with any value, or the legacy `arch-viz-help-dismissed` key, nothing shows.
+4. Else the walk starts automatically at its centered opening step.
 
 The URL parameter is read once at mount, like `mode`, and is never written
 back by `useUrlSync`.
 
-Storage writes: `done` when the walk reaches Done, `dismissed` when the
-invite is dismissed or the walk is exited early. Storage failures are
-swallowed exactly as `saveExperiencePreferences` does; with no storage the
-invite shows once per page load and no more (component state).
+Storage writes: `done` when the walk reaches Done and `dismissed` when the
+walk is skipped or exited early. Storage failures are swallowed exactly as
+`saveExperiencePreferences` does; with no storage the walk starts once per
+page load and can still be dismissed for that load.
 
-**The invite.** A small card, `data-testid="orientation-invite"`, fixed
-bottom-right on desktop (above the `?` button: `bottom-14 right-4`), a
-full-width docked strip at the bottom on mobile (`inset-x-0 bottom-0`).
-Content: heading "New here?", one line "This map takes a minute to learn.
-Let it show you around.", two buttons: "Show me around" (primary,
-`data-testid="orientation-start"`) and "Not now"
-(`data-testid="orientation-dismiss"`). No backdrop, no focus steal, nothing
-dimmed. It renders on either surface, but never while any overlay in
-`openOverlays` is open, and never while a dataset tour is active.
+**The opening.** Stop 1 is a centered modal on desktop and mobile with a
+dimmed backdrop, a large generated heading, equal Project and Presented by
+identity blocks, and immediate Skip and Next actions. It does not use the
+small spotlight treatment. Stops 2 onward return to the anchored spotlight
+and responsive side or bottom card.
 
 **Starting.** `startOrientation()`:
 
 1. Closes every open overlay (search, findings, supply chain, inventory, tours list, help, trust, preferences, admin) and exits any active dataset tour, through the store's existing close actions.
-2. Hides the invite.
+2. Clears the retained legacy invitation state.
 3. If the current surface is the Workbench, switches to the Overview (`setExperienceMode("overview")`). The walk always begins at stop 1. Workbench state (selection, drill, lens) survives in the store, so a reader who arrived by deep link gets it back at the crossing.
 4. Sets `orientationStep` to the first applicable stop.
 
@@ -228,22 +264,28 @@ a stop the component:
 1. Ensures the surface: if `stop.surface !== experienceMode`, calls `setExperienceMode(stop.surface)` and waits one animation frame for the surface to mount.
 2. Resolves the anchor: `[data-testid="<anchor>"]`, visible (non-zero rect, not `display:none`); else the fallback; else the stop is skipped with a console warning in dev builds and the beacon records the skip (`data-orientation-skipped`, comma-separated ids) so the crawl can see it.
 3. Scrolls the anchor into view: `scrollIntoView({ block: "center", inline: "nearest" })` on the Overview (window scroll); no scroll in the Workbench (fixed layout), except the tree if it is the anchor's scroll container.
-4. Measures after the next frame and positions the highlight and the card.
-5. Moves focus to the card's primary button.
+4. On the map stop, waits for completed layout and at least one rendered project node. The graph shows a preparation status instead of an unexplained empty canvas while layout runs.
+5. Measures after the next frame and positions the highlight and the card. On
+   the tools and lenses stops, the expanded menu receives the primary, tightly
+   fitted spotlight. The exact trigger receives a separate cyan outline labeled
+   `Theme control` or `Lens control`, so the menu's origin remains explicit.
+6. Moves focus to the card's primary button.
 
 The crossing from stop 5 to stop 6 is the one place the surface changes.
-Nothing in the walk selects a component, changes the lens, or opens a
-panel. The walk is read-only over the page.
+Nothing in the walk selects a component or changes the lens. It temporarily
+expands the theme choices on stop 5 and the lens choices on stop 7, then restores
+each control as the reader advances.
 
 **Ending.** Done (on the last stop) and Escape both close the walk; Done
-writes `done`, Escape and the backdrop click write `dismissed`. The walk
-ends on the Workbench with the experience switcher visible in the header,
-which is why stop 8's copy names the way back. Nothing else is left open.
+writes `done`, Escape and the backdrop click write `dismissed`. Every exit
+returns to Overview, so the walkthrough can use Workbench for the map and lens
+lessons without leaving the reader there. Nothing else is left open.
 
-**Replay.** "Show me around" in the Help dialog footer (replacing "Replay
-welcome guide") closes Help and calls `startOrientation()`. The same button
-sits in the Overview header's preferences drawer if there is a natural
-row for it; otherwise Help alone is enough.
+**Replay.** A labeled `Help` button sits at the upper-right of both primary
+headers. Help explains that the walkthrough can be revisited and presents
+`Replay guided tour` as a full-width primary action; it closes Help and calls
+`startOrientation()` on desktop and mobile. No separate replay button occupies
+the primary toolbar.
 
 **Resize and scroll.** The highlight and card re-measure on window resize,
 on scroll (capture phase, throttled to a frame), and when the viewport
@@ -367,8 +409,8 @@ together, so the id is unique at any moment; the same is already true of
 
   The last line links where the existing "Built with SysCorpus" footer
   link points.
-- **Footer button** reads "Show me around", `data-testid="orientation-replay"`,
-  and starts the walk.
+- **Footer button** reads "Replay guided tour",
+  `data-testid="orientation-replay"`, and starts the walk.
 
 ### 4.10 Accessibility
 
@@ -437,17 +479,17 @@ both in the report.
 
 Tagged `@desktop` and `@mobile`. Runs with `?mode=overview`. Uses a
 fresh context without the storage seed for W1, and `orientation=start`
-for W2 to W5 so no rule depends on the invite.
+for W2 to W5 so those rules can request a deterministic restart.
 
-- **W1, the invite.** A bare Overview URL in a context with no storage
-  shows `orientation-invite` with `orientation-start` and
-  `orientation-dismiss`; clicking dismiss removes it and a reload does not
-  show it again. With the storage seed present, no invite renders.
+- **W1, automatic opening.** A bare Overview URL in a context with no storage
+  opens the centered `what-this-is` step, names the current project and
+  SysCorpus with equal identity blocks, and exposes Skip. Clicking Skip
+  removes the walk and a reload does not show it again.
 - **W2, every stop lands.** With `orientation=start`, the walk opens at
   stop 1. For each Next until Done: the beacon's `data-orientation` equals
   the expected id for the viewport; the anchor element is visible and its
-  rect intersects the viewport; the highlight rect is non-empty and at
-  least 44px tall; the card's rect does not intersect the highlight rect;
+  rect intersects the viewport; stop 1 has its centered welcome backdrop;
+  later highlight rects are non-empty and at least 44px tall and their cards do not intersect them;
   `data-orientation-skipped` is empty. Report per stop, the way the tours
   spec reports per step.
 - **W3, the crossing and the ending.** The beacon reports `mode` overview
@@ -457,8 +499,13 @@ for W2 to W5 so no rule depends on the invite.
 - **W4, Escape.** At stop 3, Escape closes the walk, the beacon is clean,
   storage reads `dismissed`, and the Overview is intact (question routes
   present, no dimming).
-- **W5, replay.** Open Help on the Workbench, click `orientation-replay`;
-  the walk opens at stop 1 on the Overview.
+- **W5, replay.** Use the visible upper-right `Help` button on the Workbench,
+  verify the full-width `Replay guided tour` action, and click
+  `orientation-replay`; the walk opens at stop 1 on the Overview.
+- **W6, replay from either surface.** From both Overview and Workbench, the
+  visible upper-right `Help` control opens Help; its `Replay guided tour` action
+  starts at the first Overview stop and can be skipped cleanly on desktop and
+  mobile.
 
 ### 5.3 Harness changes
 
@@ -469,15 +516,15 @@ for W2 to W5 so no rule depends on the invite.
   return-to-Overview click gains `orientation-walk`.
 - `surfaces.spec.ts` and `journeys.spec.ts`: unchanged; `help-button`
   still opens `help-overlay`.
-- `contract.ts`: unchanged. The walk is always offered, so no expectation
+- `contract.ts`: unchanged. The walk starts automatically once, so no expectation
   row is needed; presence is asserted by W1 and W5.
 - `docs/testing/GUI-CRAWL-DESIGN.md`: an addendum naming the new spec, the
-  storage seed change, and rules W1 to W5.
+  storage seed change, and rules W1 to W6.
 
 ### 5.4 Manual checks and screenshots
 
 On both served bundles, in Atlas light and Signal dark, at 1440×900 and
-390×844: one screenshot per stop plus the invite, saved under
+390×844: one screenshot per stop, including the centered opening, saved under
 `viewer/.ow-screens/<subject>/<theme>/<viewport>/<stop-id>.png` (listed in
 the report; deleted by the reviewer if not gitignored). Confirm by eye
 that no card covers its target, that copy fits without truncation, and
@@ -524,7 +571,7 @@ working directory once pushed straight to main).
   - `WALK_STOPS` has the nine records of section 4.3 with the copy verbatim.
   - The unit tests of section 5.1 exist and pass, except `helpSystem.test.tsx` (OW-2).
   - Running `npx vite --port 5191` against `../.testboard/serve/vscode` (after OW-0 has assembled one, or against the ui-gateway worktree's served bundle read-only at `/Volumes/Studio/dev/.worktrees/solution-explorer--ui-gateway/.testboard/serve/vscode` if it exists), `?mode=overview&orientation=start` walks all eight stops on a desktop window and seven on a 390px window, crossing into the Workbench at stop 6, and Done leaves nothing on screen.
-  - The invite appears on a fresh profile and not after dismiss or after the walk.
+  - The centered opening appears on a fresh profile and not after Skip or after the walk.
   - The beacon carries the four new attributes.
   - Every id in section 4.8 renders.
   - tsc, eslint clean; vitest failing-file set is a subset of the before set.
@@ -536,7 +583,7 @@ working directory once pushed straight to main).
 - verify_cmd: as OW-1.
 - Acceptance:
   - No `data-kind="welcome"` anywhere; no `WELCOME_STEPS`; no write of `arch-viz-help-dismissed`.
-  - Guide tab renders the applicable stops from `WALK_STOPS` with the live context; About tab carries the section 4.9 copy; footer button `orientation-replay` starts the walk and closes Help.
+  - Guide tab renders the applicable stops from `WALK_STOPS` with the live context; About tab carries the section 4.9 copy; the clearly labeled `Replay guided tour` footer button starts the walk and closes Help.
   - `?` key and Escape behaviour unchanged for Help.
   - `helpSystem.test.tsx` passes.
 
@@ -618,8 +665,8 @@ run record at each task boundary.
 
 **Risks.**
 - **Occlusion findings.** The crawl treats fixed overlays as occlusion.
-  The seed keeps the invite out of every existing spec; if the seed is
-  missed in a new context the invite appears in screenshots and W-less
+  The seed keeps the automatic orientation out of every existing spec; if the seed is
+  missed in a new context the opening appears in screenshots and W-less
   specs fail. Mitigation: the seed lives in the shared `crawlPage`
   fixture, as today.
 - **The crossing.** `setExperienceMode("workbench")` sets

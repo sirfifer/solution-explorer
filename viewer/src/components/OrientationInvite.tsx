@@ -1,8 +1,11 @@
 import { useArchStore } from "../store";
 import { TOOLTIP_COPY } from "../utils/tooltipCopy";
+import { publicationDisplayName } from "../utils/publication";
 
 export function OrientationInvite() {
   const darkMode = useArchStore((state) => state.darkMode);
+  const architecture = useArchStore((state) => state.architecture);
+  const publication = useArchStore((state) => state.publication);
   const orientationInvite = useArchStore((state) => state.orientationInvite);
   const orientationOpen = useArchStore((state) => state.orientationOpen);
   const startOrientation = useArchStore((state) => state.startOrientation);
@@ -33,15 +36,19 @@ export function OrientationInvite() {
 
   if (!orientationInvite || orientationOpen || anotherOverlayOpen) return null;
 
+  const displayName = architecture
+    ? publicationDisplayName(publication, architecture.name)
+    : "this software project";
+
   return (
     <aside
       data-testid="orientation-invite"
       aria-label="New visitor orientation"
       className={`fixed inset-x-0 bottom-0 z-50 border px-4 py-3 shadow-2xl sm:inset-x-auto sm:bottom-14 sm:right-4 sm:w-80 sm:rounded-2xl ${darkMode ? "border-zinc-700 bg-zinc-950 text-zinc-100" : "border-zinc-200 bg-white text-zinc-900"}`}
     >
-      <h2 className="text-sm font-bold">New here?</h2>
+      <h2 className="text-sm font-bold">New to SysCorpus?</h2>
       <p className={`mt-1 text-xs leading-5 ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
-        This map takes a minute to learn. Let it show you around.
+        See how SysCorpus turns the source of {displayName} into an explorable, evidence-linked model.
       </p>
       <div className="mt-3 flex items-center justify-end gap-2">
         <button

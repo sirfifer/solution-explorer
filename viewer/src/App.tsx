@@ -8,6 +8,7 @@ import { SearchOverlay } from "./components/SearchOverlay";
 import { HelpSystem } from "./components/HelpSystem";
 import { ReviewModeButton } from "./components/ReviewModeButton";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { HeaderHelpButton } from "./components/HeaderHelpButton";
 import { applyThemeToDocument } from "./utils/themes";
 import { AnnotationInput } from "./components/AnnotationInput";
 import { ReviewSummary } from "./components/ReviewSummary";
@@ -46,7 +47,8 @@ import { initializeSearch } from "./utils/search";
 import { collectCriticalComponents, collectExternalDependencies } from "./lenses";
 import { formatNumber, formatRelativeTime, getTypeColors } from "./utils/layout";
 import { dataUrl, getDataBase } from "./utils/dataSource";
-import { parsePublication, publicationDisplayName } from "./utils/publication";
+import { parsePublication, publicationDisplayName, publicationSubjectUrl } from "./utils/publication";
+import { SYSCORPUS } from "./utils/product";
 import { attachHumanViews } from "./utils/orientation";
 import { SolutionIndex } from "./components/SolutionIndex";
 import { Tooltip } from "./components/Tooltip";
@@ -483,6 +485,7 @@ export function App() {
     liveMonitorStatus,
     mobileChromeHidden,
     orientationOpen,
+    orientationStep,
     fileDeepLinkNotice,
     clearFileDeepLinkNotice,
     experienceMode,
@@ -968,6 +971,7 @@ export function App() {
   // else the folder-derived architecture.name (the contextual default). This is
   // display only; the annotation identity key stays on architecture.name.
   const displayName = publicationDisplayName(publication, architecture.name);
+  const subjectUrl = publicationSubjectUrl(publication, architecture.repository);
   const showLegacyOpeningBands = false;
 
   if (experienceMode === "overview") {
@@ -993,7 +997,8 @@ export function App() {
       {/* Header */}
       <header
         className={`
-          flex items-center justify-between gap-1 px-2 py-2 border-b shrink-0 z-30 sm:gap-3 sm:px-4
+          flex items-center justify-between gap-1 px-2 py-2 border-b shrink-0 sm:gap-3 sm:px-4
+          ${orientationOpen && applicableStops(WALK_STOPS, typeof window === "undefined" ? 1024 : window.innerWidth)[orientationStep]?.id === "lenses" ? "z-[70]" : "z-30"}
           ${darkMode ? "bg-zinc-950/95 border-zinc-800" : "bg-white/95 border-zinc-200"}
           backdrop-blur-sm transition-transform duration-300
         `}
@@ -1016,9 +1021,13 @@ export function App() {
           </button>
 
           <div className="hidden min-w-0 items-center gap-2 sm:flex">
-            <h1 className={`max-w-40 truncate font-bold text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
-              {displayName}
-            </h1>
+            {subjectUrl ? (
+              <a href={subjectUrl} target="_blank" rel="noopener noreferrer" aria-label={`Visit the official ${displayName} website (opens in a new tab)`} className="group max-w-40 truncate">
+                <span className="flex min-w-0 items-center gap-1"><h1 className={`truncate text-sm font-bold transition group-hover:text-cyan-500 ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>{displayName}</h1><span aria-hidden="true" className="shrink-0 text-cyan-500">↗</span></span>
+              </a>
+            ) : (
+              <h1 className={`max-w-40 truncate font-bold text-sm ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>{displayName}</h1>
+            )}
             <span className={`hidden sm:inline text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
               Architecture
             </span>
@@ -1172,14 +1181,6 @@ export function App() {
                     <span>✍️</span>
                     <span>{reviewMode ? "Exit review mode" : "Review mode"}</span>
                   </button>
-                  <button
-                    data-testid="help-button"
-                    onClick={() => { window.dispatchEvent(new Event("arch-viz-open-help")); setMoreMenuOpen(false); }}
-                    className={`min-h-11 w-full flex items-center gap-2 px-3 py-2 text-sm ${darkMode ? "hover:bg-zinc-800 text-zinc-300" : "hover:bg-zinc-100 text-zinc-700"}`}
-                  >
-                    <span>?</span>
-                    <span>Help</span>
-                  </button>
                   {liveConfig && (
                     <button
                       onClick={() => { setAdminOpen(!adminOpen); setMoreMenuOpen(false); }}
@@ -1195,7 +1196,7 @@ export function App() {
           </div>
 
           {/* Stats */}
-          <div className={`hidden md:flex items-center gap-3 text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+          <div className={`hidden 2xl:flex items-center gap-3 text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
             <span>{formatNumber(architecture.stats.total_components)} components</span>
             <span>{formatNumber(architecture.stats.total_files)} files</span>
             {architecture.stats.lines_by_class ? (
@@ -1237,7 +1238,7 @@ export function App() {
 
           {/* SysCorpus project link */}
           <a
-            href="https://github.com/sirfifer/solution-explorer"
+            href={SYSCORPUS.url}
             target="_blank"
             rel="noopener noreferrer"
             className={`
@@ -1247,11 +1248,13 @@ export function App() {
                 : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
               }
             `}
-            title="Built with SysCorpus"
+            title="About SysCorpus"
           >
             <span>&#x2699;&#xFE0F;</span>
             <span>SysCorpus</span>
           </a>
+
+          <HeaderHelpButton />
         </div>
       </header>
 

@@ -1321,7 +1321,9 @@ export const useArchStore = create<ArchStore>((set, get) => ({
 
   orientationOpen: initialOrientationEntry === "start",
   orientationStep: 0,
-  orientationInvite: initialOrientationEntry === "invite",
+  // Retained in the state shape for beacon and URL compatibility. New visits
+  // enter the centered walk directly, so no live path initializes the old card.
+  orientationInvite: false,
   orientationSkipped: [],
   startOrientation: () => {
     const state = get();
@@ -1352,6 +1354,7 @@ export const useArchStore = create<ArchStore>((set, get) => ({
   exitOrientation: (reason) => {
     persistOrientation(reason);
     set({ orientationOpen: false, orientationStep: 0, orientationInvite: false, mobileChromeHidden: false });
+    if (get().experienceMode !== "overview") get().setExperienceMode("overview");
   },
   dismissOrientationInvite: () => {
     persistOrientation("dismissed");

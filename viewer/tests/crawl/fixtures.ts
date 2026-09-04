@@ -133,7 +133,7 @@ export const test = base.extend<{
   ],
 
   crawlPage: async ({ page }, use) => {
-    // The first-visit orientation invite covers the bottom edge. Dismissed before any script
+    // The first-visit orientation covers the page. Dismissed before any script
     // runs rather than clicked away per test, so no case depends on being the
     // first one in its shard (a rule the AI plan had to state in prose).
     await page.addInitScript(

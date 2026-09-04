@@ -3,7 +3,7 @@ import type { CardPlacement, WalkStop } from "./stops";
 export const ORIENTATION_STORAGE_KEY = "arch-viz-orientation-v1";
 export const LEGACY_HELP_STORAGE_KEY = "arch-viz-help-dismissed";
 
-export type OrientationEntry = "start" | "invite" | "none";
+export type OrientationEntry = "start" | "none";
 
 export interface Rect {
   top: number;
@@ -32,9 +32,11 @@ export function firstVisitDecision(
 ): OrientationEntry {
   const request = new URLSearchParams(search).get("orientation");
   if (request === "start") return "start";
-  if (request === "invite") return "invite";
+  // The old invite URL remains a compatible way to request orientation, but
+  // first visits now enter the walk itself instead of asking whether to begin.
+  if (request === "invite") return "start";
   if (stored !== null || legacyStored !== null) return "none";
-  return "invite";
+  return "start";
 }
 
 export function readFirstVisitDecision(): OrientationEntry {
@@ -54,7 +56,7 @@ export function persistOrientation(value: "done" | "dismissed"): void {
   try {
     localStorage.setItem(ORIENTATION_STORAGE_KEY, value);
   } catch {
-    // Browser storage is optional. Component state still hides the invite.
+    // Browser storage is optional. Component state still closes the walk.
   }
 }
 
@@ -138,6 +140,10 @@ export function placeCard(
     top: Math.min(Math.max(choice.top, margin), Math.max(margin, viewport.height - card.height - margin)),
     left: Math.min(Math.max(choice.left, margin), Math.max(margin, viewport.width - card.width - margin)),
   }));
+  if (requested !== "auto") {
+    const preferred = clamped[0];
+    if (!intersect(anchor, rect(preferred.top, preferred.left, card.width, card.height))) return preferred;
+  }
   const chosen = ordered.find((choice) => fits(choice.top, choice.left, card, viewport, margin));
   if (chosen) return chosen;
   return clamped.find((choice) => !intersect(anchor, rect(choice.top, choice.left, card.width, card.height)))

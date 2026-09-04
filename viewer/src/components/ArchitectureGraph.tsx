@@ -1111,6 +1111,17 @@ export function ArchitectureGraph() {
 
   return (
     <div ref={containerRef} data-layout-pending={layoutPending ? "true" : "false"} className="w-full h-full relative">
+      {rawNodes.length > 0 && (nodes.length === 0 || layoutPending) && (
+        <div
+          data-testid="graph-loading"
+          role="status"
+          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+        >
+          <span className={`rounded-full border px-3 py-1.5 text-xs shadow-sm ${darkMode ? "border-zinc-700 bg-zinc-900/90 text-zinc-300" : "border-zinc-200 bg-white/90 text-zinc-600"}`}>
+            Preparing the project map...
+          </span>
+        </div>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={edges}

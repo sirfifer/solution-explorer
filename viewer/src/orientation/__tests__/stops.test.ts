@@ -19,6 +19,7 @@ function sourceFiles(directory: string): string[] {
 
 const fixtureContext: WalkContext = {
   displayName: "VS Code",
+  subjectUrl: "https://code.visualstudio.com/",
   identitySummary: "A desktop code editor.",
   lensLabels: ["Structure", "Inventory", "Activity", "Flow"],
   hasGuidedPaths: true,
@@ -42,13 +43,28 @@ describe("orientation stop table", () => {
   it("keeps the approved copy short and free of sentence dashes", () => {
     for (const stop of WALK_STOPS) {
       const body = stop.body(fixtureContext);
+      const heading = stop.heading(fixtureContext);
       expect(body.trim().split(/\s+/).length, stop.id).toBeLessThanOrEqual(25);
-      expect(`${stop.heading}${body}`, stop.id).not.toMatch(/[–—]/);
+      expect(`${heading}${body}`, stop.id).not.toMatch(/[–—]/);
     }
   });
 
   it("uses stable unique ids", () => {
     expect(new Set(WALK_STOPS.map((stop) => stop.id)).size).toBe(WALK_STOPS.length);
     for (const stop of WALK_STOPS) expect(stop.id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
+
+  it("introduces SysCorpus before teaching the viewer controls", () => {
+    const first = WALK_STOPS[0];
+    expect(first.presentation).toBe("welcome");
+    expect(first.heading(fixtureContext)).toBe("Meet VS Code through the lens of SysCorpus");
+    expect(first.body(fixtureContext)).toContain("Start with VS Code");
+    expect(first.body(fixtureContext)).toContain("SysCorpus connects those layers");
+  });
+
+  it("describes source coverage as analysis", () => {
+    const coverage = WALK_STOPS.find((stop) => stop.id === "how-much-was-analyzed");
+    expect(coverage?.heading(fixtureContext)).toBe("How much of VS Code was analyzed?");
+    expect(coverage?.body(fixtureContext)).toContain("SysCorpus analyzed");
   });
 });

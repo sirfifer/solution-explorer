@@ -1598,6 +1598,7 @@ export interface PublicationPublisher {
 
 export interface PublicationSubject {
   name: string;
+  homepage_url?: string;
   repo_url?: string;
   license?: string;
   commit: string;

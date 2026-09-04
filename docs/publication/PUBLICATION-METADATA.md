@@ -46,6 +46,7 @@ Summary of the required shape:
 | `publication_version` | yes | Schema version, currently 1 |
 | `publisher.name`, `publisher.contact` | yes | Who is publishing this deployment and how to reach them |
 | `subject.name` | yes | The analyzed project |
+| `subject.homepage_url` | no | Official public project website used for reader-facing links |
 | `subject.repo_url`, `subject.license` | for external subjects | Upstream source and its license identifier |
 | `subject.commit`, `subject.snapshot_date` | yes | Exact provenance of the snapshot (tooling may stamp these) |
 | `subject.affiliation` | yes | `owner`, `maintainer`, `contributor`, or `none`. Anything other than `owner` or `maintainer` obligates unofficial framing |

@@ -8,15 +8,15 @@ describe("orientation model", () => {
   it("selects eight desktop stops and seven mobile stops", () => {
     expect(applicableStops(WALK_STOPS, 1440).map((stop) => stop.id)).toHaveLength(8);
     expect(applicableStops(WALK_STOPS, 390).map((stop) => stop.id)).toHaveLength(7);
-    expect(applicableStops(WALK_STOPS, 700).some((stop) => stop.id === "how-much-was-read")).toBe(false);
+    expect(applicableStops(WALK_STOPS, 700).some((stop) => stop.id === "how-much-was-analyzed")).toBe(false);
   });
 
   it.each([
     ["?orientation=start", "done", "true", "start"],
-    ["?orientation=invite", "done", "true", "invite"],
+    ["?orientation=invite", "done", "true", "start"],
     ["", "done", null, "none"],
     ["", null, "true", "none"],
-    ["", null, null, "invite"],
+    ["", null, null, "start"],
   ])("chooses the first visit entry for %s", (search, stored, legacy, expected) => {
     expect(firstVisitDecision(search, stored, legacy)).toBe(expected);
   });
@@ -50,5 +50,14 @@ describe("orientation model", () => {
     expect(placeCard(anchor, { width: 100, height: 60 }, { width: 500, height: 400 }).placement).toBe("bottom");
     const lowAnchor = { ...anchor, top: 330, bottom: 370 };
     expect(placeCard(lowAnchor, { width: 100, height: 80 }, { width: 500, height: 400 }).placement).toBe("top");
+  });
+
+  it("honors a requested side by clamping it into view when it remains clear of the anchor", () => {
+    const headerAnchor = { ...anchor, top: 60, bottom: 100, left: 900, right: 1200, width: 300 };
+    expect(placeCard(headerAnchor, { width: 320, height: 240 }, { width: 1280, height: 720 }, "left")).toEqual({
+      placement: "left",
+      top: 12,
+      left: 566,
+    });
   });
 });

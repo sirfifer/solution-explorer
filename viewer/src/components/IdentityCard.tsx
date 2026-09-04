@@ -147,6 +147,7 @@ function FormFactorEvidence({
 export function IdentityCard({
   identity,
   subjectName,
+  subjectUrl,
   headline,
   interpreted,
   staleWithheld,
@@ -157,6 +158,7 @@ export function IdentityCard({
 }: {
   identity: OrientationIdentity | null | undefined;
   subjectName: string;
+  subjectUrl?: string | null;
   headline: string;
   interpreted?: string;
   staleWithheld: boolean;
@@ -193,13 +195,22 @@ export function IdentityCard({
     <>
       {statement ? (
         <>
-          <h2
-            className={`mt-2 text-3xl font-black leading-[1.1] sm:text-4xl ${
-              darkMode ? "text-zinc-100" : "text-zinc-900"
-            }`}
-          >
-            {subjectName}
-          </h2>
+          {subjectUrl ? (
+            <a
+              data-testid="overview-subject-link"
+              href={subjectUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Visit the official ${subjectName} website (opens in a new tab)`}
+              className="group inline-block"
+            >
+              <span className="flex items-center gap-2"><h2 className={`mt-2 text-3xl font-black leading-[1.1] transition group-hover:text-cyan-500 sm:text-4xl ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{subjectName}</h2><span aria-hidden="true" className="mt-2 text-lg text-cyan-500">↗</span></span>
+            </a>
+          ) : (
+            <h2 className={`mt-2 text-3xl font-black leading-[1.1] sm:text-4xl ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>
+              {subjectName}
+            </h2>
+          )}
           <p
             data-testid="identity-statement"
             className={`mt-3 max-w-2xl text-base leading-7 sm:text-lg sm:leading-8 ${

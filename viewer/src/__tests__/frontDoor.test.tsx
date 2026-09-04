@@ -53,7 +53,16 @@ const security: SecurityProjection = {
 beforeEach(() => {
   localStorage.clear();
   window.history.replaceState({}, "", "/");
-  useArchStore.setState({ experienceMode: "overview", startView: "overview", preferencesOpen: false, darkMode: true, architecture: null, lens: "structure" });
+  useArchStore.setState({
+    experienceMode: "overview",
+    startView: "overview",
+    preferencesOpen: false,
+    darkMode: true,
+    architecture: null,
+    lens: "structure",
+    orientationOpen: false,
+    orientationInvite: false,
+  });
 });
 
 describe("human-entry compatibility projection", () => {
@@ -240,6 +249,14 @@ describe("experience aperture", () => {
       preferencesOpen: false,
     });
     render(<SystemOverview displayName="Transit" />);
+    expect(screen.getByTestId("syscorpus-brand").getAttribute("href")).toBe("https://syscorpus.com/");
+    expect(screen.getByTestId("overview-context-title").textContent).toBe("An explorable, evidence-linked model of Transit");
+    expect(screen.getByTestId("syscorpus-overview-context").textContent).toContain("Generated and presented by SysCorpus");
+    expect(screen.getAllByTestId("overview-capability")).toHaveLength(3);
+    expect(screen.getByText("Understand the system")).toBeTruthy();
+    expect(screen.getByText("Trace it into the code")).toBeTruthy();
+    expect(screen.getByText("Investigate from different angles")).toBeTruthy();
+    expect(screen.getByTestId("publication-footer").textContent).toContain("© 2025-2026 Richard Amerman");
     expect(screen.getByText("Transit at a glance")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /questions$/ }));
     expect(screen.getByText("What are you trying to understand?")).toBeTruthy();
@@ -248,6 +265,21 @@ describe("experience aperture", () => {
     expect(useArchStore.getState().experienceMode).toBe("workbench");
     expect(useArchStore.getState().lens).toBe("structure");
     expect(useArchStore.getState().semanticLevel).toBe("system");
+  });
+
+  it("opens the interface guide from the expanded first-page explanation", () => {
+    useArchStore.setState({
+      architecture: attachHumanViews(architecture(), {}),
+      experienceMode: "overview",
+      overviewDirection: "portrait",
+      publication: null,
+      helpOpen: false,
+    });
+    render(<SystemOverview displayName="Transit" />);
+    fireEvent.click(screen.getByTestId("overview-interface-guide"));
+    expect(useArchStore.getState().helpOpen).toBe(true);
+    expect(screen.getByRole("heading", { name: "Help" })).toBeTruthy();
+    expect(screen.getByText("Meet Transit through the lens of SysCorpus")).toBeTruthy();
   });
 
   it("does not carry a stale specialist lens through a portrait-area handoff", () => {
