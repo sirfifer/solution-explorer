@@ -3,11 +3,11 @@
 
 `scripts/assemble-serve.py` produces what the crawl needs: the built viewer
 plus a projection, symlinked for speed. Cloudflare Pages needs something
-else, and every difference below was learned by a refused or an unsafe
+else, and every difference below was learned by a refused or a wrong
 deploy:
 
-  - No symlinks. wrangler follows them, but the served bundle must be a plain
-    directory so what was tested is byte for byte what was uploaded.
+  - No symlinks. The served bundle is a plain directory so what was tested
+    is byte for byte what was uploaded.
   - No file over 25 MiB. Pages refuses the upload (wrangler client-side, and
     the API with a 500 if the client check is bypassed). A large subject's
     manifest.json and its biggest detail shard exceed it. Each such file is
@@ -15,10 +15,14 @@ deploy:
     Content-Encoding: gzip, so the browser decodes it and the viewer never
     knows. Compact JSON would not be enough on its own: VS Code's largest
     shard is 41 MiB compact.
-  - A gate that actually runs. An advanced-mode `_worker.js` replaces
-    `functions/_middleware.js`, so the passcode gate is composed INTO the
-    Worker. Cloudflare Access on the custom hostname does not cover the
-    `*.pages.dev` hostname of the same deployment; the Worker gate does.
+  - NO ACCESS CONTROL IN THE BUNDLE. Access to every demo site belongs to
+    the owner and is done with Cloudflare Zero Trust (Access) on the
+    hostname, in the Cloudflare dashboard. A bundle never carries a
+    passcode, a cookie check, a gate page, a `functions/` directory or a
+    `_middleware.js`. This script deletes `functions/` from the copy and
+    refuses to finish if any authentication artifact remains, because a
+    passcode gate was once composed into the Worker on an inference and the
+    owner had to order it removed (2026-09-03).
   - No machine path. `manifest.root_path` names the analyzing machine's
     working copy; it is blanked with a note, as demo-site.py does.
   - The upstream license and notices at the bundle root, beside the copies
@@ -31,9 +35,8 @@ Usage:
     scripts/publish-demo-bundle.py vscode --check-only
 
 It prints the wrangler command to run next and never runs it: the deploy is
-a deliberate, separate step (DISCLOSURE-POLICY.md), and the Pages project
-must already carry the PREVIEW_PASSCODE and PREVIEW_SUBJECT secrets or the
-gate fails closed and nobody gets in.
+a deliberate, separate step, and after it the superseded deployment is
+deleted so exactly one is live (docs/publication/DEMO-DEPLOY-RUNBOOK.md).
 """
 
 from __future__ import annotations
@@ -48,12 +51,15 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PAGES_MAX_FILE_BYTES = 25 * 1024 * 1024
-GATE_DIR = REPO_ROOT / "infrastructure" / "preview-gate"
-WORKER_TEMPLATE = GATE_DIR / "_worker.js"
-GATE_MIDDLEWARE = GATE_DIR / "_middleware.js"
+WORKER_TEMPLATE = REPO_ROOT / "infrastructure" / "preview-gate" / "_worker.js"
 VALIDATE_PUBLICATION = REPO_ROOT / "scripts" / "validate-publication.py"
 LICENSE_NAMES = ("UPSTREAM-LICENSE.txt",)
 NOTICE_NAMES = ("ThirdPartyNotices.txt", "NOTICE", "NOTICE.txt")
+
+# Files and directories that mean "something in this bundle authenticates
+# people". None of them may exist in a published bundle.
+FORBIDDEN_AUTH_ARTIFACTS = ("functions", "preview-gate.js", "_middleware.js")
+FORBIDDEN_AUTH_MARKERS = ("PREVIEW_PASSCODE", "se_preview", "passcode", "onRequest(")
 
 ROOT_PATH_NOTE = (
     "Removed when this bundle was assembled for publication. The analyzed "
@@ -70,6 +76,14 @@ def dereference_copy(serve_dir: Path, out: Path) -> None:
     if out.exists():
         shutil.rmtree(out)
     shutil.copytree(serve_dir, out, symlinks=False)
+    # assemble-serve does not add functions/, but demo-site.py's older path
+    # did. Access control is never in the bundle, so it goes.
+    for name in FORBIDDEN_AUTH_ARTIFACTS:
+        target = out / name
+        if target.is_dir():
+            shutil.rmtree(target)
+        elif target.exists():
+            target.unlink()
 
 
 def scrub_root_path(arch: Path) -> str | None:
@@ -123,12 +137,24 @@ def write_worker(out: Path, gzipped_paths: list[str]) -> None:
         raise SystemExit(f"error: {WORKER_TEMPLATE} has no __GZIPPED_JSON__ placeholder")
     worker = template.replace("__GZIPPED_JSON__", json.dumps(gzipped_paths))
     (out / "_worker.js").write_text(worker, encoding="utf-8")
-    shutil.copy2(GATE_MIDDLEWARE, out / "preview-gate.js")
-    # An advanced-mode Worker ignores functions/; a stale copy there would
-    # only mislead the next reader into thinking the gate lives in two places.
-    functions = out / "functions"
-    if functions.exists():
-        shutil.rmtree(functions)
+
+
+def auth_artifact_errors(out: Path) -> list[str]:
+    """Anything that authenticates people inside the bundle is a refusal."""
+    errors = []
+    for name in FORBIDDEN_AUTH_ARTIFACTS:
+        if (out / name).exists():
+            errors.append(f"{name} is in the bundle: access control is Cloudflare Access, never the bundle")
+    worker = out / "_worker.js"
+    if worker.is_file():
+        text = worker.read_text(encoding="utf-8")
+        # The template's own comment names the passcode once, in prose that
+        # says never; the markers below are code shapes, not prose.
+        code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith(("*", "/*", "//")))
+        for marker in FORBIDDEN_AUTH_MARKERS:
+            if marker in code:
+                errors.append(f"_worker.js contains {marker!r}: access control is Cloudflare Access, never the bundle")
+    return errors
 
 
 def safety_errors(out: Path, cap: int = PAGES_MAX_FILE_BYTES) -> list[str]:
@@ -136,13 +162,6 @@ def safety_errors(out: Path, cap: int = PAGES_MAX_FILE_BYTES) -> list[str]:
     errors = []
     if not (out / "index.html").is_file():
         errors.append("no index.html: this is data, not a viewer")
-    worker = out / "_worker.js"
-    if not worker.is_file():
-        errors.append("no _worker.js: the preview gate would be absent (DISCLOSURE-POLICY.md step 3)")
-    elif "preview-gate.js" not in worker.read_text(encoding="utf-8"):
-        errors.append("_worker.js does not import the preview gate")
-    if not (out / "preview-gate.js").is_file():
-        errors.append("no preview-gate.js beside _worker.js")
     if not any((out / n).is_file() for n in LICENSE_NAMES):
         errors.append("no upstream license at the bundle root (LICENSE-REVIEW.md step 3)")
     arch = out / "architecture"
@@ -160,11 +179,15 @@ def safety_errors(out: Path, cap: int = PAGES_MAX_FILE_BYTES) -> list[str]:
         doc = {}
     if doc.get("root_path"):
         errors.append("manifest.root_path still names the generating machine")
+    gz_files = [p for p in out.rglob("*.gz") if p.is_file()]
+    if gz_files and not (out / "_worker.js").is_file():
+        errors.append("gzip assets present but no _worker.js to serve them")
     for file in out.rglob("*"):
         if file.is_symlink():
             errors.append(f"symlink in bundle: {file.relative_to(out)}")
         elif file.is_file() and file.stat().st_size > cap:
             errors.append(f"{file.relative_to(out)} is {_human(file.stat().st_size)}, over the Pages cap")
+    errors.extend(auth_artifact_errors(out))
     return errors
 
 
@@ -187,8 +210,9 @@ def build(slug: str, serve_dir: Path, out: Path) -> Path:
     gzipped = compress_oversized(out)
     for path in gzipped:
         print(f"[publish]   gzip (over {_human(PAGES_MAX_FILE_BYTES)}): {path}")
-    write_worker(out, gzipped)
-    print("[publish]   _worker.js written with the preview gate composed in")
+    if gzipped:
+        write_worker(out, gzipped)
+        print("[publish]   _worker.js written: serves the gzip assets, nothing else")
     validate_publication(out)
     errors = safety_errors(out)
     if errors:
@@ -196,7 +220,7 @@ def build(slug: str, serve_dir: Path, out: Path) -> Path:
             print(f"  UNSAFE: {err}", file=sys.stderr)
         raise SystemExit(2)
     count = sum(1 for p in out.rglob("*") if p.is_file())
-    print(f"[publish]   bundle ready: {count} files, no symlinks, nothing over the cap")
+    print(f"[publish]   bundle ready: {count} files, no symlinks, nothing over the cap, no access control inside")
     return out
 
 
@@ -227,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\nNext, deliberately (see docs/publication/DEMO-DEPLOY-RUNBOOK.md):")
     print(f"  wrangler pages deploy {out} --project-name {project} --branch main "
           f"--commit-hash <main sha> --commit-dirty=false --commit-message '<what and why>'")
+    print("  then delete the superseded deployment so exactly one is live.")
     return 0
 
 

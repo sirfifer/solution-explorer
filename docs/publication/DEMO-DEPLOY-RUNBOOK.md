@@ -1,15 +1,29 @@
 # Demo deploy runbook
 
-How a SysCorpus demo bundle gets from a reviewed local page to a hosted
-private preview, and every trap on that path. Written 2026-09-03 after the
-VS Code identity front door deploy, which hit each trap below in turn
-because the first deploy of that demo had been made from a temporary
-directory with a hand-written Worker that nobody committed.
+How a SysCorpus demo bundle gets from a reviewed local page to its hosted
+site, and every trap on that path. Written 2026-09-03 after the VS Code
+identity front door deploy, which hit each trap below in turn because the
+first deploy of that demo had been made from a temporary directory with a
+hand-written Worker that nobody committed.
 
 The rule this runbook enforces: **what was reviewed is what gets deployed,
 and every step is a committed script or a recorded command.** No temporary
 directories, no hand-written Workers, no archaeology through wrangler's
 build cache to learn how the last deploy was done.
+
+## 0. Access control is the owner's, and only Cloudflare's
+
+All access control to every demo site is done by the owner with Cloudflare
+Zero Trust (Access) on the hostname, in the Cloudflare dashboard. Nothing
+else. A bundle never carries a passcode, a cookie check, a gate page, a
+`functions/` directory, a `_middleware.js`, or any authentication logic in
+its Worker, whatever `publication.json`, a Pages project secret, a policy
+document or an older script appears to require. On 2026-09-03 a passcode
+gate was composed into the VS Code demo's Worker on exactly that kind of
+inference; the owner found a passcode prompt in front of his own site and
+ordered it removed the same day. `scripts/publish-demo-bundle.py` refuses a
+bundle that carries any such artifact. If access looks wrong or exposed,
+report it; the fix is the owner's, in the dashboard.
 
 ## 1. The shape of a deploy
 
@@ -18,7 +32,8 @@ build cache to learn how the last deploy was done.
 | Code | the viewer build and the analyzer that produced the data | a commit on `main`, after the PR is green and merged |
 | Data | the projection: `manifest.json`, `orientation.json`, the detail shards, sidecars | a reprojection or the canonical store, plus review corrections |
 | Publication | `publication.json`, upstream license and notices, activity scrub, machine path removed | `demos/publication/<slug>.json`, the subject checkout, `assemble-serve.py` flags |
-| Hosting | Cloudflare Pages project, the passcode gate, gzip for oversized files | `scripts/publish-demo-bundle.py` and `infrastructure/preview-gate/` |
+| Hosting | Cloudflare Pages project, gzip for oversized files | `scripts/publish-demo-bundle.py` and `infrastructure/preview-gate/_worker.js` |
+| Access | who may open the site | the owner, Cloudflare Access, dashboard only |
 
 A viewer-only redeploy is never enough when the change touched the
 analyzer. The identity front door added a derive pass whose output lives in
@@ -78,27 +93,24 @@ $PY scripts/publish-demo-bundle.py <slug> --serve-dir .testboard/serve/<slug> --
 ```
 
 This resolves symlinks, removes `manifest.root_path`, hoists the license and
-notices to the root, gzips every file over 25 MiB, writes `_worker.js` with
-the passcode gate composed in, validates `publication.json`, and refuses on
-any symlink, oversized file, missing gate, missing license or machine path.
-It prints the deploy command and does not run it.
+notices to the root, gzips every file over 25 MiB, writes a `_worker.js`
+that serves those gzip assets and nothing else, validates
+`publication.json`, and refuses on any symlink, oversized file, missing
+license, machine path, or authentication artifact. It prints the deploy
+command and does not run it.
 
 ### 2.4 Prove the Worker locally
 
 ```bash
-wrangler pages dev .testboard/publish/<slug> --port 8795 --ip 127.0.0.1 \
-  --compatibility-date=2026-07-01 \
-  --binding PREVIEW_PASSCODE=<a probe value> --binding PREVIEW_SUBJECT="<name>"
+wrangler pages dev .testboard/publish/<slug> --port 8795 --ip 127.0.0.1 --compatibility-date=2026-07-01
 ```
 
-Then, with curl: an ungated `GET /` and `GET /architecture/manifest.json`
-both return 401 with the gate page; a wrong passcode returns 401; the right
-passcode returns 303 with the `se_preview` cookie; with the cookie,
-`--compressed` fetches of the gzip-served files decode to the full JSON.
-Then, in a browser (a Playwright script is fine): pass the gate, open the
-Overview, open the Workbench, drill once, and confirm zero failed requests
-and zero page errors. The compatibility date must be one the installed
-`workerd` supports; the warning tells you when it is not.
+Then, with curl: `GET /` returns the app; `--compressed` fetches of the
+gzip-served files decode to the full JSON; a small shard returns plain
+JSON. Then, in a browser (a Playwright script is fine): open the Overview,
+open the Workbench, drill once, and confirm zero failed requests and zero
+page errors. The compatibility date must be one the installed `workerd`
+supports; the warning tells you when it is not.
 
 ### 2.5 Deploy, deliberately
 
@@ -108,28 +120,27 @@ wrangler pages deploy .testboard/publish/<slug> --project-name <cf project> \
   --commit-message "<what and why>"
 ```
 
-The Pages project must already hold the `PREVIEW_PASSCODE` and
-`PREVIEW_SUBJECT` secrets (`wrangler pages secret list --project-name
-<cf project>` shows the names, never the values). Without the passcode the
-gate fails closed and nobody gets in, including the owner.
+### 2.6 Delete the superseded deployment
 
-### 2.6 Verify from outside
+Every deployment keeps answering at its own `<id>.<project>.pages.dev`
+address until deleted. The owner's rule is one deployment live. The prompt
+needs a terminal, so answer it through `expect`:
 
-- `wrangler pages deployment list --project-name <cf project>`: the top row
-  is Production, branch main, source equal to the merged sha.
-- `https://<deployment id>.<project>.pages.dev/` and
-  `.../architecture/manifest.json` return 401 with the gate page. The data
-  never leaves without the cookie.
-- `https://<project>.pages.dev/` (the production alias) also returns 401.
-- The custom hostname redirects to Cloudflare Access as before.
+```bash
+expect -c 'spawn wrangler pages deployment delete <old id> --project-name <cf project>; expect -re "delete deployment.*"; send "y\r"; expect eof'
+```
+
+### 2.7 Verify from outside
+
+- `wrangler pages deployment list --project-name <cf project>`: exactly one
+  row, Production, branch main, source equal to the merged sha.
+- The custom hostname redirects to Cloudflare Access.
+- The deployment's pages.dev URL serves the app. Whether that hostname is
+  also behind Access is the owner's Pages Access policy setting in the
+  dashboard; report its state, never change it and never gate it yourself.
 - Record the deployment id, the sha, the numbers and the screenshots in a
   run record under `docs/testing/`, and add or update the row in
   `DEPLOYMENTS.md`.
-
-What cannot be verified from outside is the page behind the gate, because
-the passcode is a secret that is used and never read. The local Worker run
-in 2.4 on the identical bundle is the evidence for that, plus the owner's
-own look after deploy.
 
 ## 3. The traps, each one paid for
 
@@ -142,18 +153,16 @@ Worker that serves them with `Content-Encoding: gzip`; the files compress to
 2.7 MiB and 4.3 MiB. The publish script does this for every oversized file.
 
 **An advanced-mode Worker replaces `functions/`.** A `_worker.js` at the
-bundle root means Pages ignores `functions/_middleware.js` entirely. The
-first VS Code deploy had the gzip Worker and therefore no gate: its data was
-readable by anyone at its `*.pages.dev` URL. The committed `_worker.js`
-template calls the gate first and serves assets second, and the publish
-script deletes `functions/` from the bundle so nobody thinks the gate lives
-there.
+bundle root means Pages ignores `functions/` entirely. That is fine, because
+nothing in `functions/` is wanted: access control is not in the bundle.
 
-**Cloudflare Access covers the custom hostname only.** Every deployment also
-answers on `<id>.<project>.pages.dev` and the production alias
-`<project>.pages.dev`, and Access does not sit in front of those. The
-Worker gate does. Old deployments made without the gate keep serving their
-data on their own preview URLs until they are deleted from the project.
+**Access control is not yours to add.** See section 0. The one time it was
+added on inference it was wrong, and it cost the owner a passcode prompt on
+his own site.
+
+**Old deployments keep answering.** Until deleted, every deployment serves
+its content at its own preview URL. Delete the superseded one after every
+deploy (2.6).
 
 **A symlinked bundle is not what you tested.** `assemble-serve.py` symlinks
 the projection for speed. Wrangler follows symlinks, but the deployable
@@ -164,8 +173,8 @@ set uploaded, and so the safety check can see the real sizes.
 copy. Blanked with a note by the publish script, as `demo-site.py` does.
 
 **The reviewed bundle is not the publication bundle.** The crawl bundle has
-no `publication.json`, no license, no scrub and no gate. Package it with the
-script and test that, or you are testing something other than what ships.
+no `publication.json`, no license, no scrub. Package it with the script and
+test that, or you are testing something other than what ships.
 
 **Merging to main deploys the installations.** `deploy-downstream.yml` runs
 after the Architecture Visualization workflow succeeds on main and
@@ -176,24 +185,17 @@ merging; it is not the demo deploy, but it is outward-facing.
 date, which a slightly older `workerd` binary refuses. Pass a date the
 binary supports.
 
+**wrangler prompts need a terminal.** `deployment delete` asks for
+confirmation and answers "no" for itself when stdin is not a terminal.
+`expect` is the reliable way to answer it.
+
 ## 4. Open items after 2026-09-03
 
-- Old deployments keep answering at their own preview URLs until deleted.
-  `wrangler pages deployment delete <id> --project-name <project>` removes
-  one (no confirmation flag; it just deletes). After every deploy, delete
-  the deployments that are no longer wanted so exactly one is live. The two
-  pre-gate VS Code deployments were deleted on 2026-09-03.
-- Enable the Pages Access policy on the project (dashboard, Settings, Access
-  policy) so `*.<project>.pages.dev` sits behind Cloudflare Access as the
-  custom hostname does. It is a dashboard toggle; there is no wrangler
-  command and the API needs an Access-scoped token.
-- The custom hostname now has two gates in series: Cloudflare Access, then
-  the passcode. If the owner wants Access alone on the hostname, the Worker
-  can skip its gate for requests carrying a valid `Cf-Access-Jwt-Assertion`,
-  which means verifying the JWT against the Access certificates, not merely
-  checking for a header a client could set itself.
 - `scripts/demo-site.py deploy` still expects `functions/_middleware.js` and
   does not gzip. It should call `publish-demo-bundle.py` or be retired in
   favour of it.
+- `infrastructure/preview-gate/_middleware.js` and the passcode wording in
+  `DISCLOSURE-POLICY.md` describe a gate the owner does not use. Whether to
+  retire them is the owner's call; nothing in the publish path uses them.
 - `assemble-serve.py` skips `tsc -b` in demo mode (review finding); until
   fixed, run `npx tsc --noEmit` before trusting a demo-mode build.

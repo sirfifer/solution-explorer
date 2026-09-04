@@ -101,3 +101,26 @@ proven under the Workers runtime locally (table above).
 
 About 240,000 session tokens for the ship pass at the frontier, plus the
 six review finder agents at roughly 900,000 subagent tokens in total.
+
+## Addendum, later on 2026-09-03: the gate was wrong and is gone
+
+The passcode gate composed into the Worker above was never asked for. The
+owner's rule is that all access control to every site is his, through
+Cloudflare Zero Trust (Access) only. The gate was an inference from the
+project's `PREVIEW_PASSCODE` secret, the publication file's
+`private-preview`, and `demo-site.py`'s middleware requirement; inference
+is not authorization for an access-control change. The owner found a
+passcode prompt on his own site and ordered it removed.
+
+Done the same day:
+
+| | |
+|---|---|
+| New deployment | `4612a962-2eae-483a-9cbd-2e053cf563bf`, Production, main, source `ade4f4c`, 2 files changed against the gated one (the Worker) |
+| Verified from outside | its pages.dev URL serves the app (200, title "Architecture Visualizer", no gate strings); the manifest decodes with `identity`; the custom hostname redirects to Cloudflare Access |
+| Deleted | `291cf0ea` (the gated deployment) and, earlier, `ac1bb93f` and `0fd2ab9c` (the pre-gate ones), so exactly one deployment is live |
+| Guardrails | `_worker.js` template serves gzip only; `publish-demo-bundle.py` deletes `functions/` and refuses any authentication artifact; runbook section 0, the `publish-demo` skill and project memory state the rule |
+
+Still the owner's, in the dashboard: whether the project's pages.dev
+hostnames sit behind Access as the custom hostname does (the Pages Access
+policy setting). Nothing in this repo gates them.
