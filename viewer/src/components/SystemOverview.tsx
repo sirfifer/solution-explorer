@@ -21,6 +21,7 @@ import { HelpSystem } from "./HelpSystem";
 import { HeaderHelpButton } from "./HeaderHelpButton";
 import { applicableStops } from "../orientation/model";
 import { WALK_STOPS } from "../orientation/stops";
+import { InterfacePreview, hasUserInterface } from "./InterfacePreview";
 
 const OVERVIEW_CAPABILITIES = [
   {
@@ -76,6 +77,13 @@ export function SystemOverview({ displayName }: { displayName: string }) {
     // correct.
     store.setLens("structure");
     store.navigateToComponent(id);
+  };
+
+  const openInterfaceSource = async (hotspot: import("../types").UISurfaceHotspot) => {
+    const store = useArchStore.getState();
+    store.setExperienceMode("workbench");
+    store.setLens("structure");
+    await store.openFileDeepLink(hotspot.evidence.file, hotspot.evidence.line);
   };
 
   return (
@@ -153,7 +161,7 @@ export function SystemOverview({ displayName }: { displayName: string }) {
           </div>
         </div>
 
-        {direction === "portrait" && <Portrait orientation={orientation} subjectUrl={subjectUrl} darkMode={darkMode} onTarget={openTarget} onComponent={openComponent} onTrust={() => setTrustOpen(true)} />}
+        {direction === "portrait" && <Portrait orientation={orientation} subjectUrl={subjectUrl} darkMode={darkMode} onTarget={openTarget} onComponent={openComponent} onInterfaceSource={openInterfaceSource} onTrust={() => setTrustOpen(true)} />}
         {direction === "questions" && <Questions orientation={orientation} questionId={questionId} setQuestionId={setQuestionId} darkMode={darkMode} onTarget={openTarget} />}
         {direction === "atlas" && <Atlas orientation={orientation} darkMode={darkMode} onTarget={openTarget} onComponent={openComponent} />}
       </main>
@@ -170,7 +178,7 @@ export function SystemOverview({ displayName }: { displayName: string }) {
   );
 }
 
-function Portrait({ orientation, subjectUrl, darkMode, onTarget, onComponent, onTrust }: { orientation: OrientationProjection; subjectUrl: string | null; darkMode: boolean; onTarget: (target: OrientationTarget, question?: string) => void; onComponent: (id?: string) => void; onTrust: () => void }) {
+function Portrait({ orientation, subjectUrl, darkMode, onTarget, onComponent, onInterfaceSource, onTrust }: { orientation: OrientationProjection; subjectUrl: string | null; darkMode: boolean; onTarget: (target: OrientationTarget, question?: string) => void; onComponent: (id?: string) => void; onInterfaceSource: (hotspot: import("../types").UISurfaceHotspot) => void | Promise<void>; onTrust: () => void }) {
   const architecture = useArchStore((state) => state.architecture)!;
   const primary = orientation.question_routes.filter((route) => route.available).slice(0, 3);
   const interpretedStatement = orientation.orientation.interpreted_statement;
@@ -209,6 +217,8 @@ function Portrait({ orientation, subjectUrl, darkMode, onTarget, onComponent, on
           newcomer should read. One line, and the full ledger is one click. */}
       <button data-testid="scale-summary" onClick={onTrust} className={`mt-7 min-h-11 text-left text-xs sm:min-h-0 ${darkMode ? "text-zinc-500 hover:text-zinc-300" : "text-zinc-500 hover:text-zinc-700"}`}>{formatNumber(architecture.stats.total_components)} components · {formatNumber(architecture.stats.total_files)} files · {formatNumber(architecture.stats.total_relationships)} relationships · full ledger →</button>
     </section>
+    <div className="grid gap-6">
+      <InterfacePreview surfaces={architecture.ui_surfaces} expectsInterface={hasUserInterface(identity?.form_factors)} darkMode={darkMode} onOpenSource={onInterfaceSource} />
     <section data-se="panel" className={`relative min-h-[460px] overflow-hidden rounded-[2rem] border p-5 sm:p-8 ${darkMode ? "border-zinc-800 bg-zinc-950/75" : "border-zinc-200 bg-white"}`}>
       <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] uppercase tracking-wider text-zinc-500">System portrait</p><h3 className={`mt-1 text-xl font-bold ${darkMode ? "text-zinc-100" : "text-zinc-900"}`}>{orientation.portrait.nodes.length} areas of the system</h3></div><button data-testid="open-workbench" onClick={() => onTarget({ lens: "structure", semantic_level: "system" })} className="min-h-11 shrink-0 text-xs font-semibold text-cyan-500 sm:min-h-0">Full map →</button></div>
       <div className="relative mt-8 grid min-h-[320px] grid-cols-2 content-center gap-4 sm:grid-cols-3">
@@ -217,6 +227,7 @@ function Portrait({ orientation, subjectUrl, darkMode, onTarget, onComponent, on
       </div>
       <button onClick={onTrust} className={`mt-2 min-h-11 text-xs sm:min-h-0 sm:text-[10px] ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>Derived by {orientation.portrait.method}. How do we know? →</button>
     </section>
+    </div>
   </div>;
 }
 

@@ -4,6 +4,7 @@ import type {
   OrientationProjection,
   SecurityProjection,
   SupportProjection,
+  UISurfacesProjection,
 } from "../types";
 import { hasFlowData } from "./flowData";
 
@@ -219,12 +220,14 @@ export function attachHumanViews(
     orientation?: OrientationProjection | null;
     support?: SupportProjection | null;
     security?: SecurityProjection | null;
+    ui_surfaces?: UISurfacesProjection | null;
   },
 ): Architecture {
   const merged: Architecture = {
     ...architecture,
     support: sidecars.support ?? architecture.support,
     security: sidecars.security ?? architecture.security,
+    ui_surfaces: sidecars.ui_surfaces ?? architecture.ui_surfaces,
   };
   const orientation = sidecars.orientation ?? architecture.orientation ?? buildOrientationFallback(merged);
   const classifiedTotal = orientation.portrait.nodes.reduce((sum, node) => sum + node.member_count, 0);

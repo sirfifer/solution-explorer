@@ -1050,6 +1050,64 @@ test.describe("overview", () => {
   );
 
   test(
+    "O10.1: a UI capture is real, provenance-labelled, and opens its source",
+    { tag: ["@desktop"] },
+    async ({ crawlPage, request, recorder }) => {
+      await requireContract(crawlPage);
+      const response = await request.get("/architecture/ui-surfaces.json");
+      if (!response.ok()) {
+        test.info().annotations.push({
+          type: "coverage",
+          description: "O10.1: no ui-surfaces.json is attached to this dataset; honest missing-capture rendering is covered by the component test",
+        });
+        return;
+      }
+      const surfaces = await response.json() as {
+        screens: Array<{
+          capture: { source_match: "exact" | "representative" };
+          image: { width: number; height: number };
+          hotspots: Array<{
+            label: string;
+            evidence: { component_id: string; file: string; line: number };
+          }>;
+        }>;
+      };
+      const authored = surfaces.screens[0];
+      expect(authored, "the sidecar must author at least one screen").toBeTruthy();
+      await gotoOverview(crawlPage);
+
+      const preview = crawlPage.locator('[data-testid="interface-preview"]');
+      await preview.scrollIntoViewIfNeeded();
+      await expect(preview).toBeVisible();
+      expect(await preview.getAttribute("data-source-match")).toBe(authored.capture.source_match);
+      const provenance = (await preview.locator('[data-testid="capture-provenance"]').innerText()).toLowerCase();
+      expect(provenance).toContain(authored.capture.source_match === "exact" ? "exact" : "representative");
+
+      const image = preview.locator("img").first();
+      await expect.poll(async () => image.evaluate((node: HTMLImageElement) => node.complete && node.naturalWidth > 0)).toBe(true);
+      expect(await image.evaluate((node: HTMLImageElement) => [node.naturalWidth, node.naturalHeight])).toEqual([
+        authored.image.width,
+        authored.image.height,
+      ]);
+      const stageHotspots = preview.locator('[data-testid="interface-image-stage"] button');
+      expect(await stageHotspots.count()).toBe(authored.hotspots.length);
+
+      const first = authored.hotspots[0];
+      recorder.reset();
+      await stageHotspots.first().click();
+      await expect.poll(async () => (await readNavState(crawlPage)).mode).toBe("workbench");
+      await expect.poll(async () => (await readNavState(crawlPage)).selected).toBe(first.evidence.component_id);
+      await expect(crawlPage.locator('[data-testid="detail-tab"][data-tab="files"][data-active="true"]')).toBeVisible();
+      expect(recorder.problems(), "the screenshot-to-source handoff must be clean").toEqual([]);
+
+      test.info().annotations.push({
+        type: "coverage",
+        description: `O10.1 loaded a ${authored.capture.source_match} ${authored.image.width}x${authored.image.height} capture with ${authored.hotspots.length} hotspot(s) and opened ${first.evidence.file}:${first.evidence.line}`,
+      });
+    },
+  );
+
+  test(
     "O11: SysCorpus frames every Overview direction without displacing the subject",
     { tag: ["@desktop", "@mobile"] },
     async ({ crawlPage }) => {

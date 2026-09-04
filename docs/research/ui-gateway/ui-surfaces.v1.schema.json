@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syscorpus.com/schemas/ui-surfaces.v1.schema.json",
+  "title": "SysCorpus UI surfaces v1",
+  "type": "object",
+  "required": ["schema", "subject", "clients", "screens"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "syscorpus.ui-surfaces/v1"},
+    "subject": {
+      "type": "object",
+      "required": ["repository", "commit"],
+      "additionalProperties": false,
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "commit": {"type": "string", "minLength": 1}
+      }
+    },
+    "clients": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "kind", "platforms", "primary", "coverage"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "label": {"type": "string", "minLength": 1},
+          "kind": {"type": "string", "minLength": 1},
+          "platforms": {"type": "array", "items": {"type": "string"}},
+          "primary": {"type": "boolean"},
+          "coverage": {"enum": ["captured", "shared", "missing", "unavailable"]},
+          "shares_interface_with": {"type": "string"},
+          "note": {"type": "string"}
+        }
+      }
+    },
+    "screens": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/screen"}
+    }
+  },
+  "$defs": {
+    "rect": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "x": {"type": "number", "minimum": 0, "maximum": 1},
+        "y": {"type": "number", "minimum": 0, "maximum": 1},
+        "width": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "height": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+      }
+    },
+    "screen": {
+      "type": "object",
+      "required": ["id", "client_id", "label", "role", "image", "capture", "hotspots"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "client_id": {"type": "string", "minLength": 1},
+        "label": {"type": "string", "minLength": 1},
+        "role": {"enum": ["primary", "secondary"]},
+        "image": {
+          "type": "object",
+          "required": ["path", "sha256", "width", "height"],
+          "additionalProperties": false,
+          "properties": {
+            "path": {"type": "string", "pattern": "^ui-surfaces/"},
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "width": {"type": "integer", "minimum": 1},
+            "height": {"type": "integer", "minimum": 1}
+          }
+        },
+        "capture": {
+          "type": "object",
+          "required": ["captured_at", "method", "runtime_name", "runtime_version", "runtime_commit", "source_match", "sanitized"],
+          "additionalProperties": false,
+          "properties": {
+            "captured_at": {"type": "string", "format": "date-time"},
+            "method": {"type": "string"},
+            "runtime_name": {"type": "string"},
+            "runtime_version": {"type": "string"},
+            "runtime_commit": {"type": "string"},
+            "source_match": {"enum": ["exact", "representative"]},
+            "sanitized": {"const": true},
+            "notes": {"type": "string"}
+          }
+        },
+        "hotspots": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "label", "kind", "rect", "evidence", "action"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {"type": "string"},
+              "label": {"type": "string"},
+              "kind": {"type": "string"},
+              "rect": {"$ref": "#/$defs/rect"},
+              "evidence": {
+                "type": "object",
+                "required": ["component_id", "file", "line"],
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {"type": "string"},
+                  "file": {"type": "string"},
+                  "line": {"type": "integer", "minimum": 1},
+                  "symbol": {"type": ["string", "null"]},
+                  "symbol_id": {"type": ["string", "null"]}
+                }
+              },
+              "action": {
+                "type": "object",
+                "required": ["kind"],
+                "additionalProperties": false,
+                "properties": {"kind": {"const": "open_source"}}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

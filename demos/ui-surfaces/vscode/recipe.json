@@ -1,0 +1,24 @@
+{
+  "schema": "syscorpus.ui-capture-recipe/v1",
+  "adapter": "vscode-playwright-electron",
+  "script": "scripts/capture-vscode-surface.mjs",
+  "subject_workspace_commit": "474a349ad5b745e512ef86b864d1c74f7264dd7a",
+  "screen": "desktop:main-workbench",
+  "viewport": {"width": 1440, "height": 900},
+  "source_file": "src/vs/workbench/browser/parts/editor/editorPart.ts",
+  "isolation": {
+    "temporary_user_data": true,
+    "temporary_extensions_directory": true,
+    "telemetry_disabled": true,
+    "workspace_trust_disabled": true,
+    "extension_recommendations_disabled": true
+  },
+  "selectors": {
+    "activity-bar": "#workbench.parts.activitybar",
+    "side-bar": "#workbench.parts.sidebar",
+    "editor": "#workbench.parts.editor",
+    "status-bar": "#workbench.parts.statusbar",
+    "title-bar": "#workbench.parts.titlebar",
+    "auxiliary-bar": "#workbench.parts.auxiliarybar"
+  }
+}

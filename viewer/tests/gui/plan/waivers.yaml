@@ -178,6 +178,13 @@
     (overview.spec.ts O9 holds the headline and the chips to the orientation
     sidecar and opens one chip to reach its evidence). No AI-plan case yet;
     retire with the Overview vector.
+- token: component:InterfacePreview
+  reason: >
+    The production surface is covered by interfacePreview.test.tsx, including
+    representative-runtime provenance, the screenshot-to-source hotspot handoff,
+    honest missing-capture state, and absence for non-UI subjects. The current
+    Phase 1 GUI datasets do not attach ui-surfaces.json; retire this waiver when
+    the VS Code capture package becomes a committed GUI dataset input.
 - token: component:TrustLedger
   reason: >
     Exercised by the deterministic crawl (overview.spec.ts opens the trust

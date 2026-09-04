@@ -14,9 +14,9 @@ Two decisions worth stating, because both were mistakes at some point today:
   for every crawl is a minute of disk churn per run for no benefit. Python's
   http.server follows symlinks, so the served bytes are identical. When a
   canonical projection predates the human-first sidecars, assembly creates a
-  small derived overlay: canonical files remain symlinks and only the three
-  deterministic sidecars are newly written. The source projection is never
-  modified.
+    small derived overlay: canonical files remain symlinks and only derived or
+    explicitly supplied sidecars are attached. The source projection is never
+    modified.
 
 The layout mirrors what scripts/gui-datasets.py assemble produces, so the two
 harnesses serve datasets the same way and a bundle from either is crawlable.
@@ -47,11 +47,18 @@ from analyzer.project.human_views import (  # noqa: E402 - repo root must preced
     write_human_view,
 )
 from analyzer.project.review import apply_review_corrections  # noqa: E402
+from analyzer.project.ui_surfaces import (  # noqa: E402
+    UI_SURFACES_FILENAME,
+    UISurfaceValidationError,
+    load_and_validate_ui_surfaces,
+    validate_ui_surface_evidence,
+)
 
 VIEWER = REPO_ROOT / "viewer"
 DIST = VIEWER / "dist"
 SERVE_ROOT = REPO_ROOT / ".testboard" / "serve"
 DERIVED_ROOT = REPO_ROOT / ".testboard" / "derived"
+DERIVED_MARKER = ".syscorpus-derived-overlay.json"
 
 # Data baked into the viewer's own public/ directory. It has to go, or the app
 # loads the repo's committed dataset instead of the subject under test, and the
@@ -131,6 +138,7 @@ def _projection_with_human_views(
     publication: Path | None = None,
     upstream_source: Path | None = None,
     scrub_activity: bool = False,
+    ui_surfaces: Path | None = None,
 ) -> tuple[Path, list[str]]:
     """Return a projection root with all human-view sidecars available.
 
@@ -142,7 +150,7 @@ def _projection_with_human_views(
     sidecars = (ORIENTATION_FILENAME, SUPPORT_FILENAME, SECURITY_FILENAME)
     missing = [name for name in sidecars if not (projection / name).is_file()]
     activity_path = projection / "activity.json"
-    if not missing and corrections is None and publication is None and upstream_source is None and not scrub_activity:
+    if not missing and corrections is None and publication is None and upstream_source is None and not scrub_activity and ui_surfaces is None:
         return projection, []
     generated_sidecars = list(missing)
     if corrections is not None and ORIENTATION_FILENAME not in generated_sidecars:
@@ -151,10 +159,26 @@ def _projection_with_human_views(
     derived = DERIVED_ROOT / slug / "architecture"
     if derived.exists() or derived.is_symlink():
         if derived.is_symlink() or derived.is_file():
-            derived.unlink()
+            raise RuntimeError(f"refusing to replace unowned derived path {derived}")
         else:
+            marker = derived / DERIVED_MARKER
+            if not marker.is_file():
+                raise RuntimeError(
+                    f"refusing to replace unowned derived directory {derived}; "
+                    f"move it aside or add a valid {DERIVED_MARKER} by running assembly into a clean location"
+                )
+            try:
+                ownership = json.loads(marker.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise RuntimeError(f"refusing to replace derived directory with an invalid ownership marker: {exc}") from exc
+            if ownership != {"schema": "syscorpus.derived-overlay/v1", "slug": slug}:
+                raise RuntimeError(f"refusing to replace derived directory owned by another assembly: {derived}")
             shutil.rmtree(derived)
     derived.mkdir(parents=True, exist_ok=True)
+    write_human_view(
+        {"schema": "syscorpus.derived-overlay/v1", "slug": slug},
+        derived / DERIVED_MARKER,
+    )
 
     for source in sorted(projection.iterdir(), key=lambda path: path.name):
         target = derived / source.name
@@ -190,6 +214,27 @@ def _projection_with_human_views(
         apply_review_corrections(derived, corrections)
 
     manifest = _load_json(derived / "manifest.json")
+
+    if ui_surfaces is not None:
+        publication_document = _load_json(publication) if publication is not None else None
+        publication_subject = publication_document.get("subject", {}) if publication_document else {}
+        expected_repository = publication_subject.get("repo_url") or manifest.get("repository")
+        expected_commit = publication_subject.get("commit")
+        try:
+            surface_document = load_and_validate_ui_surfaces(
+                ui_surfaces,
+                expected_repository=expected_repository,
+                expected_commit=expected_commit,
+            )
+            validate_ui_surface_evidence(surface_document, manifest)
+        except UISurfaceValidationError as exc:
+            raise RuntimeError(f"invalid UI surface package {ui_surfaces}: {exc}") from exc
+        shutil.copy2(ui_surfaces / UI_SURFACES_FILENAME, derived / UI_SURFACES_FILENAME)
+        asset_root = derived / "ui-surfaces"
+        if asset_root.exists():
+            raise RuntimeError("projection already uses the reserved ui-surfaces path")
+        asset_root.symlink_to((ui_surfaces / "ui-surfaces").resolve(), target_is_directory=True)
+        generated_sidecars.append(UI_SURFACES_FILENAME)
     coverage_path = projection / "coverage.json"
     coverage = _load_json(coverage_path) if coverage_path.is_file() else None
     support = (
@@ -225,6 +270,7 @@ def assemble(
     publication: Path | None = None,
     upstream_source: Path | None = None,
     scrub_activity: bool = False,
+    ui_surfaces: Path | None = None,
 ) -> Path:
     if not projection.is_dir():
         sys.exit(
@@ -255,7 +301,7 @@ def assemble(
             shutil.rmtree(target)
 
     served_projection, generated_sidecars = _projection_with_human_views(
-        slug, projection, corrections, publication, upstream_source, scrub_activity
+        slug, projection, corrections, publication, upstream_source, scrub_activity, ui_surfaces
     )
     (serve / "architecture").symlink_to(served_projection)
 
@@ -285,6 +331,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="subject checkout supplying the upstream license and notice")
     parser.add_argument("--scrub-activity", action="store_true",
                         help="replace contributor email keys with stable pseudonymous ids")
+    parser.add_argument("--ui-surfaces", default=None,
+                        help="validated UI capture package attached only to the derived assembly")
     args = parser.parse_args(argv)
     assemble(
         args.slug,
@@ -294,6 +342,7 @@ def main(argv: list[str] | None = None) -> int:
         publication=Path(args.publication).resolve() if args.publication else None,
         upstream_source=Path(args.upstream_source).resolve() if args.upstream_source else None,
         scrub_activity=args.scrub_activity,
+        ui_surfaces=Path(args.ui_surfaces).resolve() if args.ui_surfaces else None,
     )
     return 0
 

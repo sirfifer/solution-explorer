@@ -64,6 +64,7 @@ import type {
   SecurityProjection,
   SolutionManifest,
   SupportProjection,
+  UISurfacesProjection,
 } from "./types";
 import { SOLUTION_MANIFEST_KIND } from "./types";
 
@@ -750,12 +751,13 @@ export function App() {
           }
           // Split mode: manifest has components/relationships but no symbols/files
           const base: Architecture = { ...manifest, symbols: manifest.symbols || [], files: manifest.files || [] };
-          const [orientation, support, security] = await Promise.all([
+          const [orientation, support, security, uiSurfaces] = await Promise.all([
             optionalJson<OrientationProjection>("orientation.json"),
             optionalJson<SupportProjection>("support.json"),
             optionalJson<SecurityProjection>("security.json"),
+            optionalJson<UISurfacesProjection>("ui-surfaces.json"),
           ]);
-          const data = attachHumanViews(base, { orientation, support, security });
+          const data = attachHumanViews(base, { orientation, support, security, ui_surfaces: uiSurfaces });
           applyIfUnset(data);
           return;
         }

@@ -1200,6 +1200,56 @@ export interface SecurityProjection {
   counts: Record<string, number>;
 }
 
+export interface UISurfaceHotspot {
+  id: string;
+  label: string;
+  kind: string;
+  rect: { x: number; y: number; width: number; height: number };
+  evidence: {
+    component_id: string;
+    file: string;
+    line: number;
+    symbol?: string | null;
+    symbol_id?: string | null;
+  };
+  action: { kind: "open_source" };
+}
+
+export interface UISurfaceScreen {
+  id: string;
+  client_id: string;
+  label: string;
+  role: "primary" | "secondary";
+  image: { path: string; sha256: string; width: number; height: number };
+  capture: {
+    captured_at: string;
+    method: string;
+    runtime_name: string;
+    runtime_version: string;
+    runtime_commit: string;
+    source_match: "exact" | "representative";
+    sanitized: true;
+    notes?: string;
+  };
+  hotspots: UISurfaceHotspot[];
+}
+
+export interface UISurfacesProjection {
+  schema: "syscorpus.ui-surfaces/v1";
+  subject: { repository: string; commit: string };
+  clients: Array<{
+    id: string;
+    label: string;
+    kind: string;
+    platforms: string[];
+    primary: boolean;
+    coverage: "captured" | "shared" | "missing" | "unavailable";
+    shares_interface_with?: string;
+    note?: string;
+  }>;
+  screens: UISurfaceScreen[];
+}
+
 export interface Architecture {
   name: string;
   description: string;
@@ -1260,6 +1310,9 @@ export interface Architecture {
   orientation?: OrientationProjection;
   support?: SupportProjection;
   security?: SecurityProjection;
+  // Real, provenance-stamped interface captures are attached at demo assembly
+  // time. They are never analyzer or enhancement output.
+  ui_surfaces?: UISurfacesProjection;
   component_detail_index?: Record<string, { symbolCount: number; fileCount: number }>;
   live_status?: {
     statuses?: Record<string, ArchitectureStatus>;

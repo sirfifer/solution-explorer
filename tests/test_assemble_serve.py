@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
 import json
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -209,3 +212,70 @@ def test_assembly_can_scrub_activity_and_ship_publication_obligations(tmp_path: 
     assert (served / "publication.json").read_bytes() == publication.read_bytes()
     assert (served / "UPSTREAM-LICENSE.txt").read_text() == "license"
     assert (served / "ThirdPartyNotices.txt").read_text() == "notices"
+
+
+def test_assembly_attaches_verified_ui_capture_only_to_derived_overlay(tmp_path: Path) -> None:
+    assembler = _load_assembler()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("viewer", encoding="utf-8")
+    projection = tmp_path / "canonical" / "architecture"
+    projection.mkdir(parents=True)
+    manifest = {
+        "name": "subject", "repository": "https://example.test/repo",
+        "components": [{"id": "workbench", "files": ["src/editor.ts"], "children": []}],
+        "relationships": [], "component_detail_index": {},
+        "stats": {"total_relationships": 0},
+    }
+    (projection / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    canonical_hash = _sha256(projection / "manifest.json")
+
+    package = tmp_path / "capture"
+    assets = package / "ui-surfaces"
+    assets.mkdir(parents=True)
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+    (assets / "main.png").write_bytes(png)
+    capture = {
+        "schema": "syscorpus.ui-surfaces/v1",
+        "subject": {"repository": "https://example.test/repo", "commit": "abc123"},
+        "clients": [{"id": "desktop", "label": "Desktop", "kind": "desktop-app", "platforms": ["macos"], "primary": True, "coverage": "captured"}],
+        "screens": [{
+            "id": "desktop:main", "client_id": "desktop", "label": "Main", "role": "primary",
+            "image": {"path": "ui-surfaces/main.png", "sha256": hashlib.sha256(png).hexdigest(), "width": 1, "height": 1},
+            "capture": {"captured_at": "2026-09-04T00:00:00Z", "method": "test", "runtime_name": "Fixture", "runtime_version": "1", "runtime_commit": "abc123", "source_match": "exact", "sanitized": True},
+            "hotspots": [{"id": "editor", "label": "Editor", "kind": "region", "rect": {"x": 0, "y": 0, "width": 1, "height": 1}, "evidence": {"component_id": "workbench", "file": "src/editor.ts", "line": 1}, "action": {"kind": "open_source"}}],
+        }],
+    }
+    (package / "ui-surfaces.json").write_text(json.dumps(capture), encoding="utf-8")
+    publication = tmp_path / "publication.json"
+    publication.write_text(json.dumps({"subject": {"repo_url": "https://example.test/repo", "commit": "abc123"}}), encoding="utf-8")
+
+    assembler.DIST = dist
+    assembler.SERVE_ROOT = tmp_path / "serve"
+    assembler.DERIVED_ROOT = tmp_path / "derived"
+    serve = assembler.assemble("subject", projection, build=False, publication=publication, ui_surfaces=package)
+    served = serve / "architecture"
+    assert (served / "ui-surfaces.json").read_bytes() == (package / "ui-surfaces.json").read_bytes()
+    assert (served / "ui-surfaces" / "main.png").read_bytes() == png
+    assert not (projection / "ui-surfaces.json").exists()
+    assert _sha256(projection / "manifest.json") == canonical_hash
+
+
+def test_assembly_refuses_to_delete_an_unowned_derived_directory(tmp_path: Path) -> None:
+    assembler = _load_assembler()
+    projection = tmp_path / "canonical" / "architecture"
+    projection.mkdir(parents=True)
+    (projection / "manifest.json").write_text(json.dumps({
+        "name": "subject", "components": [], "relationships": [],
+        "component_detail_index": {}, "stats": {"total_relationships": 0},
+    }), encoding="utf-8")
+    assembler.DERIVED_ROOT = tmp_path / "derived"
+    occupied = assembler.DERIVED_ROOT / "subject" / "architecture"
+    occupied.mkdir(parents=True)
+    (occupied / "keep-me.txt").write_text("not assembly output", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="refusing to replace unowned"):
+        assembler._projection_with_human_views("subject", projection)
+    assert (occupied / "keep-me.txt").read_text() == "not assembly output"
