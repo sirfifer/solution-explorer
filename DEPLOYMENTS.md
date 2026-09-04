@@ -21,8 +21,9 @@ Tracks where solution-explorer is installed and how to redeploy after changes.
 A reviewed, point-in-time split projection of `microsoft/vscode` at commit
 `474a349ad5b745e512ef86b864d1c74f7264dd7a`, reprojected on 2026-09-03 with
 the identity derive pass and six commit-bound review corrections. The
-production Pages deployment is `291cf0ea-b70c-4172-bdf6-01bcf3e0c55b`, built
-from solution-explorer commit `ade4f4c25903e1cc29d3c8f7cfe81d6f4b6aea0f`.
+production Pages deployment is `69f96419-7f6a-4270-8a71-be150b39c778`, built
+from solution-explorer commit `7d67b4c` (the identity front door plus the
+guided orientation for first-time visitors, PR #127).
 Its production branch is `main`. The bundle is packaged by
 `scripts/publish-demo-bundle.py`: `manifest.json` and the largest detail
 shard exceed the 25 MiB Pages cap and are served gzip by the committed
