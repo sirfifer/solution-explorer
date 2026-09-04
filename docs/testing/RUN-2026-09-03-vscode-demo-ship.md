@@ -124,3 +124,20 @@ Done the same day:
 Still the owner's, in the dashboard: whether the project's pages.dev
 hostnames sit behind Access as the custom hostname does (the Pages Access
 policy setting). Nothing in this repo gates them.
+
+## Addendum: the guided orientation (PR #127), deployed 2026-09-03
+
+Main moved to `7d67b4c` with the other session's orientation walk, a
+viewer-only change, so the reviewed reprojection stayed and only the viewer
+was rebuilt. Followed the runbook end to end from a detached checkout of
+that commit.
+
+| Check | Result |
+|---|---|
+| `tsc --noEmit` | clean |
+| Quick crawl on the assembled bundle, desktop and iPhone 13 | 74 of 74 (the orientation cases are new) |
+| `publish-demo-bundle.py` | 678 files, no symlinks, nothing over the cap, no access control inside |
+| `wrangler pages dev` browser probe | first visit opens the walk, 8 stops, crosses into the Workbench, closes, does not reappear after reload; 0 failed requests, 0 errors |
+| Deployment | `69f96419-7f6a-4270-8a71-be150b39c778`, Production, main, source `7d67b4c`; the superseded `4612a962` deleted; one deployment live |
+| Live browser probe on the deployment's pages.dev URL | identity statement, walk of 8 stops, Workbench with 6 nodes, drill into `src`; 0 failed requests, 0 errors; served asset hash equals the built bundle's |
+| Custom hostname | redirects to Cloudflare Access, unchanged |
