@@ -27,8 +27,62 @@ from .staleness import staleness_of
 # than imported from synthesis.py: the overlay is a projection concern and must
 # not depend on the phase that happens to produce the rows.
 TOUR_TARGET_KIND = "tour"
+CONTRACT_TARGET_KIND = "contract-state"
+
+# Product-facing order for the audited component claims.  The ladder stores
+# these as separate atoms, then also composes legacy ``help_text`` for older
+# consumers and full-text search.  Projection must not throw that structure
+# away: a viewer can present these fields as a scan-friendly explanation while
+# the legacy paragraph remains available unchanged.
+COMPONENT_EXPLANATION_FIELDS = (
+    "purpose",
+    "mechanism",
+    "place",
+    "why_matters",
+    "data_handled",
+    "next_step",
+)
 
 __all__ = ["apply_enrichment_overlay"]
+
+
+def _component_explanation(contract_row: Optional[dict]) -> dict:
+    """Project audited component answers into a stable reader contract.
+
+    Contract rows are deliberately stored separately from product enrichment so
+    prompting/audit scaffolding cannot leak into the UI.  This function exposes
+    only the small, named set of reader-useful claims, with their evidence and
+    answer status.  It is additive: old stores without contract rows continue to
+    serve ``help_text`` exactly as before.
+    """
+    if not contract_row:
+        return {}
+    payload = contract_row.get("payload")
+    answers = payload.get("answers") if isinstance(payload, dict) else None
+    if not isinstance(answers, dict):
+        return {}
+
+    explanation: dict[str, dict] = {}
+    for field in COMPONENT_EXPLANATION_FIELDS:
+        raw = answers.get(field)
+        if not isinstance(raw, dict):
+            continue
+        claim = str(raw.get("claim") or "").strip()
+        if not claim:
+            continue
+        projected = {
+            "text": claim,
+            "status": str(raw.get("status") or "answered"),
+        }
+        if isinstance(raw.get("reason"), str) and raw["reason"].strip():
+            projected["reason"] = raw["reason"].strip()
+        evidence = raw.get("evidence")
+        if isinstance(evidence, list):
+            projected["evidence"] = copy.deepcopy(
+                [item for item in evidence if isinstance(item, dict)]
+            )
+        explanation[field] = projected
+    return explanation
 
 
 def _mark(payload: dict, stale: Optional[bool], commit_sha: Optional[str]) -> dict:
@@ -93,6 +147,7 @@ def apply_enrichment_overlay(
     index = digest_index or DigestIndex.from_store(store)
 
     by_component: dict[str, dict] = {}
+    component_contracts: dict[str, dict] = {}
     by_relationship: dict[str, dict] = {}
     arch_row: Optional[dict] = None
     tour_rows: list[dict] = []
@@ -100,6 +155,8 @@ def apply_enrichment_overlay(
         kind = row["target_kind"]
         if kind == "component":
             by_component[row["target_id"]] = row
+        elif kind == CONTRACT_TARGET_KIND and str(row["target_id"]).startswith("component:"):
+            component_contracts[str(row["target_id"])[len("component:"):]] = row
         elif kind == "relationship":
             by_relationship[row["target_id"]] = row
         elif kind == "architecture":
@@ -135,6 +192,11 @@ def apply_enrichment_overlay(
             row = by_component.get(comp.get("id"))
             if row is not None:
                 payload = marked_payload(row)
+                explanation = _component_explanation(
+                    component_contracts.get(str(comp.get("id") or ""))
+                )
+                if explanation:
+                    payload["explanation"] = explanation
                 comp["ai_enhance"] = payload
                 # D7: the viewer's tree and detail panel render the top-level
                 # component.description (as "docs.purpose || component.description",

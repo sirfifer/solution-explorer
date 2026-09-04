@@ -22,6 +22,7 @@ import { Tooltip, TechTooltip } from "./Tooltip";
 import { TOOLTIP_COPY } from "../utils/tooltipCopy";
 import { getTechRef, getPatternRef, getProtocolRef, TYPE_DESCRIPTIONS, SYMBOL_KIND_DESCRIPTIONS } from "../utils/techDocs";
 import { componentSummary } from "../utils/componentText";
+import { NarrativeText, StructuredExplanation } from "./StructuredExplanation";
 
 function SourceLink({ filePath, line, endLine }: { filePath: string; line?: number; endLine?: number }) {
   const { architecture, darkMode } = useArchStore();
@@ -352,7 +353,7 @@ function ComponentDetail({
                 setActivePanel("review");
                 setTimeout(() => setAddedToSet(false), 2000);
               }}
-              className={`px-1.5 py-1 rounded-lg text-[10px] font-medium transition-colors ${addedToSet ? (darkMode ? "bg-green-600/20 text-green-300" : "bg-green-100 text-green-700") : darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"}`}
+              className={`px-1.5 py-1 rounded-lg text-xs font-medium transition-colors ${addedToSet ? (darkMode ? "bg-green-600/20 text-green-300" : "bg-green-100 text-green-700") : darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-500"}`}
               title="Add this component to a selection set"
             >
               {addedToSet ? "Added" : "+ Set"}
@@ -412,7 +413,7 @@ function ComponentDetail({
               const ref = getTechRef(t);
               const badge = (
                 <span className={`
-                  text-[10px] px-1.5 py-0.5 rounded
+                  text-xs px-1.5 py-0.5 rounded
                   ${darkMode ? "bg-cyan-900/30 text-cyan-400" : "bg-cyan-50 text-cyan-700"}
                 `}>
                   {t}
@@ -430,7 +431,7 @@ function ComponentDetail({
               const pRef = getPatternRef(p);
               const badge = (
                 <span className={`
-                  text-[10px] px-1.5 py-0.5 rounded
+                  text-xs px-1.5 py-0.5 rounded
                   ${darkMode ? "bg-violet-900/30 text-violet-400" : "bg-violet-50 text-violet-700"}
                 `}>
                   {p}
@@ -649,7 +650,7 @@ function OverviewTab({
           <h4 className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
             External Services ({component.external_services.length})
             <Tooltip content={TOOLTIP_COPY.inventoryLens.externalDependencies} focusable>
-              <span className={`text-[9px] normal-case font-medium tracking-wide px-1 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}>
+              <span className={`text-xs normal-case font-medium tracking-wide px-1 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}>
                 detected
               </span>
             </Tooltip>
@@ -691,7 +692,7 @@ function OverviewTab({
                 flex items-center gap-2 px-2 py-1.5 rounded-md font-mono text-xs
                 ${darkMode ? "bg-zinc-800/50" : "bg-zinc-50"}
               `}>
-                <span data-se="method" className={`px-1.5 py-0.5 rounded text-[10px] font-bold
+                <span data-se="method" className={`px-1.5 py-0.5 rounded text-xs font-bold
                   ${ep.method === "GET" ? (darkMode ? "bg-green-900/40 text-green-400" : "bg-green-100 text-green-700") :
                     ep.method === "POST" ? (darkMode ? "bg-blue-900/40 text-blue-400" : "bg-blue-100 text-blue-700") :
                     ep.method === "DELETE" ? (darkMode ? "bg-red-900/40 text-red-400" : "bg-red-100 text-red-700") :
@@ -715,7 +716,7 @@ function OverviewTab({
           <div className="flex flex-wrap gap-1">
             {docs.env_vars.map((v, i) => (
               <span key={i} className={`
-                font-mono text-[10px] px-1.5 py-0.5 rounded
+                font-mono text-xs px-1.5 py-0.5 rounded
                 ${darkMode ? "bg-amber-900/30 text-amber-300" : "bg-amber-50 text-amber-700"}
               `}>
                 {v}
@@ -738,7 +739,7 @@ function OverviewTab({
                   <span className={`${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>{sym.kind}</span> {sym.name}
                 </div>
                 {sym.docstring && (
-                  <p className={`text-[10px] mt-0.5 leading-snug ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                  <p className={`text-xs mt-0.5 leading-snug ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
                     {sym.docstring.split("\n")[0]}
                   </p>
                 )}
@@ -877,7 +878,7 @@ function DocsTab({ component }: { component: Component }) {
               key={sec.key}
               onClick={() => setDocSection(sec.key)}
               className={`
-                px-2 py-1 rounded text-[10px] font-medium transition-colors
+                px-2 py-1 rounded text-xs font-medium transition-colors
                 ${sec.key === activeSection.key
                   ? darkMode
                     ? "bg-blue-900/40 text-blue-300"
@@ -926,12 +927,12 @@ function ChildRow({ component }: { component: Component }) {
       onClick={() => selectComponent(component.id)}
       onDoubleClick={() => drillInto(component)}
     >
-      <span className={`text-[9px] px-1 py-0.5 rounded ${colors.badge}`}>
+      <span className={`text-xs px-1 py-0.5 rounded ${colors.badge}`}>
         {TYPE_META[component.type]?.icon || component.type.slice(0, 3)}
       </span>
       <span className="truncate flex-1">{component.name}</span>
       {component.docs?.purpose && (
-        <span className={`text-[10px] truncate max-w-[120px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+        <span className={`text-xs truncate max-w-[120px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
           {component.docs.purpose}
         </span>
       )}
@@ -1019,7 +1020,7 @@ function FilesTab({ files, componentId, loading, error, onRetry }: { files: File
         )}
         {grouped.map(([dir, dirFiles]) => (
           <div key={dir}>
-            <div className={`text-[10px] font-mono px-2 py-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            <div className={`text-xs font-mono px-2 py-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
               {dir}
             </div>
             {dirFiles.map((f) => {
@@ -1044,16 +1045,16 @@ function FilesTab({ files, componentId, loading, error, onRetry }: { files: File
                     {name}
                   </span>
                   {isDeepLinkTarget && deepLinkLine != null && (
-                    <span className={`text-[9px] px-1 rounded ${darkMode ? "bg-blue-500/20 text-blue-300" : "bg-blue-100 text-blue-600"}`}>
+                    <span className={`text-xs px-1 rounded ${darkMode ? "bg-blue-500/20 text-blue-300" : "bg-blue-100 text-blue-600"}`}>
                       line {deepLinkLine}
                     </span>
                   )}
                   {f.module_doc && (
-                    <span className={`text-[9px] ${darkMode ? "text-green-600" : "text-green-500"}`} title={f.module_doc.split("\n")[0]}>
+                    <span className={`text-xs ${darkMode ? "text-green-600" : "text-green-500"}`} title={f.module_doc.split("\n")[0]}>
                       doc
                     </span>
                   )}
-                  <span className={`text-[10px] tabular-nums ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                  <span className={`text-xs tabular-nums ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                     {f.lines}
                   </span>
                   <SourceLink filePath={f.path} />
@@ -1063,7 +1064,7 @@ function FilesTab({ files, componentId, loading, error, onRetry }: { files: File
                         e.stopPropagation();
                         setAnnotatingTarget({ type: "file", id: f.path, name: f.path, componentId });
                       }}
-                      className={`shrink-0 w-5 h-5 flex items-center justify-center rounded text-[10px]
+                      className={`shrink-0 w-5 h-5 flex items-center justify-center rounded text-xs
                         ${annotations.some((a) => a.targetType === "file" && a.targetId === f.path)
                           ? "bg-blue-500 text-white"
                           : darkMode ? "text-zinc-600 hover:text-blue-400 hover:bg-zinc-800" : "text-zinc-400 hover:text-blue-500 hover:bg-zinc-100"
@@ -1191,7 +1192,7 @@ function SymbolsTab({
     return (
       <div className="p-3 h-full flex flex-col min-h-0">
         {filters}
-        <div className={`text-[10px] mb-2 shrink-0 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+        <div className={`text-xs mb-2 shrink-0 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
           {filtered.length.toLocaleString()} symbols
         </div>
         <VirtualList
@@ -1209,7 +1210,7 @@ function SymbolsTab({
             >
               <span
                 className={`
-                  w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0
+                  w-5 h-5 rounded flex items-center justify-center text-xs font-bold shrink-0
                   ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-200 text-zinc-600"}
                 `}
                 title={SYMBOL_KIND_DESCRIPTIONS[sym.kind] || `Symbol kind: ${sym.kind}`}
@@ -1220,9 +1221,9 @@ function SymbolsTab({
                 {sym.name}
               </span>
               {sym.docstring && (
-                <span className={`text-[9px] ${darkMode ? "text-green-600" : "text-green-500"}`}>doc</span>
+                <span className={`text-xs ${darkMode ? "text-green-600" : "text-green-500"}`}>doc</span>
               )}
-              <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+              <span className={`text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                 L{sym.line}
               </span>
             </button>
@@ -1250,7 +1251,7 @@ function SymbolsTab({
               <Tooltip content={SYMBOL_KIND_DESCRIPTIONS[sym.kind] || `Symbol kind: ${sym.kind}`}>
                 <span
                   className={`
-                    w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0
+                    w-5 h-5 rounded flex items-center justify-center text-xs font-bold shrink-0
                     ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-200 text-zinc-600"}
                   `}
                 >
@@ -1261,9 +1262,9 @@ function SymbolsTab({
                 {sym.name}
               </span>
               {sym.docstring && (
-                <span className={`text-[9px] ${darkMode ? "text-green-600" : "text-green-500"}`}>doc</span>
+                <span className={`text-xs ${darkMode ? "text-green-600" : "text-green-500"}`}>doc</span>
               )}
-              <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+              <span className={`text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                 L{sym.line}
               </span>
             </button>
@@ -1281,21 +1282,21 @@ function SymbolsTab({
                 {sym.dependencies && sym.dependencies.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {sym.dependencies.map((dep, i) => (
-                      <span key={`${dep}-${i}`} className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+                      <span key={`${dep}-${i}`} className={`font-mono text-xs px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
                         {dep}
                       </span>
                     ))}
                   </div>
                 )}
                 <div className={`flex items-center justify-between mt-1`}>
-                  <div className={`text-[10px] font-mono flex items-center gap-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                  <div className={`text-xs font-mono flex items-center gap-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                     {sym.file}:{sym.line}
                     <SourceLink filePath={sym.file} line={sym.line} endLine={sym.end_line} />
                   </div>
                   {reviewMode && (
                     <button
                       onClick={() => setAnnotatingTarget({ type: "symbol", id: sym.id, name: sym.name, componentId })}
-                      className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1
+                      className={`text-xs px-2 py-0.5 rounded flex items-center gap-1
                         ${annotations.some((a) => a.targetType === "symbol" && a.targetId === sym.id)
                           ? darkMode ? "bg-blue-500/20 text-blue-300" : "bg-blue-100 text-blue-600"
                           : darkMode ? "text-zinc-500 hover:text-blue-400 hover:bg-zinc-800" : "text-zinc-400 hover:text-blue-500 hover:bg-zinc-100"
@@ -1389,7 +1390,7 @@ function ActionsTab({ actions }: { actions: UIAction[] }) {
             className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm ${darkMode ? "hover:bg-zinc-800/50" : "hover:bg-zinc-100"}`}
           >
             <span
-              className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0 ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-200 text-zinc-600"}`}
+              className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold shrink-0 ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-200 text-zinc-600"}`}
               title={action.action_type}
             >
               {typeIcons[action.action_type] || "?"}
@@ -1398,11 +1399,11 @@ function ActionsTab({ actions }: { actions: UIAction[] }) {
               {action.label}
             </span>
             {action.handler && (
-              <span className={`text-[10px] font-mono truncate max-w-[100px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+              <span className={`text-xs font-mono truncate max-w-[100px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
                 {action.handler}
               </span>
             )}
-            <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+            <span className={`text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
               {action.action_type}
             </span>
             <SourceLink filePath={action.file} line={action.line} />
@@ -1462,7 +1463,7 @@ function ConfidenceBadge({ confidence }: { confidence: "certain" | "inferred" })
   if (confidence === "certain") return null;
   return (
     <Tooltip content="Inferred by heuristic, not a parse-level certainty.">
-      <span className={`text-[9px] px-1 py-0.5 rounded uppercase tracking-wide ${darkMode ? "bg-amber-900/30 text-amber-400" : "bg-amber-50 text-amber-600"}`}>
+      <span className={`text-xs px-1 py-0.5 rounded uppercase tracking-wide ${darkMode ? "bg-amber-900/30 text-amber-400" : "bg-amber-50 text-amber-600"}`}>
         inferred
       </span>
     </Tooltip>
@@ -1479,7 +1480,7 @@ function EvidenceLinks({ evidence }: { evidence: Evidence[] }) {
       {evidence.map((ev, i) => (
         <div
           key={`${ev.file}:${ev.line}:${i}`}
-          className={`text-[10px] font-mono flex items-center gap-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}
+          className={`text-xs font-mono flex items-center gap-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}
         >
           <span className="truncate">{ev.file}{ev.line != null ? `:${ev.line}` : ""}</span>
           <SourceLink filePath={ev.file} line={ev.line ?? undefined} />
@@ -1498,7 +1499,7 @@ function MethodBadge({ method }: { method: string }) {
     m === "DELETE" ? (darkMode ? "bg-red-900/40 text-red-400" : "bg-red-100 text-red-700") :
     (darkMode ? "bg-yellow-900/40 text-yellow-400" : "bg-yellow-100 text-yellow-700");
   return (
-    <span data-se="method" className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${color}`}>{m}</span>
+    <span data-se="method" className={`px-1.5 py-0.5 rounded text-xs font-bold ${color}`}>{m}</span>
   );
 }
 
@@ -1538,7 +1539,7 @@ function CapabilitiesTab({ capabilities }: { capabilities: Capability[] }) {
                     {cap.kind === "api" ? (cap.detail.path || cap.name) : cap.name}
                   </span>
                   {cap.detail.framework && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-cyan-900/30 text-cyan-400" : "bg-cyan-50 text-cyan-700"}`}>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${darkMode ? "bg-cyan-900/30 text-cyan-400" : "bg-cyan-50 text-cyan-700"}`}>
                       {cap.detail.framework}
                     </span>
                   )}
@@ -1549,7 +1550,7 @@ function CapabilitiesTab({ capabilities }: { capabilities: Capability[] }) {
                 {cap.kind === "cli" && cap.detail.flags && cap.detail.flags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {cap.detail.flags.map((flag, i) => (
-                      <span key={i} className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-700/50 text-zinc-300" : "bg-zinc-200 text-zinc-600"}`}>
+                      <span key={i} className={`font-mono text-xs px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-700/50 text-zinc-300" : "bg-zinc-200 text-zinc-600"}`}>
                         {flag}
                       </span>
                     ))}
@@ -1577,14 +1578,14 @@ function CapabilitiesTab({ capabilities }: { capabilities: Capability[] }) {
                 {/* Test linkage (L2: the proof bridge). */}
                 {cap.detail.tests && cap.detail.tests.length > 0 && (
                   <div className="mt-2">
-                    <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-emerald-500" : "text-emerald-600"}`}>
+                    <div className={`text-xs font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-emerald-500" : "text-emerald-600"}`}>
                       Tested by ({cap.detail.tests.length})
                     </div>
                     <div className="space-y-0.5">
                       {cap.detail.tests.map((t, i) => (
                         <div
                           key={`${t.file}:${t.line}:${i}`}
-                          className={`text-[10px] font-mono flex items-center gap-1 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}
+                          className={`text-xs font-mono flex items-center gap-1 ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}
                         >
                           <span className="truncate">{t.file}:{t.line}</span>
                           <SourceLink filePath={t.file} line={t.line} />
@@ -1616,7 +1617,7 @@ function AccessRow({ label, mode, confidence, evidence }: {
   return (
     <div className={`px-2 py-1.5 rounded-md ${darkMode ? "bg-zinc-800/40" : "bg-white"}`}>
       <div className="flex items-center gap-2 flex-wrap">
-        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${modeColor}`}>{mode}</span>
+        <span className={`px-1.5 py-0.5 rounded text-xs font-bold uppercase ${modeColor}`}>{mode}</span>
         <span className={`text-xs flex-1 truncate ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>{label}</span>
         <ConfidenceBadge confidence={confidence} />
       </div>
@@ -1677,7 +1678,7 @@ function DataTab({ component }: { component: Component }) {
       schema: darkMode ? "bg-zinc-700 text-zinc-300" : "bg-zinc-200 text-zinc-600",
     };
     return (
-      <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide ${colors[kind]}`}>
+      <span className={`text-xs px-1.5 py-0.5 rounded uppercase tracking-wide ${colors[kind]}`}>
         {kind}
       </span>
     );
@@ -1711,12 +1712,12 @@ function DataTab({ component }: { component: Component }) {
                       {ent.name}
                     </span>
                     {ent.table && ent.table !== ent.name && (
-                      <span className={`text-[10px] font-mono ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                      <span className={`text-xs font-mono ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
                         {ent.table}
                       </span>
                     )}
                     {ent.framework && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-cyan-900/30 text-cyan-400" : "bg-cyan-50 text-cyan-700"}`}>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${darkMode ? "bg-cyan-900/30 text-cyan-400" : "bg-cyan-50 text-cyan-700"}`}>
                         {ent.framework}
                       </span>
                     )}
@@ -1727,7 +1728,7 @@ function DataTab({ component }: { component: Component }) {
                   {ent.fields.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {ent.fields.map((f, i) => (
-                        <span key={`${f.name}-${i}`} className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-700/50 text-zinc-300" : "bg-zinc-200 text-zinc-600"}`}>
+                        <span key={`${f.name}-${i}`} className={`font-mono text-xs px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-700/50 text-zinc-300" : "bg-zinc-200 text-zinc-600"}`}>
                           {f.name}{f.type ? `: ${f.type}` : ""}
                         </span>
                       ))}
@@ -1739,7 +1740,7 @@ function DataTab({ component }: { component: Component }) {
                   {/* Who else touches this entity */}
                   {others.length > 0 && (
                     <div className="mt-2">
-                      <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                      <div className={`text-xs font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
                         Accessed by ({others.length})
                       </div>
                       <div className="space-y-1">
@@ -1849,20 +1850,24 @@ function AIInsightsTab({
         </div>
       )}
 
-      {/* Help text */}
-      {ai.help_text && (
+      {/* Structured audited explanation; legacy help_text remains the fallback
+          for projections created before contract-state atoms were exposed. */}
+      {(ai.explanation || ai.help_text || ai.honest_gaps?.length) && (
         <div>
           <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
             About This Component
           </h4>
-          <p className={`text-sm leading-relaxed ${darkMode ? "text-zinc-300" : "text-zinc-600"}`}>
-            {ai.help_text}
-          </p>
+          <StructuredExplanation
+            explanation={ai.explanation}
+            fallback={ai.help_text}
+            honestGaps={ai.honest_gaps}
+            showEvidence
+          />
         </div>
       )}
 
       {/* Data handled */}
-      {ai.data_handled && (
+      {ai.data_handled && !ai.explanation?.data_handled && (
         <div>
           <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
             Data Handled
@@ -1897,14 +1902,12 @@ function AIInsightsTab({
       )}
 
       {/* User interactions */}
-      {ai.actions_summary && (
+      {(ai.actions_summary || ai.key_user_flows?.length) && (
         <div>
           <h4 className={`text-xs font-semibold uppercase tracking-wider mb-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
             User Interactions
           </h4>
-          <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
-            {ai.actions_summary}
-          </p>
+          {ai.actions_summary && <NarrativeText text={ai.actions_summary} />}
           {ai.key_user_flows && ai.key_user_flows.length > 0 && (
             <ul className={`mt-2 space-y-1 text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
               {ai.key_user_flows.map((flow, i) => (
@@ -1958,7 +1961,7 @@ function AIInsightsTab({
               <h4 className={`text-xs font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
                 Technology
               </h4>
-              <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{ai.tech_context}</p>
+              <NarrativeText text={ai.tech_context} />
             </div>
           )}
           {ai.port_assessment && (
@@ -1966,7 +1969,7 @@ function AIInsightsTab({
               <h4 className={`text-xs font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
                 Network
               </h4>
-              <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{ai.port_assessment}</p>
+              <NarrativeText text={ai.port_assessment} />
             </div>
           )}
           {ai.external_services_assessment && (
@@ -1974,7 +1977,7 @@ function AIInsightsTab({
               <h4 className={`text-xs font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
                 External Services
               </h4>
-              <p className={`text-sm ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>{ai.external_services_assessment}</p>
+              <NarrativeText text={ai.external_services_assessment} />
             </div>
           )}
         </div>
@@ -2037,7 +2040,7 @@ function StatusTab({ statuses }: { statuses: Record<string, ComponentStatus> }) 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className={`text-sm font-medium ${colors.text}`}>{status.title}</h4>
-                  <span className={`text-[10px] shrink-0 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                  <span className={`text-xs shrink-0 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                     {status.category}
                   </span>
                 </div>
@@ -2052,12 +2055,12 @@ function StatusTab({ statuses }: { statuses: Record<string, ComponentStatus> }) 
                       href={status.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`text-[10px] hover:underline ${darkMode ? "text-blue-400" : "text-blue-600"}`}
+                      className={`text-xs hover:underline ${darkMode ? "text-blue-400" : "text-blue-600"}`}
                     >
                       View details &#x2192;
                     </a>
                   ) : <span />}
-                  <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                  <span className={`text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                     {new Date(status.updated_at).toLocaleString()}
                   </span>
                 </div>
@@ -2092,7 +2095,7 @@ function TestingTab({ component }: { component: Component }) {
           { label: "Test Lines", value: t.test_lines },
         ].filter(m => m.value > 0).map((m, i) => (
           <div key={i} className={`px-3 py-2 rounded-lg ${cardBg}`}>
-            <div className={`text-[10px] uppercase tracking-wider ${dimText}`}>{m.label}</div>
+            <div className={`text-xs uppercase tracking-wider ${dimText}`}>{m.label}</div>
             <div className={`text-lg font-semibold ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
               {m.value.toLocaleString()}
             </div>
@@ -2118,7 +2121,7 @@ function TestingTab({ component }: { component: Component }) {
             />
           </div>
           {t.coverage_source && (
-            <span className={`text-[10px] ${dimText}`}>Source: {t.coverage_source}</span>
+            <span className={`text-xs ${dimText}`}>Source: {t.coverage_source}</span>
           )}
         </div>
       )}
@@ -2236,7 +2239,7 @@ function RelationshipsTab({
           <span className={`flex-1 truncate ${darkMode ? "text-zinc-300" : "text-zinc-700"}`}>
             {other?.name || otherId}
             {near && (
-              <span className={`ml-1.5 text-[10px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+              <span className={`ml-1.5 text-xs ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
                 via {near.name}
               </span>
             )}
@@ -2244,7 +2247,7 @@ function RelationshipsTab({
           {(() => {
             const protoRef = getProtocolRef(rel.protocol || rel.type);
             const typeSpan = (
-              <span className={`text-[10px] ${typeColors[rel.type] || ""}`}>
+              <span className={`text-xs ${typeColors[rel.type] || ""}`}>
                 {rel.protocol || rel.type}
               </span>
             );
@@ -2255,19 +2258,19 @@ function RelationshipsTab({
             ) : typeSpan;
           })()}
           {rel.port && (
-            <span className={`text-[10px] font-mono ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            <span className={`text-xs font-mono ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
               :{rel.port}
             </span>
           )}
           {rel.ai_enhance?.importance && (
             <Tooltip content="How central this link is to the system, per AI review.">
-              <span className={`text-[9px] px-1.5 py-0.5 rounded ${importanceColors[rel.ai_enhance.importance] || importanceColors.internal}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded ${importanceColors[rel.ai_enhance.importance] || importanceColors.internal}`}>
                 {rel.ai_enhance.importance}
               </span>
             </Tooltip>
           )}
           {rel.ai_enhance?.ai_discovered && (
-            <span className={`text-[9px] px-1 py-0.5 rounded ${darkMode ? "bg-purple-900/30 text-purple-400" : "bg-purple-50 text-purple-600"}`}>
+            <span className={`text-xs px-1 py-0.5 rounded ${darkMode ? "bg-purple-900/30 text-purple-400" : "bg-purple-50 text-purple-600"}`}>
               AI
             </span>
           )}
@@ -2275,37 +2278,37 @@ function RelationshipsTab({
         {hasEnrichment && (
           <div className="px-3 pb-1 flex flex-wrap gap-1">
             {rel.authentication && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded ${darkMode ? "bg-amber-900/30 text-amber-400" : "bg-amber-50 text-amber-700"}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded ${darkMode ? "bg-amber-900/30 text-amber-400" : "bg-amber-50 text-amber-700"}`}>
                 {"\u{1F512}"} {rel.authentication}
               </span>
             )}
             {rel.data_format && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded ${darkMode ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-700"}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded ${darkMode ? "bg-blue-900/30 text-blue-400" : "bg-blue-50 text-blue-700"}`}>
                 {rel.data_format}
               </span>
             )}
             {rel.api_style && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded ${darkMode ? "bg-emerald-900/30 text-emerald-400" : "bg-emerald-50 text-emerald-700"}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded ${darkMode ? "bg-emerald-900/30 text-emerald-400" : "bg-emerald-50 text-emerald-700"}`}>
                 {rel.api_style}
               </span>
             )}
             {rel.transport && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
                 {rel.transport}
               </span>
             )}
             {rel.queue_name && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
                 {rel.queue_name}
               </span>
             )}
             {rel.connection_pattern && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600"}`}>
                 {rel.connection_pattern}
               </span>
             )}
             {rel.middleware && rel.middleware.length > 0 && rel.middleware.map((mw, j) => (
-              <span key={j} className={`text-[9px] px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}>
+              <span key={j} className={`text-xs px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}>
                 {mw}
               </span>
             ))}
@@ -2318,7 +2321,7 @@ function RelationshipsTab({
             {rel.endpoints.map((ep, j) => (
               <div key={j} className="flex items-center gap-1.5">
                 <MethodBadge method={ep.method} />
-                <span className={`text-[10px] font-mono truncate ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
+                <span className={`text-xs font-mono truncate ${darkMode ? "text-zinc-500" : "text-zinc-500"}`}>
                   {ep.path}
                 </span>
               </div>
@@ -2327,39 +2330,39 @@ function RelationshipsTab({
         )}
 
         {rel.ai_enhance?.data_flow_description && (
-          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+          <p className={`text-xs px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             {rel.ai_enhance.data_flow_description}
           </p>
         )}
         {rel.ai_enhance?.authentication_detail && (
-          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+          <p className={`text-xs px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             {"\u{1F512}"} {rel.ai_enhance.authentication_detail}
           </p>
         )}
         {rel.ai_enhance?.security_notes && (
-          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+          <p className={`text-xs px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             {"\u{1F512}"} {rel.ai_enhance.security_notes}
           </p>
         )}
         {rel.ai_enhance?.error_handling && (
-          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+          <p className={`text-xs px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             error handling: {rel.ai_enhance.error_handling}
           </p>
         )}
         {rel.ai_enhance?.sla_notes && (
-          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+          <p className={`text-xs px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             SLA: {rel.ai_enhance.sla_notes}
           </p>
         )}
         {rel.ai_enhance?.port_context && (
-          <p className={`text-[10px] px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+          <p className={`text-xs px-3 pb-1 ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
             {rel.ai_enhance.port_context}
           </p>
         )}
         {rel.ai_enhance?.payload_examples && rel.ai_enhance.payload_examples.length > 0 && (
           <div className="px-3 pb-1.5 space-y-0.5">
             {rel.ai_enhance.payload_examples.map((ex, j) => (
-              <div key={j} className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800/60 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}>
+              <div key={j} className={`text-xs font-mono px-1.5 py-0.5 rounded ${darkMode ? "bg-zinc-800/60 text-zinc-500" : "bg-zinc-100 text-zinc-500"}`}>
                 {ex}
               </div>
             ))}
@@ -2685,7 +2688,7 @@ function AggregateDetail({ aggregate }: { aggregate: AggregateNodeData }) {
               <span className={`text-sm font-medium truncate ${darkMode ? "text-zinc-200" : "text-zinc-800"}`}>
                 {c.name}
               </span>
-              <span className={`ml-auto shrink-0 text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+              <span className={`ml-auto shrink-0 text-xs ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
                 {c.files.length} file{c.files.length !== 1 ? "s" : ""}
               </span>
             </div>

@@ -56,8 +56,18 @@ class FactStore:
     ``":memory:"`` gives an ephemeral store for tests.
     """
 
-    def __init__(self, path: str | Path = ":memory:", *, with_fts: Optional[bool] = None):
+    def __init__(self, path: str | Path = ":memory:", *, with_fts: Optional[bool] = None, read_only: bool = False):
         self.path = str(path)
+        if read_only:
+            # Presentation/export readers must never create tables, migrate a
+            # schema, or switch the canonical database's journal mode.
+            self._conn = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA query_only = ON")
+            self.with_fts = self._conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE name = 'fts_docs'"
+            ).fetchone() is not None
+            return
         self._conn = sqlite3.connect(self.path)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")

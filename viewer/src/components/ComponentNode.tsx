@@ -11,12 +11,16 @@ import {
 } from "@xyflow/react";
 import type { Component, AnnotationTarget, AnnotationTargetContext } from "../types";
 import { getTypeColors, getLanguageColor, formatNumber, TYPE_META, isHeroType, getHeroGlow, ROLE_META, getRoleBadgeColors } from "../utils/layout";
-import { getWorstStatusLevel, getStatusSummary, getStatusDotClasses } from "../utils/status";
+import { getWorstStatusLevel, getStatusSummary } from "../utils/status";
 import { useArchStore } from "../store";
 import { THEMES } from "../utils/themes";
 import { Tooltip, TechTooltip } from "./Tooltip";
 import { getTechRef, getPatternRef, TYPE_DESCRIPTIONS, METRIC_DESCRIPTIONS } from "../utils/techDocs";
 import { componentHelp, componentSummary } from "../utils/componentText";
+import { StructuredExplanation } from "./StructuredExplanation";
+import { useHoverDisclosure } from "../hooks/useHoverDisclosure";
+import { useReadingSurfacePosition } from "../hooks/useReadingSurfacePosition";
+import { readingSurfacePlacement } from "../utils/readingSurfacePlacement";
 
 interface ComponentNodeData {
   component: Component;
@@ -473,53 +477,13 @@ function ReviewTarget({
 /** Gap kept between the preview and both the node and the canvas edge. */
 export const PREVIEW_PAD = 8;
 
-/**
- * The two things React Flow's NodeToolbar will not decide for the preview.
- *
- * The preview is carried by NodeToolbar now, so the engine owns the anchor: it
- * places the card relative to the node in screen space, at a fixed size
- * whatever the zoom, and keeps it there through pans and layout changes. What
- * NodeToolbar does NOT do is stay inside the canvas. Its transform
- * (getNodeToolbarTransform in @xyflow/system) is the node rect, the viewport,
- * the position, the offset and the alignment, and nothing else: there is no
- * collision handling and no flip, and `align` moves the card by whole node and
- * card widths, which is far too coarse to hold a 360px card inside a 390px
- * phone canvas.
- *
- * So two residual decisions stay here, both fed from measured screen rects
- * rather than from any arithmetic on the viewport transform:
- *
- *   flipBelow  which Position to hand NodeToolbar. Above the node by default;
- *              below it when there is no room above, because on a projection
- *              with a single root the node sits centred near the top and the
- *              popup covered the lens switcher, the level toggle, Review and
- *              part of Search, none of which could be clicked while it was up
- *              (GUI crawl 2026-09-01, graph.preview_covers_header).
- *   shiftX     how far to slide the card off the centre NodeToolbar gives it so
- *              it clears neither side of the canvas.
- *
- * Pure and exported so both are testable without a browser.
- */
-export function previewPlacement(
-  anchor: { left: number; right: number; top: number; bottom: number },
-  canvas: { left: number; right: number; top: number } | null,
-  card: { width: number; height: number },
-): { flipBelow: boolean; shiftX: number } {
-  if (!canvas) return { flipBelow: false, shiftX: 0 };
-  const flipBelow = anchor.top - PREVIEW_PAD - card.height < canvas.top + PREVIEW_PAD;
-  const centred = (anchor.left + anchor.right) / 2 - card.width / 2;
-  const minLeft = canvas.left + PREVIEW_PAD;
-  const maxLeft = canvas.right - card.width - PREVIEW_PAD;
-  // A canvas narrower than the card cannot satisfy both edges; pinning to the
-  // left one keeps the popup's start on screen rather than its end.
-  const clamped = maxLeft < minLeft ? minLeft : Math.min(Math.max(centred, minLeft), maxLeft);
-  return { flipBelow, shiftX: clamped - centred };
-}
-
-function HoverCard({ component, darkMode, triggerRef }: {
+function HoverCard({ component, darkMode, triggerRef, surfaceRef, onEnter, onLeave }: {
   component: Component;
   darkMode: boolean;
   triggerRef: React.RefObject<HTMLDivElement | null>;
+  surfaceRef: React.RefObject<HTMLDivElement | null>;
+  onEnter: () => void;
+  onLeave: () => void;
 }) {
   // The anchor comes from React Flow, not from the DOM: getNodesBounds gives
   // this node's measured bounds and flowToScreenPosition puts them on screen
@@ -532,14 +496,18 @@ function HoverCard({ component, darkMode, triggerRef }: {
   const { getNodesBounds, flowToScreenPosition } = useReactFlow();
   useViewport();
   // Measured rather than assumed: the card's height depends on how much
-  // documentation the component carries, and clamping against the 320px maximum
+  // documentation the component carries, and clamping against the maximum
   // would push a short card below a node it would have fitted above. Hooks stay
   // above the early returns below (rules of hooks).
-  const cardRef = useRef<HTMLDivElement>(null);
+  const cardRef = surfaceRef;
   const [card, setCard] = useState({ width: 360, height: 320 });
   useLayoutEffect(() => {
-    const box = cardRef.current?.getBoundingClientRect();
-    if (!box) return;
+    const element = cardRef.current;
+    if (!element) return;
+    // Layout dimensions are independent of our translated screen position.
+    // Measuring the transformed rectangle can alternate fractional values at
+    // graph zoom levels and feed an endless measurement/render cycle.
+    const box = { width: element.offsetWidth, height: element.offsetHeight };
     setCard((prev) =>
       prev.width === box.width && prev.height === box.height
         ? prev
@@ -547,14 +515,17 @@ function HoverCard({ component, darkMode, triggerRef }: {
     );
   });
 
-  const docs = component.docs;
+  const docs = component.docs ?? {};
   const summary = componentSummary(component);
-  if (!docs) return null;
 
   const hasDocs = docs.purpose || docs.readme || docs.patterns?.length || docs.tech_stack?.length
     || docs.api_endpoints?.length || docs.env_vars?.length || docs.architecture_notes;
+  const hasExplanation = Boolean(
+    component.ai_enhance?.explanation
+    && Object.keys(component.ai_enhance.explanation).length > 0
+  ) || Boolean(component.ai_enhance?.honest_gaps?.length);
 
-  if (!hasDocs && !summary) return null;
+  if (!hasDocs && !summary && !hasExplanation) return null;
 
   const bounds = nodeId ? getNodesBounds([nodeId]) : null;
   if (!bounds || bounds.width <= 0 || bounds.height <= 0) return null;
@@ -564,20 +535,25 @@ function HoverCard({ component, darkMode, triggerRef }: {
     y: bounds.y + bounds.height,
   });
   const canvas = triggerRef.current?.closest(".react-flow")?.getBoundingClientRect() ?? null;
-  const { flipBelow, shiftX } = previewPlacement(
+  const placement = readingSurfacePlacement(
     { left: topLeft.x, right: bottomRight.x, top: topLeft.y, bottom: bottomRight.y },
-    canvas,
-    card,
+    canvas ?? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight },
+    { width: 400, height: Math.min(420, (cardRef.current?.scrollHeight ?? 420) + 2) },
   );
+  const flipBelow = placement.side === "bottom";
+  const shiftX = placement.left - ((topLeft.x + bottomRight.x) / 2 - card.width / 2);
+  const shiftY = placement.top - (flipBelow ? bottomRight.y + PREVIEW_PAD : topLeft.y - PREVIEW_PAD - card.height);
 
   const preview = (
     <div
       ref={cardRef}
       data-testid="node-preview"
       data-component-id={component.id}
+      role="region"
+      aria-label={`Preview of ${component.name}`}
       className={`
-        pointer-events-auto
-        w-[360px] max-h-[320px] overflow-y-auto
+        pointer-events-auto nowheel nopan se-reading-surface
+        w-[min(400px,calc(100vw-16px))] max-h-[min(420px,calc(100vh-16px))] overflow-y-auto
         rounded-xl border shadow-2xl text-xs
         ${darkMode
           ? "bg-zinc-900/95 border-zinc-700 text-zinc-300"
@@ -585,19 +561,37 @@ function HoverCard({ component, darkMode, triggerRef }: {
         }
         backdrop-blur-md
       `}
-      style={{ transform: `translateX(${shiftX}px)` }}
+      style={{ transform: `translate(${shiftX}px, ${shiftY}px)`, width: placement.width, maxHeight: placement.maxHeight }}
       onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onPointerMove={(e) => e.stopPropagation()}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+      onFocus={onEnter}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) onLeave(); }}
     >
-      <div className="p-3 space-y-2">
-        {summary && (
-          <p className={`text-[11px] leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
-            {summary}
+      <div className="p-4 space-y-3">
+        <header className={`border-b pb-3 ${darkMode ? "border-zinc-700" : "border-zinc-200"}`}>
+          <h3 className="text-base font-semibold se-info-title">{component.name}</h3>
+          <p className="mt-1 text-xs se-info-meta">
+            {TYPE_META[component.type]?.label || component.type}
+            {component.language ? ` · ${component.language}` : ""}
+            {component.metrics?.files ? ` · ${formatNumber(component.metrics.files)} files` : ""}
+            {component.metrics?.lines ? ` · ${formatNumber(component.metrics.lines)} lines` : ""}
           </p>
-        )}
+        </header>
+
+        <StructuredExplanation
+          explanation={component.ai_enhance?.explanation}
+          fallback={summary}
+          honestGaps={component.ai_enhance?.honest_gaps}
+          stale={component.ai_enhance?.stale}
+          compact
+        />
 
         {docs.patterns && docs.patterns.length > 0 && (
           <div>
-            <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            <div className="se-info-heading">
               Patterns
             </div>
             <div className="flex flex-wrap gap-1">
@@ -605,7 +599,7 @@ function HoverCard({ component, darkMode, triggerRef }: {
                 const pRef = getPatternRef(p);
                 const badge = (
                   <span className={`
-                    px-1.5 py-0.5 rounded text-[10px]
+                    px-1.5 py-0.5 rounded text-xs
                     ${darkMode ? "bg-violet-900/40 text-violet-300" : "bg-violet-100 text-violet-700"}
                   `}>
                     {p}
@@ -625,7 +619,7 @@ function HoverCard({ component, darkMode, triggerRef }: {
 
         {docs.tech_stack && docs.tech_stack.length > 0 && (
           <div>
-            <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            <div className="se-info-heading">
               Tech Stack
             </div>
             <div className="flex flex-wrap gap-1">
@@ -633,7 +627,7 @@ function HoverCard({ component, darkMode, triggerRef }: {
                 const ref = getTechRef(t);
                 const badge = (
                   <span className={`
-                    px-1.5 py-0.5 rounded text-[10px]
+                    px-1.5 py-0.5 rounded text-xs
                     ${darkMode ? "bg-cyan-900/40 text-cyan-300" : "bg-cyan-100 text-cyan-700"}
                   `}>
                     {t}
@@ -653,13 +647,13 @@ function HoverCard({ component, darkMode, triggerRef }: {
 
         {docs.api_endpoints && docs.api_endpoints.length > 0 && (
           <div>
-            <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            <div className="se-info-heading">
               API Endpoints ({docs.api_endpoints.length})
             </div>
             <div className="space-y-0.5">
               {docs.api_endpoints.slice(0, 5).map((ep, i) => (
-                <div key={i} className="flex items-center gap-1.5 font-mono text-[10px]">
-                  <span className={`px-1 rounded text-[9px] font-bold
+                <div key={i} className="flex items-center gap-1.5 font-mono text-xs">
+                  <span className={`px-1 rounded text-[11px] font-bold
                     ${ep.method === "GET" ? "bg-green-900/30 text-green-400" :
                       ep.method === "POST" ? "bg-blue-900/30 text-blue-400" :
                       ep.method === "DELETE" ? "bg-red-900/30 text-red-400" :
@@ -671,7 +665,7 @@ function HoverCard({ component, darkMode, triggerRef }: {
                 </div>
               ))}
               {docs.api_endpoints.length > 5 && (
-                <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                <span className="text-xs se-info-meta">
                   +{docs.api_endpoints.length - 5} more
                 </span>
               )}
@@ -681,20 +675,20 @@ function HoverCard({ component, darkMode, triggerRef }: {
 
         {docs.env_vars && docs.env_vars.length > 0 && (
           <div>
-            <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            <div className="se-info-heading">
               Env Vars ({docs.env_vars.length})
             </div>
             <div className="flex flex-wrap gap-1">
               {docs.env_vars.slice(0, 8).map((v, i) => (
                 <span key={i} className={`
-                  font-mono px-1 py-0.5 rounded text-[9px]
+                  font-mono px-1 py-0.5 rounded text-[11px]
                   ${darkMode ? "bg-amber-900/30 text-amber-300" : "bg-amber-100 text-amber-700"}
                 `}>
                   {v}
                 </span>
               ))}
               {docs.env_vars.length > 8 && (
-                <span className={`text-[10px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+                <span className="text-xs se-info-meta">
                   +{docs.env_vars.length - 8} more
                 </span>
               )}
@@ -704,16 +698,16 @@ function HoverCard({ component, darkMode, triggerRef }: {
 
         <div className={`flex gap-2 pt-1 border-t ${darkMode ? "border-zinc-800" : "border-zinc-100"}`}>
           {docs.readme && (
-            <span className={`text-[9px] ${darkMode ? "text-green-500" : "text-green-600"}`}>README</span>
+            <span className={`text-xs ${darkMode ? "text-green-400" : "text-green-700"}`}>README</span>
           )}
           {docs.claude_md && (
-            <span className={`text-[9px] ${darkMode ? "text-purple-500" : "text-purple-600"}`}>CLAUDE.md</span>
+            <span className={`text-xs ${darkMode ? "text-purple-400" : "text-purple-700"}`}>CLAUDE.md</span>
           )}
           {docs.changelog && (
-            <span className={`text-[9px] ${darkMode ? "text-blue-500" : "text-blue-600"}`}>CHANGELOG</span>
+            <span className={`text-xs ${darkMode ? "text-blue-400" : "text-blue-700"}`}>CHANGELOG</span>
           )}
           {docs.architecture_notes && (
-            <span className={`text-[9px] ${darkMode ? "text-orange-500" : "text-orange-600"}`}>Architecture</span>
+            <span className={`text-xs ${darkMode ? "text-orange-400" : "text-orange-700"}`}>Architecture</span>
           )}
         </div>
       </div>
@@ -737,9 +731,7 @@ function HoverCard({ component, darkMode, triggerRef }: {
 // help_text when available, falls back to docs.purpose / description / README excerpt.
 
 function getHelpContent(component: Component): string | null {
-  const text = componentHelp(component);
-  if (!text) return null;
-  return text.length > 200 ? `${text.slice(0, 200)}...` : text;
+  return componentHelp(component);
 }
 
 function HelpPopover({ component, darkMode, triggerRef, onClose }: {
@@ -749,25 +741,37 @@ function HelpPopover({ component, darkMode, triggerRef, onClose }: {
   onClose: () => void;
 }) {
   const helpText = getHelpContent(component);
+  const ai = component.ai_enhance;
   const popoverRef = useRef<HTMLDivElement>(null);
+  const placement = useReadingSurfacePosition(triggerRef, popoverRef, true, "bottom", 380);
+  const positioned = placement !== null;
+  useLayoutEffect(() => {
+    if (positioned) popoverRef.current?.focus();
+  }, [positioned]);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        popoverRef.current && !popoverRef.current.contains(target) &&
-        triggerRef.current && !triggerRef.current.contains(target)
-      ) {
+    const trigger = triggerRef.current?.querySelector<HTMLButtonElement>("button");
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
         onClose();
       }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [triggerRef, onClose]);
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!popoverRef.current?.contains(target) && !triggerRef.current?.contains(target)) onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+      // Do not take focus away from another control the reader clicked.
+      if (document.activeElement === document.body || popoverRef.current?.contains(document.activeElement)) trigger?.focus();
+    };
+  }, [onClose, triggerRef]);
 
-  if (!helpText) return null;
-
-  const ai = component.ai_enhance;
+  if (!helpText && !ai?.explanation && !ai?.honest_gaps?.length) return null;
   const roleMeta = ai?.architectural_role ? ROLE_META[ai.architectural_role] : null;
 
   const rect = triggerRef.current?.getBoundingClientRect();
@@ -776,9 +780,12 @@ function HelpPopover({ component, darkMode, triggerRef, onClose }: {
   return createPortal(
     <div
       ref={popoverRef}
+      role="dialog"
+      tabIndex={-1}
+      aria-label={`About ${component.name}`}
       className={`
-        fixed z-[9999] pointer-events-auto
-        w-[300px] rounded-xl border shadow-2xl text-xs
+        fixed z-[9999] pointer-events-auto nowheel nopan se-reading-surface
+        w-[min(380px,calc(100vw-16px))] max-h-[min(420px,calc(100vh-16px))] overflow-y-auto rounded-xl border shadow-2xl text-xs
         ${darkMode
           ? "bg-zinc-900/95 border-zinc-700 text-zinc-300"
           : "bg-white/95 border-zinc-200 text-zinc-700"
@@ -786,23 +793,35 @@ function HelpPopover({ component, darkMode, triggerRef, onClose }: {
         backdrop-blur-md
       `}
       style={{
-        left: rect.right,
-        top: rect.bottom + 4,
-        transform: "translate(-100%, 0)",
+        left: placement?.left ?? rect.left,
+        top: placement?.top ?? rect.bottom + 8,
+        width: placement?.width,
+        maxHeight: placement?.maxHeight,
+        visibility: placement ? "visible" : "hidden",
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="p-3 space-y-2">
+      <div className="p-4 space-y-3">
+        <header className={`border-b pb-3 ${darkMode ? "border-zinc-700" : "border-zinc-200"}`}>
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="text-base font-semibold se-info-title">{component.name}</h3>
+            <button type="button" className="se-node-control shrink-0 rounded se-info-meta" aria-label="Close component information" onClick={onClose}>×</button>
+          </div>
+          <p className="mt-1 text-xs se-info-meta">
+            {TYPE_META[component.type]?.label || component.type}
+            {component.language ? ` · ${component.language}` : ""}
+          </p>
+        </header>
         {/* Role and criticality badges */}
         {(roleMeta || ai?.criticality) && (
           <div className="flex items-center gap-2 flex-wrap">
             {roleMeta && ai?.architectural_role && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${getRoleBadgeColors(ai.architectural_role, darkMode)}`}>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${getRoleBadgeColors(ai.architectural_role, darkMode)}`}>
                 {roleMeta.icon} {roleMeta.label}
               </span>
             )}
             {ai?.criticality && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                 ai.criticality === "critical"
                   ? (darkMode ? "bg-red-900/40 text-red-300" : "bg-red-100 text-red-700")
                   : ai.criticality === "important"
@@ -815,18 +834,22 @@ function HelpPopover({ component, darkMode, triggerRef, onClose }: {
           </div>
         )}
 
-        {/* Help text */}
-        <p className={`text-[11px] leading-relaxed ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
-          {helpText}
-        </p>
+        <StructuredExplanation
+          explanation={ai?.explanation}
+          fallback={helpText}
+          honestGaps={ai?.honest_gaps}
+          stale={ai?.stale}
+          showEvidence
+          compact
+        />
 
         {/* Data handled */}
-        {ai?.data_handled && (
+        {ai?.data_handled && !ai.explanation?.data_handled && (
           <div>
-            <div className={`text-[10px] font-semibold uppercase tracking-wider mb-0.5 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            <div className="se-info-heading">
               Data Handled
             </div>
-            <p className={`text-[10px] ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+            <p className="se-info-body">
               {ai.data_handled}
             </p>
           </div>
@@ -879,20 +902,23 @@ export const ComponentNode = memo(function ComponentNode({
   const connectionCount = incomingCount + outgoingCount;
   const hasChildren = component.children.length > 0 || component.files.length > 0;
   const langColor = component.language ? getLanguageColor(component.language) : null;
-  const [hovered, setHovered] = useState(false);
+  const { visible: hovered, enter: enterPreview, retain: retainPreview, leave: leavePreview, dismiss: dismissPreview } = useHoverDisclosure(400);
   const [showHelp, setShowHelp] = useState(false);
-  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nodeRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const helpButtonRef = useRef<HTMLDivElement>(null);
   const isHero = isHeroType(component.type);
   const glowsInThisTheme = THEMES[theme].heroGlow;
-  const hasHelpContent = !!(getHelpContent(component));
+  const hasHelpContent = Boolean(
+    getHelpContent(component)
+    || component.ai_enhance?.explanation
+    || component.ai_enhance?.honest_gaps?.length
+  );
   const isTouchDevice = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 
   useEffect(() => {
     return () => {
-      if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
       if (longPressTimeout.current) clearTimeout(longPressTimeout.current);
     };
   }, []);
@@ -900,32 +926,35 @@ export const ComponentNode = memo(function ComponentNode({
   // A preview can open with no gesture behind it: arriving in the workbench from
   // the Overview draws a node under wherever the pointer was left, and the
   // browser treats that as an enter. Nothing then guarantees the matching leave,
-  // so the popup can outlive the reason it appeared. Any pointer move that is
-  // not over this node closes it. Coarse pointers are left alone, so the 500ms
+  // so the popup can outlive the reason it appeared. Moving outside both the
+  // node and its reading surface starts dismissal. Coarse pointers are left alone, so the 500ms
   // touch-and-hold path is unchanged.
   useEffect(() => {
     if (!hovered || isTouchDevice) return;
     const onPointerMove = (e: PointerEvent) => {
       const node = nodeRef.current;
-      if (node && !node.contains(e.target as Node)) setHovered(false);
+      const target = e.target as Node;
+      if (node?.contains(target) || previewRef.current?.contains(target)) retainPreview();
+      else leavePreview();
     };
     window.addEventListener("pointermove", onPointerMove);
     return () => window.removeEventListener("pointermove", onPointerMove);
-  }, [hovered, isTouchDevice]);
+  }, [hovered, isTouchDevice, retainPreview, leavePreview]);
 
   const handleMouseEnter = () => {
     if (isTouchDevice) return;
-    hoverTimeout.current = setTimeout(() => setHovered(true), 400);
+    if (showHelp) return;
+    if (hovered) retainPreview();
+    else enterPreview();
   };
   const handleMouseLeave = () => {
-    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
-    setHovered(false);
+    leavePreview();
   };
 
   // Long-press on touch devices shows hover card
   const handleTouchStart = useCallback(() => {
-    longPressTimeout.current = setTimeout(() => setHovered(true), 500);
-  }, []);
+    longPressTimeout.current = setTimeout(retainPreview, 500);
+  }, [retainPreview]);
   const handleTouchEnd = useCallback(() => {
     if (longPressTimeout.current) clearTimeout(longPressTimeout.current);
   }, []);
@@ -951,7 +980,7 @@ export const ComponentNode = memo(function ComponentNode({
         hover:scale-[1.02] transition-transform duration-150
         cursor-pointer
       `}
-      onClick={() => { setHovered(false); selectComponent(component.id); }}
+      onClick={() => { dismissPreview(); selectComponent(component.id); }}
       onDoubleClick={() => hasChildren && drillInto(component)}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -970,7 +999,7 @@ export const ComponentNode = memo(function ComponentNode({
       <Handle id="source-bottom" type="source" position={Position.Bottom} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
 
       {/* Hover documentation card */}
-      {hovered && <HoverCard component={component} darkMode={darkMode} triggerRef={nodeRef} />}
+      {hovered && !showHelp && <HoverCard component={component} darkMode={darkMode} triggerRef={nodeRef} surfaceRef={previewRef} onEnter={retainPreview} onLeave={leavePreview} />}
 
       {/* Capability badges (P6-3): counts by kind on capability-owning nodes */}
       {capBadges && (
@@ -980,7 +1009,7 @@ export const ComponentNode = memo(function ComponentNode({
             .map((k) => (
               <span
                 key={k}
-                className={`px-1.5 h-[18px] flex items-center rounded-full text-[9px] font-bold uppercase tracking-wide shadow-sm ${
+                className={`px-1.5 h-5 flex items-center rounded-full text-[11px] font-bold uppercase tracking-wide shadow-sm ${
                   darkMode ? "bg-cyan-500 text-white" : "bg-cyan-600 text-white"
                 }`}
                 title={`${capBadges[k]} ${k} capabilit${capBadges[k] === 1 ? "y" : "ies"}`}
@@ -999,7 +1028,7 @@ export const ComponentNode = memo(function ComponentNode({
             .map((k) => (
               <span
                 key={k}
-                className={`px-1.5 h-[18px] flex items-center rounded-full text-[9px] font-bold uppercase tracking-wide shadow-sm ${
+                className={`px-1.5 h-5 flex items-center rounded-full text-[11px] font-bold uppercase tracking-wide shadow-sm ${
                   darkMode ? "bg-indigo-500 text-white" : "bg-indigo-600 text-white"
                 }`}
                 title={`${ruleBadges[k]} ${k} rule${ruleBadges[k] === 1 ? "" : "s"}`}
@@ -1014,7 +1043,7 @@ export const ComponentNode = memo(function ComponentNode({
       {annotationCount > 0 && (
         <div className={`
           absolute -top-2 -right-2 z-20 min-w-[20px] h-[20px] flex items-center justify-center
-          rounded-full text-[10px] font-bold
+          rounded-full text-[11px] font-bold
           ${darkMode ? "bg-blue-500 text-white" : "bg-blue-500 text-white"}
           ${reviewMode ? "ring-2 ring-blue-400/50 animate-pulse" : ""}
         `}>
@@ -1061,7 +1090,7 @@ export const ComponentNode = memo(function ComponentNode({
                   targetContext={{ typeValue: component.type, componentPath: component.path }}
                 >
                   <Tooltip content={TYPE_DESCRIPTIONS[component.type] || component.type} position="bottom">
-                    <span data-se="badge" className={`${isHero ? "text-[11px] px-2 py-0.5" : "text-[10px] px-1.5 py-0.5"} rounded-full font-medium ${colors.badge}`}>
+                    <span data-se="badge" className={`text-xs px-2 py-1 rounded-full font-medium ${colors.badge}`}>
                       {TYPE_META[component.type]?.label || component.type}
                     </span>
                   </Tooltip>
@@ -1070,12 +1099,12 @@ export const ComponentNode = memo(function ComponentNode({
                   const ref = getTechRef(component.framework);
                   const frameworkEl = ref ? (
                     <TechTooltip name={component.framework} description={ref.description} url={ref.url}>
-                      <span className={`${isHero ? "text-[11px] font-medium" : "text-[10px]"} ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                      <span className={`text-xs font-medium ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                         {component.framework}
                       </span>
                     </TechTooltip>
                   ) : (
-                    <span className={`${isHero ? "text-[11px] font-medium" : "text-[10px]"} ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+                    <span className={`text-xs font-medium ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                       {component.framework}
                     </span>
                   );
@@ -1092,7 +1121,7 @@ export const ComponentNode = memo(function ComponentNode({
                   );
                 })()}
                 {component.ai_enhance?.architectural_role && ROLE_META[component.ai_enhance.architectural_role] && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${getRoleBadgeColors(component.ai_enhance.architectural_role, darkMode)}`}>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${getRoleBadgeColors(component.ai_enhance.architectural_role, darkMode)}`}>
                     {ROLE_META[component.ai_enhance.architectural_role].icon} {ROLE_META[component.ai_enhance.architectural_role].label}
                   </span>
                 )}
@@ -1102,15 +1131,18 @@ export const ComponentNode = memo(function ComponentNode({
               {hasHelpContent && (
                 <button
                   className={`
-                    w-8 h-8 rounded-lg flex items-center justify-center
+                    se-node-control rounded-lg flex items-center justify-center
                     text-xs font-bold
                     ${darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200" : "bg-zinc-200 text-zinc-600 hover:bg-zinc-300"}
                   `}
-                  style={{ minWidth: 32, minHeight: 32 }}
                   onClick={(e) => {
                     e.stopPropagation();
+                    dismissPreview();
                     setShowHelp(!showHelp);
                   }}
+                  aria-label={`Open information about ${component.name}`}
+                  aria-haspopup="dialog"
+                  aria-expanded={showHelp}
                   title="Component info"
                 >
                   ?
@@ -1119,15 +1151,15 @@ export const ComponentNode = memo(function ComponentNode({
               {hasChildren && (
                 <button
                   className={`
-                    w-8 h-8 rounded-lg flex items-center justify-center
+                    se-node-control rounded-lg flex items-center justify-center
                     text-xs font-bold
                     ${darkMode ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200" : "bg-zinc-200 text-zinc-600 hover:bg-zinc-300"}
                   `}
-                  style={{ minWidth: 32, minHeight: 32 }}
                   onClick={(e) => {
                     e.stopPropagation();
                     drillInto(component);
                   }}
+                  aria-label={`Open ${component.name}`}
                   title="Drill into component"
                 >
                   &darr;
@@ -1147,7 +1179,7 @@ export const ComponentNode = memo(function ComponentNode({
               targetContext={{ purposeValue: summary, componentPath: component.path }}
               className="block mt-1.5"
             >
-              <p className={`text-[10px] leading-snug line-clamp-2 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+              <p className={`text-xs leading-relaxed line-clamp-2 ${darkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                 {summary}
               </p>
             </ReviewTarget>
@@ -1167,15 +1199,15 @@ export const ComponentNode = memo(function ComponentNode({
                 targetContext={{ patternValue: p, componentPath: component.path }}
               >
                 <span className={`
-                  text-[9px] px-1.5 py-0.5 rounded
-                  ${darkMode ? "bg-violet-900/30 text-violet-400" : "bg-violet-50 text-violet-600"}
+                  text-[11px] px-1.5 py-0.5 rounded
+                  ${darkMode ? "bg-violet-900/30 text-violet-300" : "bg-violet-50 text-violet-700"}
                 `}>
                   {p}
                 </span>
               </ReviewTarget>
             ))}
             {docs!.patterns.length > 3 && (
-              <span className={`text-[9px] ${darkMode ? "text-zinc-600" : "text-zinc-400"}`}>
+              <span className="text-[11px] se-info-meta">
                 +{docs!.patterns.length - 3}
               </span>
             )}
@@ -1183,25 +1215,37 @@ export const ComponentNode = memo(function ComponentNode({
         )}
 
         {/* Metrics bar */}
-        <div className={`px-4 pb-3 flex items-center gap-3 text-[11px] flex-wrap ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>
+        <div className="px-4 pb-3 flex items-center gap-3 text-xs flex-wrap se-info-meta">
           {component.ai_enhance?.criticality && component.ai_enhance.criticality !== "supporting" && (
-            <Tooltip content={`${component.ai_enhance.criticality === "critical" ? "Critical: system fails without this" : "Important: degraded behavior without this"}`}>
-              <span className={`w-2 h-2 rounded-full shrink-0 ${
-                component.ai_enhance.criticality === "critical" ? "bg-red-500" : "bg-amber-500"
-              }`} />
+            <Tooltip focusable content={`${component.ai_enhance.criticality === "critical" ? "Critical: system fails without this" : "Important: degraded behavior without this"}`}>
+              <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                component.ai_enhance.criticality === "critical"
+                  ? (darkMode ? "bg-red-950/60 text-red-300" : "bg-red-50 text-red-800")
+                  : (darkMode ? "bg-amber-950/60 text-amber-200" : "bg-amber-50 text-amber-800")
+              }`}>
+                {component.ai_enhance.criticality === "critical" ? "! Critical" : "▲ Important"}
+              </span>
             </Tooltip>
           )}
           {component.ai_enhance?.stale && (
-            <Tooltip content="This interpretation predates the component's current file digest and may no longer be accurate.">
-              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">stale interpretation</span>
+            <Tooltip focusable content="This interpretation predates the component's current file digest and may no longer be accurate.">
+              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-medium text-amber-500">stale interpretation</span>
             </Tooltip>
           )}
           {component.live_status?.statuses && (() => {
             const worst = getWorstStatusLevel(component.live_status.statuses);
             if (worst === "ok") return null;
             return (
-              <Tooltip content={getStatusSummary(component.live_status.statuses)}>
-                <span className={`w-2 h-2 rounded-full shrink-0 ${getStatusDotClasses(worst)}`} />
+              <Tooltip focusable content={getStatusSummary(component.live_status.statuses)}>
+                <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                  worst === "error"
+                    ? (darkMode ? "bg-red-950/60 text-red-200" : "bg-red-100 text-red-800")
+                    : worst === "warning"
+                      ? (darkMode ? "bg-amber-950/60 text-amber-200" : "bg-amber-100 text-amber-800")
+                      : (darkMode ? "bg-blue-950/60 text-blue-200" : "bg-blue-100 text-blue-800")
+                }`}>
+                  {worst === "error" ? "× Error" : worst === "warning" ? "▲ Warning" : "i Info"}
+                </span>
               </Tooltip>
             );
           })()}
@@ -1259,24 +1303,24 @@ export const ComponentNode = memo(function ComponentNode({
           )}
           {docs?.readme && (
             <Tooltip content="This component has a README file with documentation.">
-              <span className={`text-[9px] ${darkMode ? "text-green-600" : "text-green-500"}`}>
+              <span className={`text-[11px] ${darkMode ? "text-green-400" : "text-green-700"}`}>
                 DOC
               </span>
             </Tooltip>
           )}
           {docs?.api_endpoints && docs.api_endpoints.length > 0 && (
             <Tooltip content={`This component exposes ${docs.api_endpoints.length} API endpoint${docs.api_endpoints.length !== 1 ? "s" : ""}.`}>
-              <span className={`text-[9px] ${darkMode ? "text-blue-600" : "text-blue-500"}`}>
+              <span className={`text-[11px] ${darkMode ? "text-blue-400" : "text-blue-700"}`}>
                 API
               </span>
             </Tooltip>
           )}
           {component.testing && (component.testing.unit_tests + component.testing.integration_tests + component.testing.e2e_tests) > 0 && (
             <Tooltip content={`${component.testing.unit_tests + component.testing.integration_tests + component.testing.e2e_tests} tests${component.testing.coverage_percent !== null ? ` (${component.testing.coverage_percent.toFixed(0)}% coverage)` : ""}`}>
-              <span className={`text-[9px] ${
+              <span className={`text-[11px] ${
                 component.testing.coverage_percent !== null && component.testing.coverage_percent >= 80
-                  ? (darkMode ? "text-green-600" : "text-green-500")
-                  : (darkMode ? "text-amber-600" : "text-amber-500")
+                  ? (darkMode ? "text-green-400" : "text-green-700")
+                  : (darkMode ? "text-amber-400" : "text-amber-700")
               }`}>
                 TST
               </span>
@@ -1296,8 +1340,8 @@ export const ComponentNode = memo(function ComponentNode({
         {/* Children indicator */}
         {component.children.length > 0 && (
           <div className={`
-            px-4 py-1.5 border-t text-[10px]
-            ${darkMode ? "border-zinc-800/50 text-zinc-600" : "border-zinc-200 text-zinc-400"}
+            px-4 py-1.5 border-t text-xs
+            ${darkMode ? "border-zinc-800/50 text-zinc-400" : "border-zinc-200 text-zinc-600"}
           `}>
             {component.children.length} sub-component{component.children.length !== 1 ? "s" : ""}
           </div>

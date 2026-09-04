@@ -43,6 +43,8 @@ export interface ExpectedComponent {
   fileCount: number;
   symbolCount: number;
   hasAiEnhance: boolean;
+  /** Audited explanation atoms the component preview must preserve as sections. */
+  explanationKeys: string[];
 }
 
 /** One tour exactly as the manifest authored it (I11: order is not re-sorted). */
@@ -198,6 +200,11 @@ export function loadContract(): Contract {
         fileCount: counts.fileCount ?? (Array.isArray(node.files) ? node.files.length : 0),
         symbolCount: counts.symbolCount ?? 0,
         hasAiEnhance: Boolean(node.ai_enhance),
+        explanationKeys: node.ai_enhance?.explanation
+          && typeof node.ai_enhance.explanation === "object"
+          && !Array.isArray(node.ai_enhance.explanation)
+          ? Object.keys(node.ai_enhance.explanation)
+          : [],
       });
       if (parentId === null) rootIds.push(node.id);
       maxDepth = Math.max(maxDepth, depth);

@@ -37,6 +37,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from analyzer.enrich import apply_enrichment_overlay  # noqa: E402
 from analyzer.project.human_views import (  # noqa: E402 - repo root must precede local import
     ORIENTATION_FILENAME,
     SECURITY_FILENAME,
@@ -53,6 +54,7 @@ from analyzer.project.ui_surfaces import (  # noqa: E402
     load_and_validate_ui_surfaces,
     validate_ui_surface_evidence,
 )
+from analyzer.store import FactStore  # noqa: E402
 
 VIEWER = REPO_ROOT / "viewer"
 DIST = VIEWER / "dist"
@@ -139,6 +141,7 @@ def _projection_with_human_views(
     upstream_source: Path | None = None,
     scrub_activity: bool = False,
     ui_surfaces: Path | None = None,
+    enrichment_store: Path | None = None,
 ) -> tuple[Path, list[str]]:
     """Return a projection root with all human-view sidecars available.
 
@@ -148,9 +151,11 @@ def _projection_with_human_views(
     coverage.json. This keeps the canonical run byte-for-byte immutable.
     """
     sidecars = (ORIENTATION_FILENAME, SUPPORT_FILENAME, SECURITY_FILENAME)
+    if enrichment_store is not None and not enrichment_store.is_file():
+        raise RuntimeError(f"enrichment store does not exist: {enrichment_store}")
     missing = [name for name in sidecars if not (projection / name).is_file()]
     activity_path = projection / "activity.json"
-    if not missing and corrections is None and publication is None and upstream_source is None and not scrub_activity and ui_surfaces is None:
+    if not missing and corrections is None and publication is None and upstream_source is None and not scrub_activity and ui_surfaces is None and enrichment_store is None:
         return projection, []
     generated_sidecars = list(missing)
     if corrections is not None and ORIENTATION_FILENAME not in generated_sidecars:
@@ -182,7 +187,7 @@ def _projection_with_human_views(
 
     for source in sorted(projection.iterdir(), key=lambda path: path.name):
         target = derived / source.name
-        if corrections is not None and source.name == "manifest.json":
+        if (corrections is not None or enrichment_store is not None) and source.name == "manifest.json":
             shutil.copy2(source, target)
         elif corrections is not None and source.name == ORIENTATION_FILENAME:
             continue
@@ -209,6 +214,19 @@ def _projection_with_human_views(
         if notice_path is not None:
             shutil.copy2(notice_path, derived / notice_path.name)
             generated_sidecars.append(notice_path.name)
+
+    if enrichment_store is not None:
+        if not enrichment_store.is_file():
+            raise RuntimeError(f"enrichment store does not exist: {enrichment_store}")
+        manifest_path = derived / "manifest.json"
+        manifest = _load_json(manifest_path)
+        store = FactStore(str(enrichment_store), read_only=True)
+        try:
+            apply_enrichment_overlay(manifest, store)
+        finally:
+            store.close()
+        write_human_view(manifest, manifest_path)
+        generated_sidecars.append("manifest.json (store enrichment overlay)")
 
     if corrections is not None:
         apply_review_corrections(derived, corrections)
@@ -271,6 +289,7 @@ def assemble(
     upstream_source: Path | None = None,
     scrub_activity: bool = False,
     ui_surfaces: Path | None = None,
+    enrichment_store: Path | None = None,
 ) -> Path:
     if not projection.is_dir():
         sys.exit(
@@ -301,7 +320,8 @@ def assemble(
             shutil.rmtree(target)
 
     served_projection, generated_sidecars = _projection_with_human_views(
-        slug, projection, corrections, publication, upstream_source, scrub_activity, ui_surfaces
+        slug, projection, corrections, publication, upstream_source, scrub_activity, ui_surfaces,
+        enrichment_store
     )
     (serve / "architecture").symlink_to(served_projection)
 
@@ -333,6 +353,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="replace contributor email keys with stable pseudonymous ids")
     parser.add_argument("--ui-surfaces", default=None,
                         help="validated UI capture package attached only to the derived assembly")
+    parser.add_argument("--enrichment-store", default=None,
+                        help="canonical fact store whose current enrichment overlay is applied only to the derived assembly")
     args = parser.parse_args(argv)
     assemble(
         args.slug,
@@ -343,6 +365,7 @@ def main(argv: list[str] | None = None) -> int:
         upstream_source=Path(args.upstream_source).resolve() if args.upstream_source else None,
         scrub_activity=args.scrub_activity,
         ui_surfaces=Path(args.ui_surfaces).resolve() if args.ui_surfaces else None,
+        enrichment_store=Path(args.enrichment_store).resolve() if args.enrichment_store else None,
     )
     return 0
 

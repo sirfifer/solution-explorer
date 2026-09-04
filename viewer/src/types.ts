@@ -248,6 +248,10 @@ export interface Rule {
 export interface ComponentAIEnhance {
   // Core fields
   help_text?: string;
+  // Audited semantic atoms projected from the enrichment contract-state row.
+  // `help_text` remains the backward-compatible/search representation; readers
+  // should prefer this structure when present rather than splitting prose.
+  explanation?: ComponentExplanation;
   // One-line summary the tree renders. The projection also copies this up to the
   // top-level Component.description when the mechanical description is empty (D7),
   // so existing description surfaces render it without change.
@@ -276,6 +280,31 @@ export interface ComponentAIEnhance {
   // Set when the cited component digest no longer matches the current files.
   // Consumers must disclose this rather than rendering old prose as current.
   stale?: boolean;
+  honest_gaps?: HonestGap[];
+}
+
+export type ComponentExplanationKey =
+  | "purpose"
+  | "mechanism"
+  | "place"
+  | "why_matters"
+  | "data_handled"
+  | "next_step";
+
+export interface ExplanationClaim {
+  text: string;
+  status?: string;
+  reason?: string;
+  evidence?: Record<string, unknown>[];
+}
+
+export type ComponentExplanation = Partial<
+  Record<ComponentExplanationKey, ExplanationClaim>
+>;
+
+export interface HonestGap {
+  question: string;
+  why: string;
 }
 
 export interface RelationshipAIEnhance {

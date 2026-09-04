@@ -1,12 +1,16 @@
-import { useState, useRef, useCallback, type ReactElement, type ReactNode } from "react";
+import { useRef, type ReactElement, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useArchStore } from "../store";
+import { useHoverDisclosure } from "../hooks/useHoverDisclosure";
+import { useReadingSurfacePosition } from "../hooks/useReadingSurfacePosition";
 
 interface TooltipProps {
   content: ReactNode;
   children: ReactElement;
   delay?: number;
   position?: "top" | "bottom";
+  // Retained for existing callers. All help surfaces now allow pointer entry
+  // and scrolling; a link is no longer required to make content reachable.
   interactive?: boolean;
   // Make the trigger reachable by keyboard when the wrapped child is not itself
   // focusable (a badge or a plain span). Interactive children (buttons, links)
@@ -25,56 +29,15 @@ export function Tooltip({
   children,
   delay = 300,
   position = "top",
-  interactive = false,
   focusable = false,
   label,
   className = "inline-flex",
 }: TooltipProps) {
   const { darkMode } = useArchStore();
-  const [visible, setVisible] = useState(false);
-  const [coords, setCoords] = useState({ x: 0, y: 0 });
-  const showTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { visible, enter: show, leave: hide, retain: onTooltipEnter } = useHoverDisclosure(delay);
   const triggerRef = useRef<HTMLSpanElement>(null);
-
-  const clearTimers = useCallback(() => {
-    if (showTimeout.current) { clearTimeout(showTimeout.current); showTimeout.current = null; }
-    if (hideTimeout.current) { clearTimeout(hideTimeout.current); hideTimeout.current = null; }
-  }, []);
-
-  const show = useCallback(() => {
-    clearTimers();
-    showTimeout.current = setTimeout(() => {
-      if (triggerRef.current) {
-        const rect = triggerRef.current.getBoundingClientRect();
-        setCoords({
-          x: rect.left + rect.width / 2,
-          y: position === "top" ? rect.top : rect.bottom,
-        });
-      }
-      setVisible(true);
-    }, delay);
-  }, [delay, position, clearTimers]);
-
-  const hide = useCallback(() => {
-    clearTimers();
-    if (interactive) {
-      hideTimeout.current = setTimeout(() => setVisible(false), 300);
-    } else {
-      setVisible(false);
-    }
-  }, [interactive, clearTimers]);
-
-  const onTooltipEnter = useCallback(() => {
-    if (interactive) clearTimers();
-  }, [interactive, clearTimers]);
-
-  const onTooltipLeave = useCallback(() => {
-    if (interactive) {
-      clearTimers();
-      hideTimeout.current = setTimeout(() => setVisible(false), 300);
-    }
-  }, [interactive, clearTimers]);
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const placement = useReadingSurfacePosition(triggerRef, surfaceRef, visible, position, 280);
 
   // Keyboard focus is a first-class trigger, not just mouse hover. onFocus/onBlur
   // on the wrapper surface the tooltip when the child (or the wrapped child)
@@ -101,41 +64,35 @@ export function Tooltip({
       </span>
       {visible && content && createPortal(
         <div
-          className={`fixed z-[9999] ${interactive ? "pointer-events-auto" : "pointer-events-none"}`}
+          ref={surfaceRef}
+          role="tooltip"
+          className="fixed z-[9999] pointer-events-auto nowheel nopan overflow-y-auto se-reading-surface"
           style={{
-            left: coords.x,
-            top: position === "top" ? coords.y - 8 : coords.y + 8,
-            transform: position === "top"
-              ? "translate(-50%, -100%)"
-              : "translate(-50%, 0)",
+            left: placement?.left ?? 0,
+            top: placement?.top ?? 0,
+            width: placement?.width ?? 280,
+            maxHeight: placement?.maxHeight ?? 420,
+            visibility: placement ? "visible" : "hidden",
           }}
           onMouseEnter={onTooltipEnter}
-          onMouseLeave={onTooltipLeave}
+          onMouseLeave={hide}
+          onPointerMove={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
           // Keyboard parity for interactive tooltips: tabbing from the trigger
           // into the tooltip's link fires the wrapper's onBlur (which schedules
           // the hide); focus landing inside the tooltip must cancel that hide,
           // exactly as mouse-enter does, or the link is unreachable by keyboard.
           onFocus={onTooltipEnter}
-          onBlur={onTooltipLeave}
+          onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) hide(); }}
         >
           <div className={`
-            min-w-[120px] max-w-[280px] px-3 py-2 rounded-lg text-xs leading-relaxed shadow-lg border
+            px-3 py-2 rounded-lg text-sm leading-relaxed shadow-lg border
             ${darkMode
               ? "bg-zinc-800 border-zinc-700 text-zinc-200"
               : "bg-white border-zinc-200 text-zinc-700 shadow-zinc-200/50"
             }
           `}>
             {content}
-            {/* Arrow */}
-            <div
-              className={`absolute left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 border
-                ${darkMode ? "bg-zinc-800 border-zinc-700" : "bg-white border-zinc-200"}
-                ${position === "top"
-                  ? "bottom-[-5px] border-t-0 border-l-0"
-                  : "top-[-5px] border-b-0 border-r-0"
-                }
-              `}
-            />
           </div>
         </div>,
         document.body
@@ -159,7 +116,7 @@ export function TechTooltip({ name, description, url, children }: {
           <div className="font-semibold mb-0.5">{name}</div>
           <div className="opacity-80">{description}</div>
           {url && (
-            <div className="mt-1 text-blue-400 text-[10px]">
+            <div className="mt-1 text-blue-600 dark:text-blue-400 text-xs">
               <a href={url} target="_blank" rel="noopener noreferrer" className="hover:underline">
                 {url.replace(/^https?:\/\//, "").split("/")[0]} &rarr;
               </a>

@@ -22,6 +22,16 @@ by hand across a subject the size of private large-repository validation corpus 
 
 ## Running it
 
+The bounded graph cases include the hover-reading regression: move the actual
+pointer into a scrollable popup, remain beyond the dismissal delay, scroll its
+content without moving the graph, return to the trigger, and then leave. They
+also check all four containment edges and the clicked help panel's focus,
+Escape/close behavior, and exclusion of duplicate previews. These cases run in
+both quick and full profiles at normal and smaller desktop window sizes.
+CI also runs these cases against `fixtures/reading/manifest.json`, a synthetic
+long explanation that guarantees overflow. `CRAWL_REQUIRE_SCROLLABLE=1` makes
+missing scrolling coverage a failure in that gate rather than a skip.
+
 The suite needs two things: a served build, and the projection that build is
 serving, so it can compare the UI against the data.
 

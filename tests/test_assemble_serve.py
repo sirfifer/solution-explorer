@@ -6,9 +6,13 @@ import base64
 import hashlib
 import importlib.util
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
+
+from analyzer.enrich import DigestIndex, stamp_enrichment
+from analyzer.store import FactStore
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -169,6 +173,75 @@ def test_assembly_applies_review_correction_only_to_derived_overlay(
         (overlay / "orientation.json").read_text()
     )["orientation"]["interpreted_statement"]["text"]
     assert _sha256(manifest_path) == canonical_hash
+
+
+def test_assembly_can_refresh_structured_enrichment_from_store_without_mutating_projection(
+    tmp_path: Path,
+) -> None:
+    assembler = _load_assembler()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("viewer", encoding="utf-8")
+    projection = tmp_path / "canonical" / "architecture"
+    projection.mkdir(parents=True)
+    manifest_path = projection / "manifest.json"
+    manifest_path.write_text(json.dumps({
+        "name": "subject",
+        "components": [{"id": "app", "name": "App", "children": []}],
+        "relationships": [],
+        "component_detail_index": {},
+        "stats": {"total_relationships": 0},
+    }, sort_keys=True), encoding="utf-8")
+    canonical_hash = _sha256(manifest_path)
+
+    store_path = tmp_path / "index.db"
+    store = FactStore(str(store_path))
+    store.add_component("app", "App", type="application", path="app")
+    index = DigestIndex.from_store(store)
+    stamp_enrichment(
+        store, "component", "app", {"help_text": "One legacy paragraph."},
+        digest_index=index,
+    )
+    store.add_enrichment("contract-state", "component:app", {
+        "answers": {
+            "purpose": {
+                "claim": "Runs the application.",
+                "status": "answered",
+                "evidence": [{"component": "app", "field": "type", "kind": "fact"}],
+            },
+        },
+    })
+    store.commit()
+    store.close()
+    store_hash = _sha256(store_path)
+
+    assembler.DIST = dist
+    assembler.SERVE_ROOT = tmp_path / "serve"
+    assembler.DERIVED_ROOT = tmp_path / "derived"
+    serve = assembler.assemble(
+        "subject", projection, build=False, enrichment_store=store_path,
+    )
+
+    served_manifest = json.loads((serve / "architecture" / "manifest.json").read_text())
+    ai = served_manifest["components"][0]["ai_enhance"]
+    assert ai["help_text"] == "One legacy paragraph."
+    assert ai["explanation"]["purpose"]["text"] == "Runs the application."
+    assert _sha256(manifest_path) == canonical_hash
+    assert _sha256(store_path) == store_hash
+
+
+def test_read_only_store_cannot_modify_or_migrate_canonical_enrichment(tmp_path: Path) -> None:
+    path = tmp_path / "canonical.db"
+    with FactStore(path) as store:
+        store.set_meta("schema_version", "1")
+        store.add_enrichment("component", "app", {"help_text": "Keep this paid interpretation."})
+    original = _sha256(path)
+    with FactStore(path, read_only=True) as reader:
+        assert reader.get_meta("schema_version") == "1"
+        assert reader.enrichment()[0]["payload"]["help_text"] == "Keep this paid interpretation."
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            reader.set_meta("schema_version", "999")
+    assert _sha256(path) == original
 
 
 def test_assembly_can_scrub_activity_and_ship_publication_obligations(tmp_path: Path) -> None:

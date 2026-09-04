@@ -338,6 +338,22 @@ def test_the_scorer_tolerates_the_contract_key_without_scoring_it():
     )
 
 
+def test_the_scorer_tolerates_the_projected_structured_explanation():
+    scorer = _scorer_module()
+    payload = {
+        "help_text": "Some prose.", "data_handled": "Records.",
+        "criticality": "important", "ai_enhanced_at": "2026-08-21T00:00:00Z",
+        "ai_enhance_version": 2,
+        "explanation": {
+            "purpose": {"text": "Explains the component.", "status": "answered"},
+        },
+    }
+    assert scorer.validate_component_ai_enhance("c1", payload) == []
+    assert "explanation" not in (
+        scorer.REQUIRED_COMPONENT_FIELDS | scorer.OPTIONAL_COMPONENT_FIELDS
+    )
+
+
 def test_the_scorer_accepts_honest_gaps_as_a_product_field():
     scorer = _scorer_module()
     payload = {

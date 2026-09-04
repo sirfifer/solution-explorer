@@ -154,10 +154,12 @@ async function previewsOutsideCanvas(
     const box = await preview.boundingBox().catch(() => null);
     if (!box) continue;
     const id = (await preview.getAttribute("data-component-id")) ?? "an unnamed node";
-    if (box.y < canvas.y) {
+    if (box.y < canvas.y - 1 || box.x < canvas.x - 1
+      || box.y + box.height > canvas.y + canvas.height + 1
+      || box.x + box.width > canvas.x + canvas.width + 1) {
       out.push(
-        `${when}, the preview for ${id} starts ${Math.round(canvas.y - box.y)}px above the ` +
-          `canvas top edge, which is where the header is`,
+        `${when}, the preview for ${id} extends outside its canvas: ` +
+          `preview=${JSON.stringify(box)}, canvas=${JSON.stringify(canvas)}`,
       );
     }
   }
@@ -675,10 +677,94 @@ test.describe("graph", () => {
       expect(homeDead, "Home that does not return the reader to the top").toEqual([]);
     },
   );
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 1024, height: 768 }]) {
+    test(
+      `hover documentation can be entered and scrolled at ${viewport.width} × ${viewport.height}`,
+      { tag: ["@desktop"] },
+      async ({ crawlPage }) => {
+        test.setTimeout(45_000);
+        await crawlPage.setViewportSize(viewport);
+        await requireContract(crawlPage);
+        await navigateState(crawlPage, {});
+        await waitForGraph(crawlPage);
+        if (process.env.CRAWL_REQUIRE_SCROLLABLE === "1") {
+          // Use the viewer's own zoom control to exercise fractional transforms;
+          // popup measurement must not enter a render loop at non-integer zoom.
+          await crawlPage.getByRole("button", { name: "Zoom Out", exact: true }).click();
+        }
+        const nodes = crawlPage.locator('[data-testid="graph-node"]');
+        // Use real subject content; short previews have no scrolling to prove.
+        let foundScrollable = false;
+        for (let index = 0; index < Math.min(await nodes.count(), 8); index++) {
+          const node = nodes.nth(index);
+          await node.hover();
+          const id = await node.getAttribute("data-component-id");
+          const preview = crawlPage.locator(
+            `[data-testid="node-preview"][data-component-id="${cssEscape(id ?? "")}"]`,
+          );
+          let opened = await preview.waitFor({ state: "visible", timeout: 1500 }).then(() => true).catch(() => false);
+          if (!opened) {
+            // Initial fit-to-view can move the node away from the pointer after
+            // layout completes. Approach the now-settled node again, as a reader
+            // would; the handoff assertions below still permit no disappearance.
+            await crawlPage.mouse.move(5, 5);
+            await node.hover();
+            opened = await preview.waitFor({ state: "visible", timeout: 1500 }).then(() => true).catch(() => false);
+          }
+          if (!opened) continue;
+          if (!await preview.evaluate((element) => element.scrollHeight > element.clientHeight)) continue;
+          foundScrollable = true;
+          const box = await preview.boundingBox();
+          expect(box).not.toBeNull();
+          const graphTransform = await crawlPage.locator(".react-flow__viewport").getAttribute("style");
+          // Real pointer movement must cross the trigger-to-popup gap. A forced
+          // hover or DOM-dispatched enter would miss the original dismissal bug.
+          await crawlPage.mouse.move(box!.x + box!.width / 2, box!.y + 32, { steps: 20 });
+          // Remain longer than the dismissal grace period: merely delaying the
+          // disappearance does not make a popup usable for reading or scrolling.
+          await crawlPage.waitForTimeout(600);
+          await expect(preview).toBeVisible();
+          expect(await previewsOutsideCanvas(crawlPage, "while reading a scrollable preview")).toEqual([]);
+          await crawlPage.mouse.wheel(0, 300);
+          await expect.poll(() => preview.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+          await expect(crawlPage.locator(".react-flow__viewport")).toHaveAttribute("style", graphTransform!);
+          await expect(preview).toBeVisible();
+          await node.hover();
+          await crawlPage.waitForTimeout(600);
+          await expect(preview).toBeVisible();
+          await crawlPage.mouse.move(5, 5);
+          await expect(preview).toHaveCount(0);
+          const info = node.getByRole("button", { name: /Open information about/ });
+          await info.click();
+          const dialog = crawlPage.getByRole("dialog", { name: /^About / });
+          await expect(dialog).toBeVisible();
+          await expect(preview).toHaveCount(0);
+          const dialogBox = await dialog.boundingBox();
+          expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
+          expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
+          expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(viewport.width);
+          expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual(viewport.height);
+          await expect(dialog).toBeFocused();
+          await crawlPage.keyboard.press("Escape");
+          await expect(dialog).toHaveCount(0);
+          await expect(info).toBeFocused();
+          await info.click();
+          await dialog.getByRole("button", { name: "Close component information" }).click();
+          await expect(dialog).toHaveCount(0);
+          break;
+        }
+        if (process.env.CRAWL_REQUIRE_SCROLLABLE === "1") {
+          expect(foundScrollable, "the regression fixture must exercise a scrollable preview").toBe(true);
+        }
+        test.skip(!foundScrollable, "No scrollable preview among the first eight visible components in this subject.");
+      },
+    );
+  }
+
   test(
     "the hover preview stays inside the canvas and never covers the header",
     { tag: ["@desktop"] },
-    async ({ crawlPage }) => {
+    async ({ crawlPage, contract }) => {
       await requireContract(crawlPage);
       // The exploratory pass found this and no assertion could see it: arriving
       // in the workbench from an Overview question leaves the pointer over the
@@ -736,6 +822,27 @@ test.describe("graph", () => {
       const preview = crawlPage.locator('[data-testid="node-preview"]');
       await preview.first().waitFor({ state: "visible", timeout: 2_000 }).catch(() => {});
       const opened = (await preview.count()) > 0;
+      const expectedExplanation = hoveredId
+        ? contract.components.get(hoveredId)?.explanationKeys ?? []
+        : [];
+      if (expectedExplanation.length > 0) {
+        expect(opened, `structured preview for ${hoveredId} opens`).toBe(true);
+        const structured = preview.locator(
+          '[data-testid="structured-explanation"][data-structured="true"]',
+        );
+        await expect(structured).toBeVisible();
+        for (const key of expectedExplanation) {
+          await expect(
+            structured.locator(`[data-explanation-section="${cssEscape(key)}"]`),
+            `${hoveredId} preserves the ${key} explanation atom as its own section`,
+          ).toBeVisible();
+        }
+        const bodySize = await structured
+          .locator(".se-info-body")
+          .first()
+          .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+        expect(bodySize, "structured preview body copy is at least 14px").toBeGreaterThanOrEqual(14);
+      }
       covering.push(...(await previewsOutsideCanvas(crawlPage, `while hovering ${hoveredId}`)));
       covering.push(...(await headerNotClickable(crawlPage, `while hovering ${hoveredId}`)));
 

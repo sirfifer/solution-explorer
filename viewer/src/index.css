@@ -6,6 +6,139 @@
 :root {
   --xy-background-color: transparent;
   --xy-node-border-radius: 12px;
+  /* Semantic reading roles. Theme palettes may replace the referenced color
+     variables; feature components do not choose a new gray at each call site. */
+  --se-text-primary: var(--color-zinc-900);
+  --se-text-secondary: var(--color-zinc-700);
+  --se-text-metadata: var(--color-zinc-600);
+  --se-text-warning: var(--color-amber-800);
+  --se-warning-surface: var(--color-amber-50);
+  --se-warning-border: var(--color-amber-300);
+  --se-focus-ring: var(--color-blue-500);
+}
+
+html.dark {
+  --se-text-primary: var(--color-zinc-100);
+  --se-text-secondary: var(--color-zinc-300);
+  --se-text-metadata: var(--color-zinc-400);
+  --se-text-warning: var(--color-amber-200);
+  --se-warning-surface: color-mix(in srgb, var(--color-amber-950) 55%, transparent);
+  --se-warning-border: var(--color-amber-700);
+}
+
+/* Structured information is a design-system primitive, not a local tooltip
+   treatment. These sizes implement the product readability standard: 14px
+   body copy, 12px secondary headings and evidence, and a real text hierarchy. */
+.se-info-stack {
+  display: grid;
+  gap: 1rem;
+  color: var(--se-text-secondary);
+}
+
+.se-info-stack-compact {
+  gap: 0.75rem;
+}
+
+.se-info-heading {
+  margin: 0 0 0.25rem;
+  color: var(--se-text-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.se-info-title {
+  color: var(--se-text-primary);
+}
+
+.se-info-meta {
+  color: var(--se-text-metadata);
+}
+
+.se-info-body {
+  margin: 0;
+  color: var(--se-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.se-reading-surface {
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+
+.se-info-evidence {
+  margin-top: 0.375rem;
+  color: var(--se-text-metadata);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.se-info-evidence summary {
+  width: fit-content;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.se-info-evidence ul,
+.se-info-gaps ul {
+  margin: 0.375rem 0 0;
+  padding-left: 1.125rem;
+  list-style: disc;
+}
+
+.se-info-evidence li + li,
+.se-info-gaps li + li {
+  margin-top: 0.25rem;
+}
+
+.se-info-gaps {
+  padding: 0.75rem;
+  border: 1px solid var(--se-warning-border);
+  border-radius: 0.5rem;
+  background: var(--se-warning-surface);
+  color: var(--se-text-warning);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.se-info-gaps .se-info-heading {
+  color: var(--se-text-warning);
+}
+
+.se-info-gaps li {
+  display: list-item;
+}
+
+.se-info-gaps li strong,
+.se-info-gaps li span {
+  display: block;
+}
+
+.se-node-control {
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+}
+
+.se-focusable:focus-visible,
+.se-node-control:focus-visible,
+.se-info-evidence summary:focus-visible {
+  outline: 2px solid var(--se-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .se-node-control {
+    width: 2.75rem;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    min-height: 2.75rem;
+  }
 }
 
 /* Smooth transitions */
