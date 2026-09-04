@@ -107,7 +107,7 @@ export function StructuredExplanation({
           <h4 className="se-info-heading">{label}</h4>
           {claim.status && claim.status !== "answered" && <p className="se-info-gaps">
             {claim.status === "uncertain" ? "Not established" : `Answer status: ${claim.status}`}
-            {claim.reason ? ` — ${claim.reason}` : ""}
+            {claim.reason ? `: ${claim.reason}` : ""}
           </p>}
           <NarrativeText text={claim.text} />
           {showEvidence && <EvidenceDisclosure claim={claim} />}
