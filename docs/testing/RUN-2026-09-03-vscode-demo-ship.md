@@ -91,7 +91,7 @@ proven under the Workers runtime locally (table above).
 
 | # | Item | Owner decision needed |
 |---|---|---|
-| 1 | The previous deployment `ac1bb93f` still serves its data ungated at its own preview URL | delete it from the project, or leave it |
+| 1 | CLOSED 2026-09-03: the two earlier deployments `ac1bb93f` and `0fd2ab9c` were deleted from the project at the owner's instruction (`wrangler pages deployment delete`); their preview URLs now return 404 and `291cf0ea` is the only deployment. Still open: the Pages Access policy for `*.syscorpus-vscode.pages.dev`, a dashboard toggle only the owner can set | enable the Access policy on the Pages project |
 | 2 | The custom hostname now has Access and the passcode in series | keep, or teach the Worker to honour a verified Access JWT |
 | 3 | `demo-site.py deploy` still expects `functions/_middleware.js` and does not gzip | route it through `publish-demo-bundle.py` |
 | 4 | Review follow-ups on `analyzer/derive/identity.py` and the assembly scripts | GitHub issue filed from this run |
