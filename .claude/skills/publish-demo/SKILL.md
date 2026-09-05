@@ -36,7 +36,12 @@ authentication artifact.
 
 ## The steps, in order, none skipped
 
-1. `scripts/assemble-serve.py <slug> --projection ... --corrections ... --publication ... --upstream-source ... --scrub-activity`
+1. `scripts/assemble-serve.py <slug> --projection ... --corrections ... --publication ... --upstream-source ... --scrub-activity --ui-surfaces demos/ui-surfaces/<slug> --enrichment-store <store copy>`.
+   The last two carry data and fail silently when omitted: the viewer treats
+   both sidecars as optional, so the bundle still assembles, passes, and
+   deploys showing none of the work. Pass them whenever the package and the
+   store's `contract-state` rows exist. Confirm the assembly lists
+   `ui-surfaces.json` and `manifest.json (store enrichment overlay)`.
 2. `npx tsc --noEmit` in `viewer/` (demo-mode builds skip it).
 3. Quick crawl of the assembled bundle, desktop and mobile, on this subject
    and on the other canonical subject with the same viewer build.

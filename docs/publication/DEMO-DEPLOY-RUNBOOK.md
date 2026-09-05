@@ -63,8 +63,36 @@ $PY scripts/assemble-serve.py <slug> \
   --corrections demos/review-corrections/<slug>.json \
   --publication demos/publication/<slug>.json \
   --upstream-source <subject checkout> \
-  --scrub-activity
+  --scrub-activity \
+  --ui-surfaces demos/ui-surfaces/<slug> \
+  --enrichment-store <the subject's fact store>
 ```
+
+**The last two flags carry data, and leaving them off fails silently.**
+`--ui-surfaces` attaches the interface capture package, and
+`--enrichment-store` projects the store's audited component answers into the
+manifest as structured explanations. Both are additive sidecars the viewer
+treats as optional, so a bundle assembled without them is valid, passes every
+check, deploys cleanly, and shows none of the work. There is no error to
+notice. On 2026-09-04 the runbook still predated both flags, and following it
+literally would have deployed PR #129's viewer over data that had nothing for
+it to render.
+
+Pass `--ui-surfaces` when `demos/ui-surfaces/<slug>/` exists, and
+`--enrichment-store` when the subject's store carries `contract-state` rows.
+Check with:
+
+```bash
+sqlite3 "file:<store>?mode=ro" \
+  "select target_kind, count(*) from enrichment group by target_kind;"
+```
+
+The store is opened read only and the canonical projection is never mutated,
+but work from a copy of the store rather than the canonical file. Confirm the
+attachment landed: the assembly prints `ui-surfaces.json` and
+`manifest.json (store enrichment overlay)` among its deterministic sidecars,
+and the assembled `manifest.json` is materially larger than the projection's
+(36.4 MB to 39.8 MB for VS Code, which is the explanations).
 
 The build runs in `<slug>-demo` mode when `viewer/.env.<slug>-demo` exists
 (that is what keeps the VS Code demo on Atlas). Note that this mode build

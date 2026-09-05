@@ -20,7 +20,7 @@ import { componentHelp, componentSummary } from "../utils/componentText";
 import { StructuredExplanation } from "./StructuredExplanation";
 import { useHoverDisclosure } from "../hooks/useHoverDisclosure";
 import { useReadingSurfacePosition } from "../hooks/useReadingSurfacePosition";
-import { readingSurfacePlacement } from "../utils/readingSurfacePlacement";
+import { readingSurfacePlacement, foreignNodeUnderPoint, pointInside } from "../utils/readingSurfacePlacement";
 
 interface ComponentNodeData {
   component: Component;
@@ -477,13 +477,14 @@ function ReviewTarget({
 /** Gap kept between the preview and both the node and the canvas edge. */
 export const PREVIEW_PAD = 8;
 
-function HoverCard({ component, darkMode, triggerRef, surfaceRef, onEnter, onLeave }: {
+function HoverCard({ component, darkMode, triggerRef, surfaceRef, onEnter, onLeave, coarsePointer }: {
   component: Component;
   darkMode: boolean;
   triggerRef: React.RefObject<HTMLDivElement | null>;
   surfaceRef: React.RefObject<HTMLDivElement | null>;
   onEnter: () => void;
   onLeave: () => void;
+  coarsePointer: boolean;
 }) {
   // The anchor comes from React Flow, not from the DOM: getNodesBounds gives
   // this node's measured bounds and flowToScreenPosition puts them on screen
@@ -552,7 +553,7 @@ function HoverCard({ component, darkMode, triggerRef, surfaceRef, onEnter, onLea
       role="region"
       aria-label={`Preview of ${component.name}`}
       className={`
-        pointer-events-auto nowheel nopan se-reading-surface
+        nowheel nopan se-reading-surface
         w-[min(400px,calc(100vw-16px))] max-h-[min(420px,calc(100vh-16px))] overflow-y-auto
         rounded-xl border shadow-2xl text-xs
         ${darkMode
@@ -561,7 +562,18 @@ function HoverCard({ component, darkMode, triggerRef, surfaceRef, onEnter, onLea
         }
         backdrop-blur-md
       `}
-      style={{ transform: `translate(${shiftX}px, ${shiftY}px)`, width: placement.width, maxHeight: placement.maxHeight }}
+      // Deaf to the pointer until the reader is demonstrably on it, and never
+      // while it rests on another node. A surface that took pointer events the
+      // moment it appeared would hold the clicks of whatever it happened to
+      // cover, which is how the depth-5 drill became unreachable. The window
+      // listener that owns the hover lifecycle turns this on and off; it is
+      // set on the element rather than through state so the change is in
+      // effect for the very next hit test rather than after a render.
+      //
+      // A coarse pointer has no hover to disambiguate: the card is summoned
+      // deliberately by touch and hold, and that listener does not run. It
+      // stays reachable, exactly as it was before.
+      style={{ transform: `translate(${shiftX}px, ${shiftY}px)`, width: placement.width, maxHeight: placement.maxHeight, pointerEvents: coarsePointer ? "auto" : "none" }}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
       onPointerMove={(e) => e.stopPropagation()}
@@ -720,6 +732,11 @@ function HoverCard({ component, darkMode, triggerRef, surfaceRef, onEnter, onLea
       position={flipBelow ? Position.Bottom : Position.Top}
       offset={PREVIEW_PAD}
       align="center"
+      // React Flow gives the toolbar wrapper pointer-events of its own, and
+      // the wrapper is wider and taller than the card it holds. Left alone it
+      // catches presses meant for whatever the card is floating over, which
+      // the card itself no longer does. Only the card decides, below.
+      style={{ pointerEvents: "none" }}
     >
       {preview}
     </NodeToolbar>
@@ -933,13 +950,26 @@ export const ComponentNode = memo(function ComponentNode({
     if (!hovered || isTouchDevice) return;
     const onPointerMove = (e: PointerEvent) => {
       const node = nodeRef.current;
+      const surface = previewRef.current;
       const target = e.target as Node;
-      if (node?.contains(target) || previewRef.current?.contains(target)) retainPreview();
+      // The surface floats over the canvas and routinely comes to rest on
+      // other nodes. It may take the pointer only where the reader is on it
+      // and nothing of the graph is underneath; anywhere else it stays deaf so
+      // the node beneath keeps its own clicks. Reading the stack rather than
+      // the topmost element is what makes this work once the surface is live,
+      // because by then the surface is what the pointer lands on.
+      let onSurface = false;
+      if (surface) {
+        onSurface = (surface.contains(target) || pointInside(surface, e.clientX, e.clientY))
+          && !foreignNodeUnderPoint(e.clientX, e.clientY, component.id);
+        surface.style.pointerEvents = onSurface ? "auto" : "none";
+      }
+      if (node?.contains(target) || onSurface) retainPreview();
       else leavePreview();
     };
     window.addEventListener("pointermove", onPointerMove);
     return () => window.removeEventListener("pointermove", onPointerMove);
-  }, [hovered, isTouchDevice, retainPreview, leavePreview]);
+  }, [hovered, isTouchDevice, retainPreview, leavePreview, component.id]);
 
   const handleMouseEnter = () => {
     if (isTouchDevice) return;
@@ -999,7 +1029,7 @@ export const ComponentNode = memo(function ComponentNode({
       <Handle id="source-bottom" type="source" position={Position.Bottom} className="!bg-zinc-500 !w-2 !h-2 !border-0" />
 
       {/* Hover documentation card */}
-      {hovered && !showHelp && <HoverCard component={component} darkMode={darkMode} triggerRef={nodeRef} surfaceRef={previewRef} onEnter={retainPreview} onLeave={leavePreview} />}
+      {hovered && !showHelp && <HoverCard component={component} darkMode={darkMode} triggerRef={nodeRef} surfaceRef={previewRef} onEnter={retainPreview} onLeave={leavePreview} coarsePointer={isTouchDevice} />}
 
       {/* Capability badges (P6-3): counts by kind on capability-owning nodes */}
       {capBadges && (
