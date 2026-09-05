@@ -16,14 +16,24 @@ Tracks where solution-explorer is installed and how to redeploy after changes.
 - `architecture-full.yml`: Advanced build with live-config injection and Cloudflare Pages deploy
 - `live-monitor.yml`: Live data generation, GitHub Pages + optional R2 deploy (if live mode is set)
 
-### VS Code private preview (2026-09-03)
+### VS Code private preview (2026-09-04)
 
 A reviewed, point-in-time split projection of `microsoft/vscode` at commit
 `474a349ad5b745e512ef86b864d1c74f7264dd7a`, reprojected on 2026-09-03 with
 the identity derive pass and six commit-bound review corrections. The
-production Pages deployment is `69f96419-7f6a-4270-8a71-be150b39c778`, built
-from solution-explorer commit `7d67b4c` (the identity front door plus the
-guided orientation for first-time visitors, PR #127).
+production Pages deployment is `63b162e8-5b86-4626-89f5-a2cae8b5778e`, built
+from solution-explorer commit `6ec5ee5` (first-class UI captures and
+structured component explanations, PR #129, with the depth-5 drill fix from
+PR #130).
+
+**This subject's bundle carries two data sidecars that the viewer treats as
+optional**, so leaving them off assembles and deploys a bundle showing none
+of the work, with no error to notice. Assemble it with
+`--ui-surfaces demos/ui-surfaces/vscode` and `--enrichment-store <a copy of
+the canonical store>` alongside the usual flags. The manifest is 39.8 MB with
+them and 36.4 MB without; that difference is the audited explanations on all
+571 components. See `docs/publication/DEMO-DEPLOY-RUNBOOK.md` section 2.1.
+
 Its production branch is `main`. The bundle is packaged by
 `scripts/publish-demo-bundle.py`: `manifest.json` and the largest detail
 shard exceed the 25 MiB Pages cap and are served gzip by the committed
@@ -31,7 +41,8 @@ shard exceed the 25 MiB Pages cap and are served gzip by the committed
 through Cloudflare Access on the hostname; nothing in the bundle
 authenticates anyone. Procedure and traps:
 `docs/publication/DEMO-DEPLOY-RUNBOOK.md`.
-Run record: `docs/testing/RUN-2026-09-03-vscode-demo-ship.md`.
+Run records: `docs/testing/RUN-2026-09-04-ui-surfaces-ship.md` (current),
+`docs/testing/RUN-2026-09-03-vscode-demo-ship.md`.
 
 **Redeploy:** the `publish-demo` skill (`.claude/skills/publish-demo/`).
 Not the workflows below, which are for the UnaMentis installations.
