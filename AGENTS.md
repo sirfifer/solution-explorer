@@ -22,3 +22,14 @@ artifacts before resuming. Never overwrite the sole surviving recovery evidence.
 Operating-system temporary scratch is acceptable only for automatically
 recreatable internal mechanics that contain no unique work product. Keep the
 authoritative inputs, outputs, state, and evidence on durable storage throughout.
+
+## Local VS Code recovery continuation (2026-09-08)
+
+The recovered implementation is on branch `wt/vscode-readiness-recovered` in
+`.local-private/worktrees/vscode-readiness-20260908`. Read that worktree's
+`docs/remediation/REBOOT-RECOVERY-2026-09-08.md` and
+`docs/remediation/VSCODE-FRESH-READINESS-2026-09-08.md` before continuing the
+interrupted VS Code readiness work. The original evidence remains under
+`.local-private/recovery-20260908`; active dataset runs are under
+`.local-private/runs/vscode-fresh-20260908`. Check the recorded exit status and
+artifact completeness; the existence of a run directory does not mean success.
